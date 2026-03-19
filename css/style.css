@@ -1721,7 +1721,7 @@ h3 { font-size: 1.1rem; }
   }
   .sidebar.open { transform: translateX(0); }
 
-  .sidebar-overlay { display: block; }
+  .sidebar-overlay { display: none; }
   .sidebar-overlay.visible { display: block; pointer-events: auto; }
 
   .main-wrapper { margin-left: 0; }
@@ -3187,6 +3187,8 @@ h3 { font-size: 1.1rem; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { transform: translateX(-100%); position: fixed; z-index: 900; height: 100%; top: 0; }
   .sidebar.open { transform: translateX(0); box-shadow: 4px 0 40px rgba(0,0,0,.8); }
+  .sidebar-overlay { display: none !important; }
+  .sidebar-overlay.visible { display: block !important; pointer-events: auto; }
   .main-wrapper { margin-left: 0 !important; }
 
   .page-header {
