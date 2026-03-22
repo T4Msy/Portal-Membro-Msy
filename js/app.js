@@ -435,28 +435,67 @@ async function initDashboard() {
     </div>
 
     <!-- Top 3 da Semana -->
-    <div class="card card-enter" id="top3Card">
-      <div class="card-title" style="justify-content:space-between">
-        <span><i class="fa-solid fa-trophy" style="color:#f59e0b"></i> Top 3 da Semana</span>
-        ${isDiretoria ? `<button class="btn btn-ghost btn-sm" id="manageTop3Btn"><i class="fa-solid fa-pen"></i> Gerenciar</button>` : ''}
-      </div>
-      ${top3.length === 0
-        ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum ranking desta semana ainda.</div></div>`
-        : `
-          <div style="font-size:.72rem;color:var(--text-3);margin-bottom:12px">
-            ${ranking ? `Semana: ${Utils.formatDate(ranking.week_start)} → ${Utils.formatDate(ranking.week_end)}` : ''}
+    <div class="card card-enter" id="top3Card" style="overflow:hidden;padding:0">
+      <!-- Header -->
+      <div style="padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(245,158,11,.12)">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:30px;height:30px;background:linear-gradient(135deg,rgba(245,158,11,.25),rgba(180,83,9,.15));border:1px solid rgba(245,158,11,.35);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.95rem">👑</div>
+          <div>
+            <div style="font-weight:700;font-size:.82rem;color:var(--text-1);letter-spacing:.06em;text-transform:uppercase">Top 3 da Semana</div>
+            ${ranking ? `<div style="font-size:.62rem;color:var(--text-3);letter-spacing:.04em;margin-top:1px">${Utils.formatDate(ranking.week_start)} — ${Utils.formatDate(ranking.week_end)}</div>` : ''}
           </div>
-          ${top3.map((e, i) => `
-            <div class="small-list-item" style="margin-bottom:8px">
-              <div class="small-list-icon" style="background:${i===0?'rgba(245,158,11,.2)':i===1?'rgba(156,163,175,.15)':'rgba(180,120,60,.15)'};border:1px solid ${i===0?'rgba(245,158,11,.4)':i===1?'rgba(156,163,175,.3)':'rgba(180,120,60,.3)'}">
-                <span style="font-size:.9rem">${i===0?'🥇':i===1?'🥈':'🥉'}</span>
-              </div>
-              <div class="small-list-info">
-                <div class="small-list-title">${Utils.escapeHtml(e.name)}</div>
-                <div class="small-list-sub">${e.messages} mensagens</div>
-              </div>
-              <span class="badge badge-gold" style="font-size:.65rem">#${i+1}</span>
-            </div>`).join('')}
+        </div>
+        ${isDiretoria ? `<button class="btn btn-ghost btn-sm" id="manageTop3Btn" style="font-size:.7rem"><i class="fa-solid fa-pen"></i> Gerenciar</button>` : ''}
+      </div>
+
+      ${top3.length === 0
+        ? `<div class="empty-state" style="padding:28px"><div class="empty-state-text">Nenhum ranking desta semana ainda.</div></div>`
+        : `
+        <!-- 1º lugar -->
+        <div style="padding:22px 18px 20px;text-align:center;position:relative;background:linear-gradient(180deg,rgba(245,158,11,.09) 0%,rgba(245,158,11,.03) 60%,transparent 100%);overflow:hidden">
+          <!-- Glow aura -->
+          <div style="position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:160px;height:80px;background:radial-gradient(ellipse,rgba(245,158,11,.18) 0%,transparent 70%);pointer-events:none"></div>
+          <!-- Linha decorativa superior -->
+          <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,rgba(245,158,11,.6) 30%,rgba(245,158,11,.9) 50%,rgba(245,158,11,.6) 70%,transparent 100%)"></div>
+          <!-- Número do posto -->
+          <div style="position:absolute;top:10px;left:14px;font-size:.6rem;font-weight:800;color:rgba(245,158,11,.35);letter-spacing:.1em;text-transform:uppercase">1°</div>
+          <!-- Medalha -->
+          <div style="font-size:2rem;margin-bottom:8px;filter:drop-shadow(0 0 8px rgba(245,158,11,.5))">🥇</div>
+          <!-- Nome -->
+          <div style="font-weight:800;font-size:1.05rem;color:#fff;letter-spacing:.01em;margin-bottom:5px;text-shadow:0 0 20px rgba(245,158,11,.3)">${Utils.escapeHtml(top3[0].name)}</div>
+          <!-- Contagem -->
+          <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:20px;padding:3px 12px">
+            <span style="font-size:.65rem;color:rgba(245,158,11,.7);text-transform:uppercase;letter-spacing:.06em;font-weight:600">${top3[0].messages}</span>
+            <span style="font-size:.6rem;color:rgba(245,158,11,.45);letter-spacing:.04em">msgs</span>
+          </div>
+        </div>
+
+        <!-- Divisor decorativo -->
+        <div style="position:relative;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);margin:0 18px">
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:rgba(245,158,11,.3)"></div>
+        </div>
+
+        <!-- 2º e 3º lugar -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:none">
+          <!-- 2º -->
+          ${top3[1] ? `
+          <div style="padding:14px 12px 16px;text-align:center;position:relative;border-right:1px solid rgba(255,255,255,.05);background:linear-gradient(160deg,rgba(156,163,175,.07) 0%,transparent 100%)">
+            <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(156,163,175,.3),transparent)"></div>
+            <div style="font-size:.58rem;font-weight:700;color:rgba(156,163,175,.4);letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">2°</div>
+            <div style="font-size:1.2rem;margin-bottom:6px">🥈</div>
+            <div style="font-weight:700;font-size:.8rem;color:var(--text-1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${Utils.escapeHtml(top3[1].name)}</div>
+            <div style="font-size:.65rem;color:rgba(156,163,175,.65);font-weight:600;letter-spacing:.04em">${top3[1].messages} msgs</div>
+          </div>` : '<div></div>'}
+          <!-- 3º -->
+          ${top3[2] ? `
+          <div style="padding:14px 12px 16px;text-align:center;position:relative;background:linear-gradient(160deg,rgba(180,120,60,.07) 0%,transparent 100%)">
+            <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(180,120,60,.3),transparent)"></div>
+            <div style="font-size:.58rem;font-weight:700;color:rgba(180,120,60,.4);letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">3°</div>
+            <div style="font-size:1.2rem;margin-bottom:6px">🥉</div>
+            <div style="font-weight:700;font-size:.8rem;color:var(--text-1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${Utils.escapeHtml(top3[2].name)}</div>
+            <div style="font-size:.65rem;color:rgba(180,120,60,.65);font-weight:600;letter-spacing:.04em">${top3[2].messages} msgs</div>
+          </div>` : '<div></div>'}
+        </div>
         `
       }
     </div>
@@ -1303,10 +1342,25 @@ async function initMembros() {
 
   const isDiretoria = profile.tier === 'diretoria';
 
-  const { data: members, error } = await db.from('profiles')
+  const { data: membersRaw, error } = await db.from('profiles')
     .select('*')
-    .order('tier', { ascending: false })
     .order('name', { ascending: true });
+
+  // Ordem de prioridade: Fundador > Coordenador Geral > demais Diretoria > demais membros
+  const getRolePriority = m => {
+    const r = (m.role || '').toLowerCase();
+    if (r === 'fundador')                return 0;
+    if (r.includes('coordenador geral')) return 1;
+    if (m.tier === 'diretoria')          return 2;
+    return 3;
+  };
+  const members = membersRaw
+    ? [...membersRaw].sort((a, b) => {
+        const diff = getRolePriority(a) - getRolePriority(b);
+        if (diff !== 0) return diff;
+        return (a.name || '').localeCompare(b.name || '', 'pt-BR');
+      })
+    : [];
 
   if (error) { Utils.showToast('Erro ao carregar membros.', 'error'); return; }
 
@@ -1939,7 +1993,6 @@ async function initEventos() {
     <div class="filters-bar" style="margin-bottom:20px">
       <button class="filter-btn active" data-tab="eventos"><i class="fa-solid fa-calendar-days"></i> Eventos</button>
       <button class="filter-btn" data-tab="atas"><i class="fa-solid fa-file-lines"></i> Atas de Reunião</button>
-      <button class="filter-btn" data-tab="ranking"><i class="fa-solid fa-ranking-star"></i> Ranking Semanal</button>
     </div>
     <div id="evTab"></div>
 
