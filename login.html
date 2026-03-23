@@ -49,6 +49,13 @@
             </div>
           </div>
           <button class="login-btn" type="button" id="loginBtn">Entrar na Ordem</button>
+          <div style="text-align:center;margin-top:14px">
+            <a href="#" id="forgotLink"
+               style="font-size:0.8rem;color:var(--text-3);transition:color var(--t1) var(--ease)"
+               onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-3)'">
+              Esqueci minha senha
+            </a>
+          </div>
         </form>
 
       </div>
@@ -56,6 +63,7 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/push.js"></script>
   <script src="js/app.js"></script>
   <script>
     const pwToggle = document.getElementById('pwToggle');
