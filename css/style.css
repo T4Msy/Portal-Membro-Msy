@@ -825,17 +825,17 @@ h3 { font-size: 1.1rem; }
 
 /* Notification Dropdown */
 .notif-dropdown {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 340px;
+  position: fixed;
+  top: 68px;
+  right: 12px;
+  width: min(340px, calc(100vw - 24px));
   background: var(--black-3);
   border: 1px solid var(--border-gold);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-deep);
   overflow: hidden;
   display: none;
-  z-index: 200;
+  z-index: 400;
   animation: fadeInDown 0.2s var(--ease) both;
 }
 .notif-dropdown.open { display: block; }
@@ -2033,7 +2033,7 @@ h3 { font-size: 1.1rem; }
 
 .bib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 18px;
 }
 
@@ -2114,6 +2114,7 @@ h3 { font-size: 1.1rem; }
   gap: 8px;
   margin-top: auto;
   padding-top: 4px;
+  flex-wrap: wrap;
 }
 
 /* -------- PREMIAÇÕES -------- */
