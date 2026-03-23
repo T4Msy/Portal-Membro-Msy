@@ -519,7 +519,7 @@ async function initDashboard() {
     db.from('activities')
       .select('*, assigned_by_profile:assigned_by(name)')
       .eq('assigned_to', profile.id).order('created_at', { ascending: false }).limit(4),
-    db.from('weekly_rankings').select('*').order('week_start', { ascending: false }).limit(1)
+    db.from('weekly_rankings').select('*').eq('tipo','semanal').order('week_start', { ascending: false }).limit(1)
   ]);
 
   const stats   = statsRes.data || { total: 0, pendentes: 0, andamento: 0, concluidas: 0 };
