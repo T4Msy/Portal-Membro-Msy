@@ -161,6 +161,7 @@ async function renderSidebar(activePage) {
     { page: 'premiacoes',  icon: 'fa-solid fa-trophy',        label: 'Premiações' },
     { page: 'ordem',       icon: 'fa-solid fa-crown',         label: 'Estrutura' },
     { page: 'tecnologias', icon: 'fa-solid fa-microchip',     label: 'Tecnologias' },
+    { page: 'mensalidade', icon: 'fa-solid fa-credit-card',   label: 'Mensalidade' },
     { page: 'perfil',      icon: 'fa-solid fa-circle-user',   label: 'Meu Perfil' },
   ];
 
@@ -306,6 +307,13 @@ async function initLogin() {
   const loginBtn = document.getElementById('loginBtn');
   if (!form) return;
 
+  /* ── Verifica se voltou do link de reset de senha ─────── */
+  const urlHash = new URLSearchParams(window.location.hash.replace('#', '?'));
+  if (urlHash.get('type') === 'recovery') {
+    showResetForm();
+    return;
+  }
+
   async function doLogin() {
     const email = document.getElementById('loginEmail').value.trim();
     const pass  = document.getElementById('loginPass').value;
@@ -316,7 +324,7 @@ async function initLogin() {
       const profile = await Auth.getProfile();
       if (!profile || profile.status === 'pendente') {
         await db.auth.signOut();
-        errorEl.textContent = 'Acesso pendente. Aguarde aprovação da Diretoria.';
+        document.getElementById('loginErrorMsg').textContent = 'Acesso pendente. Aguarde aprovação da Diretoria.';
         errorEl.classList.add('show');
         loginBtn.disabled = false; loginBtn.textContent = 'Entrar na Ordem';
         return;
@@ -325,7 +333,7 @@ async function initLogin() {
       loginBtn.style.background = 'linear-gradient(135deg,#15803d,#16a34a)';
       setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
     } catch (err) {
-      errorEl.textContent = 'Credenciais inválidas. Verifique e tente novamente.';
+      document.getElementById('loginErrorMsg').textContent = 'Credenciais inválidas. Verifique e tente novamente.';
       errorEl.classList.add('show');
       loginBtn.disabled = false; loginBtn.textContent = 'Entrar na Ordem';
       document.getElementById('loginPass').value = '';
@@ -334,6 +342,161 @@ async function initLogin() {
 
   loginBtn.addEventListener('click', doLogin);
   form.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  /* ── Link "Esqueci minha senha" ───────────────────────── */
+  document.getElementById('forgotLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showForgotForm();
+  });
+
+  /* ── Exibe formulário de recuperação de senha ─────────── */
+  function showForgotForm() {
+    const card = document.querySelector('.login-card');
+    card.innerHTML = `
+      <div class="login-logo">
+        <span class="login-logo-mark">MSY</span>
+        <div class="login-logo-sep"><span>Masayoshi Order</span></div>
+        <span class="login-logo-sub">Recuperação de Acesso</span>
+      </div>
+      <div class="login-title" style="font-size:1.1rem">Redefinir Senha</div>
+      <p style="font-size:0.82rem;color:var(--text-3);margin-bottom:18px;line-height:1.6">
+        Informe seu e-mail de acesso. Enviaremos um link para redefinir sua senha.
+      </p>
+      <div class="login-error" id="forgotError" style="display:none">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="forgotErrorMsg"></span>
+      </div>
+      <div class="login-success" id="forgotSuccess" style="display:none;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:var(--radius);padding:12px 16px;font-size:0.83rem;color:#4ade80;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="forgotSuccessMsg"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label"><i class="fa-solid fa-at"></i> E-mail</label>
+        <input class="form-input" type="email" id="forgotEmail" placeholder="seu@msy.com" autofocus>
+      </div>
+      <button class="login-btn" type="button" id="forgotBtn">Enviar link de redefinição</button>
+      <div style="text-align:center;margin-top:14px">
+        <a href="#" id="backToLogin" style="font-size:0.8rem;color:var(--text-3);transition:color var(--t1) var(--ease)"
+           onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-3)'">
+          <i class="fa-solid fa-arrow-left" style="margin-right:4px"></i>Voltar ao login
+        </a>
+      </div>
+    `;
+
+    document.getElementById('backToLogin').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.reload();
+    });
+
+    document.getElementById('forgotBtn').addEventListener('click', async () => {
+      const email   = document.getElementById('forgotEmail').value.trim();
+      const btn     = document.getElementById('forgotBtn');
+      const errEl   = document.getElementById('forgotError');
+      const succEl  = document.getElementById('forgotSuccess');
+
+      errEl.style.display  = 'none';
+      succEl.style.display = 'none';
+
+      if (!email) {
+        document.getElementById('forgotErrorMsg').textContent = 'Digite seu e-mail.';
+        errEl.style.display = 'flex';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
+
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') + '/login.html',
+      });
+
+      if (error) {
+        document.getElementById('forgotErrorMsg').textContent = 'Erro ao enviar. Verifique o e-mail e tente novamente.';
+        errEl.style.display = 'flex';
+        btn.disabled = false;
+        btn.textContent = 'Enviar link de redefinição';
+      } else {
+        document.getElementById('forgotSuccessMsg').textContent = 'Link enviado! Verifique seu e-mail (incluindo spam).';
+        succEl.style.display = 'flex';
+        btn.disabled = true;
+        btn.textContent = 'Link enviado';
+      }
+    });
+
+    document.getElementById('forgotEmail').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('forgotBtn').click();
+    });
+  }
+
+  /* ── Formulário de nova senha (após clicar no link do email) */
+  function showResetForm() {
+    const card = document.querySelector('.login-card');
+    card.innerHTML = `
+      <div class="login-logo">
+        <span class="login-logo-mark">MSY</span>
+        <div class="login-logo-sep"><span>Masayoshi Order</span></div>
+        <span class="login-logo-sub">Nova Senha</span>
+      </div>
+      <div class="login-title" style="font-size:1.1rem">Criar Nova Senha</div>
+      <div class="login-error" id="resetError" style="display:none">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="resetErrorMsg"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label"><i class="fa-solid fa-lock"></i> Nova Senha</label>
+        <div class="input-wrap">
+          <input class="form-input" type="password" id="resetPass" placeholder="mínimo 6 caracteres" style="padding-right:42px" autofocus>
+          <button type="button" class="pw-toggle" id="resetToggle"><i class="fa-regular fa-eye"></i></button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label"><i class="fa-solid fa-lock"></i> Confirmar Nova Senha</label>
+        <input class="form-input" type="password" id="resetConfirm" placeholder="repita a senha">
+      </div>
+      <button class="login-btn" type="button" id="resetBtn">Salvar nova senha</button>
+    `;
+
+    document.getElementById('resetToggle').addEventListener('click', () => {
+      const inp = document.getElementById('resetPass');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      document.getElementById('resetToggle').innerHTML =
+        inp.type === 'password' ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', async () => {
+      const pass    = document.getElementById('resetPass').value;
+      const confirm = document.getElementById('resetConfirm').value;
+      const btn     = document.getElementById('resetBtn');
+      const errEl   = document.getElementById('resetError');
+
+      errEl.style.display = 'none';
+
+      if (pass.length < 6) {
+        document.getElementById('resetErrorMsg').textContent = 'A senha deve ter pelo menos 6 caracteres.';
+        errEl.style.display = 'flex'; return;
+      }
+      if (pass !== confirm) {
+        document.getElementById('resetErrorMsg').textContent = 'As senhas não coincidem.';
+        errEl.style.display = 'flex'; return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+
+      const { error } = await db.auth.updateUser({ password: pass });
+
+      if (error) {
+        document.getElementById('resetErrorMsg').textContent = 'Erro ao salvar. Solicite um novo link de redefinição.';
+        errEl.style.display = 'flex';
+        btn.disabled = false;
+        btn.textContent = 'Salvar nova senha';
+      } else {
+        btn.style.background = 'linear-gradient(135deg,#15803d,#16a34a)';
+        btn.textContent = 'Senha atualizada! Redirecionando...';
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+      }
+    });
+  }
 }
 
 /* ============================================================
@@ -1755,12 +1918,12 @@ function openEditMemberModal(m, allMembers) {
    PAGE: TECNOLOGIAS
    ============================================================ */
 const TECHNOLOGIES = [
-  { id:1, name:'Corvus',                icon:'🦅', description:'Assistente de IA institucional da MSY.', status:'Online', url:'#' },
-  { id:2, name:'MSY Analytics Semanal', icon:'📊', description:'Painel de métricas e KPIs coletivos da Ordem, atualizado semanalmente.', status:'Online', url:'#' },
-  { id:3, name:'MSY Analytics Mensal',  icon:'📈', description:'Relatório consolidado mensal com análise profunda e comparativo histórico.', status:'Online', url:'#' },
-  { id:4, name:'NeverMind Studio',      icon:'🎬', description:'Central de produção de conteúdo e mídia da MSY.', status:'Beta', url:'#' },
-  { id:5, name:'Britannia Hub',         icon:'🏛️', description:'Portal da camada comunitária da Masayoshi.', status:'Em breve', url:'#' },
-  { id:6, name:'ProvaGen',              icon:'📝', description:'Sistema automatizado de geração de avaliações internas.', status:'Beta', url:'#' }
+  { id:1, name:'Corvus',                icon:'🦅', description:'Assistente de IA institucional da MSY. Chat com memória, base de conhecimento e integrações avançadas.', status:'Online', url:'https://t4msy.github.io/Corvus-2.0/' },
+  { id:2, name:'MSY Analytics Semanal', icon:'📊', description:'Painel de métricas e KPIs coletivos da Ordem, atualizado semanalmente via análise de WhatsApp.', status:'Online', url:'https://t4msy.github.io/MSY-ANALYTICS/' },
+  { id:3, name:'MSY Analytics Mensal',  icon:'📈', description:'Relatório consolidado mensal com análise profunda e comparativo histórico da Ordem.', status:'Online', url:'https://t4msy.github.io/Msy-Analitycs-Mensal-2/' },
+  { id:4, name:'ProvaGen',              icon:'📝', description:'Sistema automatizado de geração de avaliações internas via IA multi-modelo.', status:'Online', url:'https://t4msy.github.io/Gerador-de-Provas/' },
+  { id:5, name:'NeverMind Studio',      icon:'🎬', description:'Central de produção de conteúdo e mídia da MSY. Pipeline editorial e social em desenvolvimento.', status:'Em breve', url:'#' },
+  { id:6, name:'Britannia Hub',         icon:'🏛️', description:'Portal da camada comunitária da Masayoshi. Conector entre a Ordem e o mundo externo.', status:'Em breve', url:'#' },
 ];
 
 async function initTecnologias() {
@@ -2415,9 +2578,26 @@ async function initAdmin() {
               <option value="comunicado">Comunicado 📢</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom:12px">
             <label class="form-label">Mensagem</label>
             <textarea class="form-input form-textarea" id="notif-msg" placeholder="Digite a mensagem para todos os membros..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Canais de envio</label>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:default;font-size:0.85rem;color:var(--text-2)">
+                <input type="checkbox" id="ch-portal" checked disabled style="accent-color:var(--gold);width:15px;height:15px">
+                <span><i class="fa-solid fa-bell" style="color:var(--gold);margin-right:6px"></i>Portal — sempre ativo</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.85rem;color:var(--text-2)">
+                <input type="checkbox" id="ch-push" style="accent-color:var(--red-bright);width:15px;height:15px">
+                <span><i class="fa-solid fa-mobile-screen" style="color:var(--red-bright);margin-right:6px"></i>Push — dispositivos com permissão ativa</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.85rem;color:var(--text-2)">
+                <input type="checkbox" id="ch-email" style="accent-color:#60a5fa;width:15px;height:15px">
+                <span><i class="fa-solid fa-envelope" style="color:#60a5fa;margin-right:6px"></i>Email — membros com email ativo nas preferências</span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -2444,16 +2624,25 @@ async function initAdmin() {
   notifyModal.addEventListener('click', e => { if (e.target === notifyModal) notifyModal.classList.remove('open'); });
 
   document.getElementById('notifySend').addEventListener('click', async () => {
-    const msg  = document.getElementById('notif-msg').value.trim();
-    const type = document.getElementById('notif-type').value;
+    const msg    = document.getElementById('notif-msg').value.trim();
+    const type   = document.getElementById('notif-type').value;
+    const doPush = document.getElementById('ch-push')?.checked  || false;
+    const doEmail= document.getElementById('ch-email')?.checked || false;
     if (!msg) { Utils.showToast('Digite uma mensagem.', 'error'); return; }
     const btn2 = document.getElementById('notifySend');
-    btn2.disabled = true; btn2.textContent = 'Enviando...';
+    btn2.disabled = true; btn2.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
     const iconMap = { info:'🔔', activity:'📋', event:'🗓️', comunicado:'📢' };
+    // 1. Grava no portal para todos
     await db.rpc('notify_member', { p_user_id: null, p_message: msg, p_type: type, p_icon: iconMap[type] });
+    // 2. Push em massa (se selecionado e módulo disponível)
+    if (doPush && typeof PushManager !== 'undefined') {
+      await PushManager.sendToAll({ title: 'MSY Portal', body: msg, url: '/dashboard.html' });
+    }
+    // 3. Email em massa: o Edge Function processa a fila de email_sent=false
+    // (requer configuração do Supabase Edge Function send-email)
     notifyModal.classList.remove('open');
-    Utils.showToast('Notificação enviada para todos!');
-    btn2.disabled = false; btn2.textContent = 'Enviar para Todos';
+    Utils.showToast('Notificação enviada' + (doPush ? ' + push' : '') + (doEmail ? ' + email' : '') + '!');
+    btn2.disabled = false; btn2.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar para Todos';
   });
 }
 
@@ -2604,6 +2793,65 @@ async function initPerfil() {
           </div>
         </div>
 
+        <!-- Preferências de Notificação -->
+        <div class="card" id="notifPrefsCard">
+          <div class="card-title"><i class="fa-solid fa-bell"></i> Notificações</div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+
+            <!-- Push -->
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--border-faint)">
+              <div>
+                <div style="font-weight:600;font-size:0.88rem;color:var(--text-1);margin-bottom:3px">
+                  <i class="fa-solid fa-mobile-screen" style="color:var(--red-bright);margin-right:6px"></i>Push no Dispositivo
+                </div>
+                <div style="font-size:0.77rem;color:var(--text-3);line-height:1.5">
+                  Receba alertas em tempo real no celular, computador e tablet.<br>
+                  Funciona em Windows, macOS, Linux, Android e iOS (via Safari).
+                </div>
+                <div id="pushStatusLabel" style="margin-top:6px;font-size:0.75rem;font-weight:600"></div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+                <label class="notif-toggle-wrap">
+                  <input type="checkbox" id="toggle-push" class="notif-toggle-input">
+                  <span class="notif-toggle-slider"></span>
+                </label>
+                <button class="btn btn-ghost btn-sm" id="btnTestPush" style="font-size:0.72rem;padding:4px 10px;display:none">
+                  <i class="fa-solid fa-bell"></i> Testar
+                </button>
+              </div>
+            </div>
+
+            <!-- Email -->
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--border-faint)">
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:0.88rem;color:var(--text-1);margin-bottom:3px">
+                  <i class="fa-solid fa-envelope" style="color:#60a5fa;margin-right:6px"></i>Notificações por Email
+                </div>
+                <div style="font-size:0.77rem;color:var(--text-3);line-height:1.5;margin-bottom:10px">
+                  Receba comunicados, atividades e eventos também no email.
+                </div>
+                <div id="emailFieldWrap" style="display:none">
+                  <input type="email" class="form-input" id="notif-email-addr"
+                    placeholder="email@exemplo.com (opcional, usa o da conta se vazio)"
+                    style="font-size:0.82rem;padding:8px 12px">
+                </div>
+              </div>
+              <div style="flex-shrink:0">
+                <label class="notif-toggle-wrap">
+                  <input type="checkbox" id="toggle-email" class="notif-toggle-input">
+                  <span class="notif-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end">
+              <button class="btn btn-outline" id="saveNotifPrefsBtn">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar preferências
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Info somente leitura (cargo, tier) -->
         <div class="card" style="border-color:var(--border-faint)">
           <div class="card-title"><i class="fa-solid fa-shield-halved"></i> Informações da Ordem</div>
@@ -2644,6 +2892,103 @@ async function initPerfil() {
   if (typeof renderBadgesNoPerfil === 'function') {
     renderBadgesNoPerfil(profile.id, 'profileBadgesContainer');
   }
+
+  /* ── Preferências de Notificação ────────────────────────── */
+  (async () => {
+    const pushToggle  = document.getElementById('toggle-push');
+    const emailToggle = document.getElementById('toggle-email');
+    const emailField  = document.getElementById('notif-email-addr');
+    const emailWrap   = document.getElementById('emailFieldWrap');
+    const pushLabel   = document.getElementById('pushStatusLabel');
+    const testBtn     = document.getElementById('btnTestPush');
+
+    // Preenche toggles com prefs salvas
+    pushToggle.checked  = profile.notif_push  ?? true;
+    emailToggle.checked = profile.notif_email ?? false;
+    emailField.value    = profile.notif_email_address || '';
+    if (emailToggle.checked) emailWrap.style.display = 'block';
+
+    // Estado atual do push neste browser
+    async function updatePushLabel() {
+      if (!PushManager.isSupported()) {
+        pushLabel.innerHTML = '<span style="color:var(--text-3)"><i class="fa-solid fa-ban"></i> Push não suportado neste browser</span>';
+        pushToggle.disabled = true;
+        return;
+      }
+      const perm       = PushManager.getPermissionStatus();
+      const subscribed = await PushManager.isSubscribed();
+      if (perm === 'denied') {
+        pushLabel.innerHTML = '<span style="color:var(--red-bright)"><i class="fa-solid fa-triangle-exclamation"></i> Bloqueado no browser — libere nas configurações do site</span>';
+        pushToggle.checked  = false;
+      } else if (subscribed) {
+        pushLabel.innerHTML = '<span style="color:#4ade80"><i class="fa-solid fa-circle-check"></i> Ativo neste dispositivo (' + PushManager._getDeviceLabel() + ')</span>';
+        if (testBtn) testBtn.style.display = 'inline-flex';
+      } else {
+        pushLabel.innerHTML = '<span style="color:var(--text-3)"><i class="fa-regular fa-circle"></i> Inativo neste dispositivo</span>';
+        if (testBtn) testBtn.style.display = 'none';
+      }
+    }
+    await updatePushLabel();
+
+    // Toggle push: ativa ou desativa subscription neste browser
+    pushToggle.addEventListener('change', async () => {
+      if (pushToggle.checked) {
+        try {
+          const { deviceLabel } = await PushManager.subscribe(profile.id);
+          pushLabel.innerHTML = '<span style="color:#4ade80"><i class="fa-solid fa-circle-check"></i> Ativo: ' + deviceLabel + '</span>';
+          if (testBtn) testBtn.style.display = 'inline-flex';
+          Utils.showToast('Push ativado neste dispositivo!');
+        } catch (err) {
+          pushToggle.checked = false;
+          Utils.showToast(err.message || 'Erro ao ativar push.', 'error');
+          await updatePushLabel();
+        }
+      } else {
+        await PushManager.unsubscribe(profile.id);
+        if (testBtn) testBtn.style.display = 'none';
+        await updatePushLabel();
+        Utils.showToast('Push desativado neste dispositivo.');
+      }
+    });
+
+    // Botão de teste
+    testBtn?.addEventListener('click', () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification('MSY Portal — Teste', {
+            body:  'Push funcionando neste dispositivo!',
+            icon:  '/favicon.ico',
+            badge: '/favicon.ico',
+            vibrate: [150, 50, 150],
+          });
+        });
+      }
+    });
+
+    // Toggle email: exibe/esconde campo de email
+    emailToggle.addEventListener('change', () => {
+      emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
+    });
+
+    // Salvar preferências
+    document.getElementById('saveNotifPrefsBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('saveNotifPrefsBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+      try {
+        await NotifPrefs.save(profile.id, {
+          notif_push:          pushToggle.checked,
+          notif_email:         emailToggle.checked,
+          notif_email_address: emailField.value.trim() || null,
+        });
+        Utils.showToast('Preferências de notificação salvas!');
+      } catch (err) {
+        Utils.showToast('Erro ao salvar preferências.', 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar preferências';
+    });
+  })();
 
   // Color swatches
   document.querySelectorAll('#colorPickerRow .color-swatch').forEach(sw => {

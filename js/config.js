@@ -16,6 +16,12 @@ const MSY_CONFIG = {
     COMUNICADO_PUBLISHED: 'https://seu-n8n.com/webhook/comunicado-published',
   },
 
+  // ── Mercado Pago ──────────────────────────────────────────
+  // Acesse: https://www.mercadopago.com.br/developers/panel
+  // ⚠️  Em produção, mova o ACCESS_TOKEN para um backend seguro
+  MP_PUBLIC_KEY:   'TEST-COLOQUE-SUA-PUBLIC-KEY',   // Chave pública
+  MP_ACCESS_TOKEN: 'TEST-COLOQUE-SEU-ACCESS-TOKEN', // Token de acesso
+
   // ── App ───────────────────────────────────────────────────
   APP_NAME: 'MSY Portal',
   VERSION:  '2.0.0',

@@ -1077,6 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
     desempenho: initDesempenho,
     onboarding: initOnboarding,
     ranking:    initRanking,
+    mensalidade: typeof initMensalidade !== 'undefined' ? initMensalidade : undefined,
   };
   routes[page]?.();
   // Patch de badges no modal de membros (sempre que membros.html for carregado)
