@@ -489,23 +489,47 @@ async function renderBadgesMembro(userId, containerId) {
   container.innerHTML = `<div style="padding:10px 0;color:var(--text-3);font-size:.8rem;display:flex;align-items:center;gap:8px">
     <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...
   </div>`;
-  const { data: badges, error } = await db.rpc('get_member_badges', { p_user_id: userId });
-  if (error || !badges || !badges.length) {
+
+  // Busca insígnias de premiações e de recordes em paralelo
+  const [badgesRes, insigniasRecordes] = await Promise.all([
+    db.rpc('get_member_badges', { p_user_id: userId }),
+    typeof calcInsigniasRecordes === 'function'
+      ? calcInsigniasRecordes(userId)
+      : Promise.resolve([]),
+  ]);
+
+  const badges = badgesRes.data || [];
+  const temQualquer = badges.length > 0 || insigniasRecordes.length > 0;
+
+  if (!temQualquer) {
     container.innerHTML = `<div style="padding:8px 0;color:var(--text-3);font-size:.8rem;font-style:italic">Nenhuma insígnia ainda.</div>`;
     return;
   }
+
   const COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
+
+  const recordesHtml = insigniasRecordes.map(ins => `
+    <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
+      <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
+      <div class="badge-info">
+        <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
+        <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
+      </div>
+    </div>`).join('');
+
+  const badgesHtml = badges.map(b => {
+    const color = COLORS[b.importancia] || 'var(--gold)';
+    return `<div class="badge-item" title="${Utils.escapeHtml((b.periodos||[]).slice(0,5).join(' · '))}" style="--badge-color:${color}">
+      <div class="badge-icon">${b.icone||'🏆'}</div>
+      <div class="badge-info">
+        <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
+        <div class="badge-qtd" style="color:${color}">${b.quantidade}×</div>
+      </div>
+    </div>`;
+  }).join('');
+
   container.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0">
-    ${badges.map(b => {
-      const color = COLORS[b.importancia]||'var(--gold)';
-      return `<div class="badge-item" title="${Utils.escapeHtml((b.periodos||[]).slice(0,5).join(' · '))}" style="--badge-color:${color}">
-        <div class="badge-icon">${b.icone||'🏆'}</div>
-        <div class="badge-info">
-          <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
-          <div class="badge-qtd" style="color:${color}">${b.quantidade}×</div>
-        </div>
-      </div>`;
-    }).join('')}
+    ${recordesHtml}${badgesHtml}
   </div>`;
 }
 

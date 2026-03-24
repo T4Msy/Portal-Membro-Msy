@@ -983,21 +983,22 @@ async function initPremiacoes() {
       const btn = document.getElementById('recSaveBtn');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
 
-      let dbErr;
-      if (rec?.id) {
-        ({ error: dbErr } = await db.from('msy_recordes').update({ nome, mensagens: msgs, periodo }).eq('id', rec.id));
-      } else {
-        ({ error: dbErr } = await db.from('msy_recordes').insert({ tipo, nome, mensagens: msgs, periodo }));
-      }
+      // Upsert — funciona para INSERT e UPDATE sem depender de rec.id
+      // onConflict:'tipo' usa a constraint UNIQUE(tipo) da tabela msy_recordes
+      const { error: dbErr } = await db.from('msy_recordes').upsert(
+        { tipo, nome, mensagens: msgs, periodo },
+        { onConflict: 'tipo', ignoreDuplicates: false }
+      );
 
       if (dbErr) {
-        Utils.showToast('Erro ao salvar recorde.', 'error');
+        console.error('[MSY] Erro ao salvar recorde:', dbErr);
+        Utils.showToast('Erro ao salvar recorde: ' + (dbErr.message || 'verifique as permissões.'), 'error');
         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Recorde';
         return;
       }
 
       Utils.showToast('Recorde salvo!');
-      // Invalida cache para que renderRecordes e insígnias reflitam o novo dado imediatamente
+      // Invalida cache para que renderRecordes e insígnias reflitam imediatamente
       window._msyRecordesCache   = null;
       window._msyRecordesCacheTs = 0;
       modal.classList.remove('open');

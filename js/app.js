@@ -1826,20 +1826,7 @@ async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers
         <div class="member-profile-stat-lbl">Pendentes</div>
       </div>
     </div>
-
-    <!-- INSÍGNIAS -->
-    <div style="margin-top:16px;border-top:1px solid var(--border-faint);padding-top:14px">
-      <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">
-        <i class="fa-solid fa-medal" style="margin-right:6px"></i>Insígnias
-      </div>
-      <div id="memberModalBadgesContainer"></div>
-    </div>
   `;
-
-  // Carregar insígnias do membro (mesma função usada no perfil)
-  if (typeof renderBadgesNoPerfil === 'function') {
-    renderBadgesNoPerfil(m.id, 'memberModalBadgesContainer');
-  }
 
   footer.innerHTML = isDiretoria && m.id !== currentProfile.id
     ? `<button class="btn btn-ghost" id="closeMemberProfile">Fechar</button>
@@ -3007,28 +2994,47 @@ async function initPerfil() {
       emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
     });
 
-    // Salvar preferências — gravação direta + wrapper
+    // Salvar preferências de notificação
     document.getElementById('saveNotifPrefsBtn').addEventListener('click', async () => {
       const btn = document.getElementById('saveNotifPrefsBtn');
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
       try {
         const emailAddr = emailField.value.trim() || null;
-        // Gravação direta via Supabase para garantir persistência independente de cache
-        const { error: updateErr } = await db.from('profiles').update({
+
+        // Usa upsert para garantir que o registro existe e é atualizado
+        // independente de política RLS de INSERT vs UPDATE
+        const { error: upsertErr } = await db.from('profiles').upsert({
+          id:                  profile.id,
           notif_push:          pushToggle.checked,
           notif_email:         emailToggle.checked,
           notif_email_address: emailAddr,
-        }).eq('id', profile.id);
-        if (updateErr) throw updateErr;
-        // Atualiza o objeto local para refletir estado salvo
-        profile.notif_push          = pushToggle.checked;
-        profile.notif_email         = emailToggle.checked;
-        profile.notif_email_address = emailAddr;
+        }, { onConflict: 'id', ignoreDuplicates: false });
+
+        if (upsertErr) throw upsertErr;
+
+        // Confirma lendo o dado de volta do banco
+        const { data: updated } = await db.from('profiles')
+          .select('notif_push, notif_email, notif_email_address')
+          .eq('id', profile.id)
+          .single();
+
+        if (updated) {
+          // Atualiza objeto local com o que realmente foi gravado
+          profile.notif_push          = updated.notif_push;
+          profile.notif_email         = updated.notif_email;
+          profile.notif_email_address = updated.notif_email_address;
+          // Sincroniza toggles com o valor confirmado
+          pushToggle.checked  = updated.notif_push  ?? true;
+          emailToggle.checked = updated.notif_email ?? false;
+          emailField.value    = updated.notif_email_address || '';
+          emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
+        }
+
         Utils.showToast('Preferências de notificação salvas!');
       } catch (err) {
-        console.error('[MSY] Erro ao salvar prefs:', err);
-        Utils.showToast('Erro ao salvar preferências. Verifique se a migration de notificações foi executada.', 'error');
+        console.error('[MSY] Erro ao salvar prefs de notificação:', err);
+        Utils.showToast('Erro ao salvar preferências.', 'error');
       }
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar preferências';
