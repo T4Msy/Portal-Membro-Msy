@@ -558,33 +558,60 @@ async function initPremiacoes() {
           <div class="page-header-sub">Histórico de conquistas e premiações da Masayoshi Order</div>
         </div>
         ${isDiretoria ? `
-          <button class="btn btn-gold" id="premAddBtn">
+          <button class="btn btn-gold" id="premAddBtn" style="display:none">
             <i class="fa-solid fa-plus"></i> Nova Premiação
           </button>
         ` : ''}
       </div>
-
-      ${(!premiacoes || premiacoes.length === 0) ? `
-        <div style="text-align:center;padding:80px 20px;color:var(--text-3)">
-          <div style="font-size:3rem;margin-bottom:16px">🏆</div>
-          <p>Nenhuma premiação cadastrada ainda.</p>
-          ${isDiretoria ? `<button class="btn btn-gold" id="premAddBtnEmpty" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Criar primeira premiação</button>` : ''}
-        </div>
-      ` : gruposHtml}
+      <div class="filters-bar" style="margin-bottom:20px" id="premSubTabs">
+        <button class="filter-btn active" data-subtab="premiacoes"><i class="fa-solid fa-trophy"></i> Premiações</button>
+        <button class="filter-btn" data-subtab="recordes"><i class="fa-solid fa-crown"></i> Recordes</button>
+      </div>
+      <div id="premSubContent"></div>
     `;
 
-    document.getElementById('premAddBtn')?.addEventListener('click', () => renderModalPremiacao());
-    document.getElementById('premAddBtnEmpty')?.addEventListener('click', () => renderModalPremiacao());
-    document.querySelectorAll('.prem-detail-btn').forEach(btn => {
-      btn.addEventListener('click', () => renderDetalhe(btn.dataset.id));
-    });
-    document.querySelectorAll('.prem-card').forEach(card => {
-      card.style.cursor = 'pointer';
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.prem-detail-btn')) return;
-        renderDetalhe(card.dataset.id);
+    // Sub-tab: renderiza premiações
+    function renderSubPremiacoes() {
+      const sub = document.getElementById('premSubContent');
+      if (isDiretoria) document.getElementById('premAddBtn').style.display = '';
+      sub.innerHTML = `
+        ${(!premiacoes || premiacoes.length === 0) ? `
+          <div style="text-align:center;padding:80px 20px;color:var(--text-3)">
+            <div style="font-size:3rem;margin-bottom:16px">🏆</div>
+            <p>Nenhuma premiação cadastrada ainda.</p>
+            ${isDiretoria ? `<button class="btn btn-gold" id="premAddBtnEmpty" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Criar primeira premiação</button>` : ''}
+          </div>
+        ` : gruposHtml}
+      `;
+      document.getElementById('premAddBtnEmpty')?.addEventListener('click', () => renderModalPremiacao());
+      sub.querySelectorAll('.prem-detail-btn').forEach(btn => {
+        btn.addEventListener('click', () => renderDetalhe(btn.dataset.id));
+      });
+      sub.querySelectorAll('.prem-card').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.prem-detail-btn')) return;
+          renderDetalhe(card.dataset.id);
+        });
+      });
+    }
+
+    renderSubPremiacoes();
+
+    // Sub-tab switcher
+    document.querySelectorAll('#premSubTabs .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#premSubTabs .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (btn.dataset.subtab === 'recordes') {
+          if (isDiretoria) document.getElementById('premAddBtn').style.display = 'none';
+          renderRecordes();
+        } else {
+          renderSubPremiacoes();
+        }
       });
     });
+
   }
 
   // -------- RENDER: Detalhe de premiação --------
@@ -745,9 +772,245 @@ async function initPremiacoes() {
   }
 
   // Roteamento inicial
+  // ──────── RECORDES HISTÓRICOS ────────
+
+  async function renderRecordes() {
+    const sub = document.getElementById('premSubContent');
+    if (!sub) return;
+    sub.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-3)">
+      <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando recordes...
+    </div>`;
+
+    // Busca recordes manuais do banco
+    const { data: recordes } = await db.from('msy_recordes').select('*').order('tipo');
+
+    // Busca rankings — uma query só para semanal, uma para mensal
+    const [semRes, mesRes] = await Promise.all([
+      db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'semanal').order('week_start', { ascending: false }),
+      db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'mensal').order('week_start', { ascending: false }),
+    ]);
+    const semRankings = semRes.data || [];
+    const mesRankings = mesRes.data || [];
+
+    // Calcula melhor semanal histórico
+    let recSemanal = null;
+    for (const r of semRankings) {
+      for (const e of (r.entries || [])) {
+        if (!recSemanal || e.messages > recSemanal.messages) {
+          recSemanal = { ...e, periodo: `${Utils.formatDate(r.week_start)} → ${Utils.formatDate(r.week_end)}` };
+        }
+      }
+    }
+
+    // Calcula melhor mensal histórico
+    let recMensal = null;
+    for (const r of mesRankings) {
+      for (const e of (r.entries || [])) {
+        if (!recMensal || e.messages > recMensal.messages) {
+          recMensal = { ...e, periodo: Utils.formatDate(r.week_start).slice(3) };
+        }
+      }
+    }
+
+    // Recorde diário (manual, do banco)
+    const recDiario = (recordes || []).find(r => r.tipo === 'diario') || null;
+
+    // ── Helper: card de recorde ──
+    function recordeCard({ simbolo, titulo, subtitulo, nome, mensagens, periodo, tipo, cor, descricao, manual }) {
+      const temDado = nome && mensagens;
+      return `
+        <div style="background:var(--black-3);border:1px solid ${cor}33;border-top:3px solid ${cor};border-radius:var(--radius-lg);padding:22px;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;right:0;width:90px;height:90px;background:radial-gradient(circle at top right,${cor}14,transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="font-size:2.2rem;line-height:1;filter:drop-shadow(0 0 7px ${cor}77)">${simbolo}</div>
+              <div>
+                <div class="font-cinzel" style="color:${cor};font-size:.95rem;letter-spacing:.06em">${titulo}</div>
+                <div style="font-size:.68rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.09em;margin-top:3px">${subtitulo}</div>
+              </div>
+            </div>
+            ${manual && isDiretoria ? `<button class="btn btn-ghost btn-sm edit-recorde-btn" data-tipo="${tipo}" style="flex-shrink:0;font-size:.7rem;padding:4px 8px" title="Editar"><i class="fa-solid fa-pen"></i></button>` : ''}
+          </div>
+          ${temDado ? `
+            <div style="display:flex;align-items:center;gap:10px;background:var(--black-4);border:1px solid var(--border-faint);border-radius:var(--radius);padding:11px 14px">
+              <div style="flex:1">
+                <div style="font-weight:700;color:var(--text-1);font-size:.9rem">${Utils.escapeHtml(nome)}</div>
+                ${periodo ? `<div style="font-size:.7rem;color:var(--text-3);margin-top:2px"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(periodo)}</div>` : ''}
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:1.5rem;font-weight:800;color:${cor};font-family:'Cinzel',serif;line-height:1">${Number(mensagens).toLocaleString('pt-BR')}</div>
+                <div style="font-size:.58rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">mensagens</div>
+              </div>
+            </div>
+          ` : `
+            <div style="display:flex;align-items:center;justify-content:center;padding:18px;background:var(--black-4);border:1px dashed var(--border-faint);border-radius:var(--radius)">
+              <div style="text-align:center;color:var(--text-3);font-size:.8rem">
+                <i class="fa-solid fa-minus" style="display:block;font-size:1.2rem;margin-bottom:6px;opacity:.3"></i>
+                ${manual && isDiretoria
+                  ? `Não registrado. <button class="btn btn-ghost btn-sm edit-recorde-btn" data-tipo="${tipo}" style="margin-left:4px;font-size:.72rem"><i class="fa-solid fa-pen"></i> Inserir</button>`
+                  : 'Sem dados suficientes.'}
+              </div>
+            </div>
+          `}
+          <div style="font-size:.73rem;color:var(--text-3);line-height:1.5">${descricao}</div>
+          <div style="font-size:.65rem;color:var(--text-3);border-top:1px solid var(--border-faint);padding-top:7px;display:flex;align-items:center;gap:5px">
+            <i class="fa-solid fa-${manual ? 'hand' : 'rotate'}" style="opacity:.5"></i>
+            ${manual ? 'Atualização manual' : 'Calculado automaticamente'}
+          </div>
+        </div>
+      `;
+    }
+
+    sub.innerHTML = `
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="height:2px;flex:0 0 24px;background:var(--gold)"></span>
+          <h2 class="font-cinzel" style="font-size:1rem;color:var(--gold);letter-spacing:.1em;text-transform:uppercase">Recordes Históricos</h2>
+          <span style="height:1px;flex:1;background:var(--border-faint)"></span>
+        </div>
+        <p style="font-size:.78rem;color:var(--text-3);margin-bottom:20px">Os maiores feitos individuais na história da Masayoshi Order. Gravados para a eternidade.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px">
+          ${recordeCard({
+            simbolo:  '⚡',
+            titulo:   'Soberania Semanal',
+            subtitulo:'Recorde Semanal Histórico',
+            nome:      recSemanal?.name   || null,
+            mensagens: recSemanal?.messages || null,
+            periodo:   recSemanal?.periodo  || null,
+            tipo: 'semanal', cor: '#f59e0b', manual: false,
+            descricao: 'O maior volume de mensagens registrado em uma única semana na história da Masayoshi Order.',
+          })}
+          ${recordeCard({
+            simbolo:  '🩸',
+            titulo:   'Domínio Mensal',
+            subtitulo:'Recorde Mensal Histórico',
+            nome:      recMensal?.name    || null,
+            mensagens: recMensal?.messages || null,
+            periodo:   recMensal?.periodo  || null,
+            tipo: 'mensal', cor: 'var(--red-bright)', manual: false,
+            descricao: 'O maior volume de mensagens registrado em um único mês na história da Masayoshi Order.',
+          })}
+          ${recordeCard({
+            simbolo:  '🔱',
+            titulo:   'Marca Perpétua',
+            subtitulo:'Recorde Diário — Manual',
+            nome:      recDiario?.nome      || null,
+            mensagens: recDiario?.mensagens  || null,
+            periodo:   recDiario?.periodo    || null,
+            tipo: 'diario', cor: '#8b5cf6', manual: true,
+            descricao: 'O maior volume de mensagens registrado em um único dia. Valor inserido manualmente pela Diretoria.',
+          })}
+
+        </div>
+      </div>
+      ${isDiretoria ? `
+        <div style="padding:11px 15px;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);font-size:.74rem;color:var(--text-3);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span><i class="fa-solid fa-circle-info" style="color:var(--gold)"></i> Recordes semanal e mensal são calculados automaticamente. O diário é manual.</span>
+          <button class="btn btn-ghost btn-sm" id="btnCorrecaoRecordes" style="font-size:.7rem"><i class="fa-solid fa-wrench"></i> Editar Recorde Diário</button>
+        </div>
+      ` : ''}
+    `;
+
+    sub.querySelectorAll('.edit-recorde-btn').forEach(btn => {
+      btn.addEventListener('click', () => renderModalRecorde(btn.dataset.tipo, recordes));
+    });
+    document.getElementById('btnCorrecaoRecordes')?.addEventListener('click', () => {
+      renderModalRecorde('diario', recordes);
+    });
+  }
+
+  // ──────── MODAL: Editar Recorde Manual ────────
+
+  async function renderModalRecorde(tipo, recordesAtuais) {
+    // Sempre busca dado fresco do banco para garantir rec.id correto
+    const { data: recFresh } = await db.from('msy_recordes')
+      .select('id, nome, mensagens, periodo').eq('tipo', tipo).limit(1);
+    const rec = (recFresh && recFresh.length > 0) ? recFresh[0] : null;
+    const { data: membros } = await db.from('profiles').select('id, name').eq('status', 'ativo').order('name');
+
+    let modal = document.getElementById('recModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'recModal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    const labelTipo = tipo === 'diario' ? 'Diário' : tipo === 'semanal' ? 'Semanal' : 'Mensal';
+
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:460px">
+        <div class="modal-header">
+          <h3 class="font-cinzel">
+            <i class="fa-solid fa-pen" style="color:var(--gold);margin-right:8px"></i>Recorde ${Utils.escapeHtml(labelTipo)}
+          </h3>
+          <button class="modal-close" id="recModalClose"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:24px">
+          <div class="form-group">
+            <label class="form-label">Membro <span style="color:var(--red-bright)">*</span></label>
+            <select class="form-input form-select" id="rec-membro">
+              <option value="">Selecionar membro...</option>
+              ${(membros || []).map(m => `<option value="${Utils.escapeHtml(m.name)}" ${rec?.nome === m.name ? 'selected' : ''}>${Utils.escapeHtml(m.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mensagens <span style="color:var(--red-bright)">*</span></label>
+            <input type="number" class="form-input" id="rec-msgs" min="1" placeholder="Ex: 1420" value="${rec?.mensagens || ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Período</label>
+            <input type="text" class="form-input" id="rec-periodo" placeholder="Ex: 14/03/2025" value="${Utils.escapeHtml(rec?.periodo || '')}">
+          </div>
+          <button class="btn btn-gold" id="recSaveBtn">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Recorde
+          </button>
+        </div>
+      </div>
+    `;
+
+    requestAnimationFrame(() => modal.classList.add('open'));
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+    document.getElementById('recModalClose').addEventListener('click', () => modal.classList.remove('open'));
+
+    document.getElementById('recSaveBtn').addEventListener('click', async () => {
+      const nome    = document.getElementById('rec-membro').value;
+      const msgs    = parseInt(document.getElementById('rec-msgs').value);
+      const periodo = document.getElementById('rec-periodo').value.trim();
+
+      if (!nome || !msgs || msgs < 1) { Utils.showToast('Preencha membro e quantidade.', 'error'); return; }
+
+      const btn = document.getElementById('recSaveBtn');
+      btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+
+      let dbErr;
+      if (rec?.id) {
+        ({ error: dbErr } = await db.from('msy_recordes').update({ nome, mensagens: msgs, periodo }).eq('id', rec.id));
+      } else {
+        ({ error: dbErr } = await db.from('msy_recordes').insert({ tipo, nome, mensagens: msgs, periodo }));
+      }
+
+      if (dbErr) {
+        Utils.showToast('Erro ao salvar recorde.', 'error');
+        btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Recorde';
+        return;
+      }
+
+      Utils.showToast('Recorde salvo!');
+      // Invalida cache para que renderRecordes e insígnias reflitam o novo dado imediatamente
+      window._msyRecordesCache   = null;
+      window._msyRecordesCacheTs = 0;
+      modal.classList.remove('open');
+      renderRecordes();
+    });
+  }
+
+  // ──────── ROTEAMENTO INICIAL ────────
+
   if (viewState.mode === 'detail') renderDetalhe(viewState.id);
   else renderLista();
 }
+
 
 /* ============================================================
    PAGE: ESTRUTURA DA ORDEM (Estática / Institucional)
@@ -983,7 +1246,12 @@ async function renderBadgesNoPerfil(userId, containerId) {
 
   const { data: badges, error } = await db.rpc('get_member_badges', { p_user_id: userId });
 
-  if (error || !badges || badges.length === 0) {
+  // Busca insígnias de recordes dinâmicas
+  const insigniasRecordes = await calcInsigniasRecordes(userId);
+
+  const temBadges = (badges && badges.length > 0) || insigniasRecordes.length > 0;
+
+  if (!temBadges) {
     container.innerHTML = `
       <div style="text-align:center;padding:28px;color:var(--text-3)">
         <div style="font-size:2rem;margin-bottom:8px">🎖️</div>
@@ -995,23 +1263,128 @@ async function renderBadgesNoPerfil(userId, containerId) {
 
   const IMPORTANCIA_COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
 
+  const badgesHtml = (badges || []).map(b => {
+    const color = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
+    const tooltip = b.periodos ? b.periodos.join(' · ') : '';
+    return `
+      <div class="badge-item" title="${Utils.escapeHtml(tooltip)}" style="--badge-color:${color}">
+        <div class="badge-icon">${b.icone || '🏆'}</div>
+        <div class="badge-info">
+          <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
+          <div class="badge-qtd" style="color:${color}">${b.quantidade}x</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const recordesHtml = insigniasRecordes.map(ins => `
+    <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
+      <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
+      <div class="badge-info">
+        <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
+        <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
+      </div>
+    </div>
+  `).join('');
+
   container.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">
-      ${badges.map(b => {
-        const color = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
-        const tooltip = b.periodos ? b.periodos.join(' · ') : '';
-        return `
-          <div class="badge-item" title="${Utils.escapeHtml(tooltip)}" style="--badge-color:${color}">
-            <div class="badge-icon">${b.icone || '🏆'}</div>
-            <div class="badge-info">
-              <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
-              <div class="badge-qtd" style="color:${color}">${b.quantidade}x</div>
-            </div>
-          </div>
-        `;
-      }).join('')}
+      ${recordesHtml}${badgesHtml}
     </div>
   `;
+}
+
+/* ============================================================
+   FUNÇÃO: Calcula insígnias de recordes para um membro
+   Cache de sessão evita reconsulta desnecessária ao banco.
+   ============================================================ */
+
+// Cache de sessão: evita recalcular enquanto o portal estiver aberto
+window._msyRecordesCache = window._msyRecordesCache || null;
+window._msyRecordesCacheTs = window._msyRecordesCacheTs || 0;
+const MSY_RECORDES_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+async function _carregarDadosRecordes() {
+  const agora = Date.now();
+  if (window._msyRecordesCache && (agora - window._msyRecordesCacheTs) < MSY_RECORDES_CACHE_TTL) {
+    return window._msyRecordesCache;
+  }
+
+  // Todas as queries em paralelo — sem .single() que lança erro no v2
+  const [semRes, mesRes, diarRes] = await Promise.all([
+    db.from('weekly_rankings').select('entries').eq('tipo', 'semanal'),
+    db.from('weekly_rankings').select('entries').eq('tipo', 'mensal'),
+    db.from('msy_recordes').select('nome, mensagens, id').eq('tipo', 'diario').limit(1),
+  ]);
+
+  // Calcula melhor semanal histórico
+  let melhorSem = null;
+  for (const r of (semRes.data || [])) {
+    for (const e of (r.entries || [])) {
+      if (!melhorSem || e.messages > melhorSem.messages) melhorSem = e;
+    }
+  }
+
+  // Calcula melhor mensal histórico
+  let melhorMes = null;
+  for (const r of (mesRes.data || [])) {
+    for (const e of (r.entries || [])) {
+      if (!melhorMes || e.messages > melhorMes.messages) melhorMes = e;
+    }
+  }
+
+  // Recorde diário (primeiro item do array, sem single())
+  const recDiario = (diarRes.data && diarRes.data.length > 0) ? diarRes.data[0] : null;
+
+  // Top 1 da semana vigente
+  const dados = { melhorSem, melhorMes, recDiario };
+  window._msyRecordesCache   = dados;
+  window._msyRecordesCacheTs = agora;
+  return dados;
+}
+
+async function calcInsigniasRecordes(userId) {
+  const insignias = [];
+
+  // Busca nome do usuário (query leve — só o campo name)
+  const { data: prof } = await db.from('profiles').select('name').eq('id', userId).limit(1);
+  if (!prof || prof.length === 0) return insignias;
+  const nome = prof[0].name;
+
+  // Carrega dados com cache
+  const { melhorSem, melhorMes, recDiario } = await _carregarDadosRecordes();
+
+  // ── Soberania Semanal — recorde histórico semanal ──
+  if (melhorSem && melhorSem.name === nome) {
+    insignias.push({
+      emoji:   '⚡',
+      titulo:  'Soberania Semanal',
+      cor:     '#f59e0b',
+      tooltip: `Recorde histórico semanal — ${Number(melhorSem.messages).toLocaleString('pt-BR')} mensagens`,
+    });
+  }
+
+  // ── Domínio Mensal — recorde histórico mensal ──
+  if (melhorMes && melhorMes.name === nome) {
+    insignias.push({
+      emoji:   '🩸',
+      titulo:  'Domínio Mensal',
+      cor:     'var(--red-bright)',
+      tooltip: `Recorde histórico mensal — ${Number(melhorMes.messages).toLocaleString('pt-BR')} mensagens`,
+    });
+  }
+
+  // ── Marca Perpétua — recorde diário (manual) ──
+  if (recDiario && recDiario.nome === nome) {
+    insignias.push({
+      emoji:   '🔱',
+      titulo:  'Marca Perpétua',
+      cor:     '#8b5cf6',
+      tooltip: `Recorde histórico diário — ${Number(recDiario.mensagens).toLocaleString('pt-BR')} mensagens`,
+    });
+  }
+
+  return insignias;
 }
 
 /* ============================================================

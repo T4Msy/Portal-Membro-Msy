@@ -1249,6 +1249,21 @@ async function openNewActivityModal(profile, onSuccess) {
       </div>
       <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Se preenchido, a atividade só aceita envios dentro deste período.</div>
     </div>
+    <div style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
+      <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-bell"></i> Canais de Notificação</div>
+      <div style="font-size:.75rem;color:var(--text-3);margin-bottom:10px">Escolha como o membro será notificado. O sistema respeita as preferências salvas do membro.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
+          <input type="checkbox" id="na-notif-push" checked style="accent-color:var(--red-bright);width:15px;height:15px">
+          <i class="fa-solid fa-mobile-screen" style="color:var(--red-bright)"></i> Push no Dispositivo
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
+          <input type="checkbox" id="na-notif-email" style="accent-color:#60a5fa;width:15px;height:15px">
+          <i class="fa-solid fa-envelope" style="color:#60a5fa"></i> Email
+        </label>
+      </div>
+      <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Canais só são disparados se o membro tiver aquela preferência ativada no perfil.</div>
+    </div>
   `;
   document.getElementById('modalFooter').innerHTML = `
     <button class="btn btn-ghost" id="cancelModal">Cancelar</button>
@@ -1281,11 +1296,20 @@ async function openNewActivityModal(profile, onSuccess) {
     const { error } = await db.from('activities').insert(payload);
 
     if (!error) {
-      await db.rpc('notify_member', {
-        p_user_id: memberId,
-        p_message: `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
-        p_type: 'activity', p_icon: '📋'
+      // Coleta canais selecionados pela Diretoria
+      const channels = [];
+      if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
+      if (document.getElementById('na-notif-email')?.checked) channels.push('email');
+
+      // Dispara notificação respeitando prefs do membro
+      await NotifPrefs.dispatch(memberId, {
+        message:  `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+        type:     'activity',
+        icon:     '📋',
+        link:     'atividades.html',
+        channels,
       });
+
       modal.classList.remove('open');
       Utils.showToast('Atividade criada com sucesso!');
       setTimeout(onSuccess, 300);
@@ -1802,7 +1826,20 @@ async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers
         <div class="member-profile-stat-lbl">Pendentes</div>
       </div>
     </div>
+
+    <!-- INSÍGNIAS -->
+    <div style="margin-top:16px;border-top:1px solid var(--border-faint);padding-top:14px">
+      <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">
+        <i class="fa-solid fa-medal" style="margin-right:6px"></i>Insígnias
+      </div>
+      <div id="memberModalBadgesContainer"></div>
+    </div>
   `;
+
+  // Carregar insígnias do membro (mesma função usada no perfil)
+  if (typeof renderBadgesNoPerfil === 'function') {
+    renderBadgesNoPerfil(m.id, 'memberModalBadgesContainer');
+  }
 
   footer.innerHTML = isDiretoria && m.id !== currentProfile.id
     ? `<button class="btn btn-ghost" id="closeMemberProfile">Fechar</button>
@@ -2970,20 +3007,28 @@ async function initPerfil() {
       emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
     });
 
-    // Salvar preferências
+    // Salvar preferências — gravação direta + wrapper
     document.getElementById('saveNotifPrefsBtn').addEventListener('click', async () => {
       const btn = document.getElementById('saveNotifPrefsBtn');
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
       try {
-        await NotifPrefs.save(profile.id, {
+        const emailAddr = emailField.value.trim() || null;
+        // Gravação direta via Supabase para garantir persistência independente de cache
+        const { error: updateErr } = await db.from('profiles').update({
           notif_push:          pushToggle.checked,
           notif_email:         emailToggle.checked,
-          notif_email_address: emailField.value.trim() || null,
-        });
+          notif_email_address: emailAddr,
+        }).eq('id', profile.id);
+        if (updateErr) throw updateErr;
+        // Atualiza o objeto local para refletir estado salvo
+        profile.notif_push          = pushToggle.checked;
+        profile.notif_email         = emailToggle.checked;
+        profile.notif_email_address = emailAddr;
         Utils.showToast('Preferências de notificação salvas!');
       } catch (err) {
-        Utils.showToast('Erro ao salvar preferências.', 'error');
+        console.error('[MSY] Erro ao salvar prefs:', err);
+        Utils.showToast('Erro ao salvar preferências. Verifique se a migration de notificações foi executada.', 'error');
       }
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar preferências';
