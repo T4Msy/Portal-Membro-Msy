@@ -747,87 +747,17 @@ async function initPresencas() {
    PAGE: PAINEL DE DESEMPENHO
    ============================================================ */
 async function initDesempenho() {
+  // Implementação movida para modules4.js
+  // Este stub é mantido para compatibilidade do router
   const profile = await Auth.requireAuth();
-  if (!profile||profile.tier!=='diretoria'){window.location.href='dashboard.html';return;}
+  if (!profile || profile.tier !== 'diretoria') { window.location.href = 'dashboard.html'; return; }
   await renderSidebar('desempenho');
   await renderTopBar('Desempenho', profile);
   const content = document.getElementById('pageContent');
-  Utils.showLoading(content,'Calculando...');
-  const {data:membros,error} = await db.rpc('get_desempenho_membros');
-  if(error){content.innerHTML=`<div style="padding:40px;text-align:center;color:var(--text-3)">Erro: ${error.message}</div>`;return;}
-  const lista=membros||[];
-  const total=lista.length;
-  const media=total?Math.round(lista.reduce((s,m)=>s+(m.taxa_conclusao||0),0)/total):0;
-  const totalActs=lista.reduce((s,m)=>s+(m.total_atividades||0),0);
-  const top=lista[0]||null;
-  const bc=t=>t>=80?'#10b981':t>=50?'var(--gold)':'var(--red-bright)';
-
-  content.innerHTML=`
-    <div class="page-header">
-      <div><div class="page-header-title">Painel de Desempenho</div><div class="page-header-sub">Performance dos membros ativos</div></div>
-    </div>
-    <div class="stats-grid" style="margin-bottom:28px">
-      <div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-users"></i></div><div class="stat-info"><div class="stat-value">${total}</div><div class="stat-label">Membros Ativos</div></div></div>
-      <div class="stat-card blue-accent card-enter"><div class="stat-icon blue"><i class="fa-solid fa-chart-line"></i></div><div class="stat-info"><div class="stat-value">${media}%</div><div class="stat-label">Taxa Média</div></div></div>
-      <div class="stat-card green-accent card-enter"><div class="stat-icon green"><i class="fa-solid fa-list-check"></i></div><div class="stat-info"><div class="stat-value">${totalActs}</div><div class="stat-label">Total Atividades</div></div></div>
-      ${top?`<div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-crown"></i></div><div class="stat-info"><div class="stat-value" style="font-size:1rem;line-height:1.2">${Utils.escapeHtml(top.name.split(' ')[0])}</div><div class="stat-label">Maior Taxa</div></div></div>`:''}
-    </div>
-    <div class="card">
-      <div style="padding:16px 24px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <h3 class="font-cinzel" style="font-size:.9rem;flex:1"><i class="fa-solid fa-ranking-star" style="color:var(--gold);margin-right:8px"></i>Ranking de Desempenho</h3>
-        <input type="text" id="desempSearch" class="form-input" placeholder="Buscar..." style="width:180px;padding:7px 12px;font-size:.82rem;max-width:100%">
-      </div>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <table class="desemp-table">
-          <thead><tr>
-            <th style="width:36px">#</th><th>Membro</th><th>Taxa</th>
-            <th style="text-align:center">✓</th>
-            <th style="text-align:center" class="hide-sm">⏳</th>
-            <th style="text-align:center" class="hide-sm">⌛</th>
-            <th style="text-align:center" class="hide-xs">Total</th>
-            <th style="text-align:center" class="hide-xs">🏆</th>
-          </tr></thead>
-          <tbody>
-            ${lista.map((m,i)=>{
-              const t=m.taxa_conclusao||0;
-              const c=bc(t);
-              const ac=m.avatar_url?`<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(m.initials||Utils.getInitials(m.name));
-              return `<tr class="desemp-row" data-name="${Utils.escapeHtml(m.name.toLowerCase())}">
-                <td style="color:var(--text-3);font-weight:700;font-size:.82rem">${i+1}</td>
-                <td><div style="display:flex;align-items:center;gap:10px">
-                  <div class="avatar" style="width:32px;height:32px;font-size:.6rem;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a);flex-shrink:0">${ac}</div>
-                  <div style="min-width:0">
-                    <div style="font-weight:600;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(m.name)}</div>
-                    <div style="font-size:.7rem;color:var(--text-3)">${Utils.escapeHtml(m.role)}</div>
-                  </div>
-                </div></td>
-                <td style="min-width:140px"><div style="display:flex;align-items:center;gap:8px">
-                  <div style="flex:1;height:6px;background:var(--black-5);border-radius:99px;overflow:hidden;min-width:50px">
-                    <div style="width:${t}%;height:100%;background:${c};border-radius:99px"></div>
-                  </div>
-                  <span style="color:${c};font-weight:700;font-size:.82rem;min-width:30px">${t}%</span>
-                </div></td>
-                <td style="color:#10b981;font-weight:600;text-align:center">${m.concluidas||0}</td>
-                <td style="color:var(--gold);text-align:center" class="hide-sm">${m.andamento||0}</td>
-                <td style="color:var(--text-3);text-align:center" class="hide-sm">${m.pendentes||0}</td>
-                <td style="color:var(--text-3);text-align:center" class="hide-xs">${m.total_atividades||0}</td>
-                <td style="text-align:center" class="hide-xs">${m.premiacoes>0?`<span style="color:var(--gold)">🏆 ${m.premiacoes}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-
-  document.getElementById('desempSearch').addEventListener('input',e=>{
-    const q=e.target.value.toLowerCase();
-    document.querySelectorAll('.desemp-row').forEach(row=>{row.style.display=row.dataset.name.includes(q)?'':'none';});
-  });
+  content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-3);gap:12px"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...</div>';
 }
 
-/* ============================================================
-   PAGE: ONBOARDING
-   ============================================================ */
+
 async function initOnboarding() {
   const session = await Auth.getSession();
   if (!session) { window.location.href='login.html'; return; }
@@ -1098,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
     busca:      initBusca,
     feed:       initFeed,
     presencas:  initPresencas,
-    desempenho: initDesempenho,
+    // desempenho: gerenciado por modules4.js
     onboarding: initOnboarding,
     ranking:    initRanking,
     mensalidade: typeof initMensalidade !== 'undefined' ? initMensalidade : undefined,
