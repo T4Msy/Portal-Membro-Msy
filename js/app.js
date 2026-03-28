@@ -227,6 +227,7 @@ async function renderTopBar(pageTitle, profile) {
 
   const { data: notifs } = await db.from('notifications')
     .select('*').eq('user_id', profile.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false }).limit(6);
 
   const unread = (notifs || []).filter(n => !n.read).length;
@@ -283,7 +284,7 @@ async function renderTopBar(pageTitle, profile) {
   document.getElementById('notifDropdown').addEventListener('click', e => e.stopPropagation());
 
   document.getElementById('markAllRead').addEventListener('click', async () => {
-    await db.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false);
+    await db.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false).is('deleted_at', null);
     topbar.querySelector('.notif-count')?.remove();
     topbar.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
   });
@@ -514,7 +515,7 @@ async function initDashboard() {
 
   const [statsRes, notifsRes, eventsRes, actsRes, rankingRes] = await Promise.all([
     db.rpc('get_member_stats', { p_user_id: profile.id }),
-    db.from('notifications').select('*').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(4),
+    db.from('notifications').select('*').eq('user_id', profile.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(4),
     db.from('events').select('*').gte('event_date', today).order('event_date', { ascending: true }).limit(3),
     db.from('activities')
       .select('*, assigned_by_profile:assigned_by(name)')
@@ -558,19 +559,23 @@ async function initDashboard() {
     </div>
 
     <div class="dash-grid">
-      <div class="card card-enter">
-        <div class="card-title"><i class="fa-solid fa-bell"></i> Notificações Recentes</div>
-        <div class="small-list">
+      <div class="card card-enter" id="notifsCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="card-title" style="margin-bottom:0"><i class="fa-solid fa-bell"></i> Notificações Recentes</div>
+          ${notifs.length > 0 ? `<button class="notif-clear-all-btn" id="notifClearAllBtn" title="Limpar todas as notificações"><i class="fa-solid fa-trash-can"></i> Limpar</button>` : ''}
+        </div>
+        <div class="small-list" id="notifsList">
           ${notifs.length === 0
-            ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Sem notificações.</div></div>`
+            ? `<div class="notif-empty-state"><i class="fa-solid fa-bell-slash" style="opacity:.3;font-size:1.1rem"></i><span>Nenhuma notificação recente.</span></div>`
             : notifs.map(n => `
-              <div class="small-list-item">
+              <div class="small-list-item notif-item-dash" data-notif-id="${n.id}">
                 <div class="small-list-icon">${n.icon||'🔔'}</div>
                 <div class="small-list-info">
                   <div class="small-list-title">${Utils.escapeHtml(n.message)}</div>
                   <div class="small-list-sub">${Utils.formatDate(n.created_at)}</div>
                 </div>
                 ${!n.read ? '<span class="badge badge-red" style="font-size:.62rem;padding:2px 7px">Nova</span>' : ''}
+                <button class="notif-del-btn" data-notif-id="${n.id}" title="Remover notificação"><i class="fa-solid fa-xmark"></i></button>
               </div>`).join('')
           }
         </div>
@@ -597,8 +602,11 @@ async function initDashboard() {
       </div>
     </div>
 
+    <!-- Jornal MSY -->
+    <div id="jornalContainer" class="card-enter" style="margin-bottom:8px"></div>
+
     <!-- Top 3 da Semana -->
-    <div class="card card-enter" id="top3Card" style="overflow:hidden;padding:0">
+    <div class="card card-enter" id="top3Card" style="overflow:hidden;padding:0;margin-bottom:8px">
       <!-- Header -->
       <div style="padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(245,158,11,.12)">
         <div style="display:flex;align-items:center;gap:9px">
@@ -639,31 +647,31 @@ async function initDashboard() {
         </div>
 
         <!-- 2º e 3º lugar -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:none;gap:1px;background:rgba(255,255,255,.05)">
           <!-- 2º -->
           ${top3[1] ? `
-          <div style="padding:14px 12px 16px;text-align:center;position:relative;border-right:1px solid rgba(255,255,255,.05);background:linear-gradient(160deg,rgba(156,163,175,.07) 0%,transparent 100%)">
+          <div style="padding:20px 16px 22px;text-align:center;position:relative;background:linear-gradient(160deg,rgba(156,163,175,.07) 0%,transparent 100%)">
             <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(156,163,175,.3),transparent)"></div>
-            <div style="font-size:.58rem;font-weight:700;color:rgba(156,163,175,.4);letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">2°</div>
-            <div style="font-size:1.2rem;margin-bottom:6px">🥈</div>
-            <div style="font-weight:700;font-size:.8rem;color:var(--text-1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${Utils.escapeHtml(top3[1].name)}</div>
-            <div style="font-size:.65rem;color:rgba(156,163,175,.65);font-weight:600;letter-spacing:.04em">${top3[1].messages} msgs</div>
-          </div>` : '<div></div>'}
+            <div style="font-size:.58rem;font-weight:700;color:rgba(156,163,175,.4);letter-spacing:.1em;margin-bottom:10px;text-transform:uppercase">2°</div>
+            <div style="font-size:1.6rem;margin-bottom:10px">🥈</div>
+            <div style="font-weight:700;font-size:.88rem;color:var(--text-1);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px">${Utils.escapeHtml(top3[1].name)}</div>
+            <div style="font-size:.7rem;color:rgba(156,163,175,.65);font-weight:600;letter-spacing:.04em">${top3[1].messages} msgs</div>
+          </div>` : '<div style="background:transparent"></div>'}
           <!-- 3º -->
           ${top3[2] ? `
-          <div style="padding:14px 12px 16px;text-align:center;position:relative;background:linear-gradient(160deg,rgba(180,120,60,.07) 0%,transparent 100%)">
+          <div style="padding:20px 16px 22px;text-align:center;position:relative;background:linear-gradient(160deg,rgba(180,120,60,.07) 0%,transparent 100%)">
             <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(180,120,60,.3),transparent)"></div>
-            <div style="font-size:.58rem;font-weight:700;color:rgba(180,120,60,.4);letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase">3°</div>
-            <div style="font-size:1.2rem;margin-bottom:6px">🥉</div>
-            <div style="font-weight:700;font-size:.8rem;color:var(--text-1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${Utils.escapeHtml(top3[2].name)}</div>
-            <div style="font-size:.65rem;color:rgba(180,120,60,.65);font-weight:600;letter-spacing:.04em">${top3[2].messages} msgs</div>
-          </div>` : '<div></div>'}
+            <div style="font-size:.58rem;font-weight:700;color:rgba(180,120,60,.4);letter-spacing:.1em;margin-bottom:10px;text-transform:uppercase">3°</div>
+            <div style="font-size:1.6rem;margin-bottom:10px">🥉</div>
+            <div style="font-weight:700;font-size:.88rem;color:var(--text-1);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px">${Utils.escapeHtml(top3[2].name)}</div>
+            <div style="font-size:.7rem;color:rgba(180,120,60,.65);font-weight:600;letter-spacing:.04em">${top3[2].messages} msgs</div>
+          </div>` : '<div style="background:transparent"></div>'}
         </div>
         `
       }
     </div>
 
-    <div class="card card-enter">
+    <div class="card card-enter" style="margin-bottom:8px">
       <div class="card-title" style="justify-content:space-between">
         <span><i class="fa-solid fa-clock-rotate-left"></i> Atividades Recentes</span>
         <a href="atividades.html" class="btn btn-ghost btn-sm">Ver todas <i class="fa-solid fa-arrow-right"></i></a>
@@ -698,6 +706,12 @@ async function initDashboard() {
       </div>
     </div>
   `;
+
+  // Inicializar Jornal MSY (definido ao final deste arquivo)
+  _initJornalMSY(profile);
+
+  // Inicializar sistema de notificações com limpeza
+  _initNotifsDash(profile);
 
   if (isDiretoria) {
     document.getElementById('manageTop3Btn')?.addEventListener('click', () => openTop3Modal(ranking));
@@ -1801,6 +1815,12 @@ async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers
       <span class="member-profile-detail-label">Nível</span>
       <span class="member-profile-detail-val">${m.tier === 'diretoria' ? 'Diretoria' : 'Membro'}</span>
     </div>
+    ${m.birth_date ? `
+    <div class="member-profile-detail-row">
+      <i class="fa-solid fa-cake-candles" style="color:var(--gold)"></i>
+      <span class="member-profile-detail-label">Nascimento</span>
+      <span class="member-profile-detail-val">${Utils.formatDate(m.birth_date)}</span>
+    </div>` : ''}
 
     ${m.bio ? `
       <div class="member-profile-bio">
@@ -2845,6 +2865,11 @@ async function initPerfil() {
             <label class="form-label">Bio / Descrição</label>
             <textarea class="form-input form-textarea" id="p-bio" style="min-height:90px" placeholder="Escreva algo sobre você, seus objetivos na Ordem...">${Utils.escapeHtml(profile.bio||'')}</textarea>
           </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label"><i class="fa-solid fa-cake-candles" style="color:var(--gold)"></i> Data de Nascimento</label>
+            <input class="form-input" type="date" id="p-birthdate" value="${profile.birth_date||''}" max="${new Date().toISOString().split('T')[0]}">
+            <div style="font-size:.7rem;color:var(--text-3);margin-top:4px">Apenas você pode editar esta informação.</div>
+          </div>
           <div class="form-group" style="margin-bottom:18px">
             <label class="form-label">Cor do Avatar</label>
             <div class="color-picker-row" id="colorPickerRow">
@@ -3170,11 +3195,14 @@ async function initPerfil() {
     const btn = document.getElementById('saveProfileBtn');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
 
+    const birth_date = document.getElementById('p-birthdate')?.value || null;
+
     const { error } = await db.from('profiles').update({
       name,
       initials: initials || Utils.getInitials(name),
       bio: bio || null,
-      color
+      color,
+      birth_date: birth_date || null,
     }).eq('id', profile.id);
 
     if (!error) {
@@ -3225,6 +3253,691 @@ async function initPerfil() {
 /* ============================================================
    ROUTER
    ============================================================ */
+/* ============================================================
+   JORNAL MSY — Sistema de Notícias da Dashboard
+   ============================================================ */
+
+(function injectJornalCSS() {
+  if (document.getElementById('msy-jornal-css')) return;
+  const s = document.createElement('style');
+  s.id = 'msy-jornal-css';
+  s.textContent = `
+    .jornal-wrap {
+      position:relative; background:linear-gradient(135deg,#0d0d12,#0a0a0e);
+      border:1px solid rgba(201,168,76,.22); border-radius:var(--radius); overflow:hidden;
+    }
+    .jornal-wrap::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg,transparent,rgba(201,168,76,.7) 25%,#c9a84c 50%,rgba(201,168,76,.7) 75%,transparent);
+    }
+    .jornal-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:13px 18px 11px; border-bottom:1px solid rgba(201,168,76,.1);
+    }
+    .jornal-header-left { display:flex; align-items:center; gap:10px; }
+    .jornal-logo {
+      width:28px; height:28px; border-radius:7px;
+      background:linear-gradient(135deg,rgba(201,168,76,.25),rgba(120,40,30,.2));
+      border:1px solid rgba(201,168,76,.35);
+      display:flex; align-items:center; justify-content:center; font-size:.85rem;
+    }
+    .jornal-title {
+      font-family:'Cinzel',serif; font-size:.75rem; font-weight:700;
+      color:var(--gold); letter-spacing:.14em; text-transform:uppercase;
+    }
+    .jornal-subtitle { font-size:.58rem; color:var(--text-3); letter-spacing:.06em; margin-top:1px; }
+    .jornal-live-dot {
+      width:6px; height:6px; border-radius:50%; background:#10b981;
+      box-shadow:0 0 6px rgba(16,185,129,.6); animation:jpulse 2s infinite;
+    }
+    @keyframes jpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+    .jornal-add-btn {
+      display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+      border-radius:6px; cursor:pointer; background:rgba(201,168,76,.1);
+      border:1px solid rgba(201,168,76,.2); color:var(--gold);
+      font-size:.65rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+      transition:all .2s;
+    }
+    .jornal-add-btn:hover { background:rgba(201,168,76,.18); }
+    .jornal-carousel { position:relative; min-height:72px; overflow:hidden; }
+    .jornal-slide {
+      display:flex; align-items:center; gap:14px; padding:14px 18px;
+      position:absolute; top:0; left:0; width:100%; box-sizing:border-box;
+      opacity:0; transform:translateX(30px);
+      transition:opacity .45s ease, transform .45s ease; pointer-events:none;
+    }
+    .jornal-slide.active { opacity:1; transform:translateX(0); pointer-events:auto; position:relative; }
+    .jornal-slide-icon {
+      width:40px; height:40px; border-radius:10px; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+    }
+    .jornal-slide-icon.aniversario { background:rgba(236,72,153,.12); border:1px solid rgba(236,72,153,.25); }
+    .jornal-slide-icon.recorde     { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.3); }
+    .jornal-slide-icon.evento      { background:rgba(96,165,250,.12); border:1px solid rgba(96,165,250,.25); }
+    .jornal-slide-icon.ranking     { background:rgba(201,168,76,.12); border:1px solid rgba(201,168,76,.25); }
+    .jornal-slide-icon.aviso       { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.25); }
+    .jornal-slide-icon.priority    { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.3); }
+    .jornal-slide-icon.desempenho  { background:rgba(22,163,74,.15); border:1px solid rgba(34,197,94,.3); }
+    .jornal-slide-body { flex:1; min-width:0; }
+    .jornal-slide-tag {
+      display:inline-block; padding:1px 7px; border-radius:20px; margin-bottom:4px;
+      font-size:.55rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    }
+    .jornal-slide-tag.aniversario { background:rgba(236,72,153,.15); color:#f472b6; }
+    .jornal-slide-tag.recorde     { background:rgba(245,158,11,.15); color:#f59e0b; }
+    .jornal-slide-tag.evento      { background:rgba(96,165,250,.15); color:#60a5fa; }
+    .jornal-slide-tag.ranking     { background:rgba(201,168,76,.15); color:var(--gold); }
+    .jornal-slide-tag.aviso       { background:rgba(168,85,247,.15); color:#c084fc; }
+    .jornal-slide-tag.priority    { background:rgba(239,68,68,.15);  color:#ef4444; }
+    .jornal-slide-tag.desempenho  { background:rgba(22,163,74,.15); color:#4ade80; }
+    .jornal-slide-text { font-size:.84rem; font-weight:600; color:var(--text-1); line-height:1.35; }
+    .jornal-slide-meta { font-size:.65rem; color:var(--text-3); margin-top:2px; }
+    .jornal-footer {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 18px 10px; border-top:1px solid rgba(255,255,255,.04);
+    }
+    .jornal-dots { display:flex; gap:5px; align-items:center; }
+    .jornal-dot {
+      width:5px; height:5px; border-radius:50%;
+      background:rgba(255,255,255,.15); transition:all .3s; cursor:pointer;
+    }
+    .jornal-dot.active { background:var(--gold); width:16px; border-radius:3px; }
+    .jornal-nav { display:flex; gap:4px; }
+    .jornal-nav-btn {
+      width:24px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.03); color:var(--text-3);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:.65rem; transition:all .15s;
+    }
+    .jornal-nav-btn:hover { background:rgba(201,168,76,.12); color:var(--gold); border-color:rgba(201,168,76,.2); }
+    .jornal-count { font-size:.62rem; color:var(--text-3); }
+    .jornal-slide-del {
+      flex-shrink:0; background:none; border:1px solid rgba(239,68,68,.25);
+      border-radius:6px; color:rgba(239,68,68,.6); cursor:pointer;
+      font-size:.65rem; padding:3px 7px; transition:all .2s;
+      align-self:flex-start; margin-left:6px;
+    }
+    .jornal-slide-del:hover { background:rgba(239,68,68,.12); color:#ef4444; border-color:rgba(239,68,68,.5); }
+    .jornal-empty {
+      display:flex; align-items:center; justify-content:center;
+      gap:10px; padding:20px; color:var(--text-3); font-size:.78rem;
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ── CSS: Notificações Dashboard ── */
+(function injectNotifDashCSS() {
+  if (document.getElementById('msy-notifdash-css')) return;
+  const s = document.createElement('style');
+  s.id = 'msy-notifdash-css';
+  s.textContent = `
+    .notif-clear-all-btn {
+      display:inline-flex; align-items:center; gap:5px;
+      background:none; border:1px solid rgba(239,68,68,.22);
+      border-radius:7px; color:rgba(239,68,68,.55); cursor:pointer;
+      font-size:.65rem; font-weight:600; letter-spacing:.04em;
+      padding:4px 10px; transition:all .2s; white-space:nowrap;
+    }
+    .notif-clear-all-btn:hover {
+      background:rgba(239,68,68,.1); color:#ef4444;
+      border-color:rgba(239,68,68,.45);
+    }
+    .notif-del-btn {
+      flex-shrink:0; background:none; border:none;
+      color:rgba(255,255,255,.2); cursor:pointer;
+      font-size:.75rem; padding:4px 6px; border-radius:5px;
+      transition:all .2s; margin-left:4px;
+    }
+    .notif-del-btn:hover { background:rgba(239,68,68,.12); color:#ef4444; }
+    .notif-item-dash { position:relative; transition:opacity .2s; }
+    .notif-item-dash.removing { opacity:0; pointer-events:none; }
+    .notif-empty-state {
+      display:flex; align-items:center; justify-content:center;
+      gap:9px; padding:22px 16px; color:var(--text-3); font-size:.78rem;
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ── Funções internas do Jornal ── */
+async function _jornalFetchAuto() {
+  const today    = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const todayMM  = String(today.getMonth()+1).padStart(2,'0');
+  const todayDD  = String(today.getDate()).padStart(2,'0');
+  const slides   = [];
+
+  const em3dias = new Date(today.getTime() + 3*86400000).toISOString().split('T')[0];
+
+  // Mês atual para desempenho
+  const mesAtual = todayStr.slice(0,7); // "YYYY-MM"
+  const mesStart = `${mesAtual}-01`;
+  const mesEnd   = todayStr;
+
+  const [membrosRes, eventosRes, rankingRes, recordesRes, rankingsMesRes, rankingMensalRes, presencasRes, atividadesRes] = await Promise.all([
+    db.from('profiles').select('id,name,birth_date').eq('status','ativo'),
+    db.from('events').select('id,title,event_date,event_time,mandatory')
+      .gte('event_date', todayStr).lte('event_date', em3dias)
+      .order('event_date',{ascending:true}).limit(5),
+    db.from('weekly_rankings').select('*').eq('tipo','semanal')
+      .order('week_start',{ascending:false}).limit(1),
+    db.from('msy_recordes').select('*'),
+    // Rankings semanais do mês (para detectar novo ranking)
+    db.from('weekly_rankings').select('week_start,week_end,entries,created_at').eq('tipo','semanal')
+      .gte('week_start', mesStart).lte('week_start', mesEnd)
+      .order('week_start',{ascending:false}),
+    // Relatório MENSAL do mês atual — usado para destaque
+    db.from('weekly_rankings').select('week_start,week_end,entries,created_at').eq('tipo','mensal')
+      .gte('week_start', mesStart).lte('week_start', mesEnd)
+      .order('week_start',{ascending:false}).limit(1),
+    // Presenças do mês para calcular desempenho
+    db.from('event_presencas').select('membro_id,status'),
+    // Atividades do mês para calcular desempenho
+    db.from('activities').select('assigned_to,status'),
+  ]);
+
+  const membros      = membrosRes.data        || [];
+  const eventos      = eventosRes.data        || [];
+  const ranking      = rankingRes.data?.[0]   || null;
+  const recordes     = recordesRes.data       || [];
+  const rankingsMes  = rankingsMesRes.data    || [];
+  const rankingMensal = rankingMensalRes.data?.[0] || null;
+  const presencas    = presencasRes.data      || [];
+  const atividades   = atividadesRes.data     || [];
+
+  /* Aniversários */
+  membros.forEach(m => {
+    if (!m.birth_date) return;
+    const [,mm,dd] = m.birth_date.split('-');
+    if (mm === todayMM && dd === todayDD)
+      slides.push({ type:'aniversario', priority:10, icon:'🎂', tag:'Aniversário',
+        text:`Hoje é aniversário de ${m.name}!`,
+        meta:`Feliz aniversário, ${m.name}! Que seu dia seja incrível. 🍷` });
+  });
+
+  /* Eventos */
+  eventos.forEach(ev => {
+    const diff   = Math.round((new Date(ev.event_date+'T00:00:00') - today) / 86400000);
+    const quando = diff===0 ? `hoje às ${ev.event_time||'?'}` : diff===1 ? 'amanhã' : `em ${diff} dias`;
+    slides.push({ type:'evento', priority: diff===0 ? 9 : 5,
+      icon: diff===0 ? '📍' : '📅', tag: diff===0 ? 'Acontece Hoje' : 'Evento Próximo',
+      text:`${ev.title} — ${quando}`,
+      meta: ev.mandatory ? '⚠ Presença obrigatória' : '' });
+  });
+
+  /* Ranking semanal */
+  if (ranking) {
+    const entries  = ranking.entries || [];
+    const leader   = entries[0];
+    const diffDays = Math.round((today - new Date(ranking.week_start+'T00:00:00')) / 86400000);
+    if (diffDays <= 10) { // até 10 dias para pegar semanas que ainda são relevantes
+      const periodoRank = `${ranking.week_start?.split('-').reverse().join('/')} a ${ranking.week_end?.split('-').reverse().join('/')}`;
+      const mesRank = new Date(ranking.week_start+'T00:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+      slides.push({ type:'ranking', priority:6, icon:'👑', tag:'Ranking Semanal',
+        text: leader ? `${leader.name} liderou a semana com ${leader.messages} msgs` : 'Novo ranking semanal disponível',
+        meta: `Semana de ${periodoRank} · ${mesRank}` });
+
+      /* Recorde semanal */
+      const recSem = recordes.find(r => r.tipo==='semanal');
+      if (leader && recSem && leader.messages > recSem.mensagens)
+        slides.push({ type:'recorde', priority:10, icon:'🏆', tag:'Novo Recorde!',
+          text:`${leader.name} bateu o recorde semanal com ${leader.messages} msgs!`,
+          meta:`Anterior: ${recSem.mensagens} msgs — ${recSem.nome} · ${periodoRank}` });
+    }
+  }
+
+  /* Novo relatório semanal adicionado (último criado há menos de 48h) */
+  if (rankingsMes.length > 0) {
+    const ultimo     = rankingsMes[0];
+    const criadoEm   = new Date(ultimo.created_at);
+    const horasAtras = (today - criadoEm) / 3600000;
+    if (horasAtras <= 48) {
+      const entries    = ultimo.entries || [];
+      const lider      = entries[0];
+      const periodoRel = `${ultimo.week_start?.split('-').reverse().join('/')} a ${ultimo.week_end?.split('-').reverse().join('/')}`;
+      const mesRel     = new Date(ultimo.week_start+'T00:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+      slides.push({ type:'ranking', priority:7, icon:'📊', tag:'Novo Relatório',
+        text: lider ? `Ranking publicado: ${lider.name} lidera com ${lider.messages} msgs` : 'Novo ranking semanal publicado',
+        meta: `${periodoRel} · ${mesRel}` });
+    }
+
+    /* Recorde mensal */
+    const recMes = recordes.find(r => r.tipo==='mensal');
+    if (recMes && rankingsMes.length > 0) {
+      // Soma total de msgs no mês por pessoa
+      const totalMes = {};
+      rankingsMes.forEach(rk => {
+        (rk.entries||[]).forEach(e => {
+          totalMes[e.name] = (totalMes[e.name]||0) + (parseInt(e.messages)||0);
+        });
+      });
+      const topMes = Object.entries(totalMes).sort((a,b)=>b[1]-a[1])[0];
+      if (topMes && topMes[1] > recMes.mensagens)
+        slides.push({ type:'recorde', priority:9, icon:'🏆', tag:'Recorde Mensal!',
+          text:`${topMes[0]} está batendo o recorde mensal com ${topMes[1]} msgs!`,
+          meta:`Recorde anterior: ${recMes.mensagens} msgs — ${recMes.nome}` });
+    }
+  }
+
+  /* Recorde diário */
+  const recDia = recordes.find(r => r.tipo==='diario');
+  if (recDia && ranking) {
+    const entries = ranking.entries || [];
+    // Pega o melhor dia estimado (msgs do líder / dias da semana)
+    const leader = entries[0];
+    if (leader) {
+      const mediaLider = Math.round(leader.messages / 7);
+      if (mediaLider > recDia.mensagens)
+        slides.push({ type:'recorde', priority:8, icon:'⚡', tag:'Recorde Diário!',
+          text:`${leader.name} pode estar batendo o recorde diário!`,
+          meta:`Recorde atual: ${recDia.mensagens} msgs/dia — ${recDia.nome}` });
+    }
+  }
+
+  /* Membro com alto desempenho — usa relatório MENSAL se disponível, fallback semanais */
+  const fonteDesempenho = rankingMensal || (rankingsMes.length > 0 ? { entries: rankingsMes.flatMap(r => r.entries||[]), week_start: rankingsMes[rankingsMes.length-1]?.week_start, week_end: rankingsMes[0]?.week_end, tipo:'semanal' } : null);
+
+  if (membros.length > 0 && fonteDesempenho) {
+    // Determina o mês pelo dado real usando o week_end (data mais recente do período)
+    // Isso garante que o mês exibido corresponde ao período real dos dados
+    const referenciaData = fonteDesempenho.week_end || fonteDesempenho.week_start;
+    const mesDaFonte = referenciaData?.slice(0,7);
+    const mesNomeReal = mesDaFonte
+      ? new Date(mesDaFonte+'-02').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+      : null;
+
+    // Agrega msgs da fonte — se mensal, já está somado; se semanais, soma por nome
+    const msgsPorNome = {};
+    const entradas = fonteDesempenho.entries || [];
+    entradas.forEach(e => {
+      const n = (e.name||'').toLowerCase().trim();
+      msgsPorNome[n] = (msgsPorNome[n]||0) + (parseInt(e.messages)||0);
+    });
+
+    // Presenças confirmadas por membro
+    const presConf = {};
+    presencas.forEach(p => {
+      if (p.status==='confirmado') presConf[p.membro_id] = (presConf[p.membro_id]||0)+1;
+    });
+
+    // Atividades concluídas por membro
+    const actsConcl = {};
+    atividades.forEach(a => {
+      if (a.status==='Concluída') actsConcl[a.assigned_to] = (actsConcl[a.assigned_to]||0)+1;
+    });
+
+    const totalMsgs = Object.values(msgsPorNome).reduce((s,v)=>s+v,0)||1;
+    const maxPres   = Math.max(...membros.map(m => presConf[m.id]||0), 1);
+    const maxActs   = Math.max(...membros.map(m => actsConcl[m.id]||0), 1);
+
+    const scored = membros.map(m => {
+      const nNorm = (m.name||'').toLowerCase().trim();
+      const msgs  = msgsPorNome[nNorm]||0;
+      const pres  = presConf[m.id]||0;
+      const acts  = actsConcl[m.id]||0;
+      const sMsgs = (msgs/totalMsgs)*100;
+      const sPres = maxPres>0 ? (pres/maxPres)*100 : 0;
+      const sActs = maxActs>0 ? (acts/maxActs)*100 : 0;
+      const score = Math.round(sMsgs*0.6 + sPres*0.25 + sActs*0.15);
+      return { ...m, score, msgs, pres, acts };
+    }).filter(m => m.score > 0).sort((a,b)=>b.score-a.score);
+
+    const destaque = scored[0];
+    if (destaque && scored.length >= 2 && mesNomeReal) {
+      const isMensal = !!rankingMensal;
+      const periodoMeta = isMensal
+        ? `Relatório mensal · ${mesNomeReal}`
+        : `${fonteDesempenho.week_start?.split('-').reverse().join('/')} a ${fonteDesempenho.week_end?.split('-').reverse().join('/')} · ${mesNomeReal}`;
+
+      slides.push({ type:'desempenho', priority:5, icon:'⭐', tag:'Destaque do Período',
+        text:`${destaque.name} se destaca em ${mesNomeReal}`,
+        meta:`${destaque.msgs} msgs · ${destaque.pres} presenças · ${destaque.acts} atividades · ${periodoMeta}` });
+    }
+  }
+
+  slides.sort((a,b) => (b.priority||0) - (a.priority||0));
+
+  /* ── SLIDES DE GARANTIA: sempre presentes se não há conteúdo suficiente ── */
+
+  // Slide: ranking histórico (sempre exibe o líder do último ranking disponível)
+  if (slides.filter(s=>s.type==='ranking').length === 0 && ranking) {
+    const entries    = ranking.entries || [];
+    const leader     = entries[0];
+    if (leader) {
+      const periodoGar = `${ranking.week_start?.split('-').reverse().join('/')} a ${ranking.week_end?.split('-').reverse().join('/')}`;
+      const mesGar     = new Date(ranking.week_start+'T00:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+      slides.push({ type:'ranking', priority:3, icon:'👑', tag:'Último Ranking',
+        text:`${leader.name} liderou a semana com ${leader.messages} msgs`,
+        meta:`${periodoGar} · ${mesGar}` });
+    }
+  }
+
+  // Slide: recordes atuais do sistema (sempre informativo)
+  const recSemGlobal = recordes.find(r => r.tipo==='semanal');
+  if (recSemGlobal && slides.filter(s=>s.type==='recorde').length === 0) {
+    slides.push({ type:'recorde', priority:2, icon:'🏆', tag:'Recorde Semanal',
+      text:`Recorde semanal: ${recSemGlobal.mensagens} msgs por ${recSemGlobal.nome}`,
+      meta: recSemGlobal.periodo ? `Período: ${recSemGlobal.periodo}` : 'Recorde histórico da Masayoshi' });
+  }
+
+  // Slide: total de membros ativos
+  if (membros.length > 0) {
+    slides.push({ type:'aviso', priority:1, icon:'⚔️', tag:'Masayoshi',
+      text:`${membros.length} membros ativos na Ordem`,
+      meta:'A Masayoshi cresce a cada dia' });
+  }
+
+  // Slide: próximo evento além dos 3 dias — busca qualquer evento futuro
+  const temEvento = slides.some(s => s.type==='evento');
+  if (!temEvento) {
+    // Tenta pegar o próximo evento (já foi buscado até 3 dias, então busca além)
+    try {
+      const { data: proximoEv } = await db.from('events')
+        .select('id,title,event_date,event_time,mandatory')
+        .gt('event_date', em3dias)
+        .order('event_date',{ascending:true}).limit(1);
+      if (proximoEv?.[0]) {
+        const ev = proximoEv[0];
+        const diff = Math.round((new Date(ev.event_date+'T00:00:00') - today) / 86400000);
+        slides.push({ type:'evento', priority:3, icon:'📅', tag:'Próximo Evento',
+          text:`${ev.title} em ${diff} dias`,
+          meta:`${Utils.formatDate(ev.event_date)}${ev.event_time ? ' · '+ev.event_time : ''}${ev.mandatory?' · Presença obrigatória':''}` });
+      }
+    } catch(e) {}
+  }
+
+  // Reordenar após adições
+  slides.sort((a,b) => (b.priority||0) - (a.priority||0));
+
+  return slides;
+}
+
+async function _jornalFetchManuais() {
+  try {
+    const now = new Date().toISOString();
+    const { data } = await db.from('jornal_avisos').select('*').eq('ativo',true)
+      .or(`expira_em.is.null,expira_em.gte.${now}`)
+      .order('prioridade',{ascending:false}).order('created_at',{ascending:false}).limit(10);
+    return (data||[]).map(a => ({
+      type: a.prioridade>=2 ? 'priority' : 'aviso',
+      priority: 10+a.prioridade, icon: a.icone||'📢',
+      tag: a.prioridade>=2 ? 'Urgente' : 'Aviso',
+      text: a.mensagem,
+      meta: a.autor_nome ? `Diretoria · ${a.autor_nome}` : 'Diretoria',
+      avisoId: a.id, // id para exclusão
+    }));
+  } catch(e) { return []; }
+}
+
+let _jornalTimer = null;
+let _jornalCur   = 0;
+let _jornalSlides = [];
+
+function _jornalShow(idx) {
+  _jornalCur = idx;
+  document.querySelectorAll('.jornal-slide').forEach((el,i) => {
+    el.classList.toggle('active', i===idx);
+  });
+  document.querySelectorAll('.jornal-dot').forEach((d,i) => d.classList.toggle('active',i===idx));
+  const cnt = document.getElementById('jornalCount');
+  if (cnt) cnt.textContent = `${idx+1} / ${_jornalSlides.length}`;
+}
+
+function _jornalNext() { _jornalShow((_jornalCur+1) % _jornalSlides.length); }
+function _jornalPrev() { _jornalShow((_jornalCur-1+_jornalSlides.length) % _jornalSlides.length); }
+
+function _jornalStartTimer() {
+  clearInterval(_jornalTimer);
+  if (_jornalSlides.length > 1)
+    _jornalTimer = setInterval(_jornalNext, 5000);
+}
+
+function _jornalSlideHTML(s, i, canDelete) {
+  const delBtn = (canDelete && s.avisoId)
+    ? `<button class="jornal-slide-del" data-aviso-id="${s.avisoId}" title="Excluir aviso"><i class="fa-solid fa-trash-can"></i></button>`
+    : '';
+  return `
+    <div class="jornal-slide${i===0?' active':''}" data-idx="${i}">
+      <div class="jornal-slide-icon ${s.type}">${s.icon}</div>
+      <div class="jornal-slide-body">
+        <div class="jornal-slide-tag ${s.type}">${s.tag}</div>
+        <div class="jornal-slide-text">${Utils.escapeHtml(s.text)}</div>
+        ${s.meta ? `<div class="jornal-slide-meta">${Utils.escapeHtml(s.meta)}</div>` : ''}
+      </div>
+      ${delBtn}
+    </div>`;
+}
+
+function _jornalBindModal(profile) {
+  if (document.getElementById('jornalAvisoModal')) return;
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.id = 'jornalAvisoModal';
+  el.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header">
+        <div class="modal-title"><i class="fa-solid fa-newspaper" style="color:var(--gold)"></i> Novo Aviso — Jornal MSY</div>
+        <button class="modal-close" id="jornalModalClose"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:13px">
+          <label class="form-label">Mensagem *</label>
+          <textarea class="form-input form-textarea" id="jornalAvisoMsg" placeholder="Escreva o aviso..." style="min-height:80px;resize:none"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px">
+          <div class="form-group">
+            <label class="form-label">Ícone</label>
+            <input class="form-input" id="jornalAvisoIcon" value="📢" maxlength="4" style="font-size:1.1rem;text-align:center">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prioridade</label>
+            <select class="form-input form-select" id="jornalAvisoPrio">
+              <option value="0">Normal</option>
+              <option value="1">Alta</option>
+              <option value="2">Urgente</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expira em (opcional)</label>
+          <input class="form-input" type="date" id="jornalAvisoExpira">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="jornalModalCancel">Cancelar</button>
+        <button class="btn btn-primary" id="jornalModalSave"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+
+  const close = () => el.classList.remove('open');
+  document.getElementById('jornalModalClose').addEventListener('click', close);
+  document.getElementById('jornalModalCancel').addEventListener('click', close);
+  el.addEventListener('click', e => { if (e.target===el) close(); });
+
+  document.getElementById('jornalModalSave').addEventListener('click', async () => {
+    const msg    = document.getElementById('jornalAvisoMsg')?.value.trim();
+    const icone  = document.getElementById('jornalAvisoIcon')?.value.trim() || '📢';
+    const prio   = parseInt(document.getElementById('jornalAvisoPrio')?.value||'0');
+    const expira = document.getElementById('jornalAvisoExpira')?.value || null;
+    if (!msg) { Utils.showToast('Escreva uma mensagem.','error'); return; }
+    const btn = document.getElementById('jornalModalSave');
+    btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i>';
+    const { error } = await db.from('jornal_avisos').insert({
+      mensagem:msg, icone, prioridade:prio, ativo:true,
+      autor_id:profile.id, autor_nome:profile.name,
+      expira_em: expira ? expira+'T23:59:59Z' : null,
+    });
+    btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-paper-plane"></i> Publicar';
+    if (!error) {
+      close(); Utils.showToast('Aviso publicado!');
+      _initJornalMSY(profile);
+    } else {
+      Utils.showToast('Erro: '+(error.message||''),'error');
+    }
+  });
+}
+
+async function _initJornalMSY(profile) {
+  const container = document.getElementById('jornalContainer');
+  if (!container) return;
+
+  let auto=[], man=[];
+  try { auto = await _jornalFetchAuto(); }   catch(e) { console.warn('[Jornal auto]',e); }
+  try { man  = await _jornalFetchManuais(); } catch(e) {}
+
+  const high = man.filter(s=>s.type==='priority');
+  const low  = man.filter(s=>s.type!=='priority');
+  _jornalSlides = [...high, ...auto, ...low];
+  _jornalCur = 0;
+
+  const canAdd = profile.tier === 'diretoria';
+  const hasSlides = _jornalSlides.length > 0;
+
+  container.innerHTML = `
+    <div class="jornal-wrap">
+      <div class="jornal-header">
+        <div class="jornal-header-left">
+          <div class="jornal-logo">📰</div>
+          <div>
+            <div class="jornal-title">Jornal MSY</div>
+            <div class="jornal-subtitle">Acontecimentos da Ordem</div>
+          </div>
+          ${hasSlides ? '<div class="jornal-live-dot"></div>' : ''}
+        </div>
+        ${canAdd ? `<button class="jornal-add-btn" id="jornalAddBtn"><i class="fa-solid fa-plus"></i> Aviso</button>` : ''}
+      </div>
+      ${hasSlides ? `
+        <div class="jornal-carousel">
+          ${_jornalSlides.map((s,i)=>_jornalSlideHTML(s,i,canAdd)).join('')}
+        </div>
+        <div class="jornal-footer">
+          <div class="jornal-dots">
+            ${_jornalSlides.map((_,i)=>`<div class="jornal-dot${i===0?' active':''}" data-idx="${i}"></div>`).join('')}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="jornal-count" id="jornalCount">1 / ${_jornalSlides.length}</span>
+            <div class="jornal-nav">
+              <button class="jornal-nav-btn" id="jornalPrev"><i class="fa-solid fa-chevron-left"></i></button>
+              <button class="jornal-nav-btn" id="jornalNext"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </div>
+        </div>` :
+        `<div class="jornal-empty"><i class="fa-solid fa-newspaper" style="opacity:.3"></i> Nenhuma novidade no momento.</div>`
+      }
+    </div>`;
+
+  if (hasSlides) {
+    _jornalStartTimer();
+    document.getElementById('jornalNext')?.addEventListener('click',()=>{ _jornalNext(); _jornalStartTimer(); });
+    document.getElementById('jornalPrev')?.addEventListener('click',()=>{ _jornalPrev(); _jornalStartTimer(); });
+    container.querySelectorAll('.jornal-dot').forEach(d=>{
+      d.addEventListener('click',()=>{ _jornalShow(parseInt(d.dataset.idx)); _jornalStartTimer(); });
+    });
+
+    // Exclusão de avisos manuais (apenas diretoria)
+    if (canAdd) {
+      container.querySelectorAll('.jornal-slide-del').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const avisoId = btn.dataset.avisoId;
+          if (!avisoId) return;
+          if (!confirm('Excluir este aviso do Jornal MSY?')) return;
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+          const { error } = await db.from('jornal_avisos')
+            .update({ ativo: false })
+            .eq('id', avisoId);
+          if (!error) {
+            Utils.showToast('Aviso excluído.');
+            _initJornalMSY(profile);
+          } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+            Utils.showToast('Erro ao excluir: '+(error.message||''),'error');
+          }
+        });
+      });
+    }
+  }
+
+  if (canAdd) {
+    _jornalBindModal(profile);
+    document.getElementById('jornalAddBtn')?.addEventListener('click',()=>{
+      document.getElementById('jornalAvisoModal')?.classList.add('open');
+    });
+  }
+}
+
+/* ── Sistema de limpeza de notificações — Dashboard ── */
+function _initNotifsDash(profile) {
+  const card = document.getElementById('notifsCard');
+  if (!card) return;
+
+  // Helper: renderiza o estado vazio elegante
+  function _renderEmpty() {
+    const list = document.getElementById('notifsList');
+    if (!list) return;
+    // Remove botão limpar se existir
+    document.getElementById('notifClearAllBtn')?.remove();
+    list.innerHTML = `<div class="notif-empty-state"><i class="fa-solid fa-bell-slash" style="opacity:.3;font-size:1.1rem"></i><span>Nenhuma notificação recente.</span></div>`;
+  }
+
+  // Helper: anima remoção e remove do DOM
+  function _animateRemove(el, callback) {
+    el.classList.add('removing');
+    setTimeout(() => { el.remove(); callback?.(); }, 200);
+  }
+
+  // Verificar se lista ficou vazia após remoção individual
+  function _checkEmpty() {
+    const list = document.getElementById('notifsList');
+    if (!list) return;
+    if (list.querySelectorAll('.notif-item-dash').length === 0) _renderEmpty();
+  }
+
+  // ── Remoção individual ──
+  card.querySelectorAll('.notif-del-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const notifId = btn.dataset.notifId;
+      if (!notifId) return;
+      const item = card.querySelector(`.notif-item-dash[data-notif-id="${notifId}"]`);
+      // Feedback imediato na UI
+      _animateRemove(item, _checkEmpty);
+      // Soft delete persistente — compatível com RLS do Supabase
+      await db.from('notifications')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', notifId).eq('user_id', profile.id);
+    });
+  });
+
+  // ── Limpar todas ──
+  document.getElementById('notifClearAllBtn')?.addEventListener('click', async () => {
+    const total = card.querySelectorAll('.notif-item-dash').length;
+    if (total === 0) return;
+
+    const ok = confirm(`Tem certeza que deseja limpar ${total > 1 ? 'todas as ' + total + ' notificações' : 'esta notificação'}?\n\nEsta ação não pode ser desfeita.`);
+    if (!ok) return;
+
+    const btn = document.getElementById('notifClearAllBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; }
+
+    const { error } = await db.from('notifications')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('user_id', profile.id).is('deleted_at', null);
+
+    if (!error) {
+      _renderEmpty();
+      Utils.showToast('Notificações limpas.');
+    } else {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Limpar'; }
+      Utils.showToast('Erro ao limpar notificações.', 'error');
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
   const init = {
