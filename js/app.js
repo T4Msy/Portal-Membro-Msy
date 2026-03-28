@@ -2185,9 +2185,9 @@ async function initEventos() {
 
     <!-- New Event Modal -->
     <div class="modal-overlay" id="newEventModal">
-      <div class="modal">
+      <div class="modal" style="max-width:560px">
         <div class="modal-header">
-          <div class="modal-title">Novo Evento</div>
+          <div class="modal-title"><i class="fa-solid fa-calendar-plus" style="color:var(--gold)"></i> Novo Evento</div>
           <button class="modal-close" id="newEventClose"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
@@ -2213,12 +2213,34 @@ async function initEventos() {
             </div>
           </div>
           <div class="form-group" style="margin-bottom:14px">
-            <label class="form-label">Descrição</label>
-            <textarea class="form-input form-textarea" id="ev-desc" style="min-height:90px" placeholder="Detalhes do evento..."></textarea>
+            <label class="form-label"><i class="fa-solid fa-user-pen" style="color:var(--gold)"></i> Criador do Evento * <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(obrigatório — impacta desempenho)</span></label>
+            <select class="form-input form-select" id="ev-creator">
+              <option value="">Selecione o criador...</option>
+            </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+              <span><i class="fa-solid fa-users" style="color:var(--gold)"></i> Co-criadores <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(recebem crédito no desempenho)</span></span>
+              <button type="button" class="btn btn-ghost btn-sm" id="ev-add-helper" style="font-size:.65rem;padding:3px 10px"><i class="fa-solid fa-plus"></i> Adicionar</button>
+            </label>
+            <div id="ev-helpers-wrap">
+              <select class="form-input form-select ev-helper-sel" style="margin-bottom:6px">
+                <option value="">Nenhum co-criador</option>
+              </select>
+            </div>
+            <div style="font-size:.68rem;color:var(--text-3)">Máximo de 5 co-criadores por evento.</div>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Descrição</label>
+            <textarea class="form-input form-textarea" id="ev-desc" style="min-height:80px" placeholder="Detalhes do evento..."></textarea>
+          </div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;color:var(--text-2)">
               <input type="checkbox" id="ev-mandatory"> Presença obrigatória
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;color:#c084fc">
+              <input type="checkbox" id="ev-private" style="accent-color:#a855f7">
+              <i class="fa-solid fa-lock" style="font-size:.75rem"></i> Reunião interna (só Diretoria)
             </label>
           </div>
         </div>
@@ -2366,35 +2388,74 @@ function renderAtaCard(ata, isDiretoria) {
     </div>`;
 }
 
-function openNewEventModal(profile, onSuccess) {
+async function openNewEventModal(profile, onSuccess) {
   const modal = document.getElementById('newEventModal');
   modal.classList.add('open');
 
+  // Popular selects de membros
+  const { data: membros } = await db.from('profiles').select('id,name,role').eq('status','ativo').order('name');
+  const memOpts = (membros||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)} — ${Utils.escapeHtml(m.role||'')}</option>`).join('');
+
+  const creatorSel = document.getElementById('ev-creator');
+  creatorSel.innerHTML = `<option value="">Selecione o criador...</option>${memOpts}`;
+
+  const helpersWrap = document.getElementById('ev-helpers-wrap');
+  helpersWrap.innerHTML = `<select class="form-input form-select ev-helper-sel" style="margin-bottom:6px"><option value="">Nenhum co-criador</option>${memOpts}</select>`;
+
+  // Adicionar co-criador
+  let helperCount = 0;
+  const addHelperBtn = document.getElementById('ev-add-helper');
+  addHelperBtn.onclick = () => {
+    if (helperCount >= 4) { Utils.showToast('Máximo de 5 co-criadores.', 'error'); return; }
+    helperCount++;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+    row.innerHTML = `<select class="form-input form-select ev-helper-sel" style="flex:1"><option value="">Co-criador ${helperCount+1}</option>${memOpts}</select><button type="button" class="btn btn-ghost btn-sm" style="color:var(--red-bright);padding:6px 10px;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>`;
+    row.querySelector('button').addEventListener('click', () => { row.remove(); helperCount--; });
+    helpersWrap.appendChild(row);
+  };
+
   document.getElementById('newEventSave').onclick = async () => {
-    const title     = document.getElementById('ev-title').value.trim();
-    const event_date = document.getElementById('ev-date').value;
-    const event_time = document.getElementById('ev-time').value || '19:00';
-    const type      = document.getElementById('ev-type').value;
+    const title       = document.getElementById('ev-title').value.trim();
+    const event_date  = document.getElementById('ev-date').value;
+    const event_time  = document.getElementById('ev-time').value || '19:00';
+    const type        = document.getElementById('ev-type').value;
     const description = document.getElementById('ev-desc').value.trim();
-    const mandatory = document.getElementById('ev-mandatory').checked;
+    const mandatory   = document.getElementById('ev-mandatory').checked;
+    const is_private  = document.getElementById('ev-private')?.checked || false;
+    const creator_id  = document.getElementById('ev-creator').value;
+    const helpers     = [...document.querySelectorAll('.ev-helper-sel')].map(s => s.value).filter(Boolean);
+    const helper_id   = helpers[0] || null;
 
     if (!title || !event_date) { Utils.showToast('Preencha título e data.', 'error'); return; }
+    if (!creator_id) { Utils.showToast('Selecione o criador do evento.', 'error'); return; }
 
     const btn = document.getElementById('newEventSave');
-    btn.disabled = true; btn.textContent = 'Criando...';
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
 
-    const { error } = await db.from('events').insert({
-      title, event_date, event_time, type, description, mandatory, created_by: profile.id
-    });
+    const { data: evData, error } = await db.from('events').insert({
+      title, event_date, event_time, type,
+      description: description || null,
+      mandatory, is_private,
+      created_by: creator_id,
+      helper_id,
+    }).select('id').single();
 
     if (!error) {
-      await db.rpc('notify_member', { p_user_id: null, p_message: `Novo evento: "${title}" em ${Utils.formatDate(event_date)}`, p_type: 'event', p_icon: '🗓️' });
+      // Registrar co-criadores adicionais se houver
+      if (helpers.length > 1 && evData?.id) {
+        const extraHelpers = helpers.slice(1).map(uid => ({ event_id: evData.id, helper_id: uid }));
+        await db.from('event_co_creators').insert(extraHelpers).catch(() => {});
+      }
+      if (!is_private) {
+        await db.rpc('notify_member', { p_user_id: null, p_message: `Novo evento: "${title}" em ${Utils.formatDate(event_date)}`, p_type: 'event', p_icon: '🗓️' });
+      }
       modal.classList.remove('open');
       Utils.showToast('Evento criado!');
       onSuccess();
     } else {
       Utils.showToast('Erro ao criar evento.', 'error');
-      btn.disabled = false; btn.textContent = 'Criar Evento';
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Criar Evento';
     }
   };
 }
