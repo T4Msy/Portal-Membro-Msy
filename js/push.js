@@ -141,6 +141,7 @@ const PushManager = {
         headers: {
           'Content-Type':  'application/json',
           'Authorization': `Bearer ${MSY_CONFIG.SUPABASE_ANON_KEY}`,
+          'apikey':          MSY_CONFIG.SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ userId, title, body, url, icon }),
       });
@@ -157,6 +158,7 @@ const PushManager = {
         headers: {
           'Content-Type':  'application/json',
           'Authorization': `Bearer ${MSY_CONFIG.SUPABASE_ANON_KEY}`,
+          'apikey':          MSY_CONFIG.SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ all: true, title, body, url, icon }),
       });
