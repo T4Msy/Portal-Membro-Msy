@@ -184,13 +184,17 @@ const NotifPrefs = {
   /* Wrapper unificado: dispara notify_member + push + email conforme prefs */
   async dispatch(targetUserId, { message, type, icon, link, channels }) {
     // 1. Sempre grava no portal (tabela notifications)
-    await db.rpc('notify_member', {
-      p_user_id: targetUserId,
-      p_message: message,
-      p_type:    type    || 'info',
-      p_icon:    icon    || '🔔',
-      p_link:    link    || null,
-    }).catch(() => {});
+    try {
+      await db.rpc('notify_member', {
+        p_user_id: targetUserId,
+        p_message: message,
+        p_type:    type    || 'info',
+        p_icon:    icon    || '🔔',
+        p_link:    link    || null,
+      });
+    } catch (_) {
+      /* RPC opcional — falha silenciosa (compat. cliente Supabase sem .catch na cadeia) */
+    }
 
     if (!channels || channels.length === 0) return;
 
