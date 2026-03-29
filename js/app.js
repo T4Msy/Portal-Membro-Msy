@@ -5,6 +5,7 @@
 
 'use strict';
 
+
 const { createClient } = supabase;
 const db = createClient(MSY_CONFIG.SUPABASE_URL, MSY_CONFIG.SUPABASE_ANON_KEY);
 
