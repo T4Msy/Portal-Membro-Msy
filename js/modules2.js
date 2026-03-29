@@ -889,7 +889,7 @@ function _tronCalcTop3FromRankings(todos) {
     // Deduplicar: manter apenas o melhor registro de cada membro
     const melhorPorMembro = new Map();
     for (const item of lista) {
-      const nomeKey = item.nome.trim().toLowerCase();
+      const nomeKey = _tronNormalize(item.nome);
       const atual = melhorPorMembro.get(nomeKey);
       if (!atual || item.mensagens > atual.mensagens ||
           (item.mensagens === atual.mensagens && item.data_ref && atual.data_ref && item.data_ref < atual.data_ref)) {
@@ -1457,6 +1457,152 @@ async function initRanking() {
       .trono-diario-pos { font-size: 1.1rem; flex-shrink: 0; }
       .trono-diario-nome { flex: 1; font-weight: 600; font-size: .88rem; color: var(--text-1); }
       .trono-diario-msgs { font-size: .8rem; color: var(--gold); font-weight: 700; }
+
+      /* ══ RESPONSIVIDADE MOBILE ══ */
+      @media (max-width: 640px) {
+        /* Cabeçalho da categoria */
+        .trono-cat-header {
+          padding: 18px 18px 14px;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .trono-cat-title {
+          font-size: .85rem;
+          letter-spacing: .08em;
+        }
+        .trono-cat-label {
+          font-size: .6rem;
+        }
+
+        /* Pódio: horizontal → vertical (1º, 2º, 3º de cima para baixo) */
+        .trono-podio {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 14px;
+          padding: 22px 16px 20px;
+        }
+        /* Remover decorações do pódio horizontal no mobile */
+        .trono-podio::before, .trono-podio::after { display: none; }
+
+        /* Reordenar: 1º no topo, 2º no meio, 3º no final */
+        .trono-pos1 { order: 1; flex: none; width: 100%; }
+        .trono-pos2 { order: 2; flex: none; width: 100%; }
+        .trono-pos3 { order: 3; flex: none; width: 100%; }
+
+        /* Items em linha horizontal dentro de cada card mobile */
+        .trono-podio-item {
+          flex-direction: row;
+          align-items: center;
+          text-align: left;
+          gap: 0;
+        }
+        .trono-podio-item:hover { transform: none; }
+
+        /* Card mobile: layout horizontal */
+        .trono-card {
+          flex-direction: row;
+          align-items: center;
+          padding: 14px 16px !important;
+          border-radius: 14px !important;
+          gap: 14px;
+          width: 100%;
+          text-align: left;
+        }
+
+        /* Coroa no mobile: acima do avatar */
+        .trono-coroa {
+          position: static;
+          transform: none;
+          font-size: 1.2rem;
+          animation: none;
+          align-self: flex-start;
+          margin-right: -8px;
+          margin-top: -4px;
+        }
+
+        /* Avatar menor no mobile */
+        .trono-pos1 .trono-avatar {
+          width: 54px !important;
+          height: 54px !important;
+          font-size: 1.1rem !important;
+          flex-shrink: 0;
+          box-shadow: 0 0 18px rgba(201,168,76,.25), 0 0 0 3px rgba(201,168,76,.08);
+        }
+        .trono-avatar {
+          width: 46px !important;
+          height: 46px !important;
+          font-size: .95rem !important;
+          flex-shrink: 0;
+          margin-bottom: 0 !important;
+        }
+        /* Remover anel pulsante no mobile (performance) */
+        .trono-pos1 .trono-avatar::after { display: none; }
+
+        /* Info à direita do avatar */
+        .trono-medal {
+          font-size: 1.6rem !important;
+          margin-bottom: 0 !important;
+          flex-shrink: 0;
+          filter: none;
+          animation: none;
+        }
+        .trono-pos1 .trono-medal { font-size: 2rem !important; }
+
+        /* Agrupar nome/msgs/período */
+        .trono-nome {
+          font-size: .82rem !important;
+          margin-bottom: 2px !important;
+          color: rgba(255,255,255,.85) !important;
+          text-shadow: none !important;
+        }
+        .trono-pos1 .trono-nome {
+          font-size: .92rem !important;
+          text-shadow: none !important;
+        }
+        .trono-msgs {
+          font-size: .72rem !important;
+          font-weight: 700;
+        }
+        .trono-pos1 .trono-msgs { font-size: .82rem !important; }
+        .trono-periodo {
+          font-size: .6rem;
+          display: block;
+          margin-top: 3px !important;
+        }
+
+        /* Degrau: esconder no mobile (não faz sentido vertical) */
+        .trono-degrau { display: none; }
+
+        /* Container do conteúdo textual */
+        .trono-card > *:not(.trono-medal):not(.trono-avatar) {
+          /* não aplicar flex individual — deixar flow normal */
+        }
+
+        /* Agrupar avatar + medalha como bloco à esquerda */
+        .trono-card {
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+        }
+
+        /* Categoria: reduzir gap entre categorias */
+        .trono-wrap { gap: 18px; }
+
+        /* Padding menor na categoria */
+        .trono-categoria { border-radius: 16px; }
+      }
+
+      /* ══ TABLET ══ */
+      @media (min-width: 641px) and (max-width: 900px) {
+        .trono-pos1 { flex: 0 0 200px; }
+        .trono-pos2, .trono-pos3 { flex: 0 0 168px; }
+        .trono-podio { padding: 40px 20px 34px; gap: 12px; }
+        .trono-cat-header { padding: 20px 24px 16px; }
+        .trono-pos1 .trono-avatar { width: 68px; height: 68px; font-size: 1.4rem; }
+        .trono-pos1 .trono-nome { font-size: .94rem; }
+        .trono-pos1 .trono-card { padding: 28px 22px 22px; }
+      }
     `;
     document.head.appendChild(s);
   }
