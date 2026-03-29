@@ -11,7 +11,7 @@
    A PUBLIC_KEY vai aqui. A PRIVATE_KEY fica no seu backend/Edge Function.
 ────────────────────────────────────────────────────────────── */
 const PUSH_CONFIG = {
-  VAPID_PUBLIC_KEY: 'COLOQUE-SUA-VAPID-PUBLIC-KEY-AQUI',
+  VAPID_PUBLIC_KEY: 'BLhU7dYmzQxxgCAmvSV8pN1oZODjoSmHjSEi0EIS-rbG3WcH6o-GjaoYvVWGyhtGmVts1_plszGPJMFw_3eeFpI',
 
   // Edge Function que envia push notifications
   PUSH_ENDPOINT: `${MSY_CONFIG.SUPABASE_URL}/functions/v1/send-push`,
