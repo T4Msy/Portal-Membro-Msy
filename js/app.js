@@ -3089,16 +3089,14 @@ async function initPerfil() {
       try {
         const emailAddr = emailField.value.trim() || null;
 
-        // Usa upsert para garantir que o registro existe e é atualizado
-        // independente de política RLS de INSERT vs UPDATE
-        const { error: upsertErr } = await db.from('profiles').upsert({
-          id:                  profile.id,
+        // UPDATE (não upsert): upsert parcial dispara INSERT sem colunas obrigatórias (ex.: name).
+        const { error: saveErr } = await db.from('profiles').update({
           notif_push:          pushToggle.checked,
           notif_email:         emailToggle.checked,
           notif_email_address: emailAddr,
-        }, { onConflict: 'id', ignoreDuplicates: false });
+        }).eq('id', profile.id);
 
-        if (upsertErr) throw upsertErr;
+        if (saveErr) throw saveErr;
 
         // Confirma lendo o dado de volta do banco
         const { data: updated } = await db.from('profiles')
