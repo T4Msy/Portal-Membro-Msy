@@ -717,6 +717,7 @@
      if (isDiretoria) {
        document.getElementById('manageTop3Btn')?.addEventListener('click', () => openTop3Modal(ranking));
        const top3Modal = document.getElementById('top3Modal');
+       if (top3Modal && top3Modal.parentElement !== document.body) document.body.appendChild(top3Modal);
        document.getElementById('top3ModalClose').addEventListener('click', () => top3Modal.classList.remove('open'));
        top3Modal.addEventListener('click', e => { if (e.target === top3Modal) top3Modal.classList.remove('open'); });
      }
@@ -917,6 +918,7 @@
      }
    
      const modal = document.getElementById('activityModal');
+     if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
      document.getElementById('modalClose').addEventListener('click', () => modal.classList.remove('open'));
      modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
    }
@@ -1498,11 +1500,13 @@
      await loadComunicados();
    
      const comModal = document.getElementById('comModal');
+     if (comModal && comModal.parentElement !== document.body) document.body.appendChild(comModal);
      document.getElementById('comModalClose').addEventListener('click', () => comModal.classList.remove('open'));
      document.getElementById('comModalCancel').addEventListener('click', () => comModal.classList.remove('open'));
      comModal.addEventListener('click', e => { if (e.target === comModal) comModal.classList.remove('open'); });
    
      const newComModal = document.getElementById('newComModal');
+     if (newComModal && newComModal.parentElement !== document.body) document.body.appendChild(newComModal);
      document.getElementById('newComBtn')?.addEventListener('click', () => newComModal.classList.add('open'));
      document.getElementById('newComClose').addEventListener('click', () => newComModal.classList.remove('open'));
      document.getElementById('cancelNewCom').addEventListener('click', () => newComModal.classList.remove('open'));
@@ -1725,6 +1729,7 @@
    
      // Edit Role
      const editRoleModal = document.getElementById('editRoleModal');
+     if (editRoleModal && editRoleModal.parentElement !== document.body) document.body.appendChild(editRoleModal);
      let editingMemberId = null;
      content.querySelectorAll('.edit-role-btn').forEach(btn => {
        btn.addEventListener('click', () => {
@@ -1757,10 +1762,17 @@
    
      // Modal close handlers
      const memberProfileModal = document.getElementById('memberProfileModal');
+     const editMemberModal = document.getElementById('editMemberModal');
+     const editRoleModalEl = document.getElementById('editRoleModal');
+
+     // Mover modais para document.body (garante position:fixed correto independente de scroll)
+     if (memberProfileModal && memberProfileModal.parentElement !== document.body) document.body.appendChild(memberProfileModal);
+     if (editMemberModal && editMemberModal.parentElement !== document.body) document.body.appendChild(editMemberModal);
+     if (editRoleModalEl && editRoleModalEl.parentElement !== document.body) document.body.appendChild(editRoleModalEl);
+
      document.getElementById('memberProfileClose').addEventListener('click', () => memberProfileModal.classList.remove('open'));
      memberProfileModal.addEventListener('click', e => { if (e.target === memberProfileModal) memberProfileModal.classList.remove('open'); });
    
-     const editMemberModal = document.getElementById('editMemberModal');
      document.getElementById('editMemberClose').addEventListener('click', () => editMemberModal.classList.remove('open'));
      editMemberModal.addEventListener('click', e => { if (e.target === editMemberModal) editMemberModal.classList.remove('open'); });
    }
@@ -2348,24 +2360,28 @@
    
      // New event modal handlers
      const newEventModal = document.getElementById('newEventModal');
+     if (newEventModal && newEventModal.parentElement !== document.body) document.body.appendChild(newEventModal);
      document.getElementById('newEventClose').addEventListener('click', () => newEventModal.classList.remove('open'));
      document.getElementById('newEventCancel').addEventListener('click', () => newEventModal.classList.remove('open'));
      newEventModal.addEventListener('click', e => { if (e.target === newEventModal) newEventModal.classList.remove('open'); });
    
      // New ata modal handlers
      const newAtaModal = document.getElementById('newAtaModal');
+     if (newAtaModal && newAtaModal.parentElement !== document.body) document.body.appendChild(newAtaModal);
      document.getElementById('newAtaClose').addEventListener('click', () => newAtaModal.classList.remove('open'));
      document.getElementById('newAtaCancel').addEventListener('click', () => newAtaModal.classList.remove('open'));
      newAtaModal.addEventListener('click', e => { if (e.target === newAtaModal) newAtaModal.classList.remove('open'); });
    
      // View ata modal handlers
      const ataViewModal = document.getElementById('ataViewModal');
+     if (ataViewModal && ataViewModal.parentElement !== document.body) document.body.appendChild(ataViewModal);
      document.getElementById('ataViewClose').addEventListener('click', () => ataViewModal.classList.remove('open'));
      document.getElementById('ataViewCancel').addEventListener('click', () => ataViewModal.classList.remove('open'));
      ataViewModal.addEventListener('click', e => { if (e.target === ataViewModal) ataViewModal.classList.remove('open'); });
    
      // Ranking modal handlers
      const newRankingModal = document.getElementById('newRankingModal');
+     if (newRankingModal && newRankingModal.parentElement !== document.body) document.body.appendChild(newRankingModal);
      document.getElementById('newRankingClose').addEventListener('click', () => newRankingModal.classList.remove('open'));
      newRankingModal.addEventListener('click', e => { if (e.target === newRankingModal) newRankingModal.classList.remove('open'); });
    
@@ -2724,6 +2740,7 @@
      });
    
      const notifyModal = document.getElementById('notifyModal');
+     if (notifyModal && notifyModal.parentElement !== document.body) document.body.appendChild(notifyModal);
      document.getElementById('notifyAllBtn')?.addEventListener('click', () => notifyModal.classList.add('open'));
      document.getElementById('notifyClose').addEventListener('click', () => notifyModal.classList.remove('open'));
      document.getElementById('notifyCancel').addEventListener('click', () => notifyModal.classList.remove('open'));
@@ -3416,14 +3433,15 @@
      const mesStart = `${mesAtual}-01`;
      const mesEnd   = todayStr;
    
-     const [membrosRes, eventosRes, rankingRes, recordesRes, rankingsMesRes, rankingMensalRes, presencasRes, atividadesRes] = await Promise.all([
+     const [membrosRes, eventosRes, rankingRes, top3Res, rankingsMesRes, rankingMensalRes, presencasRes, atividadesRes] = await Promise.all([
        db.from('profiles').select('id,name,birth_date').eq('status','ativo'),
        db.from('events').select('id,title,event_date,event_time,mandatory')
          .gte('event_date', todayStr).lte('event_date', em3dias)
          .order('event_date',{ascending:true}).limit(5),
        db.from('weekly_rankings').select('*').eq('tipo','semanal')
          .order('week_start',{ascending:false}).limit(1),
-       db.from('msy_recordes').select('*'),
+       // Trono dos Recordes — fonte de verdade do Top 3 histórico
+       db.from('msy_recordes_top3').select('tipo,posicao,nome,mensagens,periodo'),
        // Rankings semanais do mês (para detectar novo ranking)
        db.from('weekly_rankings').select('week_start,week_end,entries,created_at').eq('tipo','semanal')
          .gte('week_start', mesStart).lte('week_start', mesEnd)
@@ -3441,11 +3459,19 @@
      const membros      = membrosRes.data        || [];
      const eventos      = eventosRes.data        || [];
      const ranking      = rankingRes.data?.[0]   || null;
-     const recordes     = recordesRes.data       || [];
      const rankingsMes  = rankingsMesRes.data    || [];
      const rankingMensal = rankingMensalRes.data?.[0] || null;
      const presencas    = presencasRes.data      || [];
      const atividades   = atividadesRes.data     || [];
+
+     // Montar top3 por tipo a partir da tabela persistida
+     const top3Rows = top3Res.data || [];
+     const top3Map  = { semanal: [], mensal: [], diario: [] };
+     top3Rows.forEach(r => { if (top3Map[r.tipo]) top3Map[r.tipo].push(r); });
+     // Compatibilidade: recorde Top 1 de cada categoria
+     const recSemTop1  = top3Map.semanal.find(r => r.posicao === 1) || null;
+     const recMesTop1  = top3Map.mensal.find(r  => r.posicao === 1) || null;
+     const recDiarTop1 = top3Map.diario.find(r  => r.posicao === 1) || null;
    
      /* Aniversários */
      membros.forEach(m => {
@@ -3479,8 +3505,8 @@
            text: leader ? `${leader.name} liderou a semana com ${leader.messages} msgs` : 'Novo ranking semanal disponível',
            meta: `Semana de ${periodoRank} · ${mesRank}` });
    
-         /* Recorde semanal */
-         const recSem = recordes.find(r => r.tipo==='semanal');
+         /* Recorde semanal — exibe se o líder supera o Top 1 histórico */
+         const recSem = recSemTop1;
          if (leader && recSem && leader.messages > recSem.mensagens)
            slides.push({ type:'recorde', priority:10, icon:'🏆', tag:'Novo Recorde!',
              text:`${leader.name} bateu o recorde semanal com ${leader.messages} msgs!`,
@@ -3503,8 +3529,8 @@
            meta: `${periodoRel} · ${mesRel}` });
        }
    
-       /* Recorde mensal */
-       const recMes = recordes.find(r => r.tipo==='mensal');
+       /* Recorde mensal — compara total acumulado no mês com Top 1 histórico */
+       const recMes = recMesTop1;
        if (recMes && rankingsMes.length > 0) {
          // Soma total de msgs no mês por pessoa
          const totalMes = {};
@@ -3522,7 +3548,7 @@
      }
    
      /* Recorde diário */
-     const recDia = recordes.find(r => r.tipo==='diario');
+     const recDia = recDiarTop1;
      if (recDia && ranking) {
        const entries = ranking.entries || [];
        // Pega o melhor dia estimado (msgs do líder / dias da semana)
@@ -3614,8 +3640,8 @@
        }
      }
    
-     // Slide: recordes atuais do sistema (sempre informativo)
-     const recSemGlobal = recordes.find(r => r.tipo==='semanal');
+     // Slide: recordes atuais do sistema (sempre informativo) — usa Top 1 do Trono
+     const recSemGlobal = recSemTop1;
      if (recSemGlobal && slides.filter(s=>s.type==='recorde').length === 0) {
        slides.push({ type:'recorde', priority:2, icon:'🏆', tag:'Recorde Semanal',
          text:`Recorde semanal: ${recSemGlobal.mensagens} msgs por ${recSemGlobal.nome}`,

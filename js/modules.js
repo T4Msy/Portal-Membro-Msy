@@ -1311,34 +1311,27 @@ async function _carregarDadosRecordes() {
     return window._msyRecordesCache;
   }
 
-  // Todas as queries em paralelo — sem .single() que lança erro no v2
-  const [semRes, mesRes, diarRes] = await Promise.all([
-    db.from('weekly_rankings').select('entries').eq('tipo', 'semanal'),
-    db.from('weekly_rankings').select('entries').eq('tipo', 'mensal'),
-    db.from('msy_recordes').select('nome, mensagens, id').eq('tipo', 'diario').limit(1),
-  ]);
+  // Lê o Top 3 persistido na tabela dedicada — fonte de verdade do Trono dos Recordes
+  const { data: top3Rows } = await db.from('msy_recordes_top3')
+    .select('tipo, posicao, nome, mensagens, periodo, data_ref')
+    .order('tipo').order('posicao');
 
-  // Calcula melhor semanal histórico
-  let melhorSem = null;
-  for (const r of (semRes.data || [])) {
-    for (const e of (r.entries || [])) {
-      if (!melhorSem || e.messages > melhorSem.messages) melhorSem = e;
-    }
+  const top3 = { semanal: [], mensal: [], diario: [] };
+  for (const row of (top3Rows || [])) {
+    if (top3[row.tipo]) top3[row.tipo].push(row);
   }
 
-  // Calcula melhor mensal histórico
-  let melhorMes = null;
-  for (const r of (mesRes.data || [])) {
-    for (const e of (r.entries || [])) {
-      if (!melhorMes || e.messages > melhorMes.messages) melhorMes = e;
-    }
-  }
+  // Compatibilidade com código que espera melhorSem / melhorMes / recDiario
+  // melhorSem e melhorMes = posição 1 de cada tipo (Top 1 histórico)
+  const semPos1  = top3.semanal.find(r => r.posicao === 1);
+  const mesPos1  = top3.mensal.find(r  => r.posicao === 1);
+  const diarPos1 = top3.diario.find(r  => r.posicao === 1);
 
-  // Recorde diário (primeiro item do array, sem single())
-  const recDiario = (diarRes.data && diarRes.data.length > 0) ? diarRes.data[0] : null;
+  const melhorSem  = semPos1  ? { name: semPos1.nome,  messages: semPos1.mensagens  } : null;
+  const melhorMes  = mesPos1  ? { name: mesPos1.nome,  messages: mesPos1.mensagens  } : null;
+  const recDiario  = diarPos1 ? { nome: diarPos1.nome, mensagens: diarPos1.mensagens } : null;
 
-  // Top 1 da semana vigente
-  const dados = { melhorSem, melhorMes, recDiario };
+  const dados = { melhorSem, melhorMes, recDiario, top3 };
   window._msyRecordesCache   = dados;
   window._msyRecordesCacheTs = agora;
   return dados;
@@ -1347,41 +1340,40 @@ async function _carregarDadosRecordes() {
 async function calcInsigniasRecordes(userId) {
   const insignias = [];
 
-  // Busca nome do usuário (query leve — só o campo name)
+  // Busca nome do usuário
   const { data: prof } = await db.from('profiles').select('name').eq('id', userId).limit(1);
   if (!prof || prof.length === 0) return insignias;
   const nome = prof[0].name;
 
-  // Carrega dados com cache
-  const { melhorSem, melhorMes, recDiario } = await _carregarDadosRecordes();
+  // Normaliza para comparação sem acento/caixa
+  const normNome = (n) => (n||'').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  const nomeNorm = normNome(nome);
 
-  // ── Soberania Semanal — recorde histórico semanal ──
-  if (melhorSem && melhorSem.name === nome) {
-    insignias.push({
-      emoji:   '⚡',
-      titulo:  'Soberania Semanal',
-      cor:     '#f59e0b',
-      tooltip: `Recorde histórico semanal — ${Number(melhorSem.messages).toLocaleString('pt-BR')} mensagens`,
-    });
-  }
+  // Carrega dados com cache (lê da msy_recordes_top3)
+  const { top3 } = await _carregarDadosRecordes();
 
-  // ── Domínio Mensal — recorde histórico mensal ──
-  if (melhorMes && melhorMes.name === nome) {
-    insignias.push({
-      emoji:   '🩸',
-      titulo:  'Domínio Mensal',
-      cor:     'var(--red-bright)',
-      tooltip: `Recorde histórico mensal — ${Number(melhorMes.messages).toLocaleString('pt-BR')} mensagens`,
-    });
-  }
+  const INSIG_META = {
+    semanal: { emoji: '⚡', titulo: 'Soberania Semanal', cor: '#f59e0b',      label: 'semanal'  },
+    mensal:  { emoji: '🩸', titulo: 'Domínio Mensal',    cor: 'var(--red-bright)', label: 'mensal'  },
+    diario:  { emoji: '🔱', titulo: 'Marca Perpétua',    cor: '#8b5cf6',      label: 'diário'   },
+  };
 
-  // ── Marca Perpétua — recorde diário (manual) ──
-  if (recDiario && recDiario.nome === nome) {
+  const POS_SUFIXOS = ['1º lugar', '2º lugar', '3º lugar'];
+
+  for (const [tipo, meta] of Object.entries(INSIG_META)) {
+    const lista = (top3 || {})[tipo] || [];
+    const entrada = lista.find(r => normNome(r.nome) === nomeNorm);
+    if (!entrada) continue;
+
+    const posIdx  = entrada.posicao - 1; // 0-based
+    const sufixo  = POS_SUFIXOS[posIdx] || `${entrada.posicao}º lugar`;
+
     insignias.push({
-      emoji:   '🔱',
-      titulo:  'Marca Perpétua',
-      cor:     '#8b5cf6',
-      tooltip: `Recorde histórico diário — ${Number(recDiario.mensagens).toLocaleString('pt-BR')} mensagens`,
+      emoji:   meta.emoji,
+      titulo:  meta.titulo,
+      cor:     meta.cor,
+      tooltip: `${sufixo} no Trono dos Recordes (${meta.label}) — ${Number(entrada.mensagens).toLocaleString('pt-BR')} mensagens`,
     });
   }
 

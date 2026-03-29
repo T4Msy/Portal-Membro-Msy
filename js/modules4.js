@@ -412,6 +412,8 @@ async function initDesempenho() {
     }, 150);
 
     const mModal = document.getElementById('dpMemberModal');
+    // Mover modal para body (position:fixed correto)
+    if (mModal && mModal.parentElement !== document.body) document.body.appendChild(mModal);
     document.getElementById('dpMemberModalClose')?.addEventListener('click', () => mModal?.classList.remove('open'));
     mModal?.addEventListener('click', e => { if (e.target === mModal) mModal.classList.remove('open'); });
     document.getElementById('dpMonthSel')?.addEventListener('change', e => { selectedMonth = e.target.value; render(); });

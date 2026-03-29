@@ -743,6 +743,8 @@ async function renderSystemAlerts(containerEl) {
 
   /* ── Setup modal ── */
   const detailModal = document.getElementById('saDetailModal');
+  // Mover modal para body (position:fixed correto)
+  if (detailModal && detailModal.parentElement !== document.body) document.body.appendChild(detailModal);
   document.getElementById('saDetailClose')?.addEventListener('click', () => detailModal?.classList.remove('open'));
   detailModal?.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.remove('open'); });
 
