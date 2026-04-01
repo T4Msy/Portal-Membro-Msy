@@ -1363,7 +1363,7 @@ async function calcInsigniasRecordes(userId) {
 
   for (const [tipo, meta] of Object.entries(INSIG_META)) {
     const lista = (top3 || {})[tipo] || [];
-    const entrada = lista.find(r => normNome(r.nome) === nomeNorm);
+    const entrada = lista.find(r => r.posicao === 1 && normNome(r.nome) === nomeNorm);
     if (!entrada) continue;
 
     const posIdx  = entrada.posicao - 1; // 0-based
