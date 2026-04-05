@@ -2918,6 +2918,7 @@
            <button class="btn btn-ghost" id="notifyAllBtn"><i class="fa-solid fa-bell"></i> Notificar Todos</button>
            <button class="btn btn-ghost" id="pagManualBtn" style="border-color:rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-hand-holding-dollar"></i> Pagamento Manual</button>
            <button class="btn btn-ghost" id="viewAsMemberAdminBtn" style="border-color:rgba(96,165,250,.3);color:#60a5fa"><i class="fa-solid fa-eye"></i> Visualizar como Membro</button>
+           <button class="btn btn-ghost" id="addMemberBtn" style="border-color:rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-user-plus"></i> Adicionar Membro</button>
          </div>
        </div>
    
@@ -2937,6 +2938,44 @@
            </div>
          </div>` : ''}
    
+       <div class="modal-overlay" id="addMemberModal">
+         <div class="modal" style="max-width:480px">
+           <div class="modal-header">
+             <div class="modal-title"><i class="fa-solid fa-user-plus" style="color:#10b981;margin-right:8px"></i>Adicionar Membro</div>
+             <button class="modal-close" id="addMemberClose"><i class="fa-solid fa-xmark"></i></button>
+           </div>
+           <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+             <div class="form-group">
+               <label class="form-label">Nome completo <span style="color:var(--red-bright)">*</span></label>
+               <input type="text" class="form-input" id="addMemberName" placeholder="Ex: João Silva" maxlength="80">
+             </div>
+             <div class="form-group">
+               <label class="form-label">E-mail <span style="color:var(--red-bright)">*</span></label>
+               <input type="email" class="form-input" id="addMemberEmail" placeholder="email@exemplo.com">
+             </div>
+             <div class="form-group">
+               <label class="form-label">Senha <span style="color:var(--red-bright)">*</span></label>
+               <input type="password" class="form-input" id="addMemberPassword" placeholder="Mínimo 6 caracteres">
+             </div>
+             <div class="form-group">
+               <label class="form-label">Cargo</label>
+               <input type="text" class="form-input" id="addMemberRole" placeholder="Ex: Membro" value="Membro" maxlength="60">
+             </div>
+             <div class="form-group">
+               <label class="form-label">Data de entrada</label>
+               <input type="date" class="form-input" id="addMemberDate" value="${new Date().toISOString().split('T')[0]}">
+             </div>
+             <div id="addMemberError" style="display:none;color:var(--red-bright);font-size:.8rem;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px"></div>
+           </div>
+           <div class="modal-footer">
+             <button class="btn btn-ghost" id="addMemberCancel">Cancelar</button>
+             <button class="btn btn-primary" id="addMemberSave" style="background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981">
+               <i class="fa-solid fa-user-plus"></i> Criar Membro
+             </button>
+           </div>
+         </div>
+       </div>
+
        <div class="modal-overlay" id="notifyModal">
          <div class="modal">
            <div class="modal-header">
@@ -2998,6 +3037,75 @@
      document.getElementById('notifyClose').addEventListener('click', () => notifyModal.classList.remove('open'));
      document.getElementById('notifyCancel').addEventListener('click', () => notifyModal.classList.remove('open'));
      notifyModal.addEventListener('click', e => { if (e.target === notifyModal) notifyModal.classList.remove('open'); });
+
+     // ── Modal Adicionar Membro ──
+     const addMemberModal = document.getElementById('addMemberModal');
+     if (addMemberModal && addMemberModal.parentElement !== document.body) document.body.appendChild(addMemberModal);
+
+     const openAddMember = () => {
+       document.getElementById('addMemberName').value = '';
+       document.getElementById('addMemberEmail').value = '';
+       document.getElementById('addMemberPassword').value = '';
+       document.getElementById('addMemberRole').value = 'Membro';
+       document.getElementById('addMemberDate').value = new Date().toISOString().split('T')[0];
+       document.getElementById('addMemberError').style.display = 'none';
+       addMemberModal.classList.add('open');
+     };
+     const closeAddMember = () => addMemberModal.classList.remove('open');
+
+     document.getElementById('addMemberBtn')?.addEventListener('click', openAddMember);
+     document.getElementById('addMemberClose').addEventListener('click', closeAddMember);
+     document.getElementById('addMemberCancel').addEventListener('click', closeAddMember);
+     addMemberModal.addEventListener('click', e => { if (e.target === addMemberModal) closeAddMember(); });
+
+     document.getElementById('addMemberSave').addEventListener('click', async () => {
+       const name     = document.getElementById('addMemberName').value.trim();
+       const email    = document.getElementById('addMemberEmail').value.trim();
+       const password = document.getElementById('addMemberPassword').value;
+       const role     = document.getElementById('addMemberRole').value.trim() || 'Membro';
+       const joinDate = document.getElementById('addMemberDate').value;
+       const errEl    = document.getElementById('addMemberError');
+
+       errEl.style.display = 'none';
+       if (!name || !email || !password) {
+         errEl.textContent = 'Nome, e-mail e senha são obrigatórios.';
+         errEl.style.display = 'block'; return;
+       }
+
+       const saveBtn = document.getElementById('addMemberSave');
+       saveBtn.disabled = true;
+       saveBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
+
+       try {
+         const { data: { session } } = await db.auth.getSession();
+         const resp = await fetch(`${MSY_CONFIG.SUPABASE_URL}/functions/v1/create-member`, {
+           method: 'POST',
+           headers: {
+             'Content-Type':  'application/json',
+             'Authorization': `Bearer ${session.access_token}`,
+           },
+           body: JSON.stringify({ email, password, name, role, joinDate }),
+         });
+
+         const result = await resp.json();
+         if (!resp.ok || result.error) throw new Error(result.error || 'Erro ao criar membro.');
+
+         closeAddMember();
+         Utils.showToast(`✅ ${name} adicionado com sucesso!`, 'success');
+         await db.rpc('notify_member', {
+           p_user_id: result.userId,
+           p_message: 'Bem-vindo à Masayoshi Order! Seu acesso foi criado pela Diretoria.',
+           p_type: 'member', p_icon: '✅',
+         }).catch(() => {});
+         initAdmin();
+       } catch (err) {
+         errEl.textContent = err.message || 'Erro ao criar membro.';
+         errEl.style.display = 'block';
+       } finally {
+         saveBtn.disabled = false;
+         saveBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Criar Membro';
+       }
+     });
    
      document.getElementById('notifySend').addEventListener('click', async () => {
        const msg    = document.getElementById('notif-msg').value.trim();

@@ -1372,11 +1372,6 @@ async function initRanking() {
         50%      { opacity: 0; transform: scale(1.2); }
       }
 
-      /* ── Info wrapper ── */
-      .trono-info {
-        display: flex; flex-direction: column; align-items: center;
-      }
-
       /* ── Nome ── */
       .trono-nome {
         font-family: 'Cinzel', serif; font-weight: 700; font-size: .84rem;
@@ -1554,26 +1549,12 @@ async function initRanking() {
         }
         .trono-pos1 .trono-medal { font-size: 2rem !important; }
 
-        /* Info: coluna à direita do avatar */
-        .trono-info {
-          flex: 1;
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: flex-start !important;
-          gap: 2px;
-          min-width: 0;
-        }
-
         /* Agrupar nome/msgs/período */
         .trono-nome {
-          font-size: .88rem !important;
-          margin-bottom: 0 !important;
-          color: rgba(255,255,255,.9) !important;
+          font-size: .82rem !important;
+          margin-bottom: 2px !important;
+          color: rgba(255,255,255,.85) !important;
           text-shadow: none !important;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 100%;
         }
         .trono-pos1 .trono-nome {
           font-size: .92rem !important;
@@ -1750,11 +1731,9 @@ async function initRanking() {
                         ${isFirst ? '<span class="trono-coroa">👑</span>' : ''}
                         <div class="trono-medal">${tronoPosEmojis[origIdx]}</div>
                         <div class="trono-avatar">${getInitials(item.nome)}</div>
-                        <div class="trono-info">
-                          <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
-                          <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
-                          ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
-                        </div>
+                        <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
+                        <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
+                        ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
                       </div>
                       <div class="trono-degrau">${tronoPosLabels[origIdx]}</div>
                     </div>`;
