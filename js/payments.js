@@ -132,8 +132,11 @@ const Payments = {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || 'Erro ao criar preferência de pagamento.');
+      const text = await resp.text().catch(() => '');
+      let msg = `HTTP ${resp.status}`;
+      try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) { if (text) msg = text.slice(0, 120); }
+      console.error('[Payments] Edge Function erro:', resp.status, text);
+      throw new Error(msg);
     }
 
     return await resp.json(); // { id, init_point, sandbox_init_point }
@@ -222,7 +225,7 @@ const Payments = {
       window.location.href = url;
     } catch (err) {
       console.error('[Payments]', err);
-      Utils.showToast('Erro ao iniciar pagamento. Tente novamente.', 'error');
+      Utils.showToast(`Erro: ${err.message || 'Tente novamente.'}`, 'error');
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-brands fa-pix"></i> Pagar Mensalidade — R$10,00';
