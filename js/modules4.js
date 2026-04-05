@@ -199,6 +199,10 @@ async function initDesempenho() {
   if (!profile || profile.tier !== 'diretoria') {
     window.location.href = 'dashboard.html'; return;
   }
+  /* Se ViewMode ativo (admin simulando membro), redireciona para dashboard */
+  if (typeof ViewMode !== 'undefined' && ViewMode.isActive()) {
+    window.location.href = 'dashboard.html'; return;
+  }
   await renderSidebar('desempenho');
   await renderTopBar('Desempenho', profile);
 
@@ -227,7 +231,7 @@ async function initDesempenho() {
       db.from('activities').select('id,assigned_to,status,title,deadline,closes_at'),
       db.from('events').select('id,title,event_date,event_time,type,mandatory,created_by,helper_id,is_private,description,performance_weight').gte('event_date',mStart).lte('event_date',mEnd).order('event_date',{ascending:false}),
       db.from('event_presencas').select('event_id,membro_id,status'),
-      db.from('weekly_rankings').select('week_start,week_end,entries').gte('week_start',mStart).lte('week_end',mEnd).order('week_start',{ascending:true}),
+      db.from('weekly_rankings').select('week_start,week_end,entries').lte('week_start',mEnd).gte('week_end',mStart).order('week_start',{ascending:true}),
       db.from('premiacoes').select('user_id,created_at').gte('created_at',`${mStart}T00:00:00`).lte('created_at',`${mEnd}T23:59:59`),
     ]);
 

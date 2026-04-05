@@ -647,6 +647,7 @@ async function renderSystemAlerts(containerEl) {
       .sa3-item-tag.danger  { background:rgba(239,68,68,.18);  color:#ef4444; }
       .sa3-item-tag.warning { background:rgba(245,158,11,.18); color:#f59e0b; }
       .sa3-item-tag.info    { background:rgba(96,165,250,.18); color:#60a5fa; }
+      .sa3-item-tag.success { background:rgba(16,185,129,.18); color:#10b981; }
       .sa3-item-title  { font-size:.83rem; font-weight:700; color:var(--text-1); margin-bottom:3px; line-height:1.3; }
       .sa3-item-detail { font-size:.72rem; color:var(--text-3); line-height:1.5; }
       .sa3-item-chevron{ color:var(--text-3); font-size:.65rem; margin-left:auto; align-self:center; flex-shrink:0; padding-left:6px; }
@@ -710,7 +711,7 @@ async function renderSystemAlerts(containerEl) {
   containerEl.innerHTML = `
     <div class="sa3-header">
       <div class="sa3-header-left">
-        <div class="sa3-icon"><i class="fa-solid fa-radar"></i></div>
+        <div class="sa3-icon"><i class="fa-solid fa-tower-broadcast"></i></div>
         <div>
           <div class="sa3-title">Alertas do Sistema</div>
           <div class="sa3-sub">Monitoramento contínuo · Masayoshi Order</div>

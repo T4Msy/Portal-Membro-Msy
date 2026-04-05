@@ -149,7 +149,7 @@ async function initBiblioteca() {
         <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-3)">
           <i class="fa-solid fa-book-open" style="font-size:2.5rem;margin-bottom:16px;display:block;opacity:0.3"></i>
           <p style="font-size:0.9rem">Nenhum conteúdo ${categoriaAtiva !== 'Todas' ? 'nesta categoria' : 'na biblioteca'} ainda.</p>
-          ${isDiretoria ? `<button class="btn btn-gold" id="emptyAddBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Adicionar primeiro conteúdo</button>` : ''}
+          <button class="btn btn-gold" id="emptyAddBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Adicionar primeiro conteúdo</button>
         </div>
       `;
       document.getElementById('emptyAddBtn')?.addEventListener('click', renderModal);
@@ -180,9 +180,19 @@ async function initBiblioteca() {
                class="btn btn-primary btn-sm">
               <i class="fa-solid fa-arrow-up-right-from-square"></i> Acessar
             </a>
-            ${isDiretoria ? `<button class="btn btn-ghost btn-sm bib-delete-btn" data-id="${c.id}" title="Remover">
-              <i class="fa-solid fa-trash" style="color:var(--red-bright)"></i>
-            </button>` : ''}
+            ${isDiretoria ? `
+              <button class="btn btn-ghost btn-sm bib-edit-btn"
+                data-id="${c.id}"
+                data-titulo="${Utils.escapeHtml(c.titulo)}"
+                data-descricao="${Utils.escapeHtml(c.descricao)}"
+                data-link="${Utils.escapeHtml(c.link)}"
+                data-categoria="${c.categoria}"
+                title="Editar">
+                <i class="fa-solid fa-pen" style="color:var(--gold)"></i>
+              </button>
+              <button class="btn btn-ghost btn-sm bib-delete-btn" data-id="${c.id}" title="Remover">
+                <i class="fa-solid fa-trash" style="color:var(--red-bright)"></i>
+              </button>` : ''}
           </div>
         </div>
       `;
@@ -198,6 +208,97 @@ async function initBiblioteca() {
         if (!error) { Utils.showToast('Conteúdo removido.'); await carregarConteudos(); }
         else Utils.showToast('Erro ao remover.', 'error');
       });
+    });
+
+    // Edit handlers (apenas diretoria)
+    grid.querySelectorAll('.bib-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderModalEditar({
+          id:        btn.dataset.id,
+          titulo:    btn.dataset.titulo,
+          descricao: btn.dataset.descricao,
+          link:      btn.dataset.link,
+          categoria: btn.dataset.categoria,
+        });
+      });
+    });
+  }
+
+  // Modal de edicao de conteudo (apenas diretoria)
+  function renderModalEditar(item) {
+    let modal = document.getElementById('bibEditModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'bibEditModal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+          <h3 class="font-cinzel"><i class="fa-solid fa-pen" style="color:var(--gold);margin-right:8px"></i>Editar Conteúdo</h3>
+          <button class="modal-close" id="bibEditClose"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;padding:24px">
+          <div class="form-group">
+            <label class="form-label">Título <span style="color:var(--red-bright)">*</span></label>
+            <input type="text" class="form-input" id="bibEditTitulo" value="${Utils.escapeHtml(item.titulo)}" maxlength="120">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição <span style="color:var(--red-bright)">*</span></label>
+            <textarea class="form-input" id="bibEditDescricao" rows="3">${Utils.escapeHtml(item.descricao)}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Link Externo <span style="color:var(--red-bright)">*</span></label>
+            <input type="url" class="form-input" id="bibEditLink" value="${Utils.escapeHtml(item.link)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Categoria</label>
+            <select class="form-input form-select" id="bibEditCategoria">
+              ${['Geral','Curso','PDF','Artigo','Vídeo','Ferramenta','Outro'].map(c =>
+                `<option value="${c}" ${item.categoria===c?'selected':''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn btn-gold" id="bibEditSaveBtn" style="margin-top:4px">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Alterações
+          </button>
+        </div>
+      </div>`;
+
+    requestAnimationFrame(() => modal.classList.add('open'));
+    const close = () => modal.classList.remove('open');
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    document.getElementById('bibEditClose').addEventListener('click', close);
+
+    document.getElementById('bibEditSaveBtn').addEventListener('click', async () => {
+      const titulo    = document.getElementById('bibEditTitulo').value.trim();
+      const descricao = document.getElementById('bibEditDescricao').value.trim();
+      const link      = document.getElementById('bibEditLink').value.trim();
+      const categoria = document.getElementById('bibEditCategoria').value;
+
+      if (!titulo || !descricao || !link) { Utils.showToast('Preencha todos os campos.', 'error'); return; }
+      if (!isValidUrl(link)) { Utils.showToast('URL inválida. Use https://...', 'error'); return; }
+
+      const btn = document.getElementById('bibEditSaveBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+
+      const { error } = await db.from('biblioteca_conteudos')
+        .update({ titulo, descricao, link, categoria, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+
+      if (error) {
+        Utils.showToast('Erro ao salvar alterações.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações';
+        return;
+      }
+
+      Utils.showToast('Conteúdo atualizado!');
+      close();
+      await carregarConteudos();
     });
   }
 
@@ -245,11 +346,9 @@ async function initBiblioteca() {
         <div class="page-header-title">Biblioteca de Conhecimento</div>
         <div class="page-header-sub">Materiais, cursos e recursos da Masayoshi Order</div>
       </div>
-      ${isDiretoria ? `
-        <button class="btn btn-gold" id="bibAddBtn">
-          <i class="fa-solid fa-plus"></i> Adicionar Conteúdo
-        </button>
-      ` : ''}
+      <button class="btn btn-gold" id="bibAddBtn">
+        <i class="fa-solid fa-plus"></i> Adicionar Conteúdo
+      </button>
     </div>
 
     <!-- Filtros de categoria -->

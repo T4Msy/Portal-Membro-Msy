@@ -362,7 +362,7 @@ async function initFeed() {
           <div class="feed-empty-icon">📭</div>
           <div class="feed-empty-title">Nenhuma publicação encontrada</div>
           <div class="feed-empty-sub">${buscaFeed?'Tente outros termos.':'Seja o primeiro a publicar!'}</div>
-          ${isDiretoria&&!buscaFeed?`<button class="btn btn-gold" id="feedEmptyBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Publicar agora</button>`:''}
+          ${!buscaFeed?`<button class="btn btn-gold" id="feedEmptyBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Publicar agora</button>`:''}
         </div>`;
       document.getElementById('feedEmptyBtn')?.addEventListener('click', () => abrirModal());
       return;
@@ -387,7 +387,8 @@ async function initFeed() {
           ${items.map(item => {
             const meta    = TIPO_META[item.tipo]||TIPO_META.custom;
             const autor   = item.autor;
-            const canEdit = isDiretoria||(item.autor_id===profile.id);
+            const canEdit = isDiretoria || (item.autor_id === profile.id);
+            const canDelete = isDiretoria || (item.autor_id === profile.id);
             return `
               <div class="feed-card" data-id="${item.id}">
                 <div class="feed-card-accent" style="background:${meta.color}"></div>
@@ -411,9 +412,8 @@ async function initFeed() {
                       </div>`:'<div></div>'}
                     <div class="feed-card-actions">
                       ${item.link?`<a href="${Utils.escapeHtml(item.link)}" target="_blank" rel="noopener" class="feed-card-link-btn"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver</a>`:''}
-                      ${canEdit?`
-                        <button class="feed-action-btn feed-edit-btn" data-id="${item.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                        <button class="feed-action-btn feed-del-btn" data-id="${item.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>`:''}
+                      ${canEdit?`<button class="feed-action-btn feed-edit-btn" data-id="${item.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>`:''}
+                      ${canDelete?`<button class="feed-action-btn feed-del-btn" data-id="${item.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>`:''}
                     </div>
                   </div>
                 </div>
@@ -451,7 +451,7 @@ async function initFeed() {
         <div class="page-header-title">Feed da Ordem</div>
         <div class="page-header-sub"><span id="feedTotalCount" style="color:var(--gold);font-weight:700">…</span> publicações · atividade recente</div>
       </div>
-      ${isDiretoria?`<button class="btn btn-gold" id="feedPublicarBtn"><i class="fa-solid fa-plus"></i> <span class="btn-label">Publicar</span></button>`:''}
+      <button class="btn btn-gold" id="feedPublicarBtn"><i class="fa-solid fa-plus"></i> <span class="btn-label">Publicar</span></button>
     </div>
     <div class="feed-toolbar">
       <div class="feed-chips" id="feedChips">

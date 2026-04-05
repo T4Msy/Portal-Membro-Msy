@@ -8,6 +8,78 @@
 
    const { createClient } = supabase;
    const db = createClient(MSY_CONFIG.SUPABASE_URL, MSY_CONFIG.SUPABASE_ANON_KEY);
+
+   /* ============================================================
+      VIEW MODE — Simulação de visão de membro para admins
+      ============================================================ */
+   const ViewMode = {
+     STORAGE_KEY: 'msy_view_as_member',
+
+     isActive() {
+       return sessionStorage.getItem(this.STORAGE_KEY) === '1';
+     },
+
+     activate() {
+       sessionStorage.setItem(this.STORAGE_KEY, '1');
+     },
+
+     deactivate() {
+       sessionStorage.removeItem(this.STORAGE_KEY);
+     },
+
+     /* Retorna o perfil modificado — tier 'membro' quando em modo visualização */
+     maskProfile(profile) {
+       if (!this.isActive()) return profile;
+       return {
+         ...profile,
+         tier: 'membro',
+         _originalTier: profile.tier,
+         _viewMode: true,
+       };
+     },
+
+     /* Injeta banner + botão "Voltar ao modo admin" no topo da página */
+     injectBanner() {
+       if (!this.isActive()) return;
+       if (document.getElementById('viewModeBanner')) return;
+
+       const banner = document.createElement('div');
+       banner.id = 'viewModeBanner';
+       banner.innerHTML = `
+         <div style="
+           position:fixed;bottom:0;left:0;right:0;z-index:9990;
+           background:linear-gradient(135deg,rgba(201,168,76,.18),rgba(180,83,9,.15));
+           border-top:1px solid rgba(201,168,76,.4);
+           padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+           backdrop-filter:blur(12px);
+         ">
+           <div style="display:flex;align-items:center;gap:10px">
+             <div style="width:28px;height:28px;background:rgba(201,168,76,.2);border:1px solid rgba(201,168,76,.4);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+               <i class="fa-solid fa-eye" style="color:var(--gold);font-size:.7rem"></i>
+             </div>
+             <div>
+               <div style="font-size:.75rem;font-weight:700;color:var(--gold);letter-spacing:.06em">MODO VISUALIZAÇÃO COMO MEMBRO</div>
+               <div style="font-size:.65rem;color:var(--text-3)">Você está vendo o portal como um membro comum. Suas permissões reais não foram alteradas.</div>
+             </div>
+           </div>
+           <button id="exitViewModeBtn" style="
+             background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.1));
+             border:1px solid rgba(201,168,76,.5);border-radius:6px;
+             color:var(--gold);font-size:.75rem;font-weight:700;padding:7px 14px;
+             cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:7px;
+             transition:all .2s;letter-spacing:.04em;
+           " onmouseover="this.style.background='rgba(201,168,76,.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.1))'">
+             <i class="fa-solid fa-shield-halved"></i> Voltar ao Modo Admin
+           </button>
+         </div>`;
+       document.body.appendChild(banner);
+
+       document.getElementById('exitViewModeBtn').addEventListener('click', () => {
+         ViewMode.deactivate();
+         window.location.reload();
+       });
+     },
+   };
    
    /* ============================================================
       AUTH
@@ -135,9 +207,16 @@
       SIDEBAR
       ============================================================ */
    async function renderSidebar(activePage) {
-     const profile = await Auth.requireAuth();
-     if (!profile) return;
-   
+     const profileRaw = await Auth.requireAuth();
+     if (!profileRaw) return;
+
+     /* Aplicar ViewMode: mascara tier se admin estiver em modo visualizacao */
+     const profile = ViewMode.maskProfile(profileRaw);
+     const isRealAdmin = profileRaw.tier === 'diretoria';
+
+     /* Injetar banner de ViewMode se ativo */
+     if (ViewMode.isActive()) ViewMode.injectBanner();
+
      const sidebar = document.getElementById('sidebar');
      if (!sidebar) return;
    
@@ -197,6 +276,20 @@
              <span>Integração</span>
            </a>
          `}
+         ${isRealAdmin && !ViewMode.isActive() ? `
+           <div style="margin-top:12px;padding:0 8px">
+             <button id="viewAsMemberBtn" style="
+               width:100%;background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.22);
+               border-radius:7px;padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;
+               color:var(--text-3);font-size:.75rem;font-weight:600;letter-spacing:.04em;
+               transition:all .2s;text-align:left;
+             " onmouseover="this.style.background='rgba(201,168,76,.14)';this.style.color='var(--gold)'"
+                onmouseout="this.style.background='rgba(201,168,76,.07)';this.style.color='var(--text-3)'">
+               <i class="fa-solid fa-eye" style="font-size:.7rem"></i>
+               <span>Visualizar como Membro</span>
+             </button>
+           </div>
+         ` : ''}
        </nav>
        <div class="sidebar-footer">
          <a href="perfil.html" class="sidebar-user" style="text-decoration:none" title="Meu Perfil">
@@ -216,6 +309,14 @@
      `;
    
      document.getElementById('logoutBtn').addEventListener('click', () => Auth.logout());
+
+     document.getElementById('viewAsMemberBtn')?.addEventListener('click', () => {
+       if (confirm('Ativar modo de visualização como membro?\n\nVocê verá o portal exatamente como um membro comum, sem permissões administrativas.\n\nSuas permissões reais não serão alteradas.')) {
+         ViewMode.activate();
+         window.location.reload();
+       }
+     });
+
      return profile;
    }
    
@@ -1613,8 +1714,11 @@
                      <i class="fa-solid fa-pen" style="font-size:.7rem"></i>
                    </button>` : ''}
                  ${m.id !== profile.id ? `
-                   <button class="btn btn-sm btn-ghost remove-btn" data-id="${m.id}" style="color:var(--red-bright)">
+                   <button class="btn btn-sm btn-ghost remove-btn" data-id="${m.id}" title="Desativar membro" style="color:#eab308;border-color:rgba(234,179,8,.3)">
                      <i class="fa-solid fa-user-slash"></i>
+                   </button>
+                   <button class="btn btn-sm btn-ghost delete-member-btn" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" title="Excluir membro permanentemente" style="color:var(--red-bright);border-color:rgba(239,68,68,.3)">
+                     <i class="fa-solid fa-trash"></i>
                    </button>` : ''}
                </div>` : ''}
            </div>`).join('')}
@@ -1750,13 +1854,22 @@
        else Utils.showToast('Erro ao atualizar cargo.', 'error');
      });
    
-     // Remove
+     // Remove (desativar)
      content.querySelectorAll('.remove-btn').forEach(btn => {
        btn.addEventListener('click', async () => {
-         if (!confirm('Desativar este membro?')) return;
+         if (!confirm('Desativar este membro? Ele perderá acesso ao portal mas os dados serão mantidos.')) return;
          await db.from('profiles').update({ status: 'inativo' }).eq('id', btn.dataset.id);
          Utils.showToast('Membro desativado.');
          initMembros();
+       });
+     });
+
+     // Delete — exclusao permanente completa
+     content.querySelectorAll('.delete-member-btn').forEach(btn => {
+       btn.addEventListener('click', () => {
+         const memberId = btn.dataset.id;
+         const memberName = btn.dataset.name;
+         _confirmarExclusaoMembro(memberId, memberName);
        });
      });
    
@@ -1777,6 +1890,140 @@
      editMemberModal.addEventListener('click', e => { if (e.target === editMemberModal) editMemberModal.classList.remove('open'); });
    }
    
+   /* ============================================================
+      EXCLUSAO PERMANENTE DE MEMBRO
+      Remove o membro e todos os registros associados do Supabase.
+      ============================================================ */
+   async function _confirmarExclusaoMembro(memberId, memberName) {
+     /* Modal de confirmacao com digitação do nome */
+     let modal = document.getElementById('deleteMemberModal');
+     if (!modal) {
+       modal = document.createElement('div');
+       modal.id = 'deleteMemberModal';
+       modal.className = 'modal-overlay';
+       document.body.appendChild(modal);
+     }
+
+     modal.innerHTML = `
+       <div class="modal" style="max-width:460px">
+         <div class="modal-header" style="border-bottom:1px solid rgba(239,68,68,.3)">
+           <div class="modal-title" style="color:var(--red-bright)">
+             <i class="fa-solid fa-triangle-exclamation"></i> Excluir Membro Permanentemente
+           </div>
+           <button class="modal-close" id="delMemClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+           <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:14px">
+             <div style="font-size:.75rem;color:var(--red-bright);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">
+               <i class="fa-solid fa-skull-crossbones"></i> Ação Irreversível
+             </div>
+             <p style="font-size:.85rem;color:var(--text-2);margin:0">
+               Isso removerá <strong style="color:var(--text-1)">${Utils.escapeHtml(memberName)}</strong> permanentemente do sistema, incluindo:
+             </p>
+             <ul style="font-size:.8rem;color:var(--text-3);margin:8px 0 0 0;padding-left:16px;display:flex;flex-direction:column;gap:4px">
+               <li>Perfil e dados de cadastro</li>
+               <li>Notificações e permissões individuais</li>
+               <li>Registros de mensalidade</li>
+               <li>Atividades e presenças associadas</li>
+               <li>Publicações no feed e biblioteca</li>
+             </ul>
+           </div>
+           <div class="form-group" style="margin:0">
+             <label class="form-label">Para confirmar, digite o nome do membro:</label>
+             <input type="text" class="form-input" id="delMemConfirmInput"
+               placeholder="${Utils.escapeHtml(memberName)}"
+               style="border-color:rgba(239,68,68,.3)">
+             <div id="delMemConfirmError" style="display:none;color:var(--red-bright);font-size:.75rem;margin-top:4px">
+               <i class="fa-solid fa-circle-exclamation"></i> Nome incorreto.
+             </div>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-ghost" id="delMemCancel">Cancelar</button>
+           <button class="btn" id="delMemConfirmBtn" style="background:rgba(185,28,28,.25);border:1px solid rgba(239,68,68,.5);color:#ef4444">
+             <i class="fa-solid fa-trash"></i> Excluir Permanentemente
+           </button>
+         </div>
+       </div>`;
+
+     requestAnimationFrame(() => modal.classList.add('open'));
+
+     const close = () => modal.classList.remove('open');
+     document.getElementById('delMemClose').addEventListener('click', close);
+     document.getElementById('delMemCancel').addEventListener('click', close);
+     modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+     document.getElementById('delMemConfirmBtn').addEventListener('click', async () => {
+       const inputVal = document.getElementById('delMemConfirmInput').value.trim();
+       const errEl = document.getElementById('delMemConfirmError');
+
+       if (inputVal !== memberName) {
+         errEl.style.display = 'block';
+         document.getElementById('delMemConfirmInput').style.borderColor = 'rgba(239,68,68,.6)';
+         return;
+       }
+       errEl.style.display = 'none';
+
+       const btn = document.getElementById('delMemConfirmBtn');
+       btn.disabled = true;
+       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+
+       try {
+         await _executarExclusaoMembro(memberId, memberName);
+         close();
+         Utils.showToast(`Membro "${memberName}" excluído permanentemente.`, 'success');
+         setTimeout(() => initMembros(), 400);
+       } catch (err) {
+         console.error('[MSY Delete]', err);
+         Utils.showToast('Erro ao excluir membro: ' + err.message, 'error');
+         btn.disabled = false;
+         btn.innerHTML = '<i class="fa-solid fa-trash"></i> Excluir Permanentemente';
+       }
+     });
+   }
+
+   async function _executarExclusaoMembro(memberId, memberName) {
+     /* Remove registros associados em ordem segura (FK constraints) */
+     const tabelas = [
+       'notifications',
+       'member_permissions',
+       'mensalidades',
+       'event_presencas',
+       'activity_responses',
+     ];
+
+     for (const tabela of tabelas) {
+       // Tenta pelo campo user_id primeiro, depois membro_id
+       const campo = tabela === 'event_presencas' ? 'membro_id' : 'user_id';
+       const { error } = await db.from(tabela).delete().eq(campo, memberId);
+       if (error) console.warn(`[MSY Delete] Aviso ao limpar ${tabela}:`, error.message);
+     }
+
+     // Limpar atividades atribuídas ao membro (desassociar, nao deletar)
+     const { error: actErr } = await db.from('activities')
+       .update({ assigned_to: null }).eq('assigned_to', memberId);
+     if (actErr) console.warn('[MSY Delete] activities:', actErr.message);
+
+     // Limpar posts do feed criados pelo membro
+     const { error: feedErr } = await db.from('feed_atividade')
+       .delete().eq('autor_id', memberId);
+     if (feedErr) console.warn('[MSY Delete] feed_atividade:', feedErr.message);
+
+     // Limpar conteudos da biblioteca criados pelo membro
+     const { error: bibErr } = await db.from('biblioteca_conteudos')
+       .delete().eq('criado_por', memberId);
+     if (bibErr) console.warn('[MSY Delete] biblioteca_conteudos:', bibErr.message);
+
+     // Por ultimo: deletar o profile
+     const { error: profileErr } = await db.from('profiles').delete().eq('id', memberId);
+     if (profileErr) throw new Error(`Falha ao remover perfil: ${profileErr.message}`);
+
+     // Tentar deletar o usuario de autenticacao via RPC (nao critico — requer service_role)
+     try {
+       await db.rpc('delete_user_account', { p_user_id: memberId });
+     } catch (_) { /* RPC opcional — sem service_role falha silenciosamente */ }
+   }
+
    async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers) {
      const modal = document.getElementById('memberProfileModal');
      const body  = document.getElementById('memberProfileBody');
@@ -2616,9 +2863,13 @@
       PAGE: ADMIN
       ============================================================ */
    async function initAdmin() {
-     const profile = await Auth.requireAuth();
-     if (!profile) return;
-     if (profile.tier !== 'diretoria') { window.location.href = 'dashboard.html'; return; }
+     const profileRaw = await Auth.requireAuth();
+     if (!profileRaw) return;
+     /* Se ViewMode ativo: admin nao deve acessar painel admin como membro */
+     if (ViewMode.isActive() || profileRaw.tier !== 'diretoria') {
+       window.location.href = 'dashboard.html'; return;
+     }
+     const profile = profileRaw;
    
      await renderSidebar('admin');
      await renderTopBar('Administração', profile);
@@ -2665,6 +2916,8 @@
            <a href="membros.html" class="btn btn-outline"><i class="fa-solid fa-users"></i> Gerenciar Membros</a>
            <a href="eventos.html" class="btn btn-outline"><i class="fa-solid fa-calendar-days"></i> Eventos</a>
            <button class="btn btn-ghost" id="notifyAllBtn"><i class="fa-solid fa-bell"></i> Notificar Todos</button>
+           <button class="btn btn-ghost" id="pagManualBtn" style="border-color:rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-hand-holding-dollar"></i> Pagamento Manual</button>
+           <button class="btn btn-ghost" id="viewAsMemberAdminBtn" style="border-color:rgba(96,165,250,.3);color:#60a5fa"><i class="fa-solid fa-eye"></i> Visualizar como Membro</button>
          </div>
        </div>
    
@@ -2768,6 +3021,96 @@
        notifyModal.classList.remove('open');
        Utils.showToast('Notificação enviada' + (doPush ? ' + push' : '') + (doEmail ? ' + email' : '') + '!');
        btn2.disabled = false; btn2.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar para Todos';
+     });
+
+     /* ── Botão: Visualizar como Membro ── */
+     document.getElementById('viewAsMemberAdminBtn')?.addEventListener('click', () => {
+       if (confirm('Ativar modo de visualização como membro?\n\nVocê verá o portal como um membro comum.\nSuas permissões reais não serão alteradas.')) {
+         ViewMode.activate();
+         window.location.href = 'dashboard.html';
+       }
+     });
+
+     /* ── Botão: Pagamento Manual ── */
+     document.getElementById('pagManualBtn')?.addEventListener('click', async () => {
+       await _abrirModalPagamentoManual(profile);
+     });
+   }
+
+   /* ── Modal de Pagamento Manual (admin) ── */
+   async function _abrirModalPagamentoManual(adminProfile) {
+     let modal = document.getElementById('pagManualModal');
+     if (!modal) {
+       modal = document.createElement('div');
+       modal.id = 'pagManualModal';
+       modal.className = 'modal-overlay';
+       document.body.appendChild(modal);
+     }
+
+     // Buscar membros ativos
+     const { data: membros } = await db.from('profiles')
+       .select('id, name, role')
+       .eq('status', 'ativo')
+       .order('name');
+
+     const mesAtual = Payments.getMesAtual();
+
+     modal.innerHTML = `
+       <div class="modal" style="max-width:440px">
+         <div class="modal-header">
+           <div class="modal-title" style="color:var(--gold)">
+             <i class="fa-solid fa-hand-holding-dollar"></i> Registrar Pagamento Manual
+           </div>
+           <button class="modal-close" id="pagManualClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+           <div style="background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:12px;font-size:.82rem;color:var(--text-2)">
+             <i class="fa-solid fa-circle-info" style="color:var(--gold);margin-right:6px"></i>
+             Registra o pagamento de <strong style="color:var(--text-1)">${Payments.formatMes(mesAtual)}</strong> para um membro. Use quando o pagamento foi feito fora do portal.
+           </div>
+           <div class="form-group" style="margin:0">
+             <label class="form-label">Membro</label>
+             <select class="form-input form-select" id="pagManualMembro">
+               <option value="">— Selecione o membro —</option>
+               ${(membros||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)} · ${Utils.escapeHtml(m.role||'')}</option>`).join('')}
+             </select>
+           </div>
+           <div class="form-group" style="margin:0">
+             <label class="form-label">Valor confirmado</label>
+             <input type="text" class="form-input" value="R$ 10,00" disabled style="opacity:.6">
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-ghost" id="pagManualCancel">Cancelar</button>
+           <button class="btn btn-gold" id="pagManualSave">
+             <i class="fa-solid fa-circle-check"></i> Confirmar Pagamento
+           </button>
+         </div>
+       </div>`;
+
+     requestAnimationFrame(() => modal.classList.add('open'));
+     const close = () => modal.classList.remove('open');
+     document.getElementById('pagManualClose').addEventListener('click', close);
+     document.getElementById('pagManualCancel').addEventListener('click', close);
+     modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+     document.getElementById('pagManualSave').addEventListener('click', async () => {
+       const userId = document.getElementById('pagManualMembro').value;
+       if (!userId) { Utils.showToast('Selecione um membro.', 'error'); return; }
+
+       const btn = document.getElementById('pagManualSave');
+       btn.disabled = true;
+       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Registrando...';
+
+       try {
+         await Payments.registrarPagamentoManual(userId, adminProfile.id);
+         Utils.showToast('Pagamento registrado com sucesso!', 'success');
+         close();
+       } catch (err) {
+         Utils.showToast(err.message || 'Erro ao registrar pagamento.', 'error');
+         btn.disabled = false;
+         btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Confirmar Pagamento';
+       }
      });
    }
    
