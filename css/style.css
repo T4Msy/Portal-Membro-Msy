@@ -3209,8 +3209,13 @@ h3 { font-size: 1.1rem; }
   .feed-search-input, .feed-search-input:focus { width: 100%; }
 
   .bib-grid { grid-template-columns: 1fr; }
-  .bib-filters { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+  .bib-filters {
+    overflow-x: auto; flex-wrap: nowrap; padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .bib-filters::-webkit-scrollbar { display: none; }
   .bib-filter-btn { flex-shrink: 0; }
+  #bibCount { display: none; }
 
   .ranking-tabs { max-width: 100%; }
   .ranking-podio { flex-direction: row; }
@@ -3254,6 +3259,26 @@ h3 { font-size: 1.1rem; }
 
   .busca-bar { border-radius: var(--radius); }
   .busca-btn { padding: 14px 14px; font-size: .8rem; }
+}
+
+/* ── Biblioteca — Mobile ── */
+@media (max-width: 768px) {
+  .bib-card { padding: 16px; gap: 10px; }
+  .bib-card-title { font-size: .88rem; }
+  .bib-card-desc { font-size: .8rem; -webkit-line-clamp: 2; }
+  .bib-card-meta { flex-wrap: wrap; gap: 8px; font-size: .68rem; }
+  .bib-card-actions {
+    flex-direction: row; flex-wrap: wrap; gap: 8px;
+  }
+  .bib-card-actions .btn-primary {
+    flex: 1; min-width: 0; justify-content: center;
+  }
+  .bib-card-icon { font-size: 1.5rem; }
+}
+
+@media (max-width: 480px) {
+  .bib-card { padding: 14px; }
+  .bib-card-actions .btn-primary { width: 100%; flex: unset; }
 }
 
 /* Touch improvements */
