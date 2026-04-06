@@ -221,7 +221,7 @@ const Payments = {
       await this.salvarPreferencia(profile.id, pref.id);
 
       // Redireciona para checkout (sandbox ou produção)
-      const url = pref.sandbox_init_point || pref.init_point;
+      const url = pref.init_point;
       window.location.href = url;
     } catch (err) {
       console.error('[Payments]', err);
