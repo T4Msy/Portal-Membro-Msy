@@ -2317,16 +2317,20 @@ h3 { font-size: 1.1rem; }
 }
 
 .badge-titulo {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  font-weight: 700;
   color: var(--text-1);
   line-height: 1.2;
+  letter-spacing: 0.04em;
 }
 
 .badge-qtd {
-  font-family: 'Cinzel', serif;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
 }
 
 /* -------- RESPONSIVE -------- */
