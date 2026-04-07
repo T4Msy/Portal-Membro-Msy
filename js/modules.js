@@ -1335,6 +1335,12 @@ async function initOrdem() {
    Chamada dentro de initPerfil() após carregar o perfil.
    ============================================================ */
 async function renderBadgesNoPerfil(userId, containerId) {
+  /* Delega ao sistema unificado MSYBadges quando disponível */
+  if (typeof MSYBadges !== 'undefined') {
+    return MSYBadges.render(userId, containerId, { compact: false });
+  }
+
+  /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -1344,12 +1350,13 @@ async function renderBadgesNoPerfil(userId, containerId) {
     </div>
   `;
 
-  const { data: badges, error } = await db.rpc('get_member_badges', { p_user_id: userId });
+  const [badgesRes, insigniasRecordes] = await Promise.all([
+    db.rpc('get_member_badges', { p_user_id: userId }),
+    calcInsigniasRecordes(userId),
+  ]);
 
-  // Busca insígnias de recordes dinâmicas
-  const insigniasRecordes = await calcInsigniasRecordes(userId);
-
-  const temBadges = (badges && badges.length > 0) || insigniasRecordes.length > 0;
+  const badges    = badgesRes.data || [];
+  const temBadges = badges.length > 0 || insigniasRecordes.length > 0;
 
   if (!temBadges) {
     container.innerHTML = `
@@ -1363,8 +1370,8 @@ async function renderBadgesNoPerfil(userId, containerId) {
 
   const IMPORTANCIA_COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
 
-  const badgesHtml = (badges || []).map(b => {
-    const color = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
+  const badgesHtml = badges.map(b => {
+    const color   = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
     const tooltip = b.periodos ? b.periodos.join(' · ') : '';
     return `
       <div class="badge-item" title="${Utils.escapeHtml(tooltip)}" style="--badge-color:${color}">

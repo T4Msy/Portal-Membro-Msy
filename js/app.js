@@ -242,8 +242,9 @@
        { page: 'ordem',       icon: 'fa-solid fa-crown',         label: 'Estrutura' },
        { page: 'tecnologias', icon: 'fa-solid fa-microchip',     label: 'Tecnologias' },
        { page: 'mensalidade', icon: 'fa-solid fa-credit-card',   label: 'Mensalidade' },
+       { page: 'icm',         icon: 'fa-solid fa-brain',         label: 'ICM' },
        { page: 'perfil',      icon: 'fa-solid fa-circle-user',   label: 'Meu Perfil' },
-     ];
+     ].filter(item => item.page === 'perfil' || (typeof Features !== 'undefined' ? Features.isEnabled(item.page, profile) : true));
    
      sidebar.innerHTML = `
        <div class="sidebar-logo">
@@ -3235,9 +3236,14 @@
    
      const isDiretoria = profile.tier === 'diretoria';
    
-     // Fetch stats
-     const statsRes = await db.rpc('get_member_stats', { p_user_id: profile.id });
-     const stats = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
+     // Fetch stats + dados ICM em paralelo
+     const [statsRes, icmRes] = await Promise.all([
+       db.rpc('get_member_stats', { p_user_id: profile.id }),
+       db.from('profiles').select('icm, selected_badges').eq('id', profile.id).single()
+     ]);
+     const stats          = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
+     const icmData        = icmRes.data?.icm            || null;
+     const selectedBadges = icmRes.data?.selected_badges || [];
    
      const joinDate = new Date(profile.join_date + 'T00:00:00');
      const diffDays = Math.floor((new Date() - joinDate) / (1000 * 60 * 60 * 24));
@@ -3464,15 +3470,28 @@
                Cargo e nível são gerenciados pela Diretoria.
              </div>
            </div>
-   
+
+           <!-- ICM — Insígnias -->
+           <div class="card" id="icm-badges-card">
+             <div class="card-title"><i class="fa-solid fa-brain"></i> Insígnias ICM — Selecione as que deseja exibir</div>
+             <div id="icm-badges-section">
+               <div style="padding:12px 0;color:var(--text-3);font-size:.82rem;font-style:italic">Carregando...</div>
+             </div>
+           </div>
+
          </div>
        </div>
      `;
    
-     // Carregar insígnias do perfil (via modules.js)
-     if (typeof renderBadgesNoPerfil === 'function') {
+     // Carregar insígnias do perfil — sistema unificado MSYBadges
+     if (typeof MSYBadges !== 'undefined') {
+       MSYBadges.render(profile.id, 'profileBadgesContainer', { compact: false });
+     } else if (typeof renderBadgesNoPerfil === 'function') {
        renderBadgesNoPerfil(profile.id, 'profileBadgesContainer');
      }
+
+     // ── ICM BADGES ──────────────────────────────────────────────
+     renderICMBadgesSection(icmData, selectedBadges, profile.id);
    
      /* ── Preferências de Notificação ────────────────────────── */
      (async () => {
@@ -4416,6 +4435,180 @@
      });
    }
    
+
+   /* ═══════════════════════════════════════════════════════════
+      ICM BADGES — helpers de geração, renderização e save
+      ═══════════════════════════════════════════════════════════ */
+
+   /* ICM_BADGE_META — agora gerenciado por badges_unificado.js */
+   const ICM_BADGE_META = (typeof MSYBadges !== 'undefined' && MSYBadges.ICM_META)
+     ? MSYBadges.ICM_META
+     : {
+         corvus:   { label:'Corvus',               icon:'◈', color:'#8b5cf6', desc:'Estrategista das Sombras' },
+         fenrir:   { label:'Fenrir',               icon:'⚡', color:'#ef4444', desc:'Ruptor de Paradigmas' },
+         aegis:    { label:'Aegis',                icon:'⬡', color:'#3b82f6', desc:'Guardião da Estrutura' },
+         vortex:   { label:'Vortex',               icon:'◉', color:'#10b981', desc:'Núcleo de Influência' },
+         titan:    { label:'Titan',                icon:'▲', color:'#f59e0b', desc:'Executor de Força' },
+         cipher:   { label:'Cipher',               icon:'⊕', color:'#06b6d4', desc:'Decodificador de Sistemas' },
+         specter:  { label:'Specter',              icon:'◬', color:'#6b7280', desc:'Operador Silencioso' },
+         elite:    { label:'Elite da Ordem',       icon:'👑', color:'#c9a84c', desc:'ICM ≥ 80' },
+         agente:   { label:'Agente da Ordem',      icon:'🔵', color:'#3b82f6', desc:'ICM ≥ 70' },
+         operador: { label:'Operador Estratégico', icon:'🔰', color:'#10b981', desc:'ICM ≥ 60' },
+       };
+
+   function getICMBadges(icm) {
+     /* Delega ao sistema unificado de insígnias */
+     if (typeof MSYBadges !== 'undefined') {
+       return MSYBadges.getICMDisponiveis(icm).map(b => b.meta?.icmKey || b.key);
+     }
+     // Fallback local caso MSYBadges não esteja carregado
+     if (!icm) return [];
+     const badges = [];
+     if (icm.dominante) badges.push(icm.dominante.toLowerCase());
+     if (icm.secundario && icm.secundario.toLowerCase() !== icm.dominante?.toLowerCase())
+       badges.push(icm.secundario.toLowerCase());
+     if (icm.score >= 80)      badges.push('elite');
+     else if (icm.score >= 70) badges.push('agente');
+     else if (icm.score >= 60) badges.push('operador');
+     return badges;
+   }
+
+   function renderICMBadgesSection(icmData, selectedBadges, userId) {
+     const section = document.getElementById('icm-badges-section');
+     if (!section) return;
+
+     const available = getICMBadges(icmData);
+     let selected    = Array.isArray(selectedBadges) ? [...selectedBadges] : [];
+
+     if (!icmData || available.length === 0) {
+       section.innerHTML = `
+         <div style="padding:12px 0;text-align:center">
+           <div style="font-size:.82rem;color:var(--text-3);margin-bottom:10px">
+             Realize o ICM para desbloquear insígnias.
+           </div>
+           <a href="icm.html" style="font-size:.78rem;color:var(--red-bright);font-weight:600">
+             → Realizar ICM
+           </a>
+         </div>`;
+       return;
+     }
+
+     function renderBadgeItem(key, isSelected) {
+       const meta = ICM_BADGE_META[key] || { label: key, icon: '🏷', color: '#c9a84c', desc: '' };
+       const hex  = meta.color.startsWith('#') ? meta.color : '#c9a84c';
+       return `
+         <div class="icm-badge-item ${isSelected ? 'selected' : ''}"
+              data-key="${key}"
+              style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1px solid ${isSelected ? hex : 'var(--border-faint)'};background:${isSelected ? hex + '18' : 'rgba(255,255,255,0.02)'};transition:all .18s"
+              onclick="window.__icmBadgeToggle('${key}')"
+              onmouseover="this.style.borderColor='${hex}';this.style.background='${hex}18'"
+              onmouseout="if(!this.classList.contains('selected')){this.style.borderColor='var(--border-faint)';this.style.background='rgba(255,255,255,0.02)'}">
+           <span style="font-size:1.1rem;line-height:1">${meta.icon}</span>
+           <div style="flex:1;min-width:0">
+             <div style="font-size:.8rem;font-weight:600;color:${isSelected ? hex : 'var(--text-1)'}">${meta.label}</div>
+             <div style="font-size:.68rem;color:var(--text-3)">${meta.desc}</div>
+           </div>
+           <div style="width:16px;height:16px;border-radius:50%;border:1px solid ${hex};flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${isSelected ? hex : 'transparent'}">
+             ${isSelected ? '<span style="color:#000;font-size:.55rem;font-weight:700">✓</span>' : ''}
+           </div>
+         </div>`;
+     }
+
+     function renderSelected() {
+       if (selected.length === 0) return `<div style="font-size:.76rem;color:var(--text-3);font-style:italic;padding:4px 0">Nenhuma selecionada.</div>`;
+       return selected.map(k => {
+         const m = ICM_BADGE_META[k] || { label: k, icon: '🏷', color: '#c9a84c' };
+         const hex = m.color.startsWith('#') ? m.color : '#c9a84c';
+         return `<span style="display:inline-flex;align-items:center;gap:5px;background:${hex}18;border:1px solid ${hex}44;border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:600;color:${hex};letter-spacing:.04em">${m.icon} ${m.label}</span>`;
+       }).join('');
+     }
+
+     function rebuild() {
+       section.innerHTML = `
+         <div style="margin-bottom:10px">
+           <div style="font-size:.72rem;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Exibindo no perfil</div>
+           <div id="icm-selected-display" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px">${renderSelected()}</div>
+         </div>
+         <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Disponíveis — clique para selecionar/remover</div>
+         <div style="display:flex;flex-direction:column;gap:5px">
+           ${available.map(k => renderBadgeItem(k, selected.includes(k))).join('')}
+         </div>
+         <div style="margin-top:12px;display:flex;align-items:center;justify-content:flex-end;gap:10px">
+           <span id="icm-badges-save-msg" style="font-size:.72rem;color:var(--text-3)"></span>
+           <button class="btn btn-primary btn-sm" id="icm-badges-save-btn" onclick="window.__icmBadgesSave()">
+             <i class="fa-solid fa-floppy-disk"></i> Salvar seleção
+           </button>
+         </div>`;
+     }
+
+     window.__icmBadgeToggle = function(key) {
+       const idx = selected.indexOf(key);
+       if (idx === -1) selected.push(key); else selected.splice(idx, 1);
+       rebuild();
+     };
+
+     window.__icmBadgesSave = async function() {
+       const btn = document.getElementById('icm-badges-save-btn');
+       const msg = document.getElementById('icm-badges-save-msg');
+       if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; }
+       try {
+         // Upsert direto — funciona mesmo se selected_badges ainda não existia antes
+         const { error } = await db
+           .from('profiles')
+           .update({ selected_badges: selected.length > 0 ? selected : [] })
+           .eq('id', userId);
+         if (error) {
+           console.error('[ICM Badges] Erro ao salvar:', error);
+           throw error;
+         }
+         if (msg) { msg.textContent = '✓ Salvo!'; msg.style.color = 'var(--gold)'; }
+         /* Invalida cache do sistema unificado para reflectir nova seleção */
+         if (typeof MSYBadges !== 'undefined') MSYBadges.clearCache(userId);
+         renderLeftBadges();
+         // Atualiza selected display
+         const disp = document.getElementById('icm-selected-display');
+         if (disp) disp.innerHTML = renderSelected();
+       } catch(e) {
+         console.error('[ICM Badges] catch:', e);
+         if (msg) { msg.textContent = 'Erro: ' + (e.message || 'tente novamente'); msg.style.color = 'var(--red-bright)'; }
+       } finally {
+         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar seleção'; }
+         setTimeout(() => { if (msg) msg.textContent = ''; }, 4000);
+       }
+     };
+
+     function renderLeftBadges() {
+       // Usar container dedicado para badges ICM no painel esquerdo
+       let icmLeft = document.getElementById('icm-left-badges');
+       if (!icmLeft) {
+         const profileBadgesContainer = document.getElementById('profileBadgesContainer');
+         if (!profileBadgesContainer) return;
+         icmLeft = document.createElement('div');
+         icmLeft.id = 'icm-left-badges';
+         icmLeft.style.marginTop = '8px';
+         profileBadgesContainer.appendChild(icmLeft);
+       }
+       if (selected.length === 0) {
+         icmLeft.innerHTML = '';
+         return;
+       }
+       icmLeft.innerHTML =
+         `<div style="font-size:.6rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">ICM</div>` +
+         `<div style="display:flex;flex-wrap:wrap;gap:6px">` +
+         selected.map(k => {
+           const m = ICM_BADGE_META[k] || { label: k, icon: '🏷', color: '#c9a84c' };
+           const hex = m.color.startsWith('#') ? m.color : '#c9a84c';
+           return `<div style="display:flex;align-items:center;gap:5px;background:${hex}14;border:1px solid ${hex}33;border-radius:7px;padding:4px 9px">
+             <span style="font-size:.85rem">${m.icon}</span>
+             <span style="font-size:.7rem;font-weight:600;color:${hex}">${m.label}</span>
+           </div>`;
+         }).join('') + `</div>`;
+     }
+
+     rebuild();
+     renderLeftBadges();
+   }
+
    document.addEventListener('DOMContentLoaded', () => {
      const page = document.body.dataset.page;
      const init = {
@@ -4425,6 +4618,7 @@
        comunicados: initComunicados,
        membros:     initMembros,
        perfil:      initPerfil,
+       icm:         function() { /* gerenciado por icm_script.js + icm.html */ },
        eventos:     initEventos,
        tecnologias: initTecnologias,
        admin:       initAdmin,

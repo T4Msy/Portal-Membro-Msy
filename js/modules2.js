@@ -484,13 +484,18 @@ async function initFeed() {
    BADGES VISÍVEIS NO MODAL DE OUTRO MEMBRO
    ============================================================ */
 async function renderBadgesMembro(userId, containerId) {
+  /* Delega ao sistema unificado MSYBadges quando disponível */
+  if (typeof MSYBadges !== 'undefined') {
+    return MSYBadges.render(userId, containerId, { compact: true });
+  }
+
+  /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = `<div style="padding:10px 0;color:var(--text-3);font-size:.8rem;display:flex;align-items:center;gap:8px">
     <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...
   </div>`;
 
-  // Busca insígnias de premiações e de recordes em paralelo
   const [badgesRes, insigniasRecordes] = await Promise.all([
     db.rpc('get_member_badges', { p_user_id: userId }),
     typeof calcInsigniasRecordes === 'function'
@@ -498,7 +503,7 @@ async function renderBadgesMembro(userId, containerId) {
       : Promise.resolve([]),
   ]);
 
-  const badges = badgesRes.data || [];
+  const badges      = badgesRes.data || [];
   const temQualquer = badges.length > 0 || insigniasRecordes.length > 0;
 
   if (!temQualquer) {
