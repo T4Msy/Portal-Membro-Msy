@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07070a">
+  <title>MSY Portal — ICM</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111116'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-weight='700' font-size='13' fill='%23c9a84c'%3EMSY%3C/text%3E%3C/svg%3E">
+
+  <!-- Portal global CSS -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Fontes do ICM -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- CSS do ICM — escopado em #icm-app, vars prefixadas com --icm- -->
+  <link rel="stylesheet" href="css/icm_style.css">
+
+  <style>
+    /* Overrides para encaixar o ICM no layout do portal */
+
+    /* Remove padding/max-width do page-content para o ICM ocupar tudo */
+    body[data-page="icm"] .page-content {
+      padding: 0 !important;
+      max-width: none !important;
+      overflow: hidden;
+      animation: none;
+    }
+
+    /* Container principal do ICM */
+    #icm-app {
+      position: relative;
+      width: 100%;
+      height: calc(100vh - var(--topbar-h));
+      overflow: hidden;
+      background: #060606;
+      font-family: 'Barlow', system-ui, sans-serif;
+    }
+
+    /* Screens do ICM ficam absolutas dentro do #icm-app */
+    #icm-app .screen {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Layers de atmosfera */
+    #icm-app .noise,
+    #icm-app .scanlines,
+    #icm-app .vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* result-scroll: scroll dentro do container */
+    #icm-app .result-scroll {
+      height: calc(100vh - var(--topbar-h));
+    }
+
+    /* Desativa cursor customizado no portal */
+    #icm-app * { cursor: default !important; }
+
+    /* Toast de save */
+    #icm-save-toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      z-index: 9999;
+      background: rgba(6,6,6,0.96);
+      border: 1px solid rgba(201,168,76,0.35);
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 9px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.76rem; color: #c4a94e;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      transform: translateY(70px); opacity: 0;
+      transition: all 0.3s cubic-bezier(.34,1.56,.64,1);
+      pointer-events: none;
+    }
+    #icm-save-toast.visible { transform: translateY(0); opacity: 1; }
+    #icm-save-toast.error   { border-color: rgba(204,0,0,0.4); color: #e06060; }
+  </style>
+</head>
+
+<body data-page="icm">
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <div class="main-wrapper">
+      <header class="topbar" id="topbar"></header>
+
+      <main class="page-content" id="pageContent">
+
+        <!-- ══════════════════════════════════════════════════
+             ICM APP — container principal
+        ══════════════════════════════════════════════════════ -->
+        <div id="icm-app">
+
+          <!-- Layers de atmosfera -->
+          <div class="noise"     aria-hidden="true"></div>
+          <div class="scanlines" aria-hidden="true"></div>
+          <div class="vignette"  aria-hidden="true"></div>
+
+          <!-- ── TELA 0 · INTRO ─────────────────────────── -->
+          <section id="screen-intro" class="screen active">
+            <div class="bg-grid"   aria-hidden="true"></div>
+            <div class="bg-radial" aria-hidden="true"></div>
+            <span class="corner tl" aria-hidden="true"></span>
+            <span class="corner tr" aria-hidden="true"></span>
+            <span class="corner bl" aria-hidden="true"></span>
+            <span class="corner br" aria-hidden="true"></span>
+
+            <div class="intro-wrap">
+              <div class="intro-logo">
+                <div class="logo-mark">
+                  <svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <polygon points="45,5 85,70 5,70" fill="none" stroke="#cc0000" stroke-width="2.2"/>
+                    <polygon points="45,22 72,65 18,65" fill="none" stroke="#cc0000" stroke-width="1" opacity="0.3"/>
+                    <line x1="45" y1="5" x2="45" y2="70" stroke="#cc0000" stroke-width="0.8" opacity="0.25"/>
+                    <circle cx="45" cy="42" r="6" fill="#cc0000"/>
+                    <circle cx="45" cy="42" r="12" fill="none" stroke="#cc0000" stroke-width="0.5" opacity="0.4"/>
+                    <circle cx="45" cy="42" r="20" fill="none" stroke="#cc0000" stroke-width="0.3" opacity="0.2"/>
+                  </svg>
+                </div>
+                <div class="logo-text">
+                  <span class="logo-order">MASAYOSHI ORDER</span>
+                  <span class="logo-subtitle">SISTEMA DE AVALIAÇÃO COGNITIVA · v3.0</span>
+                </div>
+              </div>
+
+              <div class="intro-headline">
+                <div class="eyebrow">PROTOCOLO ICM · CLASSIFICAÇÃO INTERNA · NÍVEL 3</div>
+                <h1>ÍNDICE DE<br/><em>CAPACIDADE</em><br/>MASAYOSHI</h1>
+                <div class="hl-rule"></div>
+              </div>
+
+              <div class="intro-specs">
+                <div class="spec-row"><span class="spec-key">ENGINE</span><span class="spec-val">ADAPTIVE · ANTI-MANIPULATION · CROSS-ANALYSIS</span></div>
+                <div class="spec-row"><span class="spec-key">DIMENSÕES</span><span class="spec-val">4 BASE + 2 OCULTAS (CONSISTÊNCIA · CONFIABILIDADE)</span></div>
+                <div class="spec-row"><span class="spec-key">PERGUNTAS</span><span class="spec-val">28 FIXAS + ATÉ 12 ADAPTATIVAS + 6 ESPELHADAS</span></div>
+                <div class="spec-row"><span class="spec-key">DURAÇÃO</span><span class="spec-val">12 – 22 MIN · VARIA POR PERFIL DETECTADO</span></div>
+                <div class="spec-row"><span class="spec-key">RESULTADO</span><span class="spec-val">SALVO AUTOMATICAMENTE NO SEU PERFIL MSY</span></div>
+              </div>
+
+              <!-- Banner resultado anterior (Supabase) -->
+              <div id="icm-previous-banner" class="history-banner" hidden>
+                <span class="history-label">RESULTADO ANTERIOR:</span>
+                <span id="icm-prev-score" class="history-icm">—</span>
+                <span id="icm-prev-class" class="history-date">—</span>
+                <span id="icm-prev-date"  class="history-date">—</span>
+              </div>
+
+              <div class="intro-alert">
+                <span class="alert-icon" aria-hidden="true">▲</span>
+                <p>Este protocolo utiliza análise cruzada e detecção de inconsistência em tempo real. Tentativas de manipular respostas são detectadas e penalizam o score final. Responda com honestidade total — o sistema é calibrado para distinguir respostas genuínas de performativas.</p>
+              </div>
+
+              <div id="resume-banner" class="resume-banner" hidden>
+                <div class="resume-inner">
+                  <span class="resume-icon" aria-hidden="true">◈</span>
+                  <div class="resume-text">
+                    <strong>Sessão anterior detectada.</strong>
+                    <span id="resume-info">—</span>
+                  </div>
+                  <div class="resume-btns">
+                    <button id="btn-resume"  class="btn-ghost">CONTINUAR</button>
+                    <button id="btn-discard" class="btn-ghost dim">DESCARTAR</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="history-banner" class="history-banner" hidden>
+                <span class="history-label">ÚLTIMO RESULTADO:</span>
+                <span id="history-prev-icm"  class="history-icm">—</span>
+                <span id="history-prev-date" class="history-date">—</span>
+                <span id="history-trend"     class="history-trend">—</span>
+              </div>
+
+              <button id="btn-start" class="btn-primary">
+                <span class="btn-text">INICIAR PROTOCOLO</span>
+                <div class="btn-shimmer" aria-hidden="true"></div>
+              </button>
+
+              <p class="intro-footer">ACESSO RESTRITO · MSY INTERNAL · ICM ENGINE · BUILD 3.1.0</p>
+            </div>
+          </section>
+
+          <!-- ── TELA 1 · TESTE ──────────────────────────── -->
+          <section id="screen-test" class="screen">
+            <header class="test-header">
+              <div class="th-logo">
+                <svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="22" height="22">
+                  <polygon points="14,2 26,22 2,22" fill="none" stroke="#cc0000" stroke-width="2"/>
+                  <circle cx="14" cy="13" r="3" fill="#cc0000"/>
+                </svg>
+                <span>ICM</span>
+              </div>
+              <div class="th-center">
+                <span id="block-label" class="block-label">BLOCO 1 · DECISÃO</span>
+                <span id="block-phase" class="block-phase"></span>
+              </div>
+              <div class="th-right">
+                <span id="q-counter" class="q-counter">01/28</span>
+              </div>
+            </header>
+
+            <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+              <div id="progress-fill" class="progress-fill"></div>
+              <div class="seg" style="left:0"   aria-hidden="true"></div>
+              <div class="seg" style="left:25%" aria-hidden="true"></div>
+              <div class="seg" style="left:50%" aria-hidden="true"></div>
+              <div class="seg" style="left:75%" aria-hidden="true"></div>
+            </div>
+
+            <main class="test-main">
+              <div id="q-card" class="q-card">
+                <div class="q-meta">
+                  <span id="q-badge"       class="q-badge">DECISÃO</span>
+                  <span id="q-weight"      class="q-weight"></span>
+                  <span id="q-mirror-flag" class="q-mirror-flag" hidden>⚬ VERIFICAÇÃO</span>
+                </div>
+                <p id="q-text" class="q-text">Carregando protocolo...</p>
+                <div id="q-options" class="q-options" role="list"></div>
+              </div>
+            </main>
+
+            <footer class="test-footer">
+              <button id="btn-back" class="btn-nav" disabled aria-label="Voltar">
+                <span aria-hidden="true">←</span> VOLTAR
+              </button>
+              <div class="block-dots" aria-label="Blocos">
+                <div class="bdot" id="bdot-0" data-label="DECISÃO"></div>
+                <div class="bdot" id="bdot-1" data-label="LÓGICA"></div>
+                <div class="bdot" id="bdot-2" data-label="SAGACIDADE"></div>
+                <div class="bdot" id="bdot-3" data-label="MATURIDADE"></div>
+              </div>
+              <div class="save-pill" id="save-pill" aria-live="polite">
+                <span class="save-led" aria-hidden="true"></span>
+                <span>SALVO</span>
+              </div>
+            </footer>
+          </section>
+
+          <!-- ── TELA 2 · ANÁLISE ────────────────────────── -->
+          <section id="screen-analysis" class="screen">
+            <div class="analysis-wrap">
+              <div class="analysis-orb" aria-hidden="true">
+                <div class="orb-ring r1"></div>
+                <div class="orb-ring r2"></div>
+                <div class="orb-ring r3"></div>
+                <div class="orb-ring r4"></div>
+                <div class="orb-core">
+                  <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="30,5 55,47 5,47" fill="none" stroke="#cc0000" stroke-width="2"/>
+                    <circle cx="30" cy="29" r="5" fill="#cc0000"/>
+                  </svg>
+                </div>
+              </div>
+              <h2 class="analysis-title">PROCESSANDO PERFIL</h2>
+              <p id="analysis-msg" class="analysis-msg" aria-live="polite">Inicializando engine cognitivo...</p>
+              <div class="analysis-dims" aria-hidden="true">
+                <div class="adim"><span>DECISÃO</span>     <div class="adim-track"><div class="adim-fill" id="af-d"></div></div></div>
+                <div class="adim"><span>LÓGICA</span>      <div class="adim-track"><div class="adim-fill" id="af-l"></div></div></div>
+                <div class="adim"><span>SAGACIDADE</span>  <div class="adim-track"><div class="adim-fill" id="af-s"></div></div></div>
+                <div class="adim"><span>MATURIDADE</span>  <div class="adim-track"><div class="adim-fill" id="af-m"></div></div></div>
+                <div class="adim"><span>CONSISTÊNCIA</span><div class="adim-track"><div class="adim-fill accent" id="af-c"></div></div></div>
+              </div>
+              <div class="analysis-terminal" aria-hidden="true">
+                <div id="at-line1" class="at-line">ICM · ADAPTIVE ENGINE · ANTI-MANIPULATION LAYER ACTIVE</div>
+                <div id="at-data"  class="at-line mono blink">░░░░░░░░░░░░░░░░</div>
+                <div id="at-pct"   class="at-line mono">0%</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── TELA 3 · RESULTADO ──────────────────────── -->
+          <section id="screen-result" class="screen result-screen">
+            <div class="result-scroll">
+            <div class="result-wrap">
+
+              <header class="rpt-header">
+                <div class="rpt-logo-row">
+                  <svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" width="28" height="28" aria-hidden="true">
+                    <polygon points="18,2 34,30 2,30" fill="none" stroke="#cc0000" stroke-width="2"/>
+                    <circle cx="18" cy="17" r="3" fill="#cc0000"/>
+                  </svg>
+                  <div>
+                    <div class="rpt-sys">MASAYOSHI ORDER · RELATÓRIO ICM · CONFIDENCIAL</div>
+                    <div class="rpt-date" id="rpt-date">—</div>
+                  </div>
+                  <div class="rpt-sid" id="rpt-sid">—</div>
+                </div>
+              </header>
+
+              <div class="r-section score-block">
+                <div class="score-ring-area">
+                  <svg class="score-svg" viewBox="0 0 220 220" aria-hidden="true">
+                    <circle cx="110" cy="110" r="90" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+                    <circle cx="110" cy="110" r="90" fill="none" stroke="rgba(204,0,0,0.08)" stroke-width="16"/>
+                    <circle cx="110" cy="110" r="90" fill="none" stroke="#cc0000" stroke-width="16"
+                      stroke-dasharray="565" stroke-dashoffset="565" stroke-linecap="butt"
+                      transform="rotate(-90 110 110)" id="score-arc"/>
+                    <circle cx="110" cy="110" r="74" fill="none" stroke="rgba(204,0,0,0.1)" stroke-width="1"/>
+                  </svg>
+                  <div class="score-inner">
+                    <div class="score-num"><span id="score-val">00</span><span class="score-denom">/100</span></div>
+                    <div class="score-lbl">ICM</div>
+                  </div>
+                </div>
+                <div class="score-info">
+                  <div class="s-class"      id="s-class">—</div>
+                  <div class="s-tier-badge" id="s-tier">—</div>
+                  <div class="s-rule"></div>
+                  <p   class="s-desc"       id="s-desc"></p>
+                  <div class="aptidao-card" id="aptidao-card">
+                    <div class="aptidao-label">APTIDÃO MASAYOSHI</div>
+                    <div class="aptidao-val" id="aptidao-val">—</div>
+                    <p   class="aptidao-desc" id="aptidao-desc"></p>
+                  </div>
+                  <div class="ranking-card" id="ranking-card">
+                    <div class="ranking-label">POSIÇÃO ESTIMADA</div>
+                    <div class="ranking-val"  id="ranking-val">—</div>
+                    <div class="ranking-bar-track"><div class="ranking-bar-fill" id="ranking-bar"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">ÍNDICES DE INTEGRIDADE</div>
+                <div class="hidden-indices-grid">
+                  <div class="hi-card" id="hi-consistency">
+                    <div class="hi-top">
+                      <span class="hi-icon" aria-hidden="true">⊕</span>
+                      <span class="hi-name">CONSISTÊNCIA</span>
+                      <span class="hi-val" id="hv-consistency">—</span>
+                    </div>
+                    <div class="hi-bar-track"><div class="hi-bar-fill" id="hb-consistency"></div></div>
+                    <p class="hi-desc" id="hd-consistency"></p>
+                  </div>
+                  <div class="hi-card" id="hi-reliability">
+                    <div class="hi-top">
+                      <span class="hi-icon" aria-hidden="true">◎</span>
+                      <span class="hi-name">CONFIABILIDADE</span>
+                      <span class="hi-val" id="hv-reliability">—</span>
+                    </div>
+                    <div class="hi-bar-track"><div class="hi-bar-fill" id="hb-reliability"></div></div>
+                    <p class="hi-desc" id="hd-reliability"></p>
+                  </div>
+                </div>
+                <div id="inconsistency-alert" class="inconsistency-alert" hidden>
+                  <span class="ia-icon" aria-hidden="true">⚠</span>
+                  <div class="ia-text">
+                    <strong>INCONSISTÊNCIAS DETECTADAS</strong>
+                    <p id="ia-detail"></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">ESPECTRO COGNITIVO</div>
+                <div class="espectros-grid">
+                  <div class="esp-card primary" id="esp-primary">
+                    <div class="esp-header">
+                      <div class="esp-tag">DOMINANTE</div>
+                      <div class="esp-sigil" id="esp-primary-sigil" aria-hidden="true">◈</div>
+                    </div>
+                    <div class="esp-name"      id="esp-primary-name">—</div>
+                    <div class="esp-archetype" id="esp-primary-archetype">—</div>
+                    <p   class="esp-desc"      id="esp-primary-desc"></p>
+                    <div class="esp-stats">
+                      <div><span class="es-lbl">FORÇAS</span><p class="es-val" id="esp-primary-str"></p></div>
+                      <div><span class="es-lbl">LIMITAÇÕES</span><p class="es-val" id="esp-primary-lim"></p></div>
+                    </div>
+                    <div class="esp-role-row">
+                      <span class="es-lbl">PAPEL IDEAL</span>
+                      <span class="esp-role" id="esp-primary-role"></span>
+                    </div>
+                  </div>
+                  <div class="esp-card secondary" id="esp-secondary">
+                    <div class="esp-header">
+                      <div class="esp-tag sec">SECUNDÁRIO</div>
+                      <div class="esp-sigil" id="esp-sec-sigil" aria-hidden="true">◉</div>
+                    </div>
+                    <div class="esp-name"      id="esp-sec-name">—</div>
+                    <div class="esp-archetype" id="esp-sec-archetype">—</div>
+                    <p   class="esp-desc"      id="esp-sec-desc"></p>
+                  </div>
+                </div>
+                <div class="esp-combo" id="esp-combo">
+                  <span class="combo-label">COMBINAÇÃO ESPECTRAL</span>
+                  <p class="combo-text" id="combo-text"></p>
+                </div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">ANÁLISE DIMENSIONAL</div>
+                <div class="dims-grid">
+                  <div class="dim-card" id="dc-decisao">
+                    <div class="dim-top"><span class="dim-ico" aria-hidden="true">◈</span><span class="dim-name">DECISÃO</span><span class="dim-pct" id="dv-decisao">0%</span></div>
+                    <div class="dim-bar-track"><div class="dim-bar-fill" id="db-decisao"></div></div>
+                    <div class="dim-tier" id="dt-decisao">—</div><p class="dim-desc" id="dd-decisao"></p>
+                  </div>
+                  <div class="dim-card" id="dc-logica">
+                    <div class="dim-top"><span class="dim-ico" aria-hidden="true">◉</span><span class="dim-name">LÓGICA</span><span class="dim-pct" id="dv-logica">0%</span></div>
+                    <div class="dim-bar-track"><div class="dim-bar-fill" id="db-logica"></div></div>
+                    <div class="dim-tier" id="dt-logica">—</div><p class="dim-desc" id="dd-logica"></p>
+                  </div>
+                  <div class="dim-card" id="dc-sagacidade">
+                    <div class="dim-top"><span class="dim-ico" aria-hidden="true">▲</span><span class="dim-name">SAGACIDADE</span><span class="dim-pct" id="dv-sagacidade">0%</span></div>
+                    <div class="dim-bar-track"><div class="dim-bar-fill" id="db-sagacidade"></div></div>
+                    <div class="dim-tier" id="dt-sagacidade">—</div><p class="dim-desc" id="dd-sagacidade"></p>
+                  </div>
+                  <div class="dim-card" id="dc-maturidade">
+                    <div class="dim-top"><span class="dim-ico" aria-hidden="true">⬡</span><span class="dim-name">MATURIDADE</span><span class="dim-pct" id="dv-maturidade">0%</span></div>
+                    <div class="dim-bar-track"><div class="dim-bar-fill" id="db-maturidade"></div></div>
+                    <div class="dim-tier" id="dt-maturidade">—</div><p class="dim-desc" id="dd-maturidade"></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">ANÁLISE CRUZADA</div>
+                <div id="cross-analysis-list" class="cross-list"></div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">INTERPRETAÇÃO DO PERFIL</div>
+                <div class="psych-grid">
+                  <div class="psych-card strong"><div class="pc-label">PONTOS FORTES</div><p class="pc-body" id="pc-strong"></p></div>
+                  <div class="psych-card risk"><div class="pc-label">PONTOS DE RISCO</div><p class="pc-body" id="pc-risk"></p></div>
+                </div>
+                <div class="psych-deep"><div class="pc-label">ANÁLISE COMPORTAMENTAL PROFUNDA</div><p class="pc-body" id="pc-deep"></p></div>
+                <div class="psych-potential"><div class="pc-label">POTENCIAL NA ORDEM</div><p class="pc-body" id="pc-potential"></p></div>
+              </div>
+
+              <div class="r-section">
+                <div class="sec-title">FUNÇÃO ESTRATÉGICA RECOMENDADA</div>
+                <div class="func-card" id="func-card">
+                  <div class="func-sigil" id="func-sigil" aria-hidden="true"></div>
+                  <div><div class="func-title" id="func-title">—</div><p class="func-desc" id="func-desc">—</p></div>
+                </div>
+              </div>
+
+              <div class="r-section" id="section-history" hidden>
+                <div class="sec-title">HISTÓRICO DE SESSÕES</div>
+                <div id="history-list" class="history-list"></div>
+              </div>
+
+              <footer class="rpt-footer">
+                <div class="rpt-footer-meta">PROTOCOLO ICM · MASAYOSHI ORDER · USO INTERNO · CONFIDENCIAL</div>
+                <button id="btn-restart" class="btn-secondary">REINICIAR PROTOCOLO</button>
+              </footer>
+
+            </div></div>
+          </section>
+
+        </div><!-- /#icm-app -->
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast save Supabase -->
+  <div id="icm-save-toast">
+    <span id="icm-save-toast-icon">✓</span>
+    <span id="icm-save-toast-msg">Resultado salvo no perfil.</span>
+  </div>
+
+  <!-- Scripts: ordem importa -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/features.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/badges_unificado.js"></script>
+  <script src="js/modules.js"></script>
+  <script src="js/modules2.js"></script>
+  <script src="js/icm_script.js"></script>
+
+  <script>
+    (async function initICMPage() {
+      const profile = await renderSidebar('icm');
+      if (!profile) return;
+
+      // Controle de visibilidade
+      if (typeof Features !== 'undefined' && !Features.guardPage('icm', profile)) return;
+
+      await renderTopBar('ICM — Índice de Capacidade', profile);
+
+      // Expõe contexto para o icm_script.js
+      window.__MSY_PROFILE__ = profile;
+      window.__MSY_DB__      = db;
+
+      // Carrega resultado anterior do Supabase
+      try {
+        const { data: prof } = await db
+          .from('profiles').select('icm').eq('id', profile.id).single();
+        if (prof?.icm?.score) {
+          const p = prof.icm;
+          const date = p.timestamp
+            ? new Date(p.timestamp).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+            : '—';
+          document.getElementById('icm-prev-score').textContent = p.score;
+          document.getElementById('icm-prev-class').textContent = '· ' + (p.classificacao || '—');
+          document.getElementById('icm-prev-date').textContent  = '· ' + date;
+          document.getElementById('icm-previous-banner').hidden = false;
+        }
+      } catch(e) { /* silencioso */ }
+    })();
+  </script>
+</body>
+</html>
