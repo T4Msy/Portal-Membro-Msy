@@ -2320,17 +2320,19 @@ h3 { font-size: 1.1rem; }
   font-family: 'Cinzel', serif;
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--text-1);
+  color: var(--badge-color, var(--gold));
   line-height: 1.2;
   letter-spacing: 0.04em;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--badge-color, var(--gold)) 40%, transparent);
 }
 
 .badge-qtd {
-  font-size: 0.62rem;
+  font-size: 0.60rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  opacity: 0.75;
+  color: var(--text-3);
+  opacity: 0.85;
 }
 
 /* -------- RESPONSIVE -------- */
