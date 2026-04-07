@@ -176,8 +176,15 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
     const badgeIcon   = mostraStatus ? `<span class="mens-badge ${badgeClass}">${badgeLabel}</span>` :
                         (isMe ? `<span class="mens-badge ${badgeClass}">${badgeLabel}</span>` : '');
 
+    const btnMarcar = isDiretoria && statusVal !== 'pago'
+      ? `<button class="btn btn-ghost btn-sm mens-marcar-pago" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}"
+           style="font-size:.72rem;color:#22c55e;border-color:rgba(34,197,94,.3);margin-left:6px;white-space:nowrap">
+           <i class="fa-solid fa-check"></i> Marcar pago
+         </button>`
+      : '';
+
     return `
-      <div class="mens-membro-item">
+      <div class="mens-membro-item" data-member-id="${m.id}">
         <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a);flex-shrink:0">
           ${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` :
             (m.initials || Utils.getInitials(m.name))}
@@ -186,14 +193,50 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
           <div class="mens-membro-name">${Utils.escapeHtml(m.name)}${isMe ? ' <span style="color:var(--gold);font-size:0.7rem">(você)</span>' : ''}</div>
           <div class="mens-membro-role">${Utils.escapeHtml(m.role || '')} · ${Utils.tierBadge(m.tier)}</div>
         </div>
-        ${mostraStatus ? badgeIcon : `<span class="mens-badge pendente" style="opacity:0.35">—</span>`}
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          ${mostraStatus ? badgeIcon : `<span class="mens-badge pendente" style="opacity:0.35">—</span>`}
+          ${btnMarcar}
+        </div>
       </div>
     `;
   }).join('');
-}
+
+  // Bind botões "Marcar como pago"
+  lista.querySelectorAll('.mens-marcar-pago').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const memberId = btn.dataset.id;
+      const memberName = btn.dataset.name;
+      if (!confirm(`Marcar ${memberName} como pago no mês atual?`)) return;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+
+      await Payments.confirmarPagamento(memberId, 'manual-diretoria', Payments.getMesAtual());
+
+      // Atualiza a linha na tela sem recarregar tudo
+      const item = lista.querySelector(`[data-member-id="${memberId}"]`);
+      if (item) {
+        const badgeEl = item.querySelector('.mens-badge');
+        if (badgeEl) { badgeEl.className = 'mens-badge pago'; badgeEl.textContent = '✓ Pago'; }
+        btn.remove();
+      }
+
+      Utils.showToast(`✅ ${memberName} marcado como pago!`, 'success');
+
+      // Atualiza pills de resumo
+      const pagosNow = lista.querySelectorAll('.mens-badge.pago').length;
+      const totalNow = lista.querySelectorAll('.mens-membro-item').length;
+      document.getElementById('ordeSummary').innerHTML = `
+        <div class="mens-stat-pill verde"><i class="fa-solid fa-check"></i> ${pagosNow} pagos</div>
+        <div class="mens-stat-pill vermelho"><i class="fa-solid fa-xmark"></i> ${totalNow - pagosNow} pendentes</div>
+        <div class="mens-stat-pill gold"><i class="fa-solid fa-users"></i> ${totalNow} membros</div>
+      `;
+    });
+  });
 
 /* ── Boot ─────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
   if (page === 'mensalidade') initMensalidade();
 });
+}

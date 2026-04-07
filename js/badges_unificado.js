@@ -38,12 +38,12 @@
 
   /* ── METADADOS DAS INSÍGNIAS ICM ─────────────────────────── */
   const ICM_META = {
-    corvus:   { label: 'Corvus',               icon: '◈', color: '#8b5cf6', desc: 'Estrategista das Sombras'  },
-    fenrir:   { label: 'Fenrir',               icon: '⚡', color: '#ef4444', desc: 'Ruptor de Paradigmas'     },
+    corvus:   { label: 'Corvus',               icon: '🐦‍⬛', color: '#8b5cf6', desc: 'Estrategista das Sombras'  },
+    fenrir:   { label: 'Fenrir',               icon: '🐺', color: '#ef4444', desc: 'Ruptor de Paradigmas'     },
     aegis:    { label: 'Aegis',                icon: '⬡', color: '#3b82f6', desc: 'Guardião da Estrutura'    },
     vortex:   { label: 'Vortex',               icon: '◉', color: '#10b981', desc: 'Núcleo de Influência'     },
     titan:    { label: 'Titan',                icon: '▲', color: '#f59e0b', desc: 'Executor de Força'        },
-    cipher:   { label: 'Cipher',               icon: '⊕', color: '#06b6d4', desc: 'Decodificador de Sistemas'},
+    cipher:   { label: 'Cipher',               icon: '🎯', color: '#06b6d4', desc: 'Decodificador de Sistemas'},
     specter:  { label: 'Specter',              icon: '◬', color: '#6b7280', desc: 'Operador Silencioso'      },
     elite:    { label: 'Elite da Ordem',       icon: '👑', color: '#c9a84c', desc: 'ICM ≥ 80'               },
     agente:   { label: 'Agente da Ordem',      icon: '🔵', color: '#3b82f6', desc: 'ICM ≥ 70'               },
