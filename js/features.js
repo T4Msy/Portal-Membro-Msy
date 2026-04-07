@@ -13,7 +13,7 @@ const MSY_FEATURES = {
   // ── Abas do menu ─────────────────────────────────────────
   // true  = visível para todos
   // false = oculto para membros comuns (diretoria sempre vê)
-  icm:         true,
+  icm:         false,
   biblioteca:  true,
   premiacoes:  true,
   ranking:     true,
