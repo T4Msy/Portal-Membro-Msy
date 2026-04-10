@@ -904,6 +904,49 @@
    /* ============================================================
       PAGE: ATIVIDADES
       ============================================================ */
+   /* ============================================================
+      UTILS: ANEXOS — tipos de arquivo e ícones
+      ============================================================ */
+   const AnexoUtils = {
+     getFileIcon(tipo, nome) {
+       if (!tipo && nome) {
+         const ext = nome.split('.').pop().toLowerCase();
+         if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return { icon: 'fa-solid fa-image', color: '#60a5fa', label: 'Imagem' };
+         if (['mp4','mov','avi','mkv','webm'].includes(ext)) return { icon: 'fa-solid fa-film', color: '#a78bfa', label: 'Vídeo' };
+         if (['mp3','wav','ogg','aac'].includes(ext)) return { icon: 'fa-solid fa-music', color: '#f472b6', label: 'Áudio' };
+         if (ext === 'pdf') return { icon: 'fa-solid fa-file-pdf', color: '#f87171', label: 'PDF' };
+         if (['doc','docx'].includes(ext)) return { icon: 'fa-solid fa-file-word', color: '#60a5fa', label: 'Word' };
+         if (['xls','xlsx'].includes(ext)) return { icon: 'fa-solid fa-file-excel', color: '#4ade80', label: 'Excel' };
+         if (['ppt','pptx'].includes(ext)) return { icon: 'fa-solid fa-file-powerpoint', color: '#fb923c', label: 'PowerPoint' };
+         if (['zip','rar','7z','tar'].includes(ext)) return { icon: 'fa-solid fa-file-zipper', color: '#fbbf24', label: 'Arquivo' };
+         return { icon: 'fa-solid fa-file', color: 'var(--gold)', label: 'Arquivo' };
+       }
+       if (!tipo) return { icon: 'fa-solid fa-file', color: 'var(--gold)', label: 'Arquivo' };
+       if (tipo.startsWith('image/')) return { icon: 'fa-solid fa-image', color: '#60a5fa', label: 'Imagem' };
+       if (tipo.startsWith('video/')) return { icon: 'fa-solid fa-film', color: '#a78bfa', label: 'Vídeo' };
+       if (tipo.startsWith('audio/')) return { icon: 'fa-solid fa-music', color: '#f472b6', label: 'Áudio' };
+       if (tipo === 'application/pdf') return { icon: 'fa-solid fa-file-pdf', color: '#f87171', label: 'PDF' };
+       if (tipo.includes('word')) return { icon: 'fa-solid fa-file-word', color: '#60a5fa', label: 'Word' };
+       if (tipo.includes('excel') || tipo.includes('spreadsheet')) return { icon: 'fa-solid fa-file-excel', color: '#4ade80', label: 'Excel' };
+       if (tipo.includes('presentation') || tipo.includes('powerpoint')) return { icon: 'fa-solid fa-file-powerpoint', color: '#fb923c', label: 'PowerPoint' };
+       if (tipo.includes('zip') || tipo.includes('rar') || tipo.includes('compressed')) return { icon: 'fa-solid fa-file-zipper', color: '#fbbf24', label: 'Arquivo' };
+       return { icon: 'fa-solid fa-file', color: 'var(--gold)', label: 'Arquivo' };
+     },
+
+     isImage(tipo, nome) {
+       if (tipo && tipo.startsWith('image/')) return true;
+       if (nome) { const ext = nome.split('.').pop().toLowerCase(); return ['jpg','jpeg','png','gif','webp'].includes(ext); }
+       return false;
+     },
+
+     formatBytes(bytes) {
+       if (!bytes) return '';
+       if (bytes < 1024) return bytes + ' B';
+       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+     }
+   };
+
    async function initAtividades() {
      const profile = await renderSidebar('atividades');
      if (!profile) return;
@@ -977,12 +1020,142 @@
          card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile));
        });
      }
+
+     async function loadAnexosView() {
+       const grid = document.getElementById('activitiesGrid');
+       if (!grid) return;
+       grid.innerHTML = `<div style="grid-column:1/-1"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i></div></div>`;
+
+       // Buscar todos os anexos via activity_responses (file_url preenchido)
+       let query = db.from('activity_responses')
+         .select('id, file_url, file_name, created_at, user_id, activity_id, user:user_id(name,initials,color), activity:activity_id(title,status)')
+         .not('file_url', 'is', null)
+         .not('file_name', 'is', null)
+         .order('created_at', { ascending: false });
+
+       if (!isDiretoria) query = query.eq('user_id', profile.id);
+
+       const { data: anexos, error } = await query;
+
+       if (error) { Utils.showToast('Erro ao carregar anexos.', 'error'); return; }
+       if (!anexos || anexos.length === 0) {
+         grid.innerHTML = `<div style="grid-column:1/-1" class="empty-state">
+           <div class="empty-state-icon"><i class="fa-solid fa-paperclip"></i></div>
+           <div class="empty-state-text">Nenhum anexo encontrado.</div>
+           <div style="font-size:.78rem;color:var(--text-3);margin-top:6px">Os arquivos enviados nas respostas de atividades aparecerão aqui.</div>
+         </div>`;
+         return;
+       }
+
+       grid.innerHTML = `<div class="anexos-grid">${anexos.map(a => renderAnexoCard(a, isDiretoria, profile)).join('')}</div>`;
+
+       // Bind actions
+       grid.querySelectorAll('.anexo-view-btn').forEach(btn => {
+         btn.addEventListener('click', e => { e.stopPropagation(); window.open(btn.dataset.url, '_blank'); });
+       });
+       grid.querySelectorAll('.anexo-download-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           const a = document.createElement('a');
+           a.href = btn.dataset.url;
+           a.download = btn.dataset.name || 'arquivo';
+           a.target = '_blank';
+           document.body.appendChild(a); a.click(); document.body.removeChild(a);
+         });
+       });
+       if (isDiretoria) {
+         grid.querySelectorAll('.anexo-delete-btn').forEach(btn => {
+           btn.addEventListener('click', async e => {
+             e.stopPropagation();
+             if (!confirm(`Excluir o anexo "${btn.dataset.name}"?\n\nO arquivo será removido permanentemente.`)) return;
+             btn.disabled = true;
+             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+
+             // Extrair o path do storage a partir da URL pública
+             const fileUrl = btn.dataset.url || '';
+             const storageMarker = '/storage/v1/object/public/activity-files/';
+             let storagePath = null;
+             if (fileUrl.includes(storageMarker)) {
+               storagePath = decodeURIComponent(fileUrl.split(storageMarker)[1]);
+             }
+
+             // 1. Apagar do storage
+             if (storagePath) {
+               const { error: storageErr } = await db.storage.from('activity-files').remove([storagePath]);
+               if (storageErr) console.warn('Aviso storage:', storageErr.message);
+             }
+
+             // 2. Limpar referência no banco
+             const { error } = await db.from('activity_responses')
+               .update({ file_url: null, file_name: null })
+               .eq('id', btn.dataset.id);
+
+             if (!error) {
+               btn.closest('.anexo-card-wrap')?.remove();
+               Utils.showToast('✅ Anexo excluído do storage e do banco.');
+             } else {
+               Utils.showToast('Erro ao remover.', 'error');
+               btn.disabled = false;
+               btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+             }
+           });
+         });
+       }
+     }
+
+     function renderAnexoCard(a, isDiretoria, profile) {
+       const fileInfo = AnexoUtils.getFileIcon(null, a.file_name);
+       const isImg = AnexoUtils.isImage(null, a.file_name);
+       const dateStr = Utils.formatDateTime ? Utils.formatDateTime(a.created_at) : new Date(a.created_at).toLocaleDateString('pt-BR');
+       const statusColor = a.activity?.status === 'Concluída' ? '#4ade80' : a.activity?.status === 'Em andamento' ? '#60a5fa' : '#eab308';
+
+       return `
+         <div class="anexo-card-wrap">
+           <div class="anexo-card card-enter">
+             <div class="anexo-card-preview" style="background:linear-gradient(135deg,var(--black-4),var(--black-5))">
+               ${isImg
+                 ? `<img src="${a.file_url}" alt="${Utils.escapeHtml(a.file_name)}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius) var(--radius) 0 0" onerror="this.parentElement.innerHTML='<i class=\\"fa-solid fa-image\\" style=\\"font-size:2.2rem;color:#60a5fa\\"></i>'">`
+                 : `<i class="${fileInfo.icon}" style="font-size:2.8rem;color:${fileInfo.color}"></i>`
+               }
+               <div class="anexo-type-badge" style="background:${fileInfo.color}22;border-color:${fileInfo.color}44;color:${fileInfo.color}">
+                 <i class="${fileInfo.icon}" style="font-size:.6rem"></i> ${fileInfo.label}
+               </div>
+             </div>
+             <div class="anexo-card-body">
+               <div class="anexo-card-name" title="${Utils.escapeHtml(a.file_name)}">${Utils.escapeHtml(a.file_name)}</div>
+               <div class="anexo-card-meta">
+                 <span><i class="fa-solid fa-user" style="font-size:.62rem"></i> ${Utils.escapeHtml(a.user?.name||'—')}</span>
+               </div>
+               <div class="anexo-card-meta" style="margin-top:4px">
+                 <span style="color:${statusColor}">
+                   <i class="fa-solid fa-list-check" style="font-size:.62rem"></i>
+                   ${Utils.escapeHtml(a.activity?.title||'—')}
+                 </span>
+               </div>
+               <div class="anexo-card-meta" style="margin-top:4px">
+                 <span><i class="fa-solid fa-calendar" style="font-size:.62rem"></i> ${dateStr}</span>
+               </div>
+               <div class="anexo-card-actions">
+                 <button class="btn btn-ghost btn-sm anexo-view-btn" data-url="${a.file_url}" title="Visualizar">
+                   <i class="fa-solid fa-eye"></i> Ver
+                 </button>
+                 <button class="btn btn-outline btn-sm anexo-download-btn" data-url="${a.file_url}" data-name="${Utils.escapeHtml(a.file_name)}" title="Download">
+                   <i class="fa-solid fa-download"></i>
+                 </button>
+                 ${isDiretoria ? `<button class="btn btn-ghost btn-sm anexo-delete-btn" data-id="${a.id}" data-name="${Utils.escapeHtml(a.file_name)}" data-url="${a.file_url}" title="Excluir" style="color:var(--red-bright);margin-left:auto">
+                   <i class="fa-solid fa-trash"></i>
+                 </button>` : ''}
+               </div>
+             </div>
+           </div>
+         </div>`;
+     }
    
      content.innerHTML = `
        <div class="page-header">
          <div>
            <div class="page-header-title">Atividades</div>
-           <div class="page-header-sub">${isDiretoria ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas'}</div>
+           <div class="page-header-sub" id="pageHeaderSub">${isDiretoria ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas'}</div>
          </div>
          ${isDiretoria ? `<button class="btn btn-primary" id="newActivityBtn"><i class="fa-solid fa-plus"></i> Nova Atividade</button>` : ''}
        </div>
@@ -990,6 +1163,9 @@
          ${['Todos','Pendente','Em andamento','Concluída','Cancelada'].map(f =>
            `<button class="filter-btn ${f==='Todos'?'active':''}" data-filter="${f}">${f}</button>`
          ).join('')}
+         <button class="filter-btn filter-btn-anexos" data-filter="__anexos__">
+           <i class="fa-solid fa-paperclip" style="font-size:.75rem;margin-right:4px"></i>Anexos
+         </button>
        </div>
        <div class="activities-grid" id="activitiesGrid"></div>
        <div class="modal-overlay" id="activityModal">
@@ -1011,7 +1187,16 @@
          content.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
          btn.classList.add('active');
          activeFilter = btn.dataset.filter;
-         loadActivities();
+         const subEl = document.getElementById('pageHeaderSub');
+         if (activeFilter === '__anexos__') {
+           if (subEl) subEl.textContent = 'Todos os arquivos enviados nas atividades';
+           if (isDiretoria) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = 'none');
+           loadAnexosView();
+         } else {
+           if (subEl) subEl.textContent = isDiretoria ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas';
+           if (isDiretoria) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = '');
+           loadActivities();
+         }
        });
      });
    
@@ -1025,6 +1210,45 @@
      modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
    }
    
+   function renderModalAnexos(anexos) {
+     if (!anexos || anexos.length === 0) return '';
+     const items = anexos.map(a => {
+       const ext = (a.file_name||'').split('.').pop().toLowerCase();
+       const isImg = ['jpg','jpeg','png','gif','webp'].includes(ext);
+       let icon = 'fa-solid fa-file';
+       let iconColor = 'var(--gold)';
+       if (isImg) { icon = 'fa-solid fa-image'; iconColor = '#60a5fa'; }
+       else if (ext === 'pdf') { icon = 'fa-solid fa-file-pdf'; iconColor = '#f87171'; }
+       else if (['doc','docx'].includes(ext)) { icon = 'fa-solid fa-file-word'; iconColor = '#60a5fa'; }
+       else if (['xls','xlsx'].includes(ext)) { icon = 'fa-solid fa-file-excel'; iconColor = '#4ade80'; }
+       else if (['ppt','pptx'].includes(ext)) { icon = 'fa-solid fa-file-powerpoint'; iconColor = '#fb923c'; }
+       else if (['mp4','mov','avi','mkv'].includes(ext)) { icon = 'fa-solid fa-film'; iconColor = '#a78bfa'; }
+       const safeName = Utils.escapeHtml(a.file_name||'arquivo');
+       const safeUser = Utils.escapeHtml(a.user?.name||'—');
+       const safeUrl = a.file_url||'';
+       return '<div class="modal-anexo-item">' +
+         '<div class="modal-anexo-icon" style="background:' + iconColor + '18;border-color:' + iconColor + '33">' +
+           '<i class="' + icon + '" style="color:' + iconColor + '"></i>' +
+         '</div>' +
+         '<div class="modal-anexo-info">' +
+           '<div class="modal-anexo-name" title="' + safeName + '">' + safeName + '</div>' +
+           '<div class="modal-anexo-meta"><i class="fa-solid fa-user" style="font-size:.6rem"></i> ' + safeUser + '</div>' +
+         '</div>' +
+         '<div class="modal-anexo-actions">' +
+           '<a href="' + safeUrl + '" target="_blank" class="btn btn-ghost btn-sm" title="Visualizar"><i class="fa-solid fa-eye"></i></a>' +
+           '<a href="' + safeUrl + '" target="_blank" class="btn btn-outline btn-sm" title="Download" onclick="event.preventDefault();const l=document.createElement(\'a\');l.href=\''+safeUrl+'\';l.download=\''+safeName+'\';document.body.appendChild(l);l.click();document.body.removeChild(l)"><i class="fa-solid fa-download"></i></a>' +
+         '</div>' +
+       '</div>';
+     }).join('');
+     return '<div class="divider"></div>' +
+       '<div class="modal-anexos-header">' +
+         '<i class="fa-solid fa-paperclip" style="color:var(--gold)"></i>' +
+         '<span>Anexos da Atividade</span>' +
+         '<span class="modal-anexos-count">' + anexos.length + '</span>' +
+       '</div>' +
+       '<div class="modal-anexos-list">' + items + '</div>';
+   }
+
    async function openActivityModal(id, acts, profile) {
      const act = acts.find(a => a.id === id);
      if (!act) return;
@@ -1045,7 +1269,10 @@
        .select('*, user:user_id(name,initials,color)')
        .eq('activity_id', id)
        .order('created_at', { ascending: false });
-   
+
+     // Respostas com anexos
+     const anexosDaAtividade = (responses||[]).filter(r => r.file_url && r.file_name);
+
      let deadlineLabel;
      if (passed && hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}`;
      else if (passed) deadlineLabel = '🔴 Prazo excedido';
@@ -1087,7 +1314,9 @@
        <div class="divider"></div>
        <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Descrição</div>
        <div class="modal-description">${Utils.escapeHtml(act.description)}</div>
-   
+
+       ${renderModalAnexos(anexosDaAtividade)}
+
        ${responses && responses.length > 0 ? `
          <div class="divider"></div>
          <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Respostas (${responses.length})</div>
@@ -1124,7 +1353,7 @@
          <div class="upload-zone" id="uploadZone">
            <div class="upload-zone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
            <div class="upload-zone-text">Clique para anexar arquivo (opcional)</div>
-           <div class="upload-zone-hint">PDF, DOC, XLSX, PPTX, PNG, JPG — máx. 10MB</div>
+           <div class="upload-zone-hint">PDF, DOC, XLSX, PPTX, PNG, JPG, MP4... — máx. 100MB</div>
            <input type="file" id="fileInput" style="display:none">
          </div>
          <div id="fileChosen" style="font-size:.78rem;color:var(--gold);margin-top:8px;display:none"></div>
@@ -1171,11 +1400,45 @@
    
      document.getElementById('cancelModal')?.addEventListener('click', () => modal.classList.remove('open'));
    
-     // File upload
-     document.getElementById('uploadZone')?.addEventListener('click', () => document.getElementById('fileInput').click());
-     document.getElementById('fileInput')?.addEventListener('change', () => {
-       const f = document.getElementById('fileInput').files[0];
-       if (f) { document.getElementById('fileChosen').textContent = `📎 ${f.name}`; document.getElementById('fileChosen').style.display = 'block'; }
+     // File upload — com drag-and-drop e preview
+     const uploadZone = document.getElementById('uploadZone');
+     const fileInput = document.getElementById('fileInput');
+     const fileChosen = document.getElementById('fileChosen');
+
+     function handleFileSelected(f) {
+       if (!f) return;
+       const MAX = 100 * 1024 * 1024;
+       if (f.size > MAX) { Utils.showToast('Arquivo muito grande. Máximo: 100MB.', 'error'); return; }
+       fileChosen.innerHTML = `
+         <div style="display:flex;align-items:center;gap:8px;background:var(--black-4);border:1px solid var(--border-gold);border-radius:var(--radius);padding:8px 12px">
+           <i class="fa-solid fa-paperclip" style="color:var(--gold)"></i>
+           <span style="font-size:.8rem;color:var(--gold);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+           <span style="font-size:.7rem;color:var(--text-3)">${(f.size/1024).toFixed(0)} KB</span>
+           <button id="clearFileBtn" style="background:none;border:none;cursor:pointer;color:var(--text-3);padding:0 2px;font-size:.8rem" title="Remover"><i class="fa-solid fa-xmark"></i></button>
+         </div>`;
+       fileChosen.style.display = 'block';
+       document.getElementById('clearFileBtn')?.addEventListener('click', () => {
+         if (fileInput) fileInput.value = '';
+         fileChosen.innerHTML = '';
+         fileChosen.style.display = 'none';
+       });
+     }
+
+     uploadZone?.addEventListener('click', () => fileInput?.click());
+     fileInput?.addEventListener('change', () => handleFileSelected(fileInput.files[0]));
+
+     // Drag & drop
+     uploadZone?.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('upload-zone-active'); });
+     uploadZone?.addEventListener('dragleave', () => uploadZone.classList.remove('upload-zone-active'));
+     uploadZone?.addEventListener('drop', e => {
+       e.preventDefault();
+       uploadZone.classList.remove('upload-zone-active');
+       const f = e.dataTransfer.files[0];
+       if (f && fileInput) {
+         const dt = new DataTransfer(); dt.items.add(f);
+         fileInput.files = dt.files;
+         handleFileSelected(f);
+       }
      });
    
      // Submit response
@@ -1183,15 +1446,22 @@
        const text = document.getElementById('responseText')?.value.trim();
        if (!text) { document.getElementById('responseText').style.borderColor = 'var(--red-bright)'; return; }
        const btn = document.getElementById('submitActivity');
-       btn.disabled = true; btn.textContent = 'Enviando...';
+       btn.disabled = true;
+       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
    
        let file_url = null, file_name = null;
-       const fileInput = document.getElementById('fileInput');
-       if (fileInput?.files[0]) {
-         const file = fileInput.files[0];
-         const path = `${profile.id}/${id}/${Date.now()}_${file.name}`;
+       const fi = document.getElementById('fileInput');
+       if (fi?.files[0]) {
+         const file = fi.files[0];
+         const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+         const path = `${profile.id}/${id}/${Date.now()}_${sanitizedName}`;
          const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file);
-         if (!upErr && upData) {
+         if (upErr) {
+           Utils.showToast(`Erro no upload: ${upErr.message}`, 'error');
+           btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Resposta';
+           return;
+         }
+         if (upData) {
            const { data: urlData } = db.storage.from('activity-files').getPublicUrl(path);
            file_url = urlData.publicUrl; file_name = file.name;
          }
@@ -1220,7 +1490,7 @@
            });
          }
          modal.classList.remove('open');
-         Utils.showToast(isOwner && isLateSubmission ? 'Resposta enviada (com atraso)!' : 'Resposta enviada com sucesso!');
+         Utils.showToast(isOwner && isLateSubmission ? '⚠️ Resposta enviada com atraso!' : '✅ Resposta enviada com sucesso!');
          setTimeout(() => initAtividades(), 300);
        } else {
          Utils.showToast('Erro ao enviar resposta.', 'error');
