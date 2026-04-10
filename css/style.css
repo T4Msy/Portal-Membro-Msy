@@ -1179,6 +1179,212 @@ h3 { font-size: 1.1rem; }
 .filter-btn:hover { border-color: var(--border-gold); color: var(--gold); }
 .filter-btn.active { background: var(--red-subtle); border-color: var(--border-red); color: var(--red-bright); }
 
+/* Botão Anexos — destaque especial com ícone de clipe */
+.filter-btn-anexos {
+  border-color: rgba(201, 168, 76, 0.2);
+  color: var(--gold);
+}
+.filter-btn-anexos:hover,
+.filter-btn-anexos.active {
+  background: rgba(201, 168, 76, 0.08);
+  border-color: var(--border-gold);
+  color: var(--gold-bright);
+}
+
+/* ============================================================
+   ANEXOS — Grid de Cards
+   ============================================================ */
+.anexos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  grid-column: 1 / -1;
+}
+
+.anexo-card-wrap { display: contents; }
+
+.anexo-card {
+  background: var(--black-3);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all var(--t2) var(--ease);
+  position: relative;
+}
+.anexo-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity var(--t2) var(--ease);
+}
+.anexo-card:hover {
+  border-color: var(--border-gold);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,168,76,0.08);
+}
+.anexo-card:hover::before { opacity: 1; }
+
+.anexo-card-preview {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-faint);
+}
+.anexo-card-preview img {
+  transition: transform var(--t3) var(--ease);
+}
+.anexo-card:hover .anexo-card-preview img { transform: scale(1.05); }
+
+.anexo-type-badge {
+  position: absolute;
+  bottom: 8px; right: 8px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.anexo-card-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+.anexo-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
+.anexo-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anexo-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-faint);
+}
+
+/* ============================================================
+   MODAL — Anexos da Atividade (seção interna)
+   ============================================================ */
+.modal-anexos-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+.modal-anexos-count {
+  background: rgba(201,168,76,0.12);
+  border: 1px solid rgba(201,168,76,0.25);
+  color: var(--gold);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: auto;
+}
+.modal-anexos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.modal-anexo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--black-4);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  transition: border-color var(--t1) var(--ease);
+}
+.modal-anexo-item:hover { border-color: var(--border-gold); }
+.modal-anexo-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.modal-anexo-info {
+  flex: 1;
+  min-width: 0;
+}
+.modal-anexo-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-anexo-meta {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.modal-anexo-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Upload zone melhorada */
+.upload-zone-active {
+  border-color: var(--gold) !important;
+  background: var(--gold-subtle) !important;
+}
+
+/* Responsivo Anexos */
+@media (max-width: 640px) {
+  .anexos-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .anexo-card-preview { height: 110px; }
+}
+@media (max-width: 420px) {
+  .anexos-grid { grid-template-columns: 1fr; }
+}
+
 .activities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
