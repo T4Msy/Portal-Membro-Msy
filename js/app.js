@@ -2224,8 +2224,8 @@
       ============================================================ */
    const TECHNOLOGIES = [
      { id:1, name:'Corvus',                icon:'🦅', description:'Assistente de IA institucional da MSY. Chat com memória, base de conhecimento e integrações avançadas.', status:'Online', url:'https://t4msy.github.io/Corvus-2.0/' },
-     { id:2, name:'MSY Analytics Semanal', icon:'📊', description:'Painel de métricas e KPIs coletivos da Ordem, atualizado semanalmente via análise de WhatsApp.', status:'Online', url:'https://t4msy.github.io/MSY-ANALYTICS/' },
-     { id:3, name:'MSY Analytics Mensal',  icon:'📈', description:'Relatório consolidado mensal com análise profunda e comparativo histórico da Ordem.', status:'Online', url:'https://t4msy.github.io/Msy-Analitycs-Mensal-2/' },
+     { id:2, name:'MSY Analytics', icon:'📊', description:'Painel de métricas e KPIs coletivos da Ordem, atualizado semanalmente via análise de WhatsApp.', status:'Online', url:'https://t4msy.github.io/MSY-ANALYTICS/' },
+     { id:3, name:'Índice De Capacidade Masayoshi',  icon:'🧠', description:'Sistema de avaliação comportamental com lógica adaptativa, análise de padrões e coerência. Desenvolvido para identificar alinhamento com a Masayoshi.', status:'Online', url:'https://t4msy.github.io/ICM-TESTE/' },
      { id:4, name:'ProvaGen',              icon:'📝', description:'Sistema automatizado de geração de avaliações internas via IA multi-modelo.', status:'Online', url:'https://t4msy.github.io/Gerador-de-Provas/' },
      { id:5, name:'NeverMind Studio',      icon:'🎬', description:'Central de produção de conteúdo e mídia da MSY. Pipeline editorial e social em desenvolvimento.', status:'Em breve', url:'#' },
      { id:6, name:'Britannia Hub',         icon:'🏛️', description:'Portal da camada comunitária da Masayoshi. Conector entre a Ordem e o mundo externo.', status:'Em breve', url:'#' },
