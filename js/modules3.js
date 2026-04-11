@@ -1521,6 +1521,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (canDelete) {
             tab.querySelectorAll('.delete-event-btn').forEach(el => { el.style.display = ''; });
           }
+
+          // Mostra botões de concluir/reabrir para quem tem permissão de criar/gerenciar
+          const canConclude = canCreate || canDelete;
+          if (canConclude) {
+            tab.querySelectorAll('.ev-conclude-btn, .ev-unconclude-btn').forEach(el => { el.style.display = ''; });
+          }
         });
 
         obs.observe(content, { childList: true, subtree: true });

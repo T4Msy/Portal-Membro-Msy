@@ -2546,47 +2546,307 @@
      const isDiretoria = profile.tier === 'diretoria';
      let activeTab = 'eventos';
    
+     /* ── CSS premium de eventos (injetado uma vez) ── */
+     if (!document.getElementById('msy-ev-css')) {
+       const _s = document.createElement('style');
+       _s.id = 'msy-ev-css';
+       _s.textContent = `
+         /* ══ EVENT CARDS ══════════════════════════════════════════════ */
+         .ev-card {
+           position: relative;
+           background: var(--black-3);
+           border: 1px solid var(--border-faint);
+           border-radius: var(--radius-lg);
+           margin-bottom: 12px;
+           overflow: hidden;
+           transition: border-color .22s var(--ease), box-shadow .22s var(--ease), transform .22s var(--ease);
+         }
+         .ev-card:hover {
+           border-color: rgba(201,168,76,.25);
+           box-shadow: 0 8px 32px rgba(0,0,0,.55);
+           transform: translateY(-2px);
+         }
+         .ev-card-stripe {
+           position: absolute;
+           left: 0; top: 0; bottom: 0;
+           width: 3px;
+           border-radius: 3px 0 0 3px;
+         }
+         .ev-card-inner {
+           padding: 18px 20px 16px 22px;
+         }
+         .ev-card-top {
+           display: flex;
+           align-items: center;
+           justify-content: space-between;
+           gap: 10px;
+           margin-bottom: 10px;
+           flex-wrap: wrap;
+         }
+         .ev-card-type {
+           display: inline-flex;
+           align-items: center;
+           gap: 5px;
+           font-size: .62rem;
+           font-weight: 700;
+           text-transform: uppercase;
+           letter-spacing: .09em;
+           padding: 3px 10px;
+           border-radius: 20px;
+           border: 1px solid;
+         }
+         .ev-badge {
+           display: inline-flex;
+           align-items: center;
+           gap: 4px;
+           font-size: .62rem;
+           font-weight: 700;
+           padding: 3px 9px;
+           border-radius: 20px;
+           border: 1px solid;
+           letter-spacing: .05em;
+           text-transform: uppercase;
+         }
+         .ev-badge-done  { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
+         .ev-badge-obrig { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
+         .ev-badge-opt   { background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.2); color:var(--gold); }
+         .ev-action-btn {
+           width: 28px; height: 28px;
+           border-radius: 7px;
+           border: 1px solid rgba(255,255,255,.08);
+           background: rgba(255,255,255,.03);
+           cursor: pointer;
+           display: inline-flex;
+           align-items: center;
+           justify-content: center;
+           font-size: .72rem;
+           color: var(--text-3);
+           transition: all .18s;
+         }
+         .ev-action-btn:hover { background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.16); }
+         .ev-conclude-btn { color: #10b981 !important; border-color: rgba(16,185,129,.25) !important; }
+         .ev-conclude-btn:hover { background: rgba(16,185,129,.1) !important; }
+         .ev-card-title {
+           font-family: 'Cinzel', serif;
+           font-size: .98rem;
+           font-weight: 700;
+           color: var(--text-1);
+           letter-spacing: .03em;
+           margin-bottom: 8px;
+           line-height: 1.3;
+         }
+         .ev-title-done {
+           text-decoration: line-through;
+           opacity: .55;
+         }
+         .ev-card-meta {
+           display: flex;
+           flex-wrap: wrap;
+           gap: 14px;
+           font-size: .76rem;
+           color: var(--text-3);
+           margin-bottom: 8px;
+         }
+         .ev-card-desc {
+           font-size: .82rem;
+           color: var(--text-2);
+           line-height: 1.6;
+           margin-bottom: 10px;
+           padding-top: 6px;
+           border-top: 1px solid var(--border-faint);
+         }
+         .ev-card-crew {
+           display: flex;
+           align-items: center;
+           gap: 12px;
+           flex-wrap: wrap;
+           padding-top: 10px;
+           border-top: 1px solid var(--border-faint);
+           margin-top: 4px;
+         }
+         .ev-crew-item {
+           display: flex;
+           align-items: center;
+           gap: 6px;
+         }
+         .ev-crew-label {
+           font-size: .6rem;
+           color: var(--text-3);
+           text-transform: uppercase;
+           letter-spacing: .08em;
+           font-weight: 700;
+         }
+         .ev-crew-name {
+           font-size: .76rem;
+           color: var(--text-2);
+           font-weight: 600;
+         }
+         .ev-crew-sep {
+           width: 1px;
+           height: 16px;
+           background: var(--border-faint);
+         }
+
+         /* ══ SECAO LABEL ══════════════════════════════════════════════ */
+         .ev-section-label {
+           display: flex;
+           align-items: center;
+           gap: 10px;
+           font-size: .65rem;
+           color: var(--gold);
+           text-transform: uppercase;
+           letter-spacing: .14em;
+           font-weight: 700;
+           margin: 20px 0 12px;
+         }
+         .ev-section-label::after {
+           content: '';
+           flex: 1;
+           height: 1px;
+           background: linear-gradient(90deg, var(--border-gold), transparent);
+         }
+         .ev-section-label:first-child { margin-top: 0; }
+
+         /* ══ MODAL NOVO EVENTO ════════════════════════════════════════ */
+         #newEventModal .modal {
+           max-width: 580px;
+           background: #0e0e13;
+           border: 1px solid rgba(201,168,76,.2);
+         }
+         #newEventModal .modal-header {
+           background: linear-gradient(135deg,rgba(201,168,76,.07),transparent);
+           border-bottom: 1px solid rgba(201,168,76,.15);
+         }
+         #newEventModal .modal-title {
+           font-family: 'Cinzel', serif;
+           letter-spacing: .06em;
+           color: var(--gold);
+         }
+         .ev-form-grid-3 {
+           display: grid;
+           grid-template-columns: 1fr 1fr 1fr;
+           gap: 12px;
+           margin-bottom: 16px;
+         }
+         @media (max-width:560px) { .ev-form-grid-3 { grid-template-columns: 1fr 1fr; } }
+         .ev-modal-section {
+           font-size: .6rem;
+           color: var(--gold);
+           text-transform: uppercase;
+           letter-spacing: .12em;
+           font-weight: 700;
+           margin: 18px 0 10px;
+           display: flex;
+           align-items: center;
+           gap: 8px;
+         }
+         .ev-modal-section::before {
+           content: '';
+           width: 3px;
+           height: 12px;
+           background: var(--gold);
+           border-radius: 2px;
+         }
+         .ev-check-row {
+           display: flex;
+           align-items: center;
+           gap: 8px;
+           cursor: pointer;
+           font-size: .84rem;
+           color: var(--text-2);
+           padding: 10px 14px;
+           border-radius: var(--radius);
+           border: 1px solid var(--border-faint);
+           background: rgba(255,255,255,.02);
+           transition: all .18s;
+           user-select: none;
+         }
+         .ev-check-row:hover { border-color: var(--border-gold); background: rgba(201,168,76,.04); }
+         .ev-check-row input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+       `;
+       document.head.appendChild(_s);
+     }
+
      async function loadEventos() {
        const tab = document.getElementById('evTab');
        if (!tab) return;
-       tab.innerHTML = `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i></div>`;
-   
+       tab.innerHTML = `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>`;
+
+       /* Checar permissão de gerenciar eventos (diretoria OU permissão individual) */
+       let canManage = isDiretoria;
+       if (!isDiretoria) {
+         canManage = await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','excluir_eventos','gerenciar_eventos']);
+       }
+
        const { data: evs, error } = await db.from('events')
-         .select('*, creator:created_by(name,initials,color)')
+         .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
          .order('event_date', { ascending: false });
-   
+
        if (error) { Utils.showToast('Erro ao carregar eventos.', 'error'); return; }
-   
-       const today = new Date().toISOString().split('T')[0];
-       const upcoming = (evs||[]).filter(e => e.event_date >= today);
-       const past     = (evs||[]).filter(e => e.event_date < today);
-   
+
+       const today    = new Date().toISOString().split('T')[0];
+       const upcoming = (evs||[]).filter(e => e.event_date >= today && e.status !== 'concluido');
+       const done     = (evs||[]).filter(e => e.status === 'concluido');
+       const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
+
        tab.innerHTML = `
-         ${isDiretoria ? `
-           <div style="margin-bottom:18px">
-             <button class="btn btn-primary" id="newEventBtn"><i class="fa-solid fa-plus"></i> Novo Evento</button>
+         ${canManage ? `
+           <div style="margin-bottom:20px">
+             <button class="btn btn-primary" id="newEventBtn">
+               <i class="fa-solid fa-calendar-plus"></i> Novo Evento
+             </button>
            </div>` : ''}
-   
+
          ${upcoming.length > 0 ? `
-           <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Próximos Eventos</div>
-           ${upcoming.map(ev => renderEventCard(ev, isDiretoria)).join('')}
-         ` : `<div class="empty-state" style="padding:30px"><div class="empty-state-icon"><i class="fa-solid fa-calendar-xmark"></i></div><div class="empty-state-text">Nenhum evento agendado.</div></div>`}
-   
+           <div class="ev-section-label"><i class="fa-solid fa-calendar-days"></i> Próximos Eventos</div>
+           ${upcoming.map(ev => renderEventCard(ev, canManage, false)).join('')}
+         ` : `
+           <div class="empty-state" style="padding:40px">
+             <div class="empty-state-icon"><i class="fa-solid fa-calendar-days"></i></div>
+             <div class="empty-state-text">Nenhum evento agendado.</div>
+           </div>`}
+
+         ${done.length > 0 ? `
+           <div class="ev-section-label" style="color:#10b981"><i class="fa-solid fa-circle-check"></i> Concluídos</div>
+           ${done.map(ev => renderEventCard(ev, canManage, false)).join('')}
+         ` : ''}
+
          ${past.length > 0 ? `
-           <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:24px;margin-bottom:12px">Eventos Passados</div>
-           ${past.map(ev => renderEventCard(ev, isDiretoria, true)).join('')}
+           <div class="ev-section-label" style="color:var(--text-3)"><i class="fa-regular fa-calendar"></i> Encerrados</div>
+           ${past.map(ev => renderEventCard(ev, canManage, true)).join('')}
          ` : ''}
        `;
-   
+
        document.getElementById('newEventBtn')?.addEventListener('click', () => openNewEventModal(profile, loadEventos));
-   
+
+       /* Excluir */
        tab.querySelectorAll('.delete-event-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
            e.stopPropagation();
-           if (!confirm('Excluir este evento?')) return;
+           if (!confirm('Excluir este evento permanentemente?')) return;
            const { error } = await db.from('events').delete().eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Evento excluído.'); loadEventos(); }
            else Utils.showToast('Erro ao excluir.', 'error');
+         });
+       });
+
+       /* Concluir */
+       tab.querySelectorAll('.ev-conclude-btn').forEach(btn => {
+         btn.addEventListener('click', async e => {
+           e.stopPropagation();
+           const { error } = await db.from('events').update({ status: 'concluido' }).eq('id', btn.dataset.id);
+           if (!error) { Utils.showToast('Evento marcado como concluído!'); loadEventos(); }
+           else Utils.showToast('Erro ao atualizar.', 'error');
+         });
+       });
+
+       /* Reabrir */
+       tab.querySelectorAll('.ev-unconclude-btn').forEach(btn => {
+         btn.addEventListener('click', async e => {
+           e.stopPropagation();
+           const { error } = await db.from('events').update({ status: 'ativo' }).eq('id', btn.dataset.id);
+           if (!error) { Utils.showToast('Evento reaberto.'); loadEventos(); }
+           else Utils.showToast('Erro ao reabrir.', 'error');
          });
        });
      }
@@ -2736,19 +2996,25 @@
    
        <!-- New Event Modal -->
        <div class="modal-overlay" id="newEventModal">
-         <div class="modal" style="max-width:560px">
-           <div class="modal-header">
-             <div class="modal-title"><i class="fa-solid fa-calendar-plus" style="color:var(--gold)"></i> Novo Evento</div>
+         <div class="modal" style="max-width:580px;background:#0e0e13;border:1px solid rgba(201,168,76,.2)">
+           <div class="modal-header" style="background:linear-gradient(135deg,rgba(201,168,76,.07),transparent);border-bottom:1px solid rgba(201,168,76,.15)">
+             <div class="modal-title" style="font-family:'Cinzel',serif;letter-spacing:.06em;color:var(--gold)">
+               <i class="fa-solid fa-calendar-plus"></i> Novo Evento
+             </div>
              <button class="modal-close" id="newEventClose"><i class="fa-solid fa-xmark"></i></button>
            </div>
-           <div class="modal-body">
-             <div class="form-group" style="margin-bottom:14px">
-               <label class="form-label">Título *</label>
-               <input class="form-input" id="ev-title" placeholder="Nome do evento">
+           <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:0">
+
+             <!-- Título -->
+             <div class="form-group" style="margin-bottom:16px">
+               <label class="form-label">Título <span style="color:var(--red-bright)">*</span></label>
+               <input class="form-input" id="ev-title" placeholder="Nome do evento" style="font-size:.92rem">
              </div>
-             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+
+             <!-- Data / Hora / Tipo -->
+             <div class="ev-form-grid-3">
                <div class="form-group">
-                 <label class="form-label">Data *</label>
+                 <label class="form-label">Data <span style="color:var(--red-bright)">*</span></label>
                  <input class="form-input" type="date" id="ev-date">
                </div>
                <div class="form-group">
@@ -2758,46 +3024,76 @@
                <div class="form-group">
                  <label class="form-label">Tipo</label>
                  <select class="form-input form-select" id="ev-type">
-                   <option>Reunião</option><option>Treinamento</option>
-                   <option>Evento Social</option><option>Cerimonial</option><option>Outro</option>
+                   <option>Reunião</option>
+                   <option>Treinamento</option>
+                   <option>Evento Social</option>
+                   <option>Cerimonial</option>
+                   <option>Outro</option>
                  </select>
                </div>
              </div>
-             <div class="form-group" style="margin-bottom:14px">
-               <label class="form-label"><i class="fa-solid fa-user-pen" style="color:var(--gold)"></i> Criador do Evento * <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(obrigatório — impacta desempenho)</span></label>
+
+             <!-- Seção: Responsáveis -->
+             <div class="ev-modal-section">Responsáveis</div>
+
+             <div class="form-group" style="margin-bottom:12px">
+               <label class="form-label" style="display:flex;align-items:center;gap:6px">
+                 <i class="fa-solid fa-user-pen" style="color:var(--gold);font-size:.8rem"></i>
+                 Criador do Evento <span style="color:var(--red-bright)">*</span>
+                 <span style="font-size:.65rem;color:var(--text-3);font-weight:400;margin-left:4px">impacta desempenho</span>
+               </label>
                <select class="form-input form-select" id="ev-creator">
                  <option value="">Selecione o criador...</option>
                </select>
              </div>
-             <div class="form-group" style="margin-bottom:14px">
+
+             <div class="form-group" style="margin-bottom:4px">
                <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
-                 <span><i class="fa-solid fa-users" style="color:var(--gold)"></i> Co-criadores <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(recebem crédito no desempenho)</span></span>
-                 <button type="button" class="btn btn-ghost btn-sm" id="ev-add-helper" style="font-size:.65rem;padding:3px 10px"><i class="fa-solid fa-plus"></i> Adicionar</button>
+                 <span style="display:flex;align-items:center;gap:6px">
+                   <i class="fa-solid fa-users" style="color:var(--gold);font-size:.8rem"></i>
+                   Co-criadores
+                   <span style="font-size:.65rem;color:var(--text-3);font-weight:400">recebem crédito</span>
+                 </span>
+                 <button type="button" class="btn btn-ghost btn-sm" id="ev-add-helper" style="font-size:.65rem;padding:3px 10px">
+                   <i class="fa-solid fa-plus"></i> Adicionar
+                 </button>
                </label>
                <div id="ev-helpers-wrap">
                  <select class="form-input form-select ev-helper-sel" style="margin-bottom:6px">
                    <option value="">Nenhum co-criador</option>
                  </select>
                </div>
-               <div style="font-size:.68rem;color:var(--text-3)">Máximo de 5 co-criadores por evento.</div>
+               <div style="font-size:.65rem;color:var(--text-3);margin-top:2px">Máx. 5 co-criadores por evento.</div>
              </div>
-             <div class="form-group" style="margin-bottom:14px">
+
+             <!-- Seção: Detalhes -->
+             <div class="ev-modal-section">Detalhes</div>
+
+             <div class="form-group" style="margin-bottom:16px">
                <label class="form-label">Descrição</label>
-               <textarea class="form-input form-textarea" id="ev-desc" style="min-height:80px" placeholder="Detalhes do evento..."></textarea>
+               <textarea class="form-input form-textarea" id="ev-desc" style="min-height:80px;resize:vertical" placeholder="Detalhes, local, pauta..."></textarea>
              </div>
-             <div style="display:flex;gap:18px;flex-wrap:wrap">
-               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;color:var(--text-2)">
-                 <input type="checkbox" id="ev-mandatory"> Presença obrigatória
+
+             <!-- Checkboxes -->
+             <div style="display:flex;flex-direction:column;gap:8px">
+               <label class="ev-check-row">
+                 <input type="checkbox" id="ev-mandatory">
+                 <i class="fa-solid fa-circle-exclamation" style="color:var(--red-bright);font-size:.85rem"></i>
+                 Presença obrigatória
                </label>
-               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;color:#c084fc">
+               <label class="ev-check-row" style="border-color:rgba(168,85,247,.2)">
                  <input type="checkbox" id="ev-private" style="accent-color:#a855f7">
-                 <i class="fa-solid fa-lock" style="font-size:.75rem"></i> Reunião interna (só Diretoria)
+                 <i class="fa-solid fa-lock" style="color:#c084fc;font-size:.85rem"></i>
+                 <span style="color:#c084fc">Reunião interna — visível apenas para Diretoria</span>
                </label>
              </div>
+
            </div>
            <div class="modal-footer">
              <button class="btn btn-ghost" id="newEventCancel">Cancelar</button>
-             <button class="btn btn-primary" id="newEventSave"><i class="fa-solid fa-calendar-plus"></i> Criar Evento</button>
+             <button class="btn btn-primary" id="newEventSave">
+               <i class="fa-solid fa-calendar-plus"></i> Criar Evento
+             </button>
            </div>
          </div>
        </div>
@@ -2906,23 +3202,94 @@
      await loadEventos();
    }
    
-   function renderEventCard(ev, isDiretoria, isPast = false) {
+   function renderEventCard(ev, canManage, isPast = false) {
+     const isDone     = ev.status === 'concluido';
+     const isPrivate  = ev.is_private;
+     const creator    = ev.creator;
+     const helper     = ev.helper;
+
+     /* Cor e ícone por tipo */
+     const TYPE_META = {
+       'Reunião':       { color:'#60a5fa', icon:'fa-users' },
+       'Treinamento':   { color:'#10b981', icon:'fa-graduation-cap' },
+       'Evento Social': { color:'#f59e0b', icon:'fa-champagne-glasses' },
+       'Cerimonial':    { color:'#c9a84c', icon:'fa-crown' },
+       'Outro':         { color:'#8b5cf6', icon:'fa-star' },
+     };
+     const typeMeta = TYPE_META[ev.type] || { color:'#c9a84c', icon:'fa-calendar' };
+
+     /* Opacidade para passados/concluídos */
+     const dimStyle = (isPast || isDone) ? 'opacity:.6;' : '';
+
+     /* Mini avatar */
+     const miniAvatar = (m) => m
+       ? `<div class="avatar" style="width:20px;height:20px;font-size:.45rem;flex-shrink:0;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">
+            ${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials||Utils.getInitials(m.name))}
+          </div>`
+       : '';
+
      return `
-       <div class="card card-enter" style="margin-bottom:12px;${isPast?'opacity:.65':''}">
-         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-           <div style="flex:1">
-             <div style="font-weight:600;color:var(--text-1);margin-bottom:4px">${Utils.escapeHtml(ev.title)}</div>
-             <div style="font-size:.78rem;color:var(--text-3);display:flex;flex-wrap:wrap;gap:10px">
-               <span><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(ev.event_date)}</span>
-               <span><i class="fa-regular fa-clock"></i> ${ev.event_time}</span>
-               <span><i class="fa-solid fa-tag"></i> ${Utils.escapeHtml(ev.type)}</span>
+       <div class="ev-card card-enter" data-id="${ev.id}" style="${dimStyle}">
+         <!-- Faixa lateral colorida por tipo -->
+         <div class="ev-card-stripe" style="background:${typeMeta.color}"></div>
+
+         <div class="ev-card-inner">
+           <!-- Topo: tipo + badges + ações -->
+           <div class="ev-card-top">
+             <div class="ev-card-type" style="color:${typeMeta.color};border-color:${typeMeta.color}33;background:${typeMeta.color}12">
+               <i class="fa-solid ${typeMeta.icon}" style="font-size:.6rem"></i>
+               ${Utils.escapeHtml(ev.type)}
              </div>
-             ${ev.description ? `<div style="font-size:.83rem;color:var(--text-2);margin-top:8px">${Utils.escapeHtml(ev.description)}</div>` : ''}
+             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+               ${isDone
+                 ? `<span class="ev-badge ev-badge-done"><i class="fa-solid fa-circle-check" style="font-size:.6rem"></i> Concluído</span>`
+                 : ev.mandatory
+                   ? `<span class="ev-badge ev-badge-obrig"><i class="fa-solid fa-circle-exclamation" style="font-size:.6rem"></i> Obrigatório</span>`
+                   : `<span class="ev-badge ev-badge-opt">Opcional</span>`}
+               ${isPrivate ? `<span class="ev-badge" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c084fc"><i class="fa-solid fa-lock" style="font-size:.55rem"></i> Diretoria</span>` : ''}
+               ${canManage ? `
+                 <div style="display:flex;gap:4px;margin-left:4px">
+                   ${!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
+                     <i class="fa-solid fa-circle-check"></i>
+                   </button>` : `<button class="ev-action-btn ev-unconclude-btn" data-id="${ev.id}" title="Reabrir evento" style="color:var(--text-3)">
+                     <i class="fa-solid fa-rotate-left"></i>
+                   </button>`}
+                   <button class="ev-action-btn delete-event-btn" data-id="${ev.id}" title="Excluir evento" style="color:var(--red-bright)">
+                     <i class="fa-solid fa-trash"></i>
+                   </button>
+                 </div>` : ''}
+             </div>
            </div>
-           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-             ${ev.mandatory ? '<span class="badge badge-red" style="font-size:.62rem">Obrigatório</span>' : '<span class="badge badge-gold" style="font-size:.62rem">Opcional</span>'}
-             ${isDiretoria ? `<button class="btn btn-ghost btn-sm delete-event-btn" data-id="${ev.id}" style="color:var(--red-bright)"><i class="fa-solid fa-trash" style="font-size:.7rem"></i></button>` : ''}
+
+           <!-- Título -->
+           <div class="ev-card-title ${isDone ? 'ev-title-done' : ''}">${Utils.escapeHtml(ev.title)}</div>
+
+           <!-- Meta: data, hora -->
+           <div class="ev-card-meta">
+             <span><i class="fa-regular fa-calendar" style="color:${typeMeta.color};opacity:.8"></i> ${Utils.formatDate(ev.event_date)}</span>
+             <span><i class="fa-regular fa-clock" style="color:${typeMeta.color};opacity:.8"></i> ${ev.event_time || '—'}</span>
            </div>
+
+           <!-- Descrição -->
+           ${ev.description ? `<div class="ev-card-desc">${Utils.escapeHtml(ev.description)}</div>` : ''}
+
+           <!-- Criador e co-criador -->
+           ${creator || helper ? `
+             <div class="ev-card-crew">
+               ${creator ? `
+                 <div class="ev-crew-item">
+                   ${miniAvatar(creator)}
+                   <span class="ev-crew-label">Criador</span>
+                   <span class="ev-crew-name">${Utils.escapeHtml(creator.name)}</span>
+                 </div>` : ''}
+               ${helper ? `
+                 <div class="ev-crew-sep"></div>
+                 <div class="ev-crew-item">
+                   ${miniAvatar(helper)}
+                   <span class="ev-crew-label">Co-criador</span>
+                   <span class="ev-crew-name">${Utils.escapeHtml(helper.name)}</span>
+                 </div>` : ''}
+             </div>` : ''}
          </div>
        </div>`;
    }
