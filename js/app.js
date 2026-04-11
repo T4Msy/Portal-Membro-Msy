@@ -3009,7 +3009,11 @@
          Utils.showToast('Evento criado!');
          onSuccess();
        } else {
-         Utils.showToast('Erro ao criar evento.', 'error');
+         console.error('[MSY] Erro ao criar evento:', error);
+         const msg = error?.message?.includes('row-level security') || error?.code === '42501'
+           ? 'Sem permissão para criar eventos. Verifique as políticas RLS no Supabase.'
+           : (error?.message || 'Erro ao criar evento.');
+         Utils.showToast(msg, 'error');
          btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Criar Evento';
        }
      };
