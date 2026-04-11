@@ -196,7 +196,11 @@ function sortMembros(membros) {
    ============================================================ */
 async function initDesempenho() {
   const profile = await Auth.requireAuth();
-  if (!profile || profile.tier !== 'diretoria') {
+  if (!profile) { window.location.href = 'dashboard.html'; return; }
+  // Acesso liberado para diretoria OU membros com permissão ver_desempenho
+  const isDiretoria = profile.tier === 'diretoria';
+  const canVerDesempenho = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'ver_desempenho');
+  if (!canVerDesempenho) {
     window.location.href = 'dashboard.html'; return;
   }
   /* Se ViewMode ativo (admin simulando membro), redireciona para dashboard */

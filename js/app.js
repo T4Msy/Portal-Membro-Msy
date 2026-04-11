@@ -956,6 +956,10 @@
      Utils.showLoading(content);
    
      const isDiretoria = profile.tier === 'diretoria';
+     // Permissões estendidas: membros com permissão agem como diretoria nas atividades
+     const canCriar    = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'criar_atividades');
+     const canGerenciar = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['gerenciar_atividades','criar_atividades','editar_atividades']);
+     const canConcluir  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'concluir_atividades');
      let activeFilter = 'Todos';
    
      async function loadActivities() {
@@ -967,7 +971,7 @@
          .select('*, assigned_by_profile:assigned_by(name,initials,color), assigned_to_profile:assigned_to(name,initials)')
          .order('created_at', { ascending: false });
    
-       if (!isDiretoria) query = query.eq('assigned_to', profile.id);
+       if (!canGerenciar) query = query.eq('assigned_to', profile.id);
        if (activeFilter !== 'Todos') query = query.eq('status', activeFilter);
    
        const { data: acts, error } = await query;
@@ -1155,9 +1159,9 @@
        <div class="page-header">
          <div>
            <div class="page-header-title">Atividades</div>
-           <div class="page-header-sub" id="pageHeaderSub">${isDiretoria ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas'}</div>
+           <div class="page-header-sub" id="pageHeaderSub">${canGerenciar ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas'}</div>
          </div>
-         ${isDiretoria ? `<button class="btn btn-primary" id="newActivityBtn"><i class="fa-solid fa-plus"></i> Nova Atividade</button>` : ''}
+         ${canCriar ? `<button class="btn btn-primary" id="newActivityBtn"><i class="fa-solid fa-plus"></i> Nova Atividade</button>` : ''}
        </div>
        <div class="filters-bar">
          ${['Todos','Pendente','Em andamento','Concluída','Cancelada'].map(f =>
@@ -1190,17 +1194,17 @@
          const subEl = document.getElementById('pageHeaderSub');
          if (activeFilter === '__anexos__') {
            if (subEl) subEl.textContent = 'Todos os arquivos enviados nas atividades';
-           if (isDiretoria) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = 'none');
+           if (canCriar) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = 'none');
            loadAnexosView();
          } else {
-           if (subEl) subEl.textContent = isDiretoria ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas';
-           if (isDiretoria) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = '');
+           if (subEl) subEl.textContent = canGerenciar ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas';
+           if (canCriar) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = '');
            loadActivities();
          }
        });
      });
    
-     if (isDiretoria) {
+     if (canCriar) {
        document.getElementById('newActivityBtn')?.addEventListener('click', () => openNewActivityModal(profile, loadActivities));
      }
    
@@ -1721,6 +1725,8 @@
      Utils.showLoading(content);
    
      const isDiretoria = profile.tier === 'diretoria';
+     const canPublicar  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'publicar_comunicados');
+     const canGerenciarCom = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_comunicados');
    
      async function loadComunicados() {
        const { data: coms, error } = await db.from('comunicados')
@@ -1739,7 +1745,7 @@
          : coms.map(c => `
              <div class="comunicado-card ${c.pinned?'pinned':''} card-enter" data-id="${c.id}">
                ${c.pinned ? '<div class="comunicado-pin"><i class="fa-solid fa-thumbtack"></i></div>' : ''}
-               ${isDiretoria ? `
+               ${canGerenciarCom ? `
                  <div style="position:absolute;top:14px;right:${c.pinned?'40px':'14px'};display:flex;gap:6px;z-index:1">
                    <button class="btn btn-ghost btn-sm toggle-pin" data-id="${c.id}" data-pinned="${c.pinned}" title="${c.pinned?'Desafixar':'Fixar'}">
                      <i class="fa-solid fa-thumbtack" style="color:${c.pinned?'var(--gold)':'var(--text-3)'}"></i>
@@ -1814,7 +1820,7 @@
            <div class="page-header-title">Comunicados</div>
            <div class="page-header-sub">Mural oficial da Masayoshi Order</div>
          </div>
-         ${isDiretoria ? `<button class="btn btn-primary" id="newComBtn"><i class="fa-solid fa-plus"></i> Novo Comunicado</button>` : ''}
+         ${canPublicar ? `<button class="btn btn-primary" id="newComBtn"><i class="fa-solid fa-plus"></i> Novo Comunicado</button>` : ''}
        </div>
        <div class="comunicados-list" id="comunList" style="position:relative"></div>
    
@@ -1919,6 +1925,10 @@
      Utils.showLoading(content);
    
      const isDiretoria = profile.tier === 'diretoria';
+     const canAprovar  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'aprovar_membros');
+     const canEditar   = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'editar_membros');
+     const canRemover  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'remover_membros');
+     const canGerenciarMembros = canAprovar || canEditar || canRemover;
    
      const { data: membersRaw, error } = await db.from('profiles')
        .select('*')
@@ -1955,7 +1965,7 @@
            <button class="filter-btn active" data-filter="todos">Todos</button>
            <button class="filter-btn" data-filter="diretoria">Diretoria</button>
            <button class="filter-btn" data-filter="membro">Membros</button>
-           ${isDiretoria ? `<button class="filter-btn" data-filter="pendente" style="color:#eab308;border-color:rgba(234,179,8,.3)">Pendentes</button>` : ''}
+           ${canAprovar ? `<button class="filter-btn" data-filter="pendente" style="color:#eab308;border-color:rgba(234,179,8,.3)">Pendentes</button>` : ''}
          </div>
        </div>
        <div class="members-grid" id="membersGrid">
@@ -1969,9 +1979,9 @@
              <div class="member-role-text">${Utils.escapeHtml(m.role)}</div>
              <div class="member-join"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(m.join_date)}</div>
              <div class="member-tier-badge">${Utils.tierBadge(m.tier)}</div>
-             ${isDiretoria ? `
+             ${canGerenciarMembros ? `
                <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center" onclick="event.stopPropagation()">
-                 ${m.status === 'pendente' ? `<button class="btn btn-sm btn-primary approve-btn" data-id="${m.id}"><i class="fa-solid fa-check"></i> Aprovar</button>` : ''}
+                 ${m.status === 'pendente' && canAprovar ? `<button class="btn btn-sm btn-primary approve-btn" data-id="${m.id}"><i class="fa-solid fa-check"></i> Aprovar</button>` : ''}
                  ${m.tier !== 'diretoria' && m.status === 'ativo' ? `
                    <button class="btn btn-sm btn-outline promote-btn" data-id="${m.id}" title="Elevar à Diretoria">
                      <i class="fa-solid fa-arrow-up"></i> Diretoria
@@ -1984,10 +1994,11 @@
                    <button class="btn btn-sm btn-ghost edit-role-btn" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" data-role="${Utils.escapeHtml(m.role)}" title="Editar cargo">
                      <i class="fa-solid fa-pen" style="font-size:.7rem"></i>
                    </button>` : ''}
-                 ${m.id !== profile.id ? `
+                 ${m.id !== profile.id && canRemover ? `
                    <button class="btn btn-sm btn-ghost remove-btn" data-id="${m.id}" title="Desativar membro" style="color:#eab308;border-color:rgba(234,179,8,.3)">
                      <i class="fa-solid fa-user-slash"></i>
-                   </button>
+                   </button>` : ''}
+                 ${m.id !== profile.id && isDiretoria ? `
                    <button class="btn btn-sm btn-ghost delete-member-btn" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" title="Excluir membro permanentemente" style="color:var(--red-bright);border-color:rgba(239,68,68,.3)">
                      <i class="fa-solid fa-trash"></i>
                    </button>` : ''}
@@ -2047,7 +2058,7 @@
          // find by member name match
          const memberName = card.querySelector('.member-name')?.textContent;
          const found = members.find(x => x.name === memberName);
-         if (found) openMemberProfileModal(found, profile, isDiretoria, members);
+         if (found) openMemberProfileModal(found, profile, isDiretoria, members, { canAprovar, canEditar, canRemover });
        });
      });
    
@@ -2295,7 +2306,8 @@
      } catch (_) { /* RPC opcional — sem service_role falha silenciosamente */ }
    }
 
-   async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers) {
+   async function openMemberProfileModal(m, currentProfile, isDiretoria, allMembers, perms = {}) {
+     const { canAprovar = isDiretoria, canEditar = isDiretoria, canRemover = isDiretoria } = perms;
      const modal = document.getElementById('memberProfileModal');
      const body  = document.getElementById('memberProfileBody');
      const footer = document.getElementById('memberProfileFooter');
@@ -2379,7 +2391,7 @@
        </div>
      `;
    
-     footer.innerHTML = isDiretoria && m.id !== currentProfile.id
+     footer.innerHTML = canEditar && m.id !== currentProfile.id
        ? `<button class="btn btn-ghost" id="closeMemberProfile">Fechar</button>
           <button class="btn btn-primary" id="editMemberProfileBtn"><i class="fa-solid fa-pen"></i> Editar Perfil</button>`
        : `<button class="btn btn-outline" id="closeMemberProfile">Fechar</button>`;

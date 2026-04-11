@@ -16,6 +16,7 @@ async function initBiblioteca() {
 
   const content    = document.getElementById('pageContent');
   const isDiretoria = profile.tier === 'diretoria';
+  const canGerenciarBib = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_biblioteca');
 
   // Estado local
   let allConteudos  = [];
@@ -149,7 +150,7 @@ async function initBiblioteca() {
         <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-3)">
           <i class="fa-solid fa-book-open" style="font-size:2.5rem;margin-bottom:16px;display:block;opacity:0.3"></i>
           <p style="font-size:0.9rem">Nenhum conteúdo ${categoriaAtiva !== 'Todas' ? 'nesta categoria' : 'na biblioteca'} ainda.</p>
-          <button class="btn btn-gold" id="emptyAddBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Adicionar primeiro conteúdo</button>
+          ${canGerenciarBib ? `<button class="btn btn-gold" id="emptyAddBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Adicionar primeiro conteúdo</button>` : ''}
         </div>
       `;
       document.getElementById('emptyAddBtn')?.addEventListener('click', renderModal);
@@ -190,9 +191,9 @@ async function initBiblioteca() {
                 title="Editar">
                 <i class="fa-solid fa-pen" style="color:var(--gold)"></i>
               </button>
-              <button class="btn btn-ghost btn-sm bib-delete-btn" data-id="${c.id}" title="Remover">
+              ${canGerenciarBib ? `<button class="btn btn-ghost btn-sm bib-delete-btn" data-id="${c.id}" title="Remover">
                 <i class="fa-solid fa-trash" style="color:var(--red-bright)"></i>
-              </button>` : ''}
+              </button>` : ''}` : ''}
           </div>
         </div>
       `;
@@ -346,9 +347,9 @@ async function initBiblioteca() {
         <div class="page-header-title">Biblioteca de Conhecimento</div>
         <div class="page-header-sub">Materiais, cursos e recursos da Masayoshi Order</div>
       </div>
-      <button class="btn btn-gold" id="bibAddBtn">
+      ${canGerenciarBib ? `<button class="btn btn-gold" id="bibAddBtn">
         <i class="fa-solid fa-plus"></i> Adicionar Conteúdo
-      </button>
+      </button>` : ''}
     </div>
 
     <!-- Filtros de categoria -->
@@ -376,7 +377,7 @@ async function initBiblioteca() {
   });
 
   // Bind botão adicionar
-  document.getElementById('bibAddBtn')?.addEventListener('click', renderModal);
+  if (canGerenciarBib) document.getElementById('bibAddBtn')?.addEventListener('click', renderModal);
 
   await carregarConteudos();
 }

@@ -216,6 +216,7 @@ async function initFeed() {
 
   const content     = document.getElementById('pageContent');
   const isDiretoria = profile.tier === 'diretoria';
+  const canPublicarFeed = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'publicar_feed');
   const PER_PAGE    = 15;
   let page          = 1;
   let allFeed       = [];
@@ -362,7 +363,7 @@ async function initFeed() {
           <div class="feed-empty-icon">📭</div>
           <div class="feed-empty-title">Nenhuma publicação encontrada</div>
           <div class="feed-empty-sub">${buscaFeed?'Tente outros termos.':'Seja o primeiro a publicar!'}</div>
-          ${!buscaFeed?`<button class="btn btn-gold" id="feedEmptyBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Publicar agora</button>`:''}
+          ${canPublicarFeed&&!buscaFeed?`<button class="btn btn-gold" id="feedEmptyBtn" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Publicar agora</button>`:''}
         </div>`;
       document.getElementById('feedEmptyBtn')?.addEventListener('click', () => abrirModal());
       return;
@@ -451,7 +452,7 @@ async function initFeed() {
         <div class="page-header-title">Feed da Ordem</div>
         <div class="page-header-sub"><span id="feedTotalCount" style="color:var(--gold);font-weight:700">…</span> publicações · atividade recente</div>
       </div>
-      <button class="btn btn-gold" id="feedPublicarBtn"><i class="fa-solid fa-plus"></i> <span class="btn-label">Publicar</span></button>
+      ${canPublicarFeed?`<button class="btn btn-gold" id="feedPublicarBtn"><i class="fa-solid fa-plus"></i> <span class="btn-label">Publicar</span></button>`:''}
     </div>
     <div class="feed-toolbar">
       <div class="feed-chips" id="feedChips">
@@ -468,7 +469,7 @@ async function initFeed() {
     </div>
     <div id="feedList"></div>`;
 
-  document.getElementById('feedPublicarBtn')?.addEventListener('click', () => abrirModal());
+  if (canPublicarFeed) document.getElementById('feedPublicarBtn')?.addEventListener('click', () => abrirModal());
   document.querySelectorAll('.feed-chip[data-tipo]').forEach(btn => {
     btn.addEventListener('click', () => { filtroTipo=btn.dataset.tipo; page=1; renderFeed(); });
   });
@@ -755,7 +756,10 @@ async function initDesempenho() {
   // Implementação movida para modules4.js
   // Este stub é mantido para compatibilidade do router
   const profile = await Auth.requireAuth();
-  if (!profile || profile.tier !== 'diretoria') { window.location.href = 'dashboard.html'; return; }
+  if (!profile) { window.location.href = 'dashboard.html'; return; }
+  const isDiretoria = profile.tier === 'diretoria';
+  const canVerDesempenho = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'ver_desempenho');
+  if (!canVerDesempenho) { window.location.href = 'dashboard.html'; return; }
   await renderSidebar('desempenho');
   await renderTopBar('Desempenho', profile);
   const content = document.getElementById('pageContent');
@@ -1157,6 +1161,7 @@ async function initRanking() {
   await renderTopBar('Ranking', profile);
   const content     = document.getElementById('pageContent');
   const isDiretoria = profile.tier === 'diretoria';
+  const canGerenciarRanking = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_ranking');
   const PER_PAGE    = 5;
 
   // Estado de navegação
@@ -1717,7 +1722,7 @@ async function initRanking() {
                 </div>
                 <div class="trono-cat-label">${cat.label}</div>
               </div>
-              ${isDiretoria && cat.tipo === 'diario'
+              ${canGerenciarRanking && cat.tipo === 'diario'
                 ? `<button class="btn btn-ghost btn-sm trono-diario-add-btn" style="font-size:.72rem;color:${cat.color};border-color:${cat.color}44">
                     <i class="fa-solid fa-plus"></i> Adicionar
                   </button>`
@@ -1768,7 +1773,7 @@ async function initRanking() {
             <div class="ranking-card-periodo">${Utils.formatDate(r.week_start)} — ${Utils.formatDate(r.week_end)}</div>
             ${r.creator ? `<div style="font-size:.7rem;color:var(--text-3);margin-top:2px">por ${Utils.escapeHtml(r.creator.name)}</div>` : ''}
           </div>
-          ${isDiretoria ? `<button class="btn btn-ghost btn-sm ranking-del-btn" data-id="${r.id}" title="Excluir"><i class="fa-solid fa-trash" style="color:var(--red-bright);font-size:.75rem"></i></button>` : ''}
+          ${canGerenciarRanking ? `<button class="btn btn-ghost btn-sm ranking-del-btn" data-id="${r.id}" title="Excluir"><i class="fa-solid fa-trash" style="color:var(--red-bright);font-size:.75rem"></i></button>` : ''}
         </div>
         ${!entries.length
           ? `<div style="color:var(--text-3);text-align:center;padding:20px;font-size:.82rem">Nenhuma entrada.</div>`
@@ -1967,7 +1972,7 @@ async function initRanking() {
                     <div class="trono-diario-pos">${['🥇','🥈','🥉'][r.posicao - 1]}</div>
                     <div class="trono-diario-nome">${Utils.escapeHtml(r.nome)}</div>
                     <div class="trono-diario-msgs">${Number(r.mensagens).toLocaleString('pt-BR')} msgs</div>
-                    ${isDiretoria ? `<button class="btn btn-ghost btn-sm trono-del-diario" data-pos="${r.posicao}" style="padding:4px 8px;color:var(--red-bright)"><i class="fa-solid fa-trash" style="font-size:.65rem"></i></button>` : ''}
+                    ${canGerenciarRanking ? `<button class="btn btn-ghost btn-sm trono-del-diario" data-pos="${r.posicao}" style="padding:4px 8px;color:var(--red-bright)"><i class="fa-solid fa-trash" style="font-size:.65rem"></i></button>` : ''}
                   </div>`).join('')}
               </div>
             </div>` : ''}
@@ -2094,7 +2099,7 @@ async function initRanking() {
         <div class="page-header-title">Ranking de Mensagens</div>
         <div class="page-header-sub">Histórico e Trono dos Recordes da Masayoshi Order</div>
       </div>
-      ${isDiretoria ? `<div class="ranking-add-btns">
+      ${canGerenciarRanking ? `<div class="ranking-add-btns">
         <button class="btn btn-ghost btn-sm" id="newRankMenBtn"><i class="fa-solid fa-plus"></i> Mensal</button>
         <button class="btn btn-gold btn-sm" id="newRankSemBtn"><i class="fa-solid fa-plus"></i> Semanal</button>
       </div>` : ''}
