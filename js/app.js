@@ -1925,7 +1925,7 @@
    let _lendCanvas = null, _lendRAF = null;
 
    function _startLendarioLightning(modalEl, nivel) {
-     _stopLendarioLightning(); // garante cleanup anterior
+     _stopLendarioLightning();
      if (nivel !== 'lendario' || window.innerWidth <= 768) return;
 
      const canvas = document.createElement('canvas');
@@ -1945,52 +1945,99 @@
      resize();
      window.addEventListener('resize', resize);
 
-     // Gera um raio zigzag entre (x1,y1) e (x2,y2)
-     function zigzag(x1, y1, x2, y2, segs) {
-       const pts = [[x1, y1]];
-       for (let i = 1; i < segs; i++) {
-         const t  = i / segs;
-         const mx = x1 + (x2 - x1) * t;
-         const my = y1 + (y2 - y1) * t;
-         const perp = (Math.random() - 0.5) * 28 * (1 - Math.abs(t - 0.5) * 1.5);
-         const dx = -(y2 - y1), dy = x2 - x1;
-         const len = Math.sqrt(dx * dx + dy * dy) || 1;
-         pts.push([mx + perp * dx / len, my + perp * dy / len]);
-       }
-       pts.push([x2, y2]);
-       return pts;
+     // Raio realista: gera pontos com deslocamento perpendicular crescente e fractal
+     function boltPath(x1, y1, x2, y2, roughness, depth) {
+       if (depth === 0) return [[x1,y1],[x2,y2]];
+       const mx = (x1+x2)/2, my = (y1+y2)/2;
+       const dx = -(y2-y1), dy = x2-x1;
+       const len = Math.sqrt(dx*dx+dy*dy)||1;
+       const off = (Math.random()-0.5) * roughness;
+       const nx = mx + off*dx/len, ny = my + off*dy/len;
+       return [
+         ...boltPath(x1,y1,nx,ny,roughness*0.6,depth-1),
+         ...boltPath(nx,ny,x2,y2,roughness*0.6,depth-1).slice(1),
+       ];
      }
 
-     // Posições dos raios: 4 à esquerda, 4 à direita
-     function spawnBolts() {
-       if (!rect) return [];
-       const bolts = [];
-       const sides = ['left', 'right'];
-       for (const side of sides) {
-         const count = 3 + Math.floor(Math.random() * 3);
-         for (let i = 0; i < count; i++) {
-           // Ponto de origem: longe do modal
-           const ox = side === 'left'
-             ? Math.random() * (rect.left * 0.6)
-             : rect.right + Math.random() * (W - rect.right) * 0.6;
-           const oy = rect.top + Math.random() * rect.height;
-           // Ponto de destino: borda do modal
-           const dx = side === 'left' ? rect.left : rect.right;
-           const dy = rect.top + Math.random() * rect.height;
-           bolts.push({
-             pts:    zigzag(ox, oy, dx, dy, 8 + Math.floor(Math.random() * 6)),
-             life:   0,
-             maxLife: 18 + Math.floor(Math.random() * 18),
-             delay:   Math.floor(Math.random() * 40),
-             alpha:  0,
-             width:  0.8 + Math.random() * 1.4,
-           });
-         }
-       }
-       return bolts;
+     // Branch: raio secundário saindo de um ponto do raio principal
+     function spawnBranch(pts, parentAlpha) {
+       if (pts.length < 4) return null;
+       const idx = 1 + Math.floor(Math.random() * (pts.length - 2));
+       const [bx, by] = pts[idx];
+       const angle = Math.random() * Math.PI * 2;
+       const dist  = 30 + Math.random() * 60;
+       const ex = bx + Math.cos(angle) * dist;
+       const ey = by + Math.sin(angle) * dist;
+       return {
+         pts:     boltPath(bx, by, ex, ey, 18, 3),
+         alpha:   parentAlpha * (0.3 + Math.random() * 0.35),
+         width:   0.4 + Math.random() * 0.6,
+         branch:  true,
+       };
      }
 
-     let bolts = spawnBolts();
+     // Cria um raio completo com main bolt + flicker + branches
+     function createBolt() {
+       if (!rect) return null;
+       const side = Math.random() < 0.5 ? 'left' : 'right';
+       // Origem: canto superior/inferior da tela, fora do modal
+       const fromTop = Math.random() < 0.5;
+       const ox = side === 'left'
+         ? Math.random() * Math.max(10, rect.left - 20)
+         : rect.right + 20 + Math.random() * Math.max(10, W - rect.right - 20);
+       const oy = fromTop
+         ? Math.random() * rect.top * 0.8
+         : rect.bottom + Math.random() * (H - rect.bottom) * 0.8;
+       // Destino: borda do modal
+       const tx = side === 'left' ? rect.left : rect.right;
+       const ty = rect.top + Math.random() * rect.height;
+
+       const pts = boltPath(ox, oy, tx, ty, 45, 5);
+       const maxLife = 10 + Math.floor(Math.random() * 14); // vida curta: raio rápido
+       const branches = [];
+       if (Math.random() < 0.7) branches.push(spawnBranch(pts, 0.9));
+       if (Math.random() < 0.4) branches.push(spawnBranch(pts, 0.7));
+
+       return {
+         pts, branches: branches.filter(Boolean),
+         life: 0, maxLife,
+         delay: Math.floor(Math.random() * 60),
+         width: 1.2 + Math.random() * 1.5,
+         flickerPhase: Math.random() * Math.PI * 2,
+       };
+     }
+
+     function drawPath(pts, alpha, width, flicker) {
+       if (pts.length < 2) return;
+       const a = alpha * flicker;
+       // Outer glow (largo, tênue)
+       ctx.beginPath();
+       ctx.moveTo(pts[0][0], pts[0][1]);
+       for (let j=1;j<pts.length;j++) ctx.lineTo(pts[j][0], pts[j][1]);
+       ctx.strokeStyle = `rgba(255,80,80,${a*0.18})`;
+       ctx.lineWidth   = width * 5;
+       ctx.shadowColor = 'transparent';
+       ctx.shadowBlur  = 0;
+       ctx.stroke();
+
+       // Mid glow
+       ctx.strokeStyle = `rgba(240,60,60,${a*0.45})`;
+       ctx.lineWidth   = width * 2.2;
+       ctx.shadowColor = `rgba(255,40,40,${a*0.8})`;
+       ctx.shadowBlur  = 12;
+       ctx.stroke();
+
+       // Core (branco-rosado no centro)
+       ctx.strokeStyle = `rgba(255,200,200,${a*0.9})`;
+       ctx.lineWidth   = width * 0.6;
+       ctx.shadowColor = `rgba(255,120,120,1)`;
+       ctx.shadowBlur  = 6;
+       ctx.stroke();
+
+       ctx.shadowBlur = 0;
+     }
+
+     let bolts = [createBolt(), createBolt()].filter(Boolean);
      let frame = 0;
 
      function draw() {
@@ -1999,37 +2046,43 @@
        rect = modalEl ? modalEl.getBoundingClientRect() : rect;
        frame++;
 
-       // Re-spawn a cada ~80 frames
-       if (frame % 80 === 0) {
-         bolts = [...bolts.filter(b => b.life < b.maxLife), ...spawnBolts()];
+       // Spawn novo raio aleatoriamente
+       if (frame % (30 + Math.floor(Math.random()*40)) === 0) {
+         bolts.push(createBolt());
+         bolts = bolts.filter(Boolean);
        }
+       // Limita máximo de raios simultâneos
+       if (bolts.length > 6) bolts.splice(0, bolts.length - 6);
+
+       bolts = bolts.filter(b => b !== null);
 
        for (const b of bolts) {
          if (b.delay > 0) { b.delay--; continue; }
          b.life++;
+
          const t = b.life / b.maxLife;
-         // Aparecer rápido, sumir devagar
-         b.alpha = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
-         b.alpha = Math.max(0, Math.min(1, b.alpha));
+         // Flash rápido: aparece em ~20% da vida, some em 80%
+         let alpha;
+         if      (t < 0.15) alpha = t / 0.15;
+         else if (t < 0.5)  alpha = 1;
+         else               alpha = 1 - (t - 0.5) / 0.5;
+         alpha = Math.max(0, Math.min(1, alpha));
 
-         if (b.alpha <= 0) continue;
+         if (alpha <= 0) continue;
 
-         // Raio principal
-         ctx.beginPath();
-         ctx.moveTo(b.pts[0][0], b.pts[0][1]);
-         for (let j = 1; j < b.pts.length; j++) ctx.lineTo(b.pts[j][0], b.pts[j][1]);
-         ctx.strokeStyle = `rgba(220,38,38,${b.alpha * 0.85})`;
-         ctx.lineWidth   = b.width;
-         ctx.shadowColor = 'rgba(255,60,60,0.9)';
-         ctx.shadowBlur  = 8;
-         ctx.stroke();
+         // Flicker: oscilação rápida de brilho (imita raio real)
+         const flicker = 0.6 + 0.4 * Math.abs(Math.sin((b.life * 1.8) + b.flickerPhase));
 
-         // Glow extra (traço mais grosso, menos opaco)
-         ctx.strokeStyle = `rgba(255,100,100,${b.alpha * 0.3})`;
-         ctx.lineWidth   = b.width * 3;
-         ctx.shadowBlur  = 0;
-         ctx.stroke();
+         drawPath(b.pts, alpha, b.width, flicker);
+
+         // Branches
+         for (const br of b.branches) {
+           drawPath(br.pts, alpha * br.alpha, br.width, flicker * 0.8);
+         }
        }
+
+       // Remove raios mortos
+       bolts = bolts.filter(b => b.life <= b.maxLife);
 
        _lendRAF = requestAnimationFrame(draw);
      }
