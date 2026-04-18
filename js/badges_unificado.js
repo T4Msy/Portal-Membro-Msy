@@ -392,6 +392,24 @@
 
     /* Expõe ICM_META para uso externo (renderICMBadgesSection no app.js) */
     ICM_META,
+
+    /**
+     * Calcula o total ponderado de insígnias e retorna o nível FIFA.
+     * total: premiacoes contam pela quantidade, outros contam 1
+     * Retorna: { total, nivel } onde nivel = 'comum'|'raro'|'epico'|'lendario'
+     */
+    async getCardLevel(userId) {
+      const badges = await this.getAll(userId);
+      let total = 0;
+      badges.forEach(b => {
+        total += (b.origem === 'premiacao' && b.meta?.quantidade) ? b.meta.quantidade : 1;
+      });
+      let nivel = 'comum';
+      if      (total >= 100) nivel = 'lendario';
+      else if (total >= 50)  nivel = 'epico';
+      else if (total >= 10)  nivel = 'raro';
+      return { total, nivel, badges };
+    },
   };
 
   /* ── RENDER INTERNO DE UM ITEM ───────────────────────────── */
@@ -402,15 +420,15 @@
       : '';
 
     if (compact) {
-      // Layout compacto para modal de membros
+      // Layout compacto — mostra xN para premiações, label para outros
+      const qtdStr = b.origem === 'premiacao' && b.meta?.quantidade > 0
+        ? `×${b.meta.quantidade}` : _origemLabel(b);
       return `
         <div class="badge-item" title="${_esc(tooltipText)}" style="--badge-color:${b.color}">
           <div class="badge-icon" style="${glowStyle}">${b.icon}</div>
           <div class="badge-info">
             <div class="badge-titulo">${_esc(b.label)}</div>
-            <div class="badge-qtd" style="color:${b.color};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">
-              ${_origemLabel(b)}
-            </div>
+            <div class="badge-qtd" style="color:${b.color}">${qtdStr}</div>
           </div>
         </div>`;
     }

@@ -555,7 +555,8 @@ function patchMemberModal() {
     const observer = new MutationObserver(() => {
       if (!modal.classList.contains('open')) return;
       const body = document.getElementById('memberProfileBody');
-      if (!body || body.querySelector('#memberBadgesSection')) return;
+      // Não injeta se o novo sistema (mpb-section) já renderizou as insígnias
+      if (!body || body.querySelector('#memberBadgesSection') || body.querySelector('.mpb-section')) return;
 
       // Ler membro_id injetado pelo patch do app.js
       const memberId = body.dataset.memberId;

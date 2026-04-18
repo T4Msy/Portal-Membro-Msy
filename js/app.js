@@ -1966,6 +1966,7 @@
            <button class="filter-btn" data-filter="diretoria">Diretoria</button>
            <button class="filter-btn" data-filter="membro">Membros</button>
            ${canAprovar ? `<button class="filter-btn" data-filter="pendente" style="color:#eab308;border-color:rgba(234,179,8,.3)">Pendentes</button>` : ''}
+
          </div>
        </div>
        <div class="members-grid" id="membersGrid">
@@ -2081,6 +2082,7 @@
          filterMembers();
        });
      });
+
    
      // Approve
      content.querySelectorAll('.approve-btn').forEach(btn => {
@@ -2311,95 +2313,168 @@
      const modal = document.getElementById('memberProfileModal');
      const body  = document.getElementById('memberProfileBody');
      const footer = document.getElementById('memberProfileFooter');
-   
+
      document.getElementById('memberProfileTitle').textContent = 'Perfil do Membro';
-   
-     // Injetar ID do membro no body para uso pelo modules2.js (badges)
      body.dataset.memberId = m.id;
-   
-     // Fetch stats
-     const statsRes = await db.rpc('get_member_stats', { p_user_id: m.id });
-     const stats = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
-   
-     // Time in ordem
+
+     // Busca stats e nível FIFA em paralelo
+     const [statsRes, cardData] = await Promise.all([
+       db.rpc('get_member_stats', { p_user_id: m.id }),
+       typeof MSYBadges !== 'undefined'
+         ? MSYBadges.getCardLevel(m.id)
+         : Promise.resolve({ total: 0, nivel: 'comum', badges: [] }),
+     ]);
+
+     const stats   = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
+     const nivel   = cardData.nivel;
+     const badges  = cardData.badges;
+
      const joinDate = new Date(m.join_date + 'T00:00:00');
      const now = new Date();
      const diffDays = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
      const months = Math.floor(diffDays / 30);
      const timeLabel = months >= 1 ? `${months} ${months === 1 ? 'mês' : 'meses'}` : `${diffDays} dias`;
-   
+
+     // Aplicar classe FIFA no modal
+     const modalEl = modal.querySelector('.modal');
+     if (modalEl) {
+       modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
+       if (nivel !== 'comum') modalEl.classList.add(`mcard-${nivel}`);
+     }
+
+     // Render das insígnias agrupadas
+     function renderBadgesList(bList) {
+       if (!bList || bList.length === 0) {
+         return `<div class="mpb-vazio"><i class="fa-solid fa-medal" style="opacity:.25;font-size:1.4rem;display:block;margin-bottom:6px"></i>Nenhuma insígnia conquistada ainda.</div>`;
+       }
+       return bList.map(b => {
+         const qty = b.origem === 'premiacao' && b.meta?.quantidade > 0
+           ? `<span class="mpb-qty">×${b.meta.quantidade}</span>` : '';
+         const glow = b.origem === 'recorde' ? `filter:drop-shadow(0 0 8px ${b.color}99)` : '';
+         const tip  = b.meta?.tooltip || b.desc || '';
+         return `<div class="mpb-item" title="${Utils.escapeHtml(tip)}" style="--bc:${b.color}">
+           <div class="mpb-icon" style="${glow}">${b.icon}</div>
+           <div class="mpb-info">
+             <div class="mpb-label">${Utils.escapeHtml(b.label)}</div>
+             <div class="mpb-sub">${b.origem === 'recorde' ? 'Recorde' : b.origem === 'icm' ? 'ICM' : (b.meta?.importancia || 'Premiação')}</div>
+           </div>
+           ${qty}
+         </div>`;
+       }).join('');
+     }
+
+     const NIVEL_LABELS = { comum:'', raro:'Raro', epico:'Épico', lendario:'Lendário' };
+     const nivelTag = nivel !== 'comum'
+       ? `<div class="mcard-nivel-tag mcard-nivel-tag--${nivel}">${NIVEL_LABELS[nivel]}</div>` : '';
+
      body.innerHTML = `
-       <div class="member-profile-hero">
-         <div class="member-profile-hero-avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">
+       <div class="mcard-hero mcard-hero--${nivel}">
+         ${nivelTag}
+         <div class="mcard-fx-rays" aria-hidden="true">
+           <span></span><span></span><span></span><span></span><span></span><span></span>
+         </div>
+         <div class="mcard-hero-avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">
            ${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials||Utils.getInitials(m.name))}
          </div>
-         <div style="flex:1">
-           <div class="member-profile-info-name">${Utils.escapeHtml(m.name)}</div>
-           <div class="member-profile-info-role">${Utils.escapeHtml(m.role)}</div>
-           <div style="display:flex;gap:8px;flex-wrap:wrap">
+         <div class="mcard-hero-info">
+           <div class="mcard-name">${Utils.escapeHtml(m.name)}</div>
+           <div class="mcard-role">${Utils.escapeHtml(m.role)}</div>
+           <div class="mcard-badges-row">
              ${Utils.tierBadge(m.tier)}
              <span class="badge ${m.status==='ativo'?'badge-done':m.status==='inativo'?'badge-red':'badge-pending'}">${m.status.charAt(0).toUpperCase()+m.status.slice(1)}</span>
            </div>
          </div>
        </div>
-   
-       <div class="member-profile-detail-row">
-         <i class="fa-regular fa-calendar"></i>
-         <span class="member-profile-detail-label">Membro desde</span>
-         <span class="member-profile-detail-val">${Utils.formatDate(m.join_date)}</span>
-       </div>
-       <div class="member-profile-detail-row">
-         <i class="fa-solid fa-hourglass-half"></i>
-         <span class="member-profile-detail-label">Tempo na Ordem</span>
-         <span class="member-profile-detail-val">${timeLabel}</span>
-       </div>
-       <div class="member-profile-detail-row">
-         <i class="fa-solid fa-shield-halved"></i>
-         <span class="member-profile-detail-label">Nível</span>
-         <span class="member-profile-detail-val">${m.tier === 'diretoria' ? 'Diretoria' : 'Membro'}</span>
-       </div>
-       ${m.birth_date ? `
-       <div class="member-profile-detail-row">
-         <i class="fa-solid fa-cake-candles" style="color:var(--gold)"></i>
-         <span class="member-profile-detail-label">Nascimento</span>
-         <span class="member-profile-detail-val">${Utils.formatDate(m.birth_date)}</span>
-       </div>` : ''}
-   
-       ${m.bio ? `
+
+       <div class="mcard-details">
+         <div class="member-profile-detail-row">
+           <i class="fa-regular fa-calendar"></i>
+           <span class="member-profile-detail-label">Membro desde</span>
+           <span class="member-profile-detail-val">${Utils.formatDate(m.join_date)}</span>
+         </div>
+         <div class="member-profile-detail-row">
+           <i class="fa-solid fa-hourglass-half"></i>
+           <span class="member-profile-detail-label">Tempo na Ordem</span>
+           <span class="member-profile-detail-val">${timeLabel}</span>
+         </div>
+         <div class="member-profile-detail-row">
+           <i class="fa-solid fa-shield-halved"></i>
+           <span class="member-profile-detail-label">Nível</span>
+           <span class="member-profile-detail-val">${m.tier === 'diretoria' ? 'Diretoria' : 'Membro'}</span>
+         </div>
+         ${m.birth_date ? `
+         <div class="member-profile-detail-row">
+           <i class="fa-solid fa-cake-candles" style="color:var(--gold)"></i>
+           <span class="member-profile-detail-label">Nascimento</span>
+           <span class="member-profile-detail-val">${Utils.formatDate(m.birth_date)}</span>
+         </div>` : ''}
+         ${m.bio ? `
          <div class="member-profile-bio">
            <div style="font-size:.72rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px"><i class="fa-solid fa-quote-left"></i> Sobre</div>
            ${Utils.escapeHtml(m.bio)}
          </div>` : ''}
-   
+       </div>
+
        <div class="member-profile-stats-row">
-         <div class="member-profile-stat">
-           <div class="member-profile-stat-num">${stats.total||0}</div>
-           <div class="member-profile-stat-lbl">Total</div>
-         </div>
-         <div class="member-profile-stat">
-           <div class="member-profile-stat-num">${stats.concluidas||0}</div>
-           <div class="member-profile-stat-lbl">Concluídas</div>
-         </div>
-         <div class="member-profile-stat">
-           <div class="member-profile-stat-num">${stats.andamento||0}</div>
-           <div class="member-profile-stat-lbl">Em andamento</div>
-         </div>
-         <div class="member-profile-stat">
-           <div class="member-profile-stat-num">${stats.pendentes||0}</div>
-           <div class="member-profile-stat-lbl">Pendentes</div>
-         </div>
+         <div class="member-profile-stat"><div class="member-profile-stat-num">${stats.total||0}</div><div class="member-profile-stat-lbl">Total</div></div>
+         <div class="member-profile-stat"><div class="member-profile-stat-num">${stats.concluidas||0}</div><div class="member-profile-stat-lbl">Concluídas</div></div>
+         <div class="member-profile-stat"><div class="member-profile-stat-num">${stats.andamento||0}</div><div class="member-profile-stat-lbl">Em andamento</div></div>
+         <div class="member-profile-stat"><div class="member-profile-stat-num">${stats.pendentes||0}</div><div class="member-profile-stat-lbl">Pendentes</div></div>
+       </div>
+
+       <div class="mpb-section">
+         <div class="mpb-header"><i class="fa-solid fa-medal"></i> Insígnias Conquistadas</div>
+         <div class="mpb-grid">${renderBadgesList(badges)}</div>
        </div>
      `;
-   
+
+     // Prévia de nível no modal (só Diretoria)
+     const previewSel = isDiretoria
+       ? `<select id="modalPreviewNivel" class="form-input form-select" style="font-size:.72rem;padding:5px 8px;border-color:rgba(201,168,76,.3);color:var(--gold);flex:0 0 auto;min-width:140px" title="Prévia visual — não altera dados">
+           <option value="${nivel}">👁 Nível atual</option>
+           <option value="comum"${nivel==='comum'?' selected':''}>◻ Comum</option>
+           <option value="raro"${nivel==='raro'?' selected':''}>🟥 Raro</option>
+           <option value="epico"${nivel==='epico'?' selected':''}>🔶 Épico</option>
+           <option value="lendario"${nivel==='lendario'?' selected':''}>⭐ Lendário</option>
+         </select>` : '';
+
      footer.innerHTML = canEditar && m.id !== currentProfile.id
-       ? `<button class="btn btn-ghost" id="closeMemberProfile">Fechar</button>
+       ? `${previewSel}<button class="btn btn-ghost" id="closeMemberProfile">Fechar</button>
           <button class="btn btn-primary" id="editMemberProfileBtn"><i class="fa-solid fa-pen"></i> Editar Perfil</button>`
-       : `<button class="btn btn-outline" id="closeMemberProfile">Fechar</button>`;
-   
+       : `${previewSel}<button class="btn btn-outline" id="closeMemberProfile">Fechar</button>`;
+
      modal.classList.add('open');
-   
-     document.getElementById('closeMemberProfile').addEventListener('click', () => modal.classList.remove('open'));
-   
+
+     // Prévia: troca o nível visual do modal ao mudar o select
+     document.getElementById('modalPreviewNivel')?.addEventListener('change', e => {
+       if (!modalEl) return;
+       modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
+       const v = e.target.value;
+       if (v && v !== 'comum') modalEl.classList.add(`mcard-${v}`);
+       // Atualiza hero e tag também
+       const hero = body.querySelector('.mcard-hero');
+       if (hero) {
+         hero.className = `mcard-hero mcard-hero--${v || 'comum'}`;
+       }
+       const tag = body.querySelector('.mcard-nivel-tag');
+       const LABELS = { raro:'Raro', epico:'Épico', lendario:'Lendário' };
+       if (!v || v === 'comum') {
+         if (tag) tag.remove();
+       } else {
+         if (tag) { tag.className = `mcard-nivel-tag mcard-nivel-tag--${v}`; tag.textContent = LABELS[v]; }
+         else {
+           const newTag = document.createElement('div');
+           newTag.className = `mcard-nivel-tag mcard-nivel-tag--${v}`;
+           newTag.textContent = LABELS[v];
+           hero?.appendChild(newTag);
+         }
+       }
+     });
+
+     document.getElementById('closeMemberProfile').addEventListener('click', () => {
+       modal.classList.remove('open');
+       if (modalEl) modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
+     });
      document.getElementById('editMemberProfileBtn')?.addEventListener('click', () => {
        modal.classList.remove('open');
        openEditMemberModal(m, allMembers);
