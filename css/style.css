@@ -2533,12 +2533,11 @@ h3 { font-size: 1.1rem; }
 }
 
 .badge-qtd {
-  font-size: 0.60rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-3);
-  opacity: 0.85;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--badge-color, var(--gold));
+  line-height: 1;
 }
 
 /* -------- RESPONSIVE -------- */
@@ -3482,6 +3481,257 @@ h3 { font-size: 1.1rem; }
   .busca-btn { padding: 14px 14px; font-size: .8rem; }
 }
 
+
+/* ================================================================
+   MODAL FIFA — NÍVEIS MASAYOSHI (Raro / Épico / Lendário)
+   ================================================================ */
+
+/* ── Modal base ajustado para FIFA ── */
+.modal.mcard-raro,
+.modal.mcard-epico,
+.modal.mcard-lendario {
+  overflow: hidden;
+}
+
+/* ── Hero do card ── */
+.mcard-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 24px 20px;
+  margin: -1px -1px 0;
+  overflow: hidden;
+}
+
+/* Fundo padrão (comum) */
+.mcard-hero--comum {
+  background: linear-gradient(135deg, var(--black-3), var(--black-2));
+  border-bottom: 1px solid var(--border-faint);
+  margin-bottom: 0;
+}
+
+/* ── Raios de luz (rays) ── */
+.mcard-fx-rays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+}
+.mcard-fx-rays span {
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  width: 2px;
+  height: 180%;
+  transform-origin: top center;
+  border-radius: 1px;
+}
+.mcard-fx-rays span:nth-child(1) { transform: rotate(-60deg) translateX(-90px); }
+.mcard-fx-rays span:nth-child(2) { transform: rotate(-30deg) translateX(-40px); }
+.mcard-fx-rays span:nth-child(3) { transform: rotate(0deg)   translateX(0px);   }
+.mcard-fx-rays span:nth-child(4) { transform: rotate(30deg)  translateX(40px);  }
+.mcard-fx-rays span:nth-child(5) { transform: rotate(60deg)  translateX(90px);  }
+.mcard-fx-rays span:nth-child(6) { transform: rotate(90deg)  translateX(140px); }
+
+/* ── RARO — Amarelo ── */
+.mcard-hero--raro {
+  background: linear-gradient(145deg, #131000 0%, #1e1800 45%, #0c0a00 100%);
+  border-bottom: 1px solid rgba(234,179,8,.4);
+}
+.mcard-hero--raro .mcard-fx-rays { opacity: 1; animation: rays-pulse 4s ease-in-out infinite; }
+.mcard-hero--raro .mcard-fx-rays span { background: linear-gradient(180deg, rgba(234,179,8,.0), rgba(234,179,8,.3), rgba(234,179,8,.0)); }
+.modal.mcard-raro { border-color: rgba(234,179,8,.55) !important; box-shadow: 0 0 40px rgba(234,179,8,.2), 0 0 0 1px rgba(234,179,8,.15), 0 32px 64px rgba(0,0,0,.8) !important; }
+
+/* ── ÉPICO — Roxo ── */
+.mcard-hero--epico {
+  background: linear-gradient(145deg, #0d0018 0%, #1a0030 35%, #0a000e 70%, #060008 100%);
+  border-bottom: 1px solid rgba(139,92,246,.45);
+}
+.mcard-hero--epico .mcard-fx-rays { opacity: 1; animation: rays-pulse 3s ease-in-out infinite; }
+.mcard-hero--epico .mcard-fx-rays span:nth-child(odd)  { background: linear-gradient(180deg, rgba(139,92,246,.0), rgba(139,92,246,.4), rgba(139,92,246,.0)); }
+.mcard-hero--epico .mcard-fx-rays span:nth-child(even) { background: linear-gradient(180deg, rgba(196,132,255,.0), rgba(196,132,255,.2), rgba(196,132,255,.0)); }
+.modal.mcard-epico { border-color: rgba(139,92,246,.6) !important; box-shadow: 0 0 55px rgba(139,92,246,.3), 0 0 20px rgba(139,92,246,.15), 0 0 0 1px rgba(139,92,246,.25), 0 32px 64px rgba(0,0,0,.85) !important; }
+
+/* ── LENDÁRIO — Vermelho com raios pra fora ── */
+.mcard-hero--lendario {
+  background: linear-gradient(145deg, #1a0000 0%, #300000 30%, #1a0005 60%, #080000 100%);
+  border-bottom: 1px solid rgba(220,38,38,.6);
+}
+.mcard-hero--lendario .mcard-fx-rays { opacity: 1; animation: rays-spin 5s linear infinite; }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(1) { background: linear-gradient(180deg, rgba(239,68,68,.0), rgba(239,68,68,.6), rgba(239,68,68,.0)); width: 4px; }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(2) { background: linear-gradient(180deg, rgba(220,38,38,.0), rgba(220,38,38,.35), rgba(220,38,38,.0)); }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(3) { background: linear-gradient(180deg, rgba(248,113,113,.0), rgba(248,113,113,.5), rgba(248,113,113,.0)); width: 3px; }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(4) { background: linear-gradient(180deg, rgba(239,68,68,.0), rgba(239,68,68,.4), rgba(239,68,68,.0)); }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(5) { background: linear-gradient(180deg, rgba(220,38,38,.0), rgba(220,38,38,.55), rgba(220,38,38,.0)); width: 4px; }
+.mcard-hero--lendario .mcard-fx-rays span:nth-child(6) { background: linear-gradient(180deg, rgba(248,113,113,.0), rgba(248,113,113,.3), rgba(248,113,113,.0)); }
+/* Raios saindo pra fora do modal (overflow visible no lendário) */
+.modal.mcard-lendario {
+  border-color: rgba(220,38,38,.8) !important;
+  overflow: visible !important;
+  box-shadow:
+    0 0 80px rgba(220,38,38,.5),
+    0 0 40px rgba(220,38,38,.3),
+    0 0 0 1px rgba(220,38,38,.4),
+    0 0 120px rgba(220,38,38,.2),
+    0 32px 80px rgba(0,0,0,.9) !important;
+}
+/* Raios externos: pseudo-element que vaza pra fora */
+.modal.mcard-lendario::before {
+  content: '';
+  position: absolute;
+  inset: -30px;
+  border-radius: 28px;
+  background: radial-gradient(ellipse at 50% 20%, rgba(220,38,38,.25) 0%, rgba(220,38,38,.08) 40%, transparent 70%);
+  pointer-events: none;
+  animation: lend-outer-glow 2.5s ease-in-out infinite;
+  z-index: -1;
+}
+@keyframes lend-outer-glow {
+  0%,100% { opacity: .7; transform: scale(1); }
+  50%      { opacity: 1;  transform: scale(1.02); }
+}
+
+@keyframes rays-pulse {
+  0%, 100% { opacity: .7; }
+  50%       { opacity: 1;  }
+}
+@keyframes rays-spin {
+  0%   { transform: rotate(0deg);   opacity: .85; }
+  50%  { opacity: 1; }
+  100% { transform: rotate(360deg); opacity: .85; }
+}
+
+/* ── Avatar do hero ── */
+.mcard-hero-avatar {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  border: 3px solid var(--border-gold);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem; font-weight: 700;
+  color: var(--gold);
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative; z-index: 1;
+  box-shadow: 0 0 20px rgba(0,0,0,.5);
+}
+.mcard-hero--raro    .mcard-hero-avatar { border-color: rgba(234,179,8,.8); box-shadow: 0 0 20px rgba(234,179,8,.35), 0 0 0 4px rgba(234,179,8,.1); }
+.mcard-hero--epico   .mcard-hero-avatar { border-color: rgba(139,92,246,.7); box-shadow: 0 0 24px rgba(139,92,246,.35), 0 0 0 4px rgba(139,92,246,.1); }
+.mcard-hero--lendario .mcard-hero-avatar {
+  border-color: #ef4444;
+  box-shadow: 0 0 32px rgba(220,38,38,.55), 0 0 0 5px rgba(220,38,38,.15), 0 0 0 9px rgba(220,38,38,.06);
+  animation: avatar-glow-lend 2s ease-in-out infinite;
+}
+@keyframes avatar-glow-lend {
+  0%,100% { box-shadow: 0 0 32px rgba(220,38,38,.55), 0 0 0 5px rgba(220,38,38,.15); }
+  50%     { box-shadow: 0 0 55px rgba(220,38,38,.8),  0 0 0 5px rgba(220,38,38,.3); }
+}
+
+/* ── Info do hero ── */
+.mcard-hero-info { position: relative; z-index: 1; flex: 1; min-width: 0; }
+.mcard-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem; font-weight: 700;
+  color: var(--text-1); margin-bottom: 3px;
+  line-height: 1.2;
+}
+.mcard-hero--lendario .mcard-name {
+  color: #f87171;
+  text-shadow: 0 0 16px rgba(220,38,38,.6), 0 0 32px rgba(220,38,38,.3);
+}
+.mcard-role { font-size: .82rem; color: var(--gold); margin-bottom: 8px; }
+.mcard-badges-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── Tag de nível ── */
+.mcard-nivel-tag {
+  position: absolute; top: 12px; right: 14px;
+  font-family: 'Cinzel', serif;
+  font-size: .58rem; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 20px;
+  z-index: 2; line-height: 1.5;
+}
+.mcard-nivel-tag--raro    { background: rgba(234,179,8,.2); color: #fbbf24; border: 1px solid rgba(234,179,8,.6); text-shadow: 0 0 8px rgba(234,179,8,.4); }
+.mcard-nivel-tag--epico   { background: rgba(139,92,246,.2); color: #c084fc; border: 1px solid rgba(139,92,246,.6); text-shadow: 0 0 8px rgba(139,92,246,.4); }
+.mcard-nivel-tag--lendario{ background: rgba(220,38,38,.25); color: #f87171; border: 1px solid rgba(220,38,38,.7); text-shadow: 0 0 8px rgba(220,38,38,.5); animation: tag-glow 1.8s ease-in-out infinite; }
+@keyframes tag-glow {
+  0%,100% { box-shadow: none; }
+  50%     { box-shadow: 0 0 12px rgba(220,38,38,.4); }
+}
+
+/* ── Seção de detalhes ── */
+.mcard-details { padding: 0 4px; }
+
+/* ── Seção de insígnias no modal ── */
+.mpb-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-faint);
+  padding-top: 14px;
+}
+.mpb-header {
+  font-size: .72rem; color: var(--gold);
+  text-transform: uppercase; letter-spacing: .08em;
+  font-weight: 700; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 7px;
+}
+.mpb-grid {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+/* ── Item de insígnia no modal ── */
+.mpb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--black-4);
+  border: 1px solid rgba(255,255,255,.06);
+  border-left: 3px solid var(--bc, var(--gold));
+  border-radius: var(--radius);
+  min-width: 150px;
+  flex: 1 1 calc(50% - 4px);
+  transition: all .2s;
+  cursor: default;
+}
+.mpb-item:hover {
+  background: var(--black-3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,.4);
+}
+.mpb-icon { font-size: 1.7rem; line-height: 1; flex-shrink: 0; }
+.mpb-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mpb-label {
+  font-family: 'Cinzel', serif;
+  font-size: .83rem; font-weight: 700;
+  color: var(--bc, var(--gold));
+  line-height: 1.2;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--bc, var(--gold)) 35%, transparent);
+}
+.mpb-sub {
+  font-size: .66rem; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.mpb-qty {
+  font-size: 1.05rem; font-weight: 900;
+  color: var(--bc, var(--gold));
+  flex-shrink: 0; letter-spacing: -.01em;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--bc, var(--gold)) 50%, transparent);
+}
+.mpb-vazio {
+  padding: 20px; text-align: center; color: var(--text-3);
+  font-size: .82rem; font-style: italic;
+  width: 100%;
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .mcard-hero { padding: 18px 16px; gap: 14px; }
+  .mcard-hero-avatar { width: 70px; height: 70px; font-size: 1.2rem; }
+  .mcard-name { font-size: .9rem; }
+  .mpb-item { flex: 1 1 100%; min-width: 0; }
+  .mcard-nivel-tag { font-size: .52rem; top: 8px; right: 10px; }
+}
+
 /* ── Biblioteca — Mobile ── */
 @media (max-width: 768px) {
   .bib-card { padding: 16px; gap: 10px; }
@@ -3575,3 +3825,8 @@ h3 { font-size: 1.1rem; }
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ── Preview de nível nos cards (só visual, Diretoria) — removido da lista ── */
+
+/* Preview nível no footer do modal */
+#modalPreviewNivel { margin-right: auto; }
