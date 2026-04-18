@@ -1916,6 +1916,134 @@
    /* ============================================================
       PAGE: MEMBROS
       ============================================================ */
+
+   /* ── RAIOS LENDÁRIOS — Canvas ao redor do modal ──────────
+      Apenas desktop (largura > 768px). Cria um canvas fixo
+      sobre a página, desenha raios zigzag que aparecem e somem
+      nas laterais do modal. Limpo ao fechar o modal.
+   ─────────────────────────────────────────────────────────── */
+   let _lendCanvas = null, _lendRAF = null;
+
+   function _startLendarioLightning(modalEl, nivel) {
+     _stopLendarioLightning(); // garante cleanup anterior
+     if (nivel !== 'lendario' || window.innerWidth <= 768) return;
+
+     const canvas = document.createElement('canvas');
+     canvas.id = 'lend-lightning-canvas';
+     canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1001;';
+     document.body.appendChild(canvas);
+     _lendCanvas = canvas;
+
+     const ctx = canvas.getContext('2d');
+     let W, H, rect;
+
+     function resize() {
+       W = canvas.width  = window.innerWidth;
+       H = canvas.height = window.innerHeight;
+       rect = modalEl ? modalEl.getBoundingClientRect() : null;
+     }
+     resize();
+     window.addEventListener('resize', resize);
+
+     // Gera um raio zigzag entre (x1,y1) e (x2,y2)
+     function zigzag(x1, y1, x2, y2, segs) {
+       const pts = [[x1, y1]];
+       for (let i = 1; i < segs; i++) {
+         const t  = i / segs;
+         const mx = x1 + (x2 - x1) * t;
+         const my = y1 + (y2 - y1) * t;
+         const perp = (Math.random() - 0.5) * 28 * (1 - Math.abs(t - 0.5) * 1.5);
+         const dx = -(y2 - y1), dy = x2 - x1;
+         const len = Math.sqrt(dx * dx + dy * dy) || 1;
+         pts.push([mx + perp * dx / len, my + perp * dy / len]);
+       }
+       pts.push([x2, y2]);
+       return pts;
+     }
+
+     // Posições dos raios: 4 à esquerda, 4 à direita
+     function spawnBolts() {
+       if (!rect) return [];
+       const bolts = [];
+       const sides = ['left', 'right'];
+       for (const side of sides) {
+         const count = 3 + Math.floor(Math.random() * 3);
+         for (let i = 0; i < count; i++) {
+           // Ponto de origem: longe do modal
+           const ox = side === 'left'
+             ? Math.random() * (rect.left * 0.6)
+             : rect.right + Math.random() * (W - rect.right) * 0.6;
+           const oy = rect.top + Math.random() * rect.height;
+           // Ponto de destino: borda do modal
+           const dx = side === 'left' ? rect.left : rect.right;
+           const dy = rect.top + Math.random() * rect.height;
+           bolts.push({
+             pts:    zigzag(ox, oy, dx, dy, 8 + Math.floor(Math.random() * 6)),
+             life:   0,
+             maxLife: 18 + Math.floor(Math.random() * 18),
+             delay:   Math.floor(Math.random() * 40),
+             alpha:  0,
+             width:  0.8 + Math.random() * 1.4,
+           });
+         }
+       }
+       return bolts;
+     }
+
+     let bolts = spawnBolts();
+     let frame = 0;
+
+     function draw() {
+       if (!_lendCanvas) return;
+       ctx.clearRect(0, 0, W, H);
+       rect = modalEl ? modalEl.getBoundingClientRect() : rect;
+       frame++;
+
+       // Re-spawn a cada ~80 frames
+       if (frame % 80 === 0) {
+         bolts = [...bolts.filter(b => b.life < b.maxLife), ...spawnBolts()];
+       }
+
+       for (const b of bolts) {
+         if (b.delay > 0) { b.delay--; continue; }
+         b.life++;
+         const t = b.life / b.maxLife;
+         // Aparecer rápido, sumir devagar
+         b.alpha = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
+         b.alpha = Math.max(0, Math.min(1, b.alpha));
+
+         if (b.alpha <= 0) continue;
+
+         // Raio principal
+         ctx.beginPath();
+         ctx.moveTo(b.pts[0][0], b.pts[0][1]);
+         for (let j = 1; j < b.pts.length; j++) ctx.lineTo(b.pts[j][0], b.pts[j][1]);
+         ctx.strokeStyle = `rgba(220,38,38,${b.alpha * 0.85})`;
+         ctx.lineWidth   = b.width;
+         ctx.shadowColor = 'rgba(255,60,60,0.9)';
+         ctx.shadowBlur  = 8;
+         ctx.stroke();
+
+         // Glow extra (traço mais grosso, menos opaco)
+         ctx.strokeStyle = `rgba(255,100,100,${b.alpha * 0.3})`;
+         ctx.lineWidth   = b.width * 3;
+         ctx.shadowBlur  = 0;
+         ctx.stroke();
+       }
+
+       _lendRAF = requestAnimationFrame(draw);
+     }
+
+     _lendRAF = requestAnimationFrame(draw);
+   }
+
+   function _stopLendarioLightning() {
+     if (_lendRAF) { cancelAnimationFrame(_lendRAF); _lendRAF = null; }
+     const c = document.getElementById('lend-lightning-canvas');
+     if (c) c.remove();
+     _lendCanvas = null;
+   }
+
    async function initMembros() {
      const profile = await renderSidebar('membros');
      if (!profile) return;
@@ -2430,8 +2558,8 @@
 
      // Prévia de nível no modal (só Diretoria)
      const previewSel = isDiretoria
-       ? `<select id="modalPreviewNivel" class="form-input form-select" style="font-size:.72rem;padding:5px 8px;border-color:rgba(201,168,76,.3);color:var(--gold);flex:0 0 auto;min-width:140px" title="Prévia visual — não altera dados">
-           <option value="${nivel}">👁 Nível atual</option>
+       ? `<select id="modalPreviewNivel" class="form-input form-select" style="font-size:.7rem;padding:4px 6px;border-color:rgba(201,168,76,.25);color:var(--gold);flex:0 0 auto;width:auto;max-width:130px;height:34px" title="Prévia visual — não altera dados">
+           <option value="${nivel}">👁 Prévia</option>
            <option value="comum"${nivel==='comum'?' selected':''}>◻ Comum</option>
            <option value="raro"${nivel==='raro'?' selected':''}>🟥 Raro</option>
            <option value="epico"${nivel==='epico'?' selected':''}>🔶 Épico</option>
@@ -2445,12 +2573,16 @@
 
      modal.classList.add('open');
 
+     // ── Raios Lendários (canvas ao redor do modal, só desktop) ──
+     _startLendarioLightning(modalEl, nivel);
+
      // Prévia: troca o nível visual do modal ao mudar o select
      document.getElementById('modalPreviewNivel')?.addEventListener('change', e => {
        if (!modalEl) return;
        modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
        const v = e.target.value;
        if (v && v !== 'comum') modalEl.classList.add(`mcard-${v}`);
+       _startLendarioLightning(modalEl, v);
        // Atualiza hero e tag também
        const hero = body.querySelector('.mcard-hero');
        if (hero) {
@@ -2474,6 +2606,7 @@
      document.getElementById('closeMemberProfile').addEventListener('click', () => {
        modal.classList.remove('open');
        if (modalEl) modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
+       _stopLendarioLightning();
      });
      document.getElementById('editMemberProfileBtn')?.addEventListener('click', () => {
        modal.classList.remove('open');
