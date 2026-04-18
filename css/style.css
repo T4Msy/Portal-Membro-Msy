@@ -3571,26 +3571,59 @@ h3 { font-size: 1.1rem; }
   border-color: rgba(220,38,38,.8) !important;
   overflow: visible !important;
   box-shadow:
-    0 0 80px rgba(220,38,38,.5),
-    0 0 40px rgba(220,38,38,.3),
+    0 0 50px rgba(220,38,38,.3),
+    0 0 20px rgba(220,38,38,.15),
     0 0 0 1px rgba(220,38,38,.4),
-    0 0 120px rgba(220,38,38,.2),
     0 32px 80px rgba(0,0,0,.9) !important;
 }
-/* Raios externos: pseudo-element que vaza pra fora */
+/* Raios externos — glow suave atrás do modal */
 .modal.mcard-lendario::before {
   content: '';
   position: absolute;
-  inset: -30px;
-  border-radius: 28px;
-  background: radial-gradient(ellipse at 50% 20%, rgba(220,38,38,.25) 0%, rgba(220,38,38,.08) 40%, transparent 70%);
+  inset: -18px;
+  border-radius: 26px;
+  background: radial-gradient(ellipse at 50% 15%, rgba(220,38,38,.14) 0%, rgba(220,38,38,.05) 50%, transparent 75%);
   pointer-events: none;
-  animation: lend-outer-glow 2.5s ease-in-out infinite;
+  animation: lend-outer-glow 3s ease-in-out infinite;
   z-index: -1;
 }
 @keyframes lend-outer-glow {
-  0%,100% { opacity: .7; transform: scale(1); }
-  50%      { opacity: 1;  transform: scale(1.02); }
+  0%,100% { opacity: .6; }
+  50%      { opacity: 1; }
+}
+
+/* Raios saindo do hero — apenas desktop */
+@media (min-width: 769px) {
+  .mcard-hero--lendario::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; right: 0; bottom: 0;
+    transform: translateX(-50%);
+    width: 120%;
+    pointer-events: none;
+    background:
+      repeating-conic-gradient(
+        from 0deg at 50% 110%,
+        rgba(220,38,38,.0)   0deg,
+        rgba(220,38,38,.18)  2deg,
+        rgba(220,38,38,.0)   4deg,
+        rgba(220,38,38,.0)   10deg,
+        rgba(248,113,113,.12) 12deg,
+        rgba(220,38,38,.0)  14deg,
+        rgba(220,38,38,.0)  22deg,
+        rgba(220,38,38,.2)  24deg,
+        rgba(220,38,38,.0)  26deg,
+        rgba(220,38,38,.0)  36deg
+      );
+    opacity: 0;
+    animation: hero-rays 3s ease-in-out infinite;
+    mix-blend-mode: screen;
+  }
+}
+@keyframes hero-rays {
+  0%,100% { opacity: 0;   transform: translateX(-50%) scaleY(1);    }
+  30%     { opacity: 1;   transform: translateX(-50%) scaleY(1.08);  }
+  60%     { opacity: .7;  transform: translateX(-50%) scaleY(.96);   }
 }
 
 @keyframes rays-pulse {
