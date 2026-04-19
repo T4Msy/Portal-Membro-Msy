@@ -4026,3 +4026,73 @@ h3 { font-size: 1.1rem; }
   .member-card:hover { transform: none; }
   .mpb-item:hover    { transform: none; }
 }
+
+/* ================================================================
+   FIX SCROLL MODAL MOBILE — insígnias e conteúdo longo
+   ================================================================ */
+
+/* Overlay: permite que o modal seja menor que a viewport e role */
+.modal-overlay {
+  align-items: flex-start !important;
+  padding: 12px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Em telas grandes volta a centrar */
+@media (min-height: 700px) and (min-width: 600px) {
+  .modal-overlay { align-items: center !important; }
+}
+
+/* O modal em si: altura máxima = 96% da viewport, scroll interno */
+.modal {
+  max-height: 96vh !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  flex-shrink: 0;
+  margin: auto;
+}
+
+/* No mobile, permite o modal crescer até caber tudo e dar scroll */
+@media (max-width: 600px) {
+  .modal {
+    max-height: none !important;     /* deixa crescer naturalmente */
+    overflow-y: visible !important;  /* o scroll fica no overlay */
+    width: 100% !important;
+    border-radius: 14px !important;
+  }
+  /* Header fixo no topo enquanto rola */
+  .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--black-3);
+  }
+}
+
+/* Cards na lista de membros — layout horizontal limpo no mobile */
+@media (max-width: 500px) {
+  .members-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .member-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    text-align: left !important;
+    padding: 12px 14px !important;
+    gap: 12px !important;
+  }
+  .member-card .avatar {
+    width: 50px !important; height: 50px !important;
+    font-size: .9rem !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+  }
+  .member-card-text {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .member-name       { font-size: .84rem !important; margin-bottom: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .member-join       { font-size: .64rem !important; margin-bottom: 1px !important; }
+  .member-role-text  { font-size: .72rem !important; margin-bottom: 3px !important; }
+  .member-tier-badge { margin-top: 3px !important; }
+}
