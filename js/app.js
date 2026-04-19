@@ -2187,10 +2187,12 @@
              <div class="avatar" style="width:64px;height:64px;font-size:1.1rem;margin:0 auto 14px;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a);border-color:${m.tier==='diretoria'?'var(--border-gold)':'var(--border-faint)'}">
                ${m.avatar_url ? `<img src="${m.avatar_url}" alt="${Utils.escapeHtml(m.name)}">` : (m.initials||Utils.getInitials(m.name))}
              </div>
-             <div class="member-name">${Utils.escapeHtml(m.name)}</div>
-             <div class="member-role-text">${Utils.escapeHtml(m.role)}</div>
-             <div class="member-join"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(m.join_date)}</div>
-             <div class="member-tier-badge">${Utils.tierBadge(m.tier)}</div>
+             <div class="member-card-text">
+               <div class="member-name">${Utils.escapeHtml(m.name)}</div>
+               <div class="member-join" style="font-size:.68rem;color:var(--text-3);margin-bottom:3px"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(m.join_date)}</div>
+               <div class="member-role-text">${Utils.escapeHtml(m.role)}</div>
+               <div class="member-tier-badge">${Utils.tierBadge(m.tier)}</div>
+             </div>
              ${canGerenciarMembros ? `
                <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center" onclick="event.stopPropagation()">
                  ${m.status === 'pendente' && canAprovar ? `<button class="btn btn-sm btn-primary approve-btn" data-id="${m.id}"><i class="fa-solid fa-check"></i> Aprovar</button>` : ''}
