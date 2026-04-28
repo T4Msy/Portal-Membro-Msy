@@ -234,7 +234,7 @@
        { page: 'comunicados', icon: 'fa-solid fa-bullhorn',      label: 'Comunicados' },
        { page: 'membros',     icon: 'fa-solid fa-users',         label: 'Membros' },
        { page: 'eventos',     icon: 'fa-solid fa-calendar-days', label: 'Eventos' },
-       { page: 'presencas',   icon: 'fa-solid fa-clipboard-list',label: 'Presenças' },
+       { page: 'reunioes',    icon: 'fa-solid fa-handshake',     label: 'Reuniões' },
        { page: 'ranking',     icon: 'fa-solid fa-ranking-star',  label: 'Ranking' },
        { page: 'feed',        icon: 'fa-solid fa-rss',           label: 'Feed' },
        { page: 'biblioteca',  icon: 'fa-solid fa-book-open',     label: 'Biblioteca' },
@@ -2491,7 +2491,7 @@
 
      for (const tabela of tabelas) {
        // Tenta pelo campo user_id primeiro, depois membro_id
-       const campo = tabela === 'event_presencas' ? 'membro_id' : 'user_id';
+       const campo = 'user_id';
        const { error } = await db.from(tabela).delete().eq(campo, memberId);
        if (error) console.warn(`[MSY Delete] Aviso ao limpar ${tabela}:`, error.message);
      }
@@ -3068,6 +3068,39 @@
          }
          .ev-check-row:hover { border-color: var(--border-gold); background: rgba(201,168,76,.04); }
          .ev-check-row input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+         /* ══ PRESENÇA EM EVENTOS ══════════════════════════════════════ */
+         .ev-presence-bar {
+           display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+           margin-top: 10px; padding-top: 10px;
+           border-top: 1px solid var(--border-faint);
+         }
+         .ev-presence-btn {
+           display: inline-flex; align-items: center; gap: 5px;
+           padding: 6px 14px; border-radius: 8px; border: 1px solid;
+           font-size: .75rem; font-weight: 700; cursor: pointer;
+           letter-spacing: .04em; transition: all .18s;
+         }
+         .ev-presence-btn-join {
+           background: rgba(16,185,129,.1); border-color: rgba(16,185,129,.35); color: #10b981;
+         }
+         .ev-presence-btn-join:hover { background: rgba(16,185,129,.2); }
+         .ev-presence-btn-skip {
+           background: rgba(220,38,38,.07); border-color: rgba(220,38,38,.25); color: #ef4444;
+         }
+         .ev-presence-btn-skip:hover { background: rgba(220,38,38,.15); }
+         .ev-presence-btn-cancel {
+           background: rgba(245,158,11,.07); border-color: rgba(245,158,11,.25); color: #f59e0b;
+           font-size: .68rem;
+         }
+         .ev-presence-btn-cancel:hover { background: rgba(245,158,11,.13); }
+         .ev-presence-btn:disabled { opacity: .45; cursor: not-allowed; }
+         .ev-presence-status {
+           font-size: .72rem; font-weight: 700; padding: 4px 12px;
+           border-radius: 8px; border: 1px solid;
+         }
+         .ev-presence-status-joined { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
+         .ev-presence-status-skip   { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
+         .ev-presence-count { font-size:.68rem; color:var(--text-3); margin-left:auto; }
        `;
        document.head.appendChild(_s);
      }
@@ -3083,28 +3116,63 @@
          canManage = await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','excluir_eventos','gerenciar_eventos']);
        }
 
-       const { data: evs, error } = await db.from('events')
-         .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
-         .order('event_date', { ascending: false });
+       const [{ data: evs, error }, { data: myPresencas }] = await Promise.all([
+         db.from('events')
+           .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
+           .order('event_date', { ascending: false }),
+         db.from('event_presencas').select('event_id,status,justificativa').eq('user_id', profile.id)
+       ]);
 
        if (error) { Utils.showToast('Erro ao carregar eventos.', 'error'); return; }
 
+       // Build my presence map { event_id -> status }
+       const myPresMap = {};
+       (myPresencas||[]).forEach(p => { myPresMap[p.event_id] = p.status; });
+
+       // Load cancel requests pending
+       const { data: cancelReqs } = await db.from('event_cancel_requests')
+         .select('event_id,status').eq('user_id', profile.id).eq('status','pendente');
+       const cancelPending = new Set((cancelReqs||[]).map(r => r.event_id));
+
+       // Load confirmed counts for upcoming events (visible to all)
        const today    = new Date().toISOString().split('T')[0];
        const upcoming = (evs||[]).filter(e => e.event_date >= today && e.status !== 'concluido');
        const done     = (evs||[]).filter(e => e.status === 'concluido');
        const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
 
+       let presCountMap = {};
+       if (upcoming.length) {
+         const { data: counts } = await db.from('event_presencas')
+           .select('event_id,status').in('event_id', upcoming.map(e=>e.id)).eq('status','participar');
+         (counts||[]).forEach(c => { presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1; });
+       }
+
+       // Load cancel requests for diretoria
+       let allCancelReqs = [];
+       if (isDiretoria) {
+         const { data: cr } = await db.from('event_cancel_requests')
+           .select('*').eq('status','pendente').order('created_at',{ascending:false});
+         if (cr && cr.length) {
+           const uids = [...new Set(cr.map(r => r.user_id).filter(Boolean))];
+           const { data: profs } = await db.from('profiles').select('id,name').in('id', uids);
+           const pm = {}; (profs||[]).forEach(p => { pm[p.id] = p; });
+           cr.forEach(r => { r.requester = pm[r.user_id] || null; });
+         }
+         allCancelReqs = cr||[];
+       }
+
        tab.innerHTML = `
          ${canManage ? `
-           <div style="margin-bottom:20px">
+           <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
              <button class="btn btn-primary" id="newEventBtn">
                <i class="fa-solid fa-calendar-plus"></i> Novo Evento
              </button>
+             ${allCancelReqs.length > 0 ? `<button class="btn btn-gold" id="cancelReqsBtn"><i class="fa-solid fa-bell"></i> ${allCancelReqs.length} Pedido(s) de Cancelamento</button>` : ''}
            </div>` : ''}
 
          ${upcoming.length > 0 ? `
            <div class="ev-section-label"><i class="fa-solid fa-calendar-days"></i> Próximos Eventos</div>
-           ${upcoming.map(ev => renderEventCard(ev, canManage, false)).join('')}
+           ${upcoming.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, cancelPending.has(ev.id), presCountMap[ev.id]||0)).join('')}
          ` : `
            <div class="empty-state" style="padding:40px">
              <div class="empty-state-icon"><i class="fa-solid fa-calendar-days"></i></div>
@@ -3113,16 +3181,18 @@
 
          ${done.length > 0 ? `
            <div class="ev-section-label" style="color:#10b981"><i class="fa-solid fa-circle-check"></i> Concluídos</div>
-           ${done.map(ev => renderEventCard(ev, canManage, false)).join('')}
+           ${done.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, false, 0)).join('')}
          ` : ''}
 
          ${past.length > 0 ? `
            <div class="ev-section-label" style="color:var(--text-3)"><i class="fa-regular fa-calendar"></i> Encerrados</div>
-           ${past.map(ev => renderEventCard(ev, canManage, true)).join('')}
+           ${past.map(ev => renderEventCard(ev, canManage, true, myPresMap[ev.id]||null, false, 0)).join('')}
          ` : ''}
        `;
 
        document.getElementById('newEventBtn')?.addEventListener('click', () => openNewEventModal(profile, loadEventos));
+
+       document.getElementById('cancelReqsBtn')?.addEventListener('click', () => openCancelRequestsModal(loadEventos));
 
        /* Excluir */
        tab.querySelectorAll('.delete-event-btn').forEach(btn => {
@@ -3152,6 +3222,55 @@
            const { error } = await db.from('events').update({ status: 'ativo' }).eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Evento reaberto.'); loadEventos(); }
            else Utils.showToast('Erro ao reabrir.', 'error');
+         });
+       });
+
+       /* PRESENÇA — Participar */
+       tab.querySelectorAll('.pres-join-btn').forEach(btn => {
+         btn.addEventListener('click', async e => {
+           e.stopPropagation();
+           btn.disabled = true;
+           const eid = btn.dataset.id;
+           const { error } = await db.from('event_presencas').upsert(
+             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar' },
+             { onConflict: 'event_id,user_id', ignoreDuplicates: false }
+           );
+           if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
+           else { Utils.showToast('Erro ao confirmar presença.', 'error'); btn.disabled = false; }
+         });
+       });
+
+       /* PRESENÇA — Não Participar (abre modal de justificativa) */
+       tab.querySelectorAll('.pres-skip-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           openSkipModal(btn.dataset.id, profile, loadEventos);
+         });
+       });
+
+       /* PRESENÇA — Solicitar Cancelamento */
+       tab.querySelectorAll('.pres-cancel-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           openPresenceCancelModal(btn.dataset.id, profile, loadEventos);
+         });
+       });
+
+       /* PRESENÇA — Gerenciar (evento finalizado/encerrado, diretoria) */
+       tab.querySelectorAll('.ev-pres-manage-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
+           openPresenceManageModal(btn.dataset.id, ev, loadEventos);
+         });
+       });
+
+       /* PRESENÇA — Ver detalhes (diretoria, evento futuro) */
+       tab.querySelectorAll('.ev-pres-detail-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
+           openPresenceDetailModal(btn.dataset.id, ev);
          });
        });
      }
@@ -3295,7 +3414,7 @@
        </div>
        <div class="filters-bar" style="margin-bottom:20px">
          <button class="filter-btn active" data-tab="eventos"><i class="fa-solid fa-calendar-days"></i> Eventos</button>
-         <button class="filter-btn" data-tab="atas"><i class="fa-solid fa-file-lines"></i> Atas de Reunião</button>
+
        </div>
        <div id="evTab"></div>
    
@@ -3472,7 +3591,7 @@
          btn.classList.add('active');
          activeTab = btn.dataset.tab;
          if (activeTab === 'eventos') loadEventos();
-         else if (activeTab === 'atas') loadAtas();
+         
          else if (activeTab === 'ranking') loadRanking();
        });
      });
@@ -3507,7 +3626,7 @@
      await loadEventos();
    }
    
-   function renderEventCard(ev, canManage, isPast = false) {
+   function renderEventCard(ev, canManage, isPast = false, myStatus = null, cancelPending = false, presCount = 0) {
      const isDone     = ev.status === 'concluido';
      const isPrivate  = ev.is_private;
      const creator    = ev.creator;
@@ -3595,6 +3714,28 @@
                    <span class="ev-crew-name">${Utils.escapeHtml(helper.name)}</span>
                  </div>` : ''}
              </div>` : ''}
+
+           ${!isPast && !isDone ? `
+             <div class="ev-presence-bar" data-evid="${ev.id}">
+               ${myStatus === 'participar' ? `
+                 <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Confirmado</span>
+                 ${cancelPending
+                   ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
+                   : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
+               ` : myStatus === 'nao_participar' ? `
+                 <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificou ausência</span>
+               ` : `
+                 <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
+                 <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
+               `}
+               <span class="ev-presence-count"><i class="fa-solid fa-users" style="font-size:.6rem"></i> ${presCount} confirmado${presCount!==1?'s':''}</span>
+               ${canManage ? `<button class="ev-presence-btn ev-pres-detail-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);color:var(--gold);margin-left:auto;font-size:.65rem;padding:4px 10px"><i class="fa-solid fa-eye"></i> Ver detalhes</button>` : ''}
+             </div>` : (isPast || isDone) && canManage ? `
+             <div class="ev-presence-bar" data-evid="${ev.id}">
+               <button class="ev-presence-btn ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);color:var(--gold)">
+                 <i class="fa-solid fa-clipboard-list"></i> Registrar Presenças (${presCount} confirmado${presCount!==1?'s':''})
+               </button>
+             </div>` : ''}
          </div>
        </div>`;
    }
@@ -3615,6 +3756,464 @@
        </div>`;
    }
    
+   /* ── Diretoria: painel detalhado de presenças (evento ativo/futuro) ── */
+   async function openPresenceDetailModal(eventId, evento) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:580px;background:#0e0e13;border:1px solid rgba(201,168,76,.2);max-height:88vh;display:flex;flex-direction:column">
+         <div class="modal-header" style="background:linear-gradient(135deg,rgba(201,168,76,.07),transparent);border-bottom:1px solid rgba(201,168,76,.15)">
+           <div>
+             <div class="modal-title font-cinzel" style="color:var(--gold)"><i class="fa-solid fa-users-viewfinder"></i> Detalhes de Presença</div>
+             <div style="font-size:.72rem;color:var(--text-3);margin-top:2px">${evento ? Utils.escapeHtml(evento.title) : 'Evento'}</div>
+           </div>
+           <button class="modal-close" id="pdClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" id="pdBody" style="overflow-y:auto;flex:1">
+           <div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>
+         </div>
+         <div class="modal-footer"><button class="btn btn-outline" id="pdDone">Fechar</button></div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => overlay.remove();
+     overlay.querySelector('#pdClose').addEventListener('click', close);
+     overlay.querySelector('#pdDone').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+     const [memRes, presRes, cancelRes] = await Promise.all([
+       db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
+       db.from('event_presencas').select('*').eq('event_id', eventId),
+       db.from('event_cancel_requests').select('*').eq('event_id', eventId).order('created_at',{ascending:false})
+     ]);
+
+     // Enriquecer cancel requests com nome do solicitante
+     if (cancelRes.data && cancelRes.data.length) {
+       const uids = [...new Set(cancelRes.data.map(r => r.user_id).filter(Boolean))];
+       const { data: profs } = await db.from('profiles').select('id,name').in('id', uids);
+       const pm = {}; (profs||[]).forEach(p => { pm[p.id] = p; });
+       cancelRes.data.forEach(r => { r.requester = pm[r.user_id] || null; });
+     }
+
+     const membros = memRes.data || [];
+     const presMap = {};
+     (presRes.data||[]).forEach(p => { presMap[p.user_id || p.membro_id] = p; });
+     const cancelReqs = cancelRes.data || [];
+
+     const confirmados = membros.filter(m => {
+       const s = presMap[m.id]?.status;
+       return s === 'participar' || s === 'confirmado';
+     });
+     const justificados = membros.filter(m => {
+       const s = presMap[m.id]?.status;
+       return s === 'nao_participar' || s === 'ausente' || s === 'justificado';
+     });
+     const semResp = membros.filter(m => !presMap[m.id]);
+     const cancelPend = cancelReqs.filter(r => r.status === 'pendente');
+
+     const avatarHtml = m => m.avatar_url
+       ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+       : (m.initials || Utils.getInitials(m.name));
+
+     const memberRow = (m, statusColor, statusIcon, extra = '') => `
+       <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,.02);border-radius:8px;border:1px solid var(--border-faint);margin-bottom:6px">
+         <div class="avatar" style="width:28px;height:28px;font-size:.5rem;flex-shrink:0;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${avatarHtml(m)}</div>
+         <div style="flex:1;min-width:0">
+           <div style="font-size:.82rem;font-weight:600;color:var(--text-1)">${Utils.escapeHtml(m.name)}</div>
+           ${m.role ? `<div style="font-size:.65rem;color:var(--text-3)">${Utils.escapeHtml(m.role)}</div>` : ''}
+           ${extra}
+         </div>
+         <i class="${statusIcon}" style="color:${statusColor};font-size:.8rem;flex-shrink:0"></i>
+       </div>`;
+
+     const cancelCardHtml = (r) => `
+       <div style="padding:10px 14px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:8px;margin-bottom:8px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+           <div style="font-size:.82rem;font-weight:600;color:var(--text-1)">${Utils.escapeHtml(r.requester?.name||'—')}</div>
+           <span style="font-size:.62rem;padding:2px 8px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b">${r.status === 'pendente' ? 'Pendente' : r.status === 'aprovado' ? 'Aprovado' : 'Recusado'}</span>
+         </div>
+         <div style="font-size:.78rem;color:var(--text-2);margin-bottom:8px"><i class="fa-solid fa-comment-dots" style="color:#f59e0b;margin-right:5px;font-size:.7rem"></i>${Utils.escapeHtml(r.justificativa)}</div>
+         ${r.status === 'pendente' ? `
+           <div style="display:flex;gap:6px">
+             <button class="btn btn-sm pd-cr-approve" data-rid="${r.id}" data-uid="${r.user_id}" data-eid="${r.event_id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
+             <button class="btn btn-sm pd-cr-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
+           </div>` : ''}
+       </div>`;
+
+     const sectionLabel = (label, count, color = 'var(--gold)') => `
+       <div style="font-size:.62rem;color:${color};text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin:16px 0 8px;display:flex;align-items:center;gap:8px">
+         <span>${label}</span><span style="background:rgba(255,255,255,.05);border-radius:10px;padding:1px 8px;color:var(--text-3)">${count}</span>
+         <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.08),transparent)"></div>
+       </div>`;
+
+     const body = overlay.querySelector('#pdBody');
+     body.innerHTML = `
+       <!-- Resumo -->
+       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px">
+         <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18);border-radius:10px;padding:10px;text-align:center">
+           <div style="font-size:1.3rem;font-weight:700;color:#10b981">${confirmados.length}</div>
+           <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Confirmados</div>
+         </div>
+         <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.18);border-radius:10px;padding:10px;text-align:center">
+           <div style="font-size:1.3rem;font-weight:700;color:#ef4444">${justificados.length}</div>
+           <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Justificados</div>
+         </div>
+         <div style="background:rgba(255,255,255,.03);border:1px solid var(--border-faint);border-radius:10px;padding:10px;text-align:center">
+           <div style="font-size:1.3rem;font-weight:700;color:var(--text-3)">${semResp.length}</div>
+           <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Sem resp.</div>
+         </div>
+       </div>
+
+       ${cancelPend.length ? `
+         ${sectionLabel('<i class="fa-solid fa-rotate-left"></i> Pedidos de Cancelamento', cancelPend.length, '#f59e0b')}
+         ${cancelPend.map(cancelCardHtml).join('')}
+       ` : ''}
+
+       ${confirmados.length ? `
+         ${sectionLabel('<i class="fa-solid fa-check"></i> Vão Participar', confirmados.length, '#10b981')}
+         ${confirmados.map(m => memberRow(m, '#10b981', 'fa-solid fa-check-circle')).join('')}
+       ` : ''}
+
+       ${justificados.length ? `
+         ${sectionLabel('<i class="fa-solid fa-comment-dots"></i> Justificaram Ausência', justificados.length, '#ef4444')}
+         ${justificados.map(m => {
+           const just = presMap[m.id]?.justificativa;
+           const extra = just ? `<div style="font-size:.72rem;color:var(--text-2);margin-top:3px;padding:4px 8px;background:rgba(220,38,38,.06);border-radius:5px;border-left:2px solid rgba(220,38,38,.3)"><i class="fa-solid fa-comment-dots" style="color:#ef4444;margin-right:4px;font-size:.65rem"></i>${Utils.escapeHtml(just)}</div>` : '';
+           return memberRow(m, '#ef4444', 'fa-solid fa-comment-dots', extra);
+         }).join('')}
+       ` : ''}
+
+       ${semResp.length ? `
+         ${sectionLabel('<i class="fa-solid fa-minus"></i> Sem Resposta', semResp.length, 'var(--text-3)')}
+         ${semResp.map(m => memberRow(m, 'var(--text-3)', 'fa-solid fa-minus-circle')).join('')}
+       ` : ''}
+     `;
+
+     // Cancel request handlers
+     body.querySelectorAll('.pd-cr-approve').forEach(btn => {
+       btn.addEventListener('click', async () => {
+         btn.disabled = true;
+         const [{ error: e1 }, { error: e2 }] = await Promise.all([
+           db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('user_id', btn.dataset.uid),
+           db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
+         ]);
+         if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[style*="rgba(245"]').remove(); }
+         else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+       });
+     });
+     body.querySelectorAll('.pd-cr-refuse').forEach(btn => {
+       btn.addEventListener('click', async () => {
+         btn.disabled = true;
+         const { error } = await db.from('event_cancel_requests').update({ status: 'recusado' }).eq('id', btn.dataset.rid);
+         if (!error) { Utils.showToast('Recusado.'); btn.closest('[style*="rgba(245"]').remove(); }
+         else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+       });
+     });
+   }
+
+   /* ── Presença: modal Gerenciar Presenças (evento concluído/encerrado) ── */
+   async function openPresenceManageModal(eventId, evento, onSuccess) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:560px;background:#0e0e13;border:1px solid rgba(201,168,76,.2);max-height:85vh;display:flex;flex-direction:column">
+         <div class="modal-header" style="background:linear-gradient(135deg,rgba(201,168,76,.07),transparent);border-bottom:1px solid rgba(201,168,76,.15)">
+           <div>
+             <div class="modal-title font-cinzel" style="color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Presenças</div>
+             <div style="font-size:.72rem;color:var(--text-3);margin-top:2px">${evento ? Utils.escapeHtml(evento.title) : 'Evento'}</div>
+           </div>
+           <button class="modal-close" id="pmClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" id="pmBody" style="overflow-y:auto;flex:1">
+           <div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>
+         </div>
+         <div class="modal-footer"><button class="btn btn-outline" id="pmDone">Fechar</button></div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => { overlay.remove(); onSuccess(); };
+     overlay.querySelector('#pmClose').addEventListener('click', close);
+     overlay.querySelector('#pmDone').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+     const [memRes, presRes] = await Promise.all([
+       db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
+       db.from('event_presencas').select('*').eq('event_id', eventId)
+     ]);
+
+     const membros  = memRes.data || [];
+     const presMap  = {};
+     (presRes.data||[]).forEach(p => { presMap[p.user_id || p.membro_id] = p; });
+
+     const conf  = Object.values(presMap).filter(p => p.status === 'participar' || p.status === 'confirmado').length;
+     const skip  = Object.values(presMap).filter(p => p.status === 'nao_participar' || p.status === 'ausente').length;
+     const sem   = membros.length - Object.keys(presMap).length;
+
+     const body = overlay.querySelector('#pmBody');
+
+     function statusIcon(s) {
+       if (s === 'participar' || s === 'confirmado') return '<i class="fa-solid fa-check" style="color:#10b981"></i>';
+       if (s === 'nao_participar' || s === 'ausente') return '<i class="fa-solid fa-xmark" style="color:#ef4444"></i>';
+       if (s === 'justificado') return '<i class="fa-solid fa-comment-dots" style="color:#f59e0b"></i>';
+       return '<i class="fa-solid fa-minus" style="color:var(--text-3)"></i>';
+     }
+
+     body.innerHTML = `
+       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px">
+         <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px;text-align:center">
+           <div style="font-size:1.4rem;font-weight:700;color:#10b981">${conf}</div>
+           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Presentes</div>
+         </div>
+         <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);border-radius:10px;padding:12px;text-align:center">
+           <div style="font-size:1.4rem;font-weight:700;color:#ef4444">${skip}</div>
+           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Ausentes</div>
+         </div>
+         <div style="background:rgba(255,255,255,.03);border:1px solid var(--border-faint);border-radius:10px;padding:12px;text-align:center">
+           <div style="font-size:1.4rem;font-weight:700;color:var(--text-3)">${sem}</div>
+           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Sem registro</div>
+         </div>
+       </div>
+       <div style="display:flex;flex-direction:column;gap:6px">
+         ${membros.map(m => {
+           const p = presMap[m.id];
+           const status = p?.status || null;
+           const av = m.avatar_url
+             ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+             : (m.initials || Utils.getInitials(m.name));
+           return `
+             <div class="pm-row" data-uid="${m.id}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,.02);border-radius:8px;border:1px solid var(--border-faint)">
+               <div class="avatar" style="width:28px;height:28px;font-size:.5rem;flex-shrink:0;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${av}</div>
+               <div style="flex:1;min-width:0">
+                 <div style="font-size:.82rem;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(m.name)}</div>
+                 ${m.role ? `<div style="font-size:.65rem;color:var(--text-3)">${Utils.escapeHtml(m.role)}</div>` : ''}
+               </div>
+               <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
+                 ${p?.justificativa ? `<button class="pm-btn pm-justif" data-uid="${m.id}" data-justif="${Utils.escapeHtml(p.justificativa)}" title="Ver justificativa" style="width:30px;height:30px;border-radius:7px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.1);cursor:pointer;color:#f59e0b;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s"><i class="fa-solid fa-comment-dots"></i></button>` : ''}
+                 <button class="pm-btn pm-present" data-uid="${m.id}" title="Presente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${(status==='participar'||status==='confirmado')?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${(status==='participar'||status==='confirmado')?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${(status==='participar'||status==='confirmado')?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
+                   <i class="fa-solid fa-check"></i>
+                 </button>
+                 <button class="pm-btn pm-absent" data-uid="${m.id}" title="Ausente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${(status==='nao_participar'||status==='ausente')?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${(status==='nao_participar'||status==='ausente')?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${(status==='nao_participar'||status==='ausente')?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
+                   <i class="fa-solid fa-xmark"></i>
+                 </button>
+               </div>
+             </div>`;
+         }).join('')}
+       </div>`;
+
+     async function setStatus(uid, status) {
+       const ex = presMap[uid];
+       let error;
+       if (ex) {
+         ({ error } = await db.from('event_presencas').update({ status }).eq('id', ex.id));
+         if (!error) presMap[uid].status = status;
+       } else {
+         const { data, error: e } = await db.from('event_presencas').insert({
+           event_id: eventId, user_id: uid, status
+         }).select().single();
+         error = e;
+         if (!error) presMap[uid] = data;
+       }
+       if (error) { Utils.showToast('Erro ao registrar.', 'error'); return; }
+
+       // Update row visually
+       const row = body.querySelector(`.pm-row[data-uid="${uid}"]`);
+       if (row) {
+         const pBtn = row.querySelector('.pm-present');
+         const aBtn = row.querySelector('.pm-absent');
+         const isP = status === 'participar' || status === 'confirmado';
+         const isA = status === 'nao_participar' || status === 'ausente';
+         pBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isP?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${isP?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isP?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
+         aBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isA?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${isA?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isA?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
+       }
+     }
+
+     body.querySelectorAll('.pm-present').forEach(btn => {
+       btn.addEventListener('click', () => setStatus(btn.dataset.uid, 'confirmado'));
+     });
+     body.querySelectorAll('.pm-absent').forEach(btn => {
+       btn.addEventListener('click', () => setStatus(btn.dataset.uid, 'ausente'));
+     });
+     body.querySelectorAll('.pm-justif').forEach(btn => {
+       btn.addEventListener('click', e => {
+         e.stopPropagation();
+         const tip = document.createElement('div');
+         tip.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)';
+         tip.innerHTML = `<div style="max-width:360px;width:90%;background:#0e0e13;border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+           <div style="font-size:.62rem;color:#f59e0b;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:10px"><i class="fa-solid fa-comment-dots"></i> Justificativa</div>
+           <div style="font-size:.88rem;color:var(--text-2);line-height:1.6">${Utils.escapeHtml(btn.dataset.justif)}</div>
+           <button style="margin-top:16px;width:100%;padding:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;cursor:pointer;font-size:.82rem">Fechar</button>
+         </div>`;
+         document.body.appendChild(tip);
+         const closeTip = () => tip.remove();
+         tip.querySelector('button').addEventListener('click', closeTip);
+         tip.addEventListener('click', e => { if (e.target === tip) closeTip(); });
+       });
+     });
+   }
+
+   /* ── Presença: modal Não Participar ── */
+   function openSkipModal(eventId, profile, onSuccess) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:440px;background:#0e0e13;border:1px solid rgba(220,38,38,.25)">
+         <div class="modal-header" style="border-bottom:1px solid rgba(220,38,38,.15)">
+           <div class="modal-title" style="color:#ef4444"><i class="fa-solid fa-xmark-circle"></i> Justificar Ausência</div>
+           <button class="modal-close" id="skipClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body">
+           <div class="form-group">
+             <label class="form-label">Motivo da ausência <span style="color:var(--red-bright)">*</span></label>
+             <textarea class="form-input form-textarea" id="skipReason" style="min-height:90px" placeholder="Explique o motivo..."></textarea>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-ghost" id="skipCancel">Cancelar</button>
+           <button class="btn" id="skipSave" style="background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.35);color:#ef4444"><i class="fa-solid fa-floppy-disk"></i> Confirmar</button>
+         </div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => overlay.remove();
+     overlay.querySelector('#skipClose').addEventListener('click', close);
+     overlay.querySelector('#skipCancel').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+     overlay.querySelector('#skipSave').addEventListener('click', async () => {
+       const reason = overlay.querySelector('#skipReason').value.trim();
+       if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
+       const btn = overlay.querySelector('#skipSave');
+       btn.disabled = true;
+       const { error } = await db.from('event_presencas').upsert(
+         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', justificativa: reason },
+         { onConflict: 'event_id,user_id', ignoreDuplicates: false }
+       );
+       if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
+       else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
+     });
+   }
+
+   /* ── Presença: modal Solicitar Cancelamento ── */
+   function openPresenceCancelModal(eventId, profile, onSuccess) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:440px;background:#0e0e13;border:1px solid rgba(245,158,11,.2)">
+         <div class="modal-header" style="border-bottom:1px solid rgba(245,158,11,.12)">
+           <div class="modal-title" style="color:#f59e0b"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</div>
+           <button class="modal-close" id="pcClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body">
+           <div style="font-size:.81rem;color:var(--text-2);margin-bottom:14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;padding:10px 14px">
+             <i class="fa-solid fa-circle-info" style="color:#f59e0b;margin-right:6px"></i>
+             Sua solicitação será analisada pela Diretoria. O cancelamento só será efetivado após aprovação.
+           </div>
+           <div class="form-group">
+             <label class="form-label">Motivo <span style="color:var(--red-bright)">*</span></label>
+             <textarea class="form-input form-textarea" id="pcReason" style="min-height:90px" placeholder="Por que deseja cancelar sua participação?"></textarea>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-ghost" id="pcCancel">Cancelar</button>
+           <button class="btn btn-gold" id="pcSave"><i class="fa-solid fa-paper-plane"></i> Enviar Solicitação</button>
+         </div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => overlay.remove();
+     overlay.querySelector('#pcClose').addEventListener('click', close);
+     overlay.querySelector('#pcCancel').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+     overlay.querySelector('#pcSave').addEventListener('click', async () => {
+       const reason = overlay.querySelector('#pcReason').value.trim();
+       if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
+       const btn = overlay.querySelector('#pcSave');
+       btn.disabled = true;
+       const { error } = await db.from('event_cancel_requests').insert({
+         user_id: profile.id, event_id: eventId, justificativa: reason, status: 'pendente'
+       });
+       if (!error) { Utils.showToast('Solicitação enviada à Diretoria!'); close(); onSuccess(); }
+       else { Utils.showToast('Erro ao enviar.', 'error'); btn.disabled = false; }
+     });
+   }
+
+   /* ── Diretoria: modal Pedidos de Cancelamento ── */
+   async function openCancelRequestsModal(onSuccess) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:560px;background:#0e0e13;border:1px solid rgba(201,168,76,.2)">
+         <div class="modal-header" style="border-bottom:1px solid rgba(201,168,76,.15)">
+           <div class="modal-title font-cinzel" style="color:var(--gold)"><i class="fa-solid fa-bell"></i> Pedidos de Cancelamento</div>
+           <button class="modal-close" id="crClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" id="crBody">
+           <div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>
+         </div>
+         <div class="modal-footer"><button class="btn btn-outline" id="crDone">Fechar</button></div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => { overlay.remove(); onSuccess(); };
+     overlay.querySelector('#crClose').addEventListener('click', close);
+     overlay.querySelector('#crDone').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+     const { data: reqs } = await db.from('event_cancel_requests')
+       .select('*')
+       .eq('status','pendente').order('created_at',{ascending:false});
+
+     // Enriquecer com nome do solicitante e título do evento
+     if (reqs && reqs.length) {
+       const uids = [...new Set(reqs.map(r => r.user_id).filter(Boolean))];
+       const eids = [...new Set(reqs.map(r => r.event_id).filter(Boolean))];
+       const [{ data: profs }, { data: evs }] = await Promise.all([
+         db.from('profiles').select('id,name,initials,color').in('id', uids),
+         db.from('events').select('id,title,event_date').in('id', eids)
+       ]);
+       const pm = {}; (profs||[]).forEach(p => { pm[p.id] = p; });
+       const em = {}; (evs||[]).forEach(e => { em[e.id] = e; });
+       reqs.forEach(r => { r.requester = pm[r.user_id]||null; r.ev = em[r.event_id]||null; });
+     }
+
+     const body = overlay.querySelector('#crBody');
+     if (!reqs?.length) {
+       body.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-state-text">Nenhuma solicitação pendente.</div></div>';
+       return;
+     }
+
+     body.innerHTML = reqs.map(r => `
+       <div class="card" style="margin-bottom:10px" data-rid="${r.id}" data-uid="${r.user_id}" data-eid="${r.event_id}">
+         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
+           <div>
+             <div style="font-weight:600;color:var(--text-1)">${Utils.escapeHtml(r.requester?.name||'—')}</div>
+             <div style="font-size:.72rem;color:var(--text-3)"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title||'—')} · ${Utils.formatDate(r.ev?.event_date)}</div>
+           </div>
+         </div>
+         <div style="font-size:.8rem;color:var(--text-2);background:rgba(255,255,255,.03);border-radius:6px;padding:8px 12px;margin-bottom:10px;border:1px solid var(--border-faint)">
+           <i class="fa-solid fa-comment-dots" style="color:var(--gold);margin-right:6px;font-size:.7rem"></i>${Utils.escapeHtml(r.justificativa)}
+         </div>
+         <div style="display:flex;gap:8px">
+           <button class="btn btn-sm cr-approve" data-rid="${r.id}" data-uid="${r.user_id}" data-eid="${r.event_id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
+           <button class="btn btn-sm cr-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
+         </div>
+       </div>`).join('');
+
+     body.querySelectorAll('.cr-approve').forEach(btn => {
+       btn.addEventListener('click', async () => {
+         btn.disabled = true;
+         const [{ error: e1 }, { error: e2 }] = await Promise.all([
+           db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('user_id', btn.dataset.uid),
+           db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
+         ]);
+         if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[data-rid]').remove(); }
+         else { Utils.showToast('Erro ao aprovar.', 'error'); btn.disabled = false; }
+       });
+     });
+     body.querySelectorAll('.cr-refuse').forEach(btn => {
+       btn.addEventListener('click', async () => {
+         btn.disabled = true;
+         const { error } = await db.from('event_cancel_requests').update({ status: 'recusado' }).eq('id', btn.dataset.rid);
+         if (!error) { Utils.showToast('Solicitação recusada.'); btn.closest('[data-rid]').remove(); }
+         else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+       });
+     });
+   }
+
    async function openNewEventModal(profile, onSuccess) {
      const modal = document.getElementById('newEventModal');
      modal.classList.add('open');
@@ -4867,7 +5466,7 @@
          .gte('week_start', mesStart).lte('week_start', mesEnd)
          .order('week_start',{ascending:false}).limit(1),
        // Presenças do mês para calcular desempenho
-       db.from('event_presencas').select('membro_id,status'),
+       db.from('event_presencas').select('user_id,membro_id,status'),
        // Atividades do mês para calcular desempenho
        db.from('activities').select('assigned_to,status'),
      ]);
@@ -5001,7 +5600,7 @@
        // Presenças confirmadas por membro
        const presConf = {};
        presencas.forEach(p => {
-         if (p.status==='confirmado') presConf[p.membro_id] = (presConf[p.membro_id]||0)+1;
+         if (p.status==='confirmado') { const uid = p.user_id||p.membro_id; if(uid) presConf[uid] = (presConf[uid]||0)+1; }
        });
    
        // Atividades concluídas por membro

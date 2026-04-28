@@ -604,7 +604,7 @@ async function initPresencas() {
           presencaMap[c.event_id][c.status]=(presencaMap[c.event_id][c.status]||0)+1;
         });
       } else {
-        const {data:mine}=await db.from('event_presencas').select('event_id,status').eq('membro_id',profile.id).in('event_id',eIds);
+        const {data:mine}=await db.from('event_presencas').select('event_id,status').eq('user_id',profile.id).in('event_id',eIds);
         (mine||[]).forEach(p=>{presencaMap[p.event_id]=p.status;});
       }
     }
@@ -2140,7 +2140,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const routes = {
     busca:      initBusca,
     feed:       initFeed,
-    presencas:  initPresencas,
+    // presencas: removida — presença centralizada em Eventos
     // desempenho: gerenciado por modules4.js
     onboarding: initOnboarding,
     ranking:    initRanking,

@@ -1092,7 +1092,7 @@ async function openAlertDetailModal(type, items, ctx) {
         }).join('')}
       </div>
       <div class="sa3-modal-sec" style="text-align:center">
-        <a href="presencas.html" class="btn btn-primary"><i class="fa-solid fa-clipboard-list"></i> Ir para Presenças</a>
+        <a href="eventos.html" class="btn btn-primary"><i class="fa-solid fa-calendar-days"></i> Ir para Eventos</a>
       </div>`;
 
   } else if (type === 'sem-atividade') {
@@ -1239,7 +1239,7 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
           presencaMap[c.event_id][c.status] = (presencaMap[c.event_id][c.status] || 0) + 1;
         });
       } else {
-        const { data: mine } = await db.from('event_presencas').select('event_id,status').eq('membro_id', profile.id).in('event_id', eIds);
+        const { data: mine } = await db.from('event_presencas').select('event_id,status').eq('user_id', profile.id).in('event_id', eIds);
         (mine || []).forEach(p => { presencaMap[p.event_id] = p.status; });
       }
     }
