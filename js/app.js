@@ -977,9 +977,10 @@
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
        if (!canGerenciar) {
-         const { data: collabRows } = await db.from('activity_collaborators').select('activity_id').eq('user_id', profile.id);
-         const collabActIds = new Set((collabRows||[]).map(r => r.activity_id));
-         acts = (acts||[]).filter(a => a.assigned_to === profile.id || collabActIds.has(a.id));
+         acts = (acts||[]).filter(a =>
+           a.assigned_to === profile.id ||
+           (a.is_collaborative && Array.isArray(a.collab_members) && a.collab_members.includes(profile.id))
+         );
        }
        if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
    
@@ -1269,11 +1270,10 @@
      const passed  = Utils.isDeadlinePassed(act);
      const hasExt  = Utils.hasExtendedDeadline(act);
      const canSubmit = Utils.isActivityOpen(act);
-     // Busca co-membros desta atividade
-     const { data: collabRows } = await db.from('activity_collaborators').select('user_id').eq('activity_id', id);
-     const collabMembers  = (collabRows||[]).map(r => r.user_id);
-     const isCollaborative = collabMembers.length > 0;
-     const isOwner = act.assigned_to === profile.id || collabMembers.includes(profile.id);
+     const isCollaborative = act.is_collaborative === true;
+     const collabMembers  = Array.isArray(act.collab_members) ? act.collab_members : [];
+     const isOwner = act.assigned_to === profile.id ||
+                     (isCollaborative && collabMembers.includes(profile.id));
      const isLateSubmission = passed && hasExt && canSubmit;
    
      document.getElementById('modalTitle').textContent = act.title;
@@ -1418,7 +1418,7 @@
    
      modal.classList.add('open');
 
-     // Carregar nomes dos membros colaborativos (collabMembers já populado acima)
+     // Carregar nomes dos membros colaborativos
      if (isCollaborative && collabMembers.length) {
        db.from('profiles').select('id,name').in('id', collabMembers).then(({ data: cProfs }) => {
          const el = document.getElementById('collab-members-row');
@@ -1875,18 +1875,15 @@
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
 
          const payload = {
-           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority
+           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority,
+           is_collaborative: true, collab_members: collabIds
          };
          if (opens)  payload.opens_at  = new Date(opens).toISOString();
          if (closes) payload.closes_at = new Date(closes).toISOString();
 
-         const { data: newAct, error } = await db.from('activities').insert(payload).select('id').single();
+         const { error } = await db.from('activities').insert(payload);
 
-         if (!error && newAct) {
-           // Registra co-membros na tabela auxiliar
-           const collabRows = collabIds.map(uid => ({ activity_id: newAct.id, user_id: uid }));
-           await db.from('activity_collaborators').insert(collabRows);
-
+         if (!error) {
            const allMembers = [ownerId, ...collabIds];
            await Promise.all(allMembers.map(uid =>
              NotifPrefs.dispatch(uid, {

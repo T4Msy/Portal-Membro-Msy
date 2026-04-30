@@ -102,10 +102,10 @@ async function initReunioes() {
 
     const schedQuery = isDiretoria
       ? db.from('scheduled_meetings')
-          .select('*')
+          .select('*, member:assigned_to(name,initials,color,avatar_url)')
           .order('meeting_date', { ascending: false })
       : db.from('scheduled_meetings')
-          .select('*')
+          .select('*, member:assigned_to(name,initials,color,avatar_url)')
           .eq('assigned_to', profile.id)
           .order('meeting_date', { ascending: false });
 
@@ -113,17 +113,6 @@ async function initReunioes() {
 
     if (errR) console.error('[MSY Reuniões] Erro meetings:', errR);
     if (errP) console.error('[MSY Reuniões] Erro scheduled_meetings:', errP);
-
-    // Enrich pessoais com nome do membro (busca manual para garantir compatibilidade)
-    if (isDiretoria && (pessoais||[]).length) {
-      const uids = [...new Set(pessoais.map(r => r.assigned_to).filter(Boolean))];
-      if (uids.length) {
-        const { data: profs } = await db.from('profiles').select('id,name,initials,color,avatar_url').in('id', uids);
-        const profMap = {};
-        (profs||[]).forEach(p => { profMap[p.id] = p; });
-        pessoais.forEach(r => { r.member = profMap[r.assigned_to] || null; });
-      }
-    }
 
     const today  = new Date().toISOString().split('T')[0];
     const futG   = (reunioes||[]).filter(r => r.meeting_date >= today && r.status !== 'realizada');
@@ -154,25 +143,23 @@ async function initReunioes() {
     };
 
     const pessoalCard = (r) => {
-      const membroNome = r.member?.name || null;
+      const nome = isDiretoria ? (r.member?.name || '—') : 'Diretoria';
       const statusBadge = r.status === 'concluida'
         ? `<span class="meet-badge meet-badge-approved"><i class="fa-solid fa-circle-check"></i> Concluída</span>`
         : r.status === 'cancelada'
         ? `<span class="meet-badge meet-badge-refused"><i class="fa-solid fa-xmark"></i> Cancelada</span>`
         : `<span class="meet-badge meet-badge-personal"><i class="fa-solid fa-clock"></i> Agendada</span>`;
-      const cardTitle = isDiretoria
-        ? (membroNome ? `Reunião com ${Utils.escapeHtml(membroNome)}` : 'Reunião com Membro')
-        : 'Reunião com a Diretoria';
       return `<div class="meet-card" style="border-color:rgba(201,168,76,.18)"><div class="meet-card-inner">
         <div class="meet-card-top">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-              <div class="meet-card-title" style="font-size:.88rem">${cardTitle}</div>
+              <div class="meet-card-title" style="font-size:.88rem">Reunião com a Diretoria</div>
               ${statusBadge}
             </div>
             <div class="meet-card-meta">
               <span><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(r.meeting_date)}</span>
               <span><i class="fa-regular fa-clock"></i> ${r.meeting_time || '—'}</span>
+              <span><i class="fa-solid fa-user"></i> ${Utils.escapeHtml(nome)}</span>
             </div>
           </div>
           ${isDiretoria ? `<div style="display:flex;gap:6px">
