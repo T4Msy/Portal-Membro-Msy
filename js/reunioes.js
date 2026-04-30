@@ -102,10 +102,10 @@ async function initReunioes() {
 
     const schedQuery = isDiretoria
       ? db.from('scheduled_meetings')
-          .select('*')
+          .select('*, member:assigned_to(name,initials,color,avatar_url)')
           .order('meeting_date', { ascending: false })
       : db.from('scheduled_meetings')
-          .select('*')
+          .select('*, member:assigned_to(name,initials,color,avatar_url)')
           .eq('assigned_to', profile.id)
           .order('meeting_date', { ascending: false });
 
@@ -874,6 +874,11 @@ async function openPresenceManageModal(eventId, evento, onSuccess) {
 function openNewAtaModal(profile, onSuccess) {
   const modal = document.getElementById('newAtaModal');
   modal.classList.add('open');
+
+  const closeAta = () => modal.classList.remove('open');
+  document.getElementById('newAtaClose').onclick  = closeAta;
+  document.getElementById('newAtaCancel').onclick = closeAta;
+  modal.onclick = e => { if (e.target === modal) closeAta(); };
 
   document.getElementById('newAtaSave').onclick = async () => {
     const title        = document.getElementById('ata-title').value.trim();

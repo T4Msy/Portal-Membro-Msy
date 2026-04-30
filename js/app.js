@@ -1584,13 +1584,19 @@
        }
      });
    
-     document.getElementById('extDeadlineBtn')?.addEventListener('click', async () => {
-       const val = document.getElementById('extDeadlineInput').value;
-       if (!val) { Utils.showToast('Selecione uma data.','error'); return; }
-       const { error } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
-       if (!error) { Utils.showToast('Prazo estendido!'); setTimeout(() => initAtividades(), 300); modal.classList.remove('open'); }
-       else Utils.showToast('Erro ao estender prazo.', 'error');
-     });
+     const extBtn = document.getElementById('extDeadlineBtn');
+     if (extBtn) {
+       const applyExtend = async (e) => {
+         e.preventDefault();
+         const val = document.getElementById('extDeadlineInput').value;
+         if (!val) { Utils.showToast('Selecione uma data.','error'); return; }
+         const { error } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
+         if (!error) { Utils.showToast('Prazo estendido!'); setTimeout(() => initAtividades(), 300); modal.classList.remove('open'); }
+         else Utils.showToast('Erro ao estender prazo.', 'error');
+       };
+       extBtn.addEventListener('click', applyExtend);
+       extBtn.addEventListener('touchend', applyExtend, { passive: false });
+     }
    }
    
    async function openNewActivityModal(profile, onSuccess) {
@@ -1604,11 +1610,15 @@
          <input class="form-input" id="na-title" placeholder="Nome da atividade">
        </div>
        <div class="form-group" style="margin-bottom:14px">
-         <label class="form-label">Atribuir para *</label>
-         <select class="form-input form-select" id="na-member">
-           <option value="">Selecione um membro...</option>
-           ${(members||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)} — ${Utils.escapeHtml(m.role)}</option>`).join('')}
-         </select>
+         <label class="form-label">Atribuir para * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">(selecione um ou mais)</span></label>
+         <div id="na-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:4px 2px">
+           ${(members||[]).map(m => `
+             <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 12px;font-size:.83rem;transition:border-color .15s" onmouseenter="this.style.borderColor='rgba(201,168,76,.35)'" onmouseleave="this.style.borderColor='var(--border-faint)'">
+               <input type="checkbox" class="na-member-cb" value="${m.id}" style="accent-color:var(--red-bright);width:15px;height:15px;flex-shrink:0">
+               <span style="color:var(--text-1);font-weight:500">${Utils.escapeHtml(m.name)}</span>
+               <span style="color:var(--text-3);font-size:.75rem;margin-left:auto">${Utils.escapeHtml(m.role)}</span>
+             </label>`).join('')}
+         </div>
        </div>
        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
          <div class="form-group">
@@ -1668,47 +1678,54 @@
    
      document.getElementById('createActivityBtn').addEventListener('click', async () => {
        const title    = document.getElementById('na-title').value.trim();
-       const memberId = document.getElementById('na-member').value;
+       const memberIds = [...document.querySelectorAll('.na-member-cb:checked')].map(cb => cb.value);
        const deadline = document.getElementById('na-deadline').value;
        const priority = document.getElementById('na-priority').value;
        const desc     = document.getElementById('na-desc').value.trim();
        const opens    = document.getElementById('na-opens').value;
        const closes   = document.getElementById('na-closes').value;
    
-       if (!title || !memberId || !deadline || !desc) {
-         Utils.showToast('Preencha todos os campos obrigatórios.', 'error'); return;
+       if (!title || !memberIds.length || !deadline || !desc) {
+         Utils.showToast('Preencha todos os campos e selecione ao menos um membro.', 'error'); return;
        }
    
        const btn = document.getElementById('createActivityBtn');
-       btn.disabled = true; btn.textContent = 'Criando...';
+       btn.disabled = true;
+       btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Criando${memberIds.length > 1 ? ` (${memberIds.length})` : ''}...`;
    
-       const payload = { title, description: desc, assigned_to: memberId, assigned_by: profile.id, deadline, priority };
-       if (opens) payload.opens_at = new Date(opens).toISOString();
-       if (closes) payload.closes_at = new Date(closes).toISOString();
+       const channels = [];
+       if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
+       if (document.getElementById('na-notif-email')?.checked) channels.push('email');
    
-       const { error } = await db.from('activities').insert(payload);
+       const payloads = memberIds.map(memberId => {
+         const p = { title, description: desc, assigned_to: memberId, assigned_by: profile.id, deadline, priority };
+         if (opens)  p.opens_at  = new Date(opens).toISOString();
+         if (closes) p.closes_at = new Date(closes).toISOString();
+         return p;
+       });
+   
+       const { error } = await db.from('activities').insert(payloads);
    
        if (!error) {
-         // Coleta canais selecionados pela Diretoria
-         const channels = [];
-         if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
-         if (document.getElementById('na-notif-email')?.checked) channels.push('email');
-   
-         // Dispara notificação respeitando prefs do membro
-         await NotifPrefs.dispatch(memberId, {
-           message:  `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
-           type:     'activity',
-           icon:     '📋',
-           link:     'atividades.html',
-           channels,
-         });
+         // Notifica todos os membros selecionados
+         await Promise.all(memberIds.map(memberId =>
+           NotifPrefs.dispatch(memberId, {
+             message:  `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+             type:     'activity',
+             icon:     '📋',
+             link:     'atividades.html',
+             channels,
+           })
+         ));
    
          modal.classList.remove('open');
-         Utils.showToast('Atividade criada com sucesso!');
+         Utils.showToast(memberIds.length > 1
+           ? `Atividade criada para ${memberIds.length} membros!`
+           : 'Atividade criada com sucesso!');
          setTimeout(onSuccess, 300);
        } else {
          Utils.showToast('Erro ao criar atividade.', 'error');
-         btn.disabled = false; btn.textContent = 'Criar Atividade';
+         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
        }
      });
    }
