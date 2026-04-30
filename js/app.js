@@ -1419,8 +1419,10 @@
      modal.classList.add('open');
 
      // Carregar nomes dos membros colaborativos
-     if (isCollaborative && collabMembers.length) {
-       db.from('profiles').select('id,name').in('id', collabMembers).then(({ data: cProfs }) => {
+     if (isCollaborative) {
+       // Busca nomes de todos: assigned_to + co-membros
+       const allIds = [...new Set([act.assigned_to, ...collabMembers].filter(Boolean))];
+       db.from('profiles').select('id,name').in('id', allIds).then(({ data: cProfs }) => {
          const el = document.getElementById('collab-members-row');
          if (el) el.textContent = (cProfs||[]).map(p => p.name).join(', ') || '—';
        });
