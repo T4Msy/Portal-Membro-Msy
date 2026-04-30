@@ -1636,7 +1636,11 @@
          if (!val) { Utils.showToast('Selecione uma data.','error'); _extLock = false; return; }
          extBtn.disabled = true;
          extBtn.textContent = '...';
-         const { error: extErr } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
+         const { data: extData, error: extErr, count: extCount } = await db.from('activities')
+           .update({ extended_deadline: val }, { count: 'exact' })
+           .eq('id', id)
+           .select('id, extended_deadline');
+         console.log('[MSY extDeadline] id:', id, 'val:', val, 'data:', extData, 'count:', extCount, 'err:', extErr);
          if (!extErr) {
            Utils.showToast('Prazo estendido!');
            document.getElementById('activityModal')?.classList.remove('open');
