@@ -1610,15 +1610,23 @@
          <input class="form-input" id="na-title" placeholder="Nome da atividade">
        </div>
        <div class="form-group" style="margin-bottom:14px">
-         <label class="form-label">Atribuir para * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">(selecione um ou mais)</span></label>
-         <div id="na-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:4px 2px">
-           ${(members||[]).map(m => `
-             <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 12px;font-size:.83rem;transition:border-color .15s" onmouseenter="this.style.borderColor='rgba(201,168,76,.35)'" onmouseleave="this.style.borderColor='var(--border-faint)'">
-               <input type="checkbox" class="na-member-cb" value="${m.id}" style="accent-color:var(--red-bright);width:15px;height:15px;flex-shrink:0">
-               <span style="color:var(--text-1);font-weight:500">${Utils.escapeHtml(m.name)}</span>
-               <span style="color:var(--text-3);font-size:.75rem;margin-left:auto">${Utils.escapeHtml(m.role)}</span>
-             </label>`).join('')}
+         <label class="form-label">Atribuir para * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">— múltiplos permitidos</span></label>
+         <div id="na-members-wrap" style="position:relative">
+           <div id="na-members-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:42px;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 10px;cursor:pointer;align-items:center;transition:border-color .15s" onclick="document.getElementById('na-members-dropdown').style.display=document.getElementById('na-members-dropdown').style.display==='block'?'none':'block'">
+             <span id="na-members-placeholder" style="color:var(--text-3);font-size:.85rem">Selecione os membros...</span>
+           </div>
+           <div id="na-members-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--black-2,#0e0e13);border:1px solid rgba(201,168,76,.25);border-radius:var(--radius);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)">
+             <div style="padding:6px">
+               ${(members||[]).map(m => `
+                 <div class="na-member-opt" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background='rgba(201,168,76,.08)'" onmouseleave="this.style.background=this.classList.contains('selected')?'rgba(201,168,76,.1)':'transparent'">
+                   <div style="width:16px;height:16px;border-radius:4px;border:1px solid var(--border-faint);background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.65rem" class="na-chk-box"></div>
+                   <span style="color:var(--text-1);font-size:.85rem;font-weight:500;flex:1">${Utils.escapeHtml(m.name)}</span>
+                   <span style="color:var(--text-3);font-size:.72rem">${Utils.escapeHtml(m.role)}</span>
+                 </div>`).join('')}
+             </div>
+           </div>
          </div>
+         <input type="hidden" id="na-member-ids" value="">
        </div>
        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
          <div class="form-group">
@@ -1673,12 +1681,74 @@
        <button class="btn btn-primary" id="createActivityBtn"><i class="fa-solid fa-plus"></i> Criar Atividade</button>
      `;
      modal.classList.add('open');
+
+     // ── Multi-select dropdown logic ──
+     (() => {
+       const selectedIds = new Set();
+       const tags  = document.getElementById('na-members-tags');
+       const drop  = document.getElementById('na-members-dropdown');
+       const ph    = document.getElementById('na-members-placeholder');
+
+       function updateTags() {
+         // Remove existing tag spans
+         tags.querySelectorAll('.na-tag').forEach(t => t.remove());
+         if (selectedIds.size === 0) {
+           ph.style.display = '';
+         } else {
+           ph.style.display = 'none';
+           selectedIds.forEach(id => {
+             const opt = drop.querySelector(`.na-member-opt[data-id="${id}"]`);
+             if (!opt) return;
+             const tag = document.createElement('span');
+             tag.className = 'na-tag';
+             tag.dataset.id = id;
+             tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.35);border-radius:20px;padding:3px 10px 3px 10px;font-size:.75rem;color:var(--gold);font-weight:600;cursor:default';
+             tag.innerHTML = `${opt.dataset.name} <span class="na-tag-rm" style="cursor:pointer;opacity:.7;margin-left:2px;font-size:.8rem" data-id="${id}">×</span>`;
+             tag.querySelector('.na-tag-rm').addEventListener('click', e => {
+               e.stopPropagation();
+               selectedIds.delete(id);
+               const o = drop.querySelector(`.na-member-opt[data-id="${id}"]`);
+               if (o) { o.classList.remove('selected'); o.querySelector('.na-chk-box').innerHTML=''; o.style.background='transparent'; }
+               updateTags();
+             });
+             tags.appendChild(tag);
+           });
+         }
+         document.getElementById('na-member-ids').value = [...selectedIds].join(',');
+       }
+
+       drop.querySelectorAll('.na-member-opt').forEach(opt => {
+         opt.addEventListener('click', () => {
+           const id = opt.dataset.id;
+           if (selectedIds.has(id)) {
+             selectedIds.delete(id);
+             opt.classList.remove('selected');
+             opt.querySelector('.na-chk-box').innerHTML = '';
+             opt.style.background = 'transparent';
+           } else {
+             selectedIds.add(id);
+             opt.classList.add('selected');
+             opt.querySelector('.na-chk-box').innerHTML = '<i class="fa-solid fa-check" style="color:var(--gold)"></i>';
+             opt.style.background = 'rgba(201,168,76,.1)';
+           }
+           updateTags();
+         });
+       });
+
+       // Close dropdown on outside click
+       document.addEventListener('click', function closeDropdown(e) {
+         if (!document.getElementById('na-members-wrap')?.contains(e.target)) {
+           drop.style.display = 'none';
+           document.removeEventListener('click', closeDropdown);
+         }
+       }, true);
+     })();
    
      document.getElementById('cancelModal').addEventListener('click', () => modal.classList.remove('open'));
    
      document.getElementById('createActivityBtn').addEventListener('click', async () => {
        const title    = document.getElementById('na-title').value.trim();
-       const memberIds = [...document.querySelectorAll('.na-member-cb:checked')].map(cb => cb.value);
+       const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
        const deadline = document.getElementById('na-deadline').value;
        const priority = document.getElementById('na-priority').value;
        const desc     = document.getElementById('na-desc').value.trim();
