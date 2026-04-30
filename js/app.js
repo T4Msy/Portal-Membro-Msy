@@ -977,10 +977,9 @@
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
        if (!canGerenciar) {
-         acts = (acts||[]).filter(a =>
-           a.assigned_to === profile.id ||
-           (a.is_collaborative && Array.isArray(a.collab_members) && a.collab_members.includes(profile.id))
-         );
+         const { data: collabRows } = await db.from('activity_collaborators').select('activity_id').eq('user_id', profile.id);
+         const collabActIds = new Set((collabRows||[]).map(r => r.activity_id));
+         acts = (acts||[]).filter(a => a.assigned_to === profile.id || collabActIds.has(a.id));
        }
        if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
    
@@ -1270,10 +1269,11 @@
      const passed  = Utils.isDeadlinePassed(act);
      const hasExt  = Utils.hasExtendedDeadline(act);
      const canSubmit = Utils.isActivityOpen(act);
-     const isCollaborative = act.is_collaborative === true;
-     const collabMembers  = Array.isArray(act.collab_members) ? act.collab_members : [];
-     const isOwner = act.assigned_to === profile.id ||
-                     (isCollaborative && collabMembers.includes(profile.id));
+     // Busca co-membros via junction table
+     const { data: collabRows } = await db.from('activity_collaborators').select('user_id').eq('activity_id', id);
+     const collabMembers   = (collabRows||[]).map(r => r.user_id);
+     const isCollaborative = collabMembers.length > 0;
+     const isOwner = act.assigned_to === profile.id || collabMembers.includes(profile.id);
      const isLateSubmission = passed && hasExt && canSubmit;
    
      document.getElementById('modalTitle').textContent = act.title;
@@ -1636,9 +1636,16 @@
          if (!val) { Utils.showToast('Selecione uma data.','error'); _extLock = false; return; }
          extBtn.disabled = true;
          extBtn.textContent = '...';
-         const { error } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
-         if (!error) { Utils.showToast('Prazo estendido!'); setTimeout(() => initAtividades(), 300); modal.classList.remove('open'); }
-         else { Utils.showToast('Erro ao estender prazo.', 'error'); extBtn.disabled = false; extBtn.textContent = 'Aplicar'; }
+         const { error: extErr } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
+         if (!extErr) {
+           Utils.showToast('Prazo estendido!');
+           document.getElementById('activityModal')?.classList.remove('open');
+           setTimeout(() => initAtividades(), 300);
+         } else {
+           console.error('[MSY] extended_deadline error:', extErr);
+           Utils.showToast('Erro ao estender prazo.', 'error');
+           extBtn.disabled = false; extBtn.textContent = 'Aplicar';
+         }
          _extLock = false;
        };
        extBtn.addEventListener('touchend', (e) => { e.preventDefault(); applyExtend(); }, { passive: false });
@@ -1875,15 +1882,18 @@
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
 
          const payload = {
-           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority,
-           is_collaborative: true, collab_members: collabIds
+           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority
          };
          if (opens)  payload.opens_at  = new Date(opens).toISOString();
          if (closes) payload.closes_at = new Date(closes).toISOString();
 
-         const { error } = await db.from('activities').insert(payload);
+         const { data: newAct, error } = await db.from('activities').insert(payload).select('id').single();
 
-         if (!error) {
+         if (!error && newAct) {
+           // Registra co-membros na tabela auxiliar
+           await db.from('activity_collaborators').insert(
+             collabIds.map(uid => ({ activity_id: newAct.id, user_id: uid }))
+           );
            const allMembers = [ownerId, ...collabIds];
            await Promise.all(allMembers.map(uid =>
              NotifPrefs.dispatch(uid, {
