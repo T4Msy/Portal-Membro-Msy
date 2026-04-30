@@ -970,11 +970,18 @@
        let query = db.from('activities')
          .select('*, assigned_by_profile:assigned_by(name,initials,color), assigned_to_profile:assigned_to(name,initials)')
          .order('created_at', { ascending: false });
-   
-       if (!canGerenciar) query = query.eq('assigned_to', profile.id);
+
        if (activeFilter !== 'Todos') query = query.eq('status', activeFilter);
-   
-       const { data: acts, error } = await query;
+
+       let { data: acts, error } = await query;
+
+       // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
+       if (!canGerenciar) {
+         acts = (acts||[]).filter(a =>
+           a.assigned_to === profile.id ||
+           (a.is_collaborative && Array.isArray(a.collab_members) && a.collab_members.includes(profile.id))
+         );
+       }
        if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
    
        if (!acts || acts.length === 0) {
@@ -1263,7 +1270,10 @@
      const passed  = Utils.isDeadlinePassed(act);
      const hasExt  = Utils.hasExtendedDeadline(act);
      const canSubmit = Utils.isActivityOpen(act);
-     const isOwner = act.assigned_to === profile.id;
+     const isCollaborative = act.is_collaborative === true;
+     const collabMembers  = Array.isArray(act.collab_members) ? act.collab_members : [];
+     const isOwner = act.assigned_to === profile.id ||
+                     (isCollaborative && collabMembers.includes(profile.id));
      const isLateSubmission = passed && hasExt && canSubmit;
    
      document.getElementById('modalTitle').textContent = act.title;
@@ -1307,6 +1317,12 @@
          <span class="modal-detail-label">Atribuído por:</span>
          <span>${Utils.escapeHtml(act.assigned_by_profile?.name||'—')}</span>
        </div>
+       ${isCollaborative ? `
+       <div class="modal-detail-row" style="align-items:flex-start">
+         <i class="fa-solid fa-users" style="color:var(--gold)"></i>
+         <span class="modal-detail-label">Colaborativa</span>
+         <span id="collab-members-row" style="font-size:.8rem;color:var(--text-2)">Carregando membros...</span>
+       </div>` : ''}
        <div class="modal-detail-row">
          <i class="fa-solid fa-clock"></i>
          <span class="modal-detail-label">Prazo:</span>
@@ -1401,6 +1417,14 @@
      document.getElementById('modalFooter').innerHTML = submitFooter;
    
      modal.classList.add('open');
+
+     // Carregar nomes dos membros colaborativos
+     if (isCollaborative && collabMembers.length) {
+       db.from('profiles').select('id,name').in('id', collabMembers).then(({ data: cProfs }) => {
+         const el = document.getElementById('collab-members-row');
+         if (el) el.textContent = (cProfs||[]).map(p => p.name).join(', ') || '—';
+       });
+     }
    
      document.getElementById('cancelModal')?.addEventListener('click', () => modal.classList.remove('open'));
    
@@ -1482,9 +1506,21 @@
          }
          // Notifica: se diretoria respondeu, avisa o membro; se membro respondeu, avisa a diretoria
          if (isDiretoria && !isOwner) {
-           await db.rpc('notify_member', {
-             p_user_id: act.assigned_to,
-             p_message: `A Diretoria comentou na atividade "${act.title}"`,
+           // Notifica assigned_to + collab_members
+           const toNotify = isCollaborative
+             ? [...new Set([act.assigned_to, ...collabMembers].filter(u => u && u !== profile.id))]
+             : [act.assigned_to].filter(Boolean);
+           await Promise.all(toNotify.map(uid =>
+             db.rpc('notify_member', { p_user_id: uid, p_message: `A Diretoria comentou na atividade "${act.title}"`, p_type: 'activity', p_icon: '📋' })
+           ));
+         } else if (isCollaborative) {
+           // Notifica os outros membros collab
+           const others = [...new Set([act.assigned_to, ...collabMembers].filter(u => u && u !== profile.id))];
+           await Promise.all(others.map(uid =>
+             db.rpc('notify_member', { p_user_id: uid, p_message: `${profile.name} comentou na atividade colaborativa "${act.title}"`, p_type: 'activity', p_icon: '📋' })
+           ));
+           await db.rpc('notify_diretoria', {
+             p_message: `${profile.name} comentou na atividade colaborativa "${act.title}"`,
              p_type: 'activity', p_icon: '📋'
            });
          } else {
@@ -1549,7 +1585,13 @@
      // Diretoria actions
      document.getElementById('markDoneBtn')?.addEventListener('click', async () => {
        await db.from('activities').update({ status: 'Concluída' }).eq('id', id);
-       await db.rpc('notify_member', { p_user_id: act.assigned_to, p_message: `Sua atividade "${act.title}" foi marcada como concluída.`, p_type: 'approval', p_icon: '✅' });
+       // Notifica assigned_to + todos collab_members
+       const toNotify = isCollaborative
+         ? [...new Set([act.assigned_to, ...collabMembers].filter(Boolean))]
+         : [act.assigned_to].filter(Boolean);
+       await Promise.all(toNotify.map(uid =>
+         db.rpc('notify_member', { p_user_id: uid, p_message: `A atividade colaborativa "${act.title}" foi marcada como concluída.`, p_type: 'approval', p_icon: '✅' })
+       ));
        modal.classList.remove('open');
        Utils.showToast('Atividade concluída.');
        setTimeout(() => initAtividades(), 300);
@@ -1586,19 +1628,99 @@
    
      const extBtn = document.getElementById('extDeadlineBtn');
      if (extBtn) {
-       const applyExtend = async (e) => {
-         e.preventDefault();
-         const val = document.getElementById('extDeadlineInput').value;
-         if (!val) { Utils.showToast('Selecione uma data.','error'); return; }
+       let _extLock = false;
+       const applyExtend = async () => {
+         if (_extLock) return;
+         _extLock = true;
+         const val = document.getElementById('extDeadlineInput')?.value;
+         if (!val) { Utils.showToast('Selecione uma data.','error'); _extLock = false; return; }
+         extBtn.disabled = true;
+         extBtn.textContent = '...';
          const { error } = await db.from('activities').update({ extended_deadline: val }).eq('id', id);
          if (!error) { Utils.showToast('Prazo estendido!'); setTimeout(() => initAtividades(), 300); modal.classList.remove('open'); }
-         else Utils.showToast('Erro ao estender prazo.', 'error');
+         else { Utils.showToast('Erro ao estender prazo.', 'error'); extBtn.disabled = false; extBtn.textContent = 'Aplicar'; }
+         _extLock = false;
        };
+       extBtn.addEventListener('touchend', (e) => { e.preventDefault(); applyExtend(); }, { passive: false });
        extBtn.addEventListener('click', applyExtend);
-       extBtn.addEventListener('touchend', applyExtend, { passive: false });
      }
    }
    
+   function _buildMemberDropdown(members, hiddenId, wrapId, tagsId, phId, dropId, optClass) {
+     return `
+       <div id="${wrapId}" style="position:relative">
+         <div id="${tagsId}" style="display:flex;flex-wrap:wrap;gap:6px;min-height:42px;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 10px;cursor:pointer;align-items:center;transition:border-color .15s" onclick="(function(){var d=document.getElementById('${dropId}');d.style.display=d.style.display==='block'?'none':'block'})()">
+           <span id="${phId}" style="color:var(--text-3);font-size:.85rem">Selecione os membros...</span>
+         </div>
+         <div id="${dropId}" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0e0e13;border:1px solid rgba(201,168,76,.25);border-radius:var(--radius);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)">
+           <div style="padding:6px">
+             ${(members||[]).map(m => `
+               <div class="${optClass}" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background='rgba(201,168,76,.08)'" onmouseleave="this.style.background=this.classList.contains('selected')?'rgba(201,168,76,.1)':'transparent'">
+                 <div style="width:16px;height:16px;border-radius:4px;border:1px solid var(--border-faint);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.65rem" class="na-chk-box-inner"></div>
+                 <span style="color:var(--text-1);font-size:.85rem;font-weight:500;flex:1">${Utils.escapeHtml(m.name)}</span>
+                 <span style="color:var(--text-3);font-size:.72rem">${Utils.escapeHtml(m.role)}</span>
+               </div>`).join('')}
+           </div>
+         </div>
+       </div>
+       <input type="hidden" id="${hiddenId}" value="">`;
+   }
+
+   function _initMemberDropdown(wrapId, tagsId, phId, dropId, optClass, hiddenId) {
+     const tags = document.getElementById(tagsId);
+     const drop = document.getElementById(dropId);
+     const ph   = document.getElementById(phId);
+     if (!tags || !drop) return;
+     const selectedIds = new Set();
+
+     function updateTags() {
+       tags.querySelectorAll('.na-tag').forEach(t => t.remove());
+       ph.style.display = selectedIds.size ? 'none' : '';
+       selectedIds.forEach(id => {
+         const opt = drop.querySelector(`.${optClass}[data-id="${id}"]`);
+         if (!opt) return;
+         const tag = document.createElement('span');
+         tag.className = 'na-tag';
+         tag.dataset.id = id;
+         tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.35);border-radius:20px;padding:3px 10px;font-size:.75rem;color:var(--gold);font-weight:600';
+         tag.innerHTML = `${opt.dataset.name} <span class="na-tag-rm" style="cursor:pointer;opacity:.7;margin-left:2px" data-id="${id}">×</span>`;
+         tag.querySelector('.na-tag-rm').addEventListener('click', e => {
+           e.stopPropagation();
+           selectedIds.delete(id);
+           const o = drop.querySelector(`.${optClass}[data-id="${id}"]`);
+           if (o) { o.classList.remove('selected'); o.querySelector('.na-chk-box-inner').innerHTML=''; o.style.background='transparent'; }
+           updateTags();
+           document.getElementById(hiddenId).value = [...selectedIds].join(',');
+         });
+         tags.appendChild(tag);
+       });
+       document.getElementById(hiddenId).value = [...selectedIds].join(',');
+     }
+
+     drop.querySelectorAll(`.${optClass}`).forEach(opt => {
+       opt.addEventListener('click', () => {
+         const id = opt.dataset.id;
+         if (selectedIds.has(id)) {
+           selectedIds.delete(id); opt.classList.remove('selected');
+           opt.querySelector('.na-chk-box-inner').innerHTML = '';
+           opt.style.background = 'transparent';
+         } else {
+           selectedIds.add(id); opt.classList.add('selected');
+           opt.querySelector('.na-chk-box-inner').innerHTML = '<i class="fa-solid fa-check" style="color:var(--gold)"></i>';
+           opt.style.background = 'rgba(201,168,76,.1)';
+         }
+         updateTags();
+       });
+     });
+
+     document.addEventListener('click', function closeDD(e) {
+       if (!document.getElementById(wrapId)?.contains(e.target)) {
+         drop.style.display = 'none';
+         document.removeEventListener('click', closeDD);
+       }
+     }, true);
+   }
+
    async function openNewActivityModal(profile, onSuccess) {
      const { data: members } = await db.from('profiles').select('id,name,role').eq('status', 'ativo').order('name');
    
@@ -1609,24 +1731,37 @@
          <label class="form-label">Título *</label>
          <input class="form-input" id="na-title" placeholder="Nome da atividade">
        </div>
-       <div class="form-group" style="margin-bottom:14px">
-         <label class="form-label">Atribuir para * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">— múltiplos permitidos</span></label>
-         <div id="na-members-wrap" style="position:relative">
-           <div id="na-members-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:42px;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 10px;cursor:pointer;align-items:center;transition:border-color .15s" onclick="document.getElementById('na-members-dropdown').style.display=document.getElementById('na-members-dropdown').style.display==='block'?'none':'block'">
-             <span id="na-members-placeholder" style="color:var(--text-3);font-size:.85rem">Selecione os membros...</span>
-           </div>
-           <div id="na-members-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--black-2,#0e0e13);border:1px solid rgba(201,168,76,.25);border-radius:var(--radius);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)">
-             <div style="padding:6px">
-               ${(members||[]).map(m => `
-                 <div class="na-member-opt" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background='rgba(201,168,76,.08)'" onmouseleave="this.style.background=this.classList.contains('selected')?'rgba(201,168,76,.1)':'transparent'">
-                   <div style="width:16px;height:16px;border-radius:4px;border:1px solid var(--border-faint);background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.65rem" class="na-chk-box"></div>
-                   <span style="color:var(--text-1);font-size:.85rem;font-weight:500;flex:1">${Utils.escapeHtml(m.name)}</span>
-                   <span style="color:var(--text-3);font-size:.72rem">${Utils.escapeHtml(m.role)}</span>
-                 </div>`).join('')}
-             </div>
-           </div>
+       <!-- Tipo de atividade: individual ou colaborativa -->
+       <div style="display:flex;gap:8px;margin-bottom:14px">
+         <button type="button" id="na-type-individual" class="btn btn-sm btn-outline" style="flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)">
+           <i class="fa-solid fa-user"></i> Individual
+         </button>
+         <button type="button" id="na-type-collab" class="btn btn-sm btn-ghost" style="flex:1">
+           <i class="fa-solid fa-users"></i> Colaborativa
+         </button>
+       </div>
+
+       <!-- Seção individual: multi-envio -->
+       <div id="na-section-individual">
+         <div class="form-group" style="margin-bottom:14px">
+           <label class="form-label">Atribuir para * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">— múltiplos: cria uma cópia para cada</span></label>
+           ${_buildMemberDropdown(members, 'na-member-ids', 'na-members-wrap', 'na-members-tags', 'na-members-placeholder', 'na-members-dropdown', 'na-member-opt')}
          </div>
-         <input type="hidden" id="na-member-ids" value="">
+       </div>
+
+       <!-- Seção colaborativa: um membro principal + co-membros -->
+       <div id="na-section-collab" style="display:none">
+         <div class="form-group" style="margin-bottom:12px">
+           <label class="form-label">Responsável principal * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">— quem lidera</span></label>
+           <select class="form-input form-select" id="na-collab-owner">
+             <option value="">Selecione o responsável...</option>
+             ${(members||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)} — ${Utils.escapeHtml(m.role)}</option>`).join('')}
+           </select>
+         </div>
+         <div class="form-group" style="margin-bottom:14px">
+           <label class="form-label">Co-membros * <span style="font-size:.72rem;color:var(--text-3);font-weight:400">— participam juntos</span></label>
+           ${_buildMemberDropdown(members, 'na-collab-ids', 'na-collab-wrap', 'na-collab-tags', 'na-collab-placeholder', 'na-collab-dropdown', 'na-collab-opt')}
+         </div>
        </div>
        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
          <div class="form-group">
@@ -1682,120 +1817,119 @@
      `;
      modal.classList.add('open');
 
-     // ── Multi-select dropdown logic ──
-     (() => {
-       const selectedIds = new Set();
-       const tags  = document.getElementById('na-members-tags');
-       const drop  = document.getElementById('na-members-dropdown');
-       const ph    = document.getElementById('na-members-placeholder');
+     // ── Init dropdowns ──
+     _initMemberDropdown('na-members-wrap', 'na-members-tags', 'na-members-placeholder', 'na-members-dropdown', 'na-member-opt', 'na-member-ids');
+     _initMemberDropdown('na-collab-wrap', 'na-collab-tags', 'na-collab-placeholder', 'na-collab-dropdown', 'na-collab-opt', 'na-collab-ids');
 
-       function updateTags() {
-         // Remove existing tag spans
-         tags.querySelectorAll('.na-tag').forEach(t => t.remove());
-         if (selectedIds.size === 0) {
-           ph.style.display = '';
-         } else {
-           ph.style.display = 'none';
-           selectedIds.forEach(id => {
-             const opt = drop.querySelector(`.na-member-opt[data-id="${id}"]`);
-             if (!opt) return;
-             const tag = document.createElement('span');
-             tag.className = 'na-tag';
-             tag.dataset.id = id;
-             tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.35);border-radius:20px;padding:3px 10px 3px 10px;font-size:.75rem;color:var(--gold);font-weight:600;cursor:default';
-             tag.innerHTML = `${opt.dataset.name} <span class="na-tag-rm" style="cursor:pointer;opacity:.7;margin-left:2px;font-size:.8rem" data-id="${id}">×</span>`;
-             tag.querySelector('.na-tag-rm').addEventListener('click', e => {
-               e.stopPropagation();
-               selectedIds.delete(id);
-               const o = drop.querySelector(`.na-member-opt[data-id="${id}"]`);
-               if (o) { o.classList.remove('selected'); o.querySelector('.na-chk-box').innerHTML=''; o.style.background='transparent'; }
-               updateTags();
-             });
-             tags.appendChild(tag);
-           });
-         }
-         document.getElementById('na-member-ids').value = [...selectedIds].join(',');
-       }
+     // ── Toggle individual / colaborativa ──
+     let _isCollab = false;
+     const btnInd   = document.getElementById('na-type-individual');
+     const btnCollab = document.getElementById('na-type-collab');
+     const secInd   = document.getElementById('na-section-individual');
+     const secCollab = document.getElementById('na-section-collab');
 
-       drop.querySelectorAll('.na-member-opt').forEach(opt => {
-         opt.addEventListener('click', () => {
-           const id = opt.dataset.id;
-           if (selectedIds.has(id)) {
-             selectedIds.delete(id);
-             opt.classList.remove('selected');
-             opt.querySelector('.na-chk-box').innerHTML = '';
-             opt.style.background = 'transparent';
-           } else {
-             selectedIds.add(id);
-             opt.classList.add('selected');
-             opt.querySelector('.na-chk-box').innerHTML = '<i class="fa-solid fa-check" style="color:var(--gold)"></i>';
-             opt.style.background = 'rgba(201,168,76,.1)';
-           }
-           updateTags();
-         });
-       });
+     btnInd.addEventListener('click', () => {
+       _isCollab = false;
+       btnInd.style.cssText   = 'flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)';
+       btnCollab.style.cssText = 'flex:1;border-color:var(--border-faint);color:var(--text-2);background:transparent';
+       secInd.style.display    = '';
+       secCollab.style.display = 'none';
+     });
+     btnCollab.addEventListener('click', () => {
+       _isCollab = true;
+       btnCollab.style.cssText = 'flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)';
+       btnInd.style.cssText    = 'flex:1;border-color:var(--border-faint);color:var(--text-2);background:transparent';
+       secCollab.style.display = '';
+       secInd.style.display    = 'none';
+     });
 
-       // Close dropdown on outside click
-       document.addEventListener('click', function closeDropdown(e) {
-         if (!document.getElementById('na-members-wrap')?.contains(e.target)) {
-           drop.style.display = 'none';
-           document.removeEventListener('click', closeDropdown);
-         }
-       }, true);
-     })();
-   
      document.getElementById('cancelModal').addEventListener('click', () => modal.classList.remove('open'));
-   
+
      document.getElementById('createActivityBtn').addEventListener('click', async () => {
        const title    = document.getElementById('na-title').value.trim();
-       const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
        const deadline = document.getElementById('na-deadline').value;
        const priority = document.getElementById('na-priority').value;
        const desc     = document.getElementById('na-desc').value.trim();
        const opens    = document.getElementById('na-opens').value;
        const closes   = document.getElementById('na-closes').value;
-   
-       if (!title || !memberIds.length || !deadline || !desc) {
-         Utils.showToast('Preencha todos os campos e selecione ao menos um membro.', 'error'); return;
-       }
-   
-       const btn = document.getElementById('createActivityBtn');
-       btn.disabled = true;
-       btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Criando${memberIds.length > 1 ? ` (${memberIds.length})` : ''}...`;
-   
+
        const channels = [];
        if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
        if (document.getElementById('na-notif-email')?.checked) channels.push('email');
-   
-       const payloads = memberIds.map(memberId => {
-         const p = { title, description: desc, assigned_to: memberId, assigned_by: profile.id, deadline, priority };
-         if (opens)  p.opens_at  = new Date(opens).toISOString();
-         if (closes) p.closes_at = new Date(closes).toISOString();
-         return p;
-       });
-   
-       const { error } = await db.from('activities').insert(payloads);
-   
-       if (!error) {
-         // Notifica todos os membros selecionados
-         await Promise.all(memberIds.map(memberId =>
-           NotifPrefs.dispatch(memberId, {
-             message:  `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
-             type:     'activity',
-             icon:     '📋',
-             link:     'atividades.html',
-             channels,
-           })
-         ));
-   
-         modal.classList.remove('open');
-         Utils.showToast(memberIds.length > 1
-           ? `Atividade criada para ${memberIds.length} membros!`
-           : 'Atividade criada com sucesso!');
-         setTimeout(onSuccess, 300);
+
+       if (!title || !deadline || !desc) {
+         Utils.showToast('Preencha título, prazo e descrição.', 'error'); return;
+       }
+
+       const btn = document.getElementById('createActivityBtn');
+
+       if (_isCollab) {
+         // ── Modo colaborativo: 1 atividade compartilhada ──
+         const ownerId   = document.getElementById('na-collab-owner').value;
+         const collabIds = (document.getElementById('na-collab-ids').value || '').split(',').filter(Boolean);
+         if (!ownerId) { Utils.showToast('Selecione o responsável principal.', 'error'); return; }
+         if (!collabIds.length) { Utils.showToast('Selecione ao menos um co-membro.', 'error'); return; }
+         if (collabIds.includes(ownerId)) { Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); return; }
+
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
+
+         const payload = {
+           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority,
+           is_collaborative: true, collab_members: collabIds
+         };
+         if (opens)  payload.opens_at  = new Date(opens).toISOString();
+         if (closes) payload.closes_at = new Date(closes).toISOString();
+
+         const { error } = await db.from('activities').insert(payload);
+
+         if (!error) {
+           const allMembers = [ownerId, ...collabIds];
+           await Promise.all(allMembers.map(uid =>
+             NotifPrefs.dispatch(uid, {
+               message: `Nova atividade colaborativa: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+               type: 'activity', icon: '🤝', link: 'atividades.html', channels,
+             })
+           ));
+           modal.classList.remove('open');
+           Utils.showToast(`Atividade colaborativa criada para ${allMembers.length} membros!`);
+           setTimeout(onSuccess, 300);
+         } else {
+           Utils.showToast('Erro ao criar atividade.', 'error');
+           btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
+         }
+
        } else {
-         Utils.showToast('Erro ao criar atividade.', 'error');
-         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
+         // ── Modo individual: cópia para cada membro selecionado ──
+         const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
+         if (!memberIds.length) { Utils.showToast('Selecione ao menos um membro.', 'error'); return; }
+
+         btn.disabled = true;
+         btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Criando${memberIds.length > 1 ? ` (${memberIds.length})` : ''}...`;
+
+         const payloads = memberIds.map(memberId => {
+           const p = { title, description: desc, assigned_to: memberId, assigned_by: profile.id, deadline, priority };
+           if (opens)  p.opens_at  = new Date(opens).toISOString();
+           if (closes) p.closes_at = new Date(closes).toISOString();
+           return p;
+         });
+
+         const { error } = await db.from('activities').insert(payloads);
+
+         if (!error) {
+           await Promise.all(memberIds.map(uid =>
+             NotifPrefs.dispatch(uid, {
+               message: `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+               type: 'activity', icon: '📋', link: 'atividades.html', channels,
+             })
+           ));
+           modal.classList.remove('open');
+           Utils.showToast(memberIds.length > 1 ? `Atividade criada para ${memberIds.length} membros!` : 'Atividade criada com sucesso!');
+           setTimeout(onSuccess, 300);
+         } else {
+           Utils.showToast('Erro ao criar atividade.', 'error');
+           btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
+         }
        }
      });
    }
