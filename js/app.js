@@ -6429,3 +6429,17 @@
        Utils.showToast?.('Erro ao carregar página.', 'error');
      });
    });
+
+   /* ============================================================
+      FASE 3 — BRIDGE PARA ES MODULES
+      Expõe objetos críticos em window.MSY para scripts type="module".
+      Scripts legados clássicos continuam usando os bindings diretos.
+      ============================================================ */
+   window.MSY = {
+     db,
+     Utils,
+     Auth,
+     ViewMode,
+     renderSidebar,
+     renderTopBar,
+   };

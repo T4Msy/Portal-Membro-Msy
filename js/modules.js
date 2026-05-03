@@ -1564,7 +1564,7 @@ async function calcInsigniasRecordes(userId) {
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
   const extraRoutes = {
-    biblioteca: initBiblioteca,
+    // biblioteca: migrada para js/pages/biblioteca.js (Fase 3 — Batch 3)
     premiacoes: initPremiacoes,
     ordem:      initOrdem,
   };

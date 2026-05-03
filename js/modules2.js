@@ -2229,12 +2229,12 @@ async function initRanking() {
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
   const routes = {
-    busca:      initBusca,
-    feed:       initFeed,
+    // busca:   migrada para js/pages/busca.js   (Fase 3 — Batch 2)
+    // feed:    migrada para js/pages/feed.js    (Fase 3 — Batch 4)
+    // ranking: migrado para js/pages/ranking.js (Fase 3 — Batch 5)
     // presencas: removida — presença centralizada em Eventos
     // desempenho: gerenciado por modules4.js
     onboarding: initOnboarding,
-    ranking:    initRanking,
     mensalidade: typeof initMensalidade !== 'undefined' ? initMensalidade : undefined,
   };
   Promise.resolve(routes[page]?.()).catch(err => {
