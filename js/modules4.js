@@ -146,7 +146,7 @@ async function initDesempenho() {
       db.from('events').select('id,title,event_date,event_time,type,mandatory,created_by,helper_id,is_private,description,performance_weight').gte('event_date',mStart).lte('event_date',mEnd).order('event_date',{ascending:false}),
       db.from('event_presencas').select('event_id,membro_id,status'),
       db.from('weekly_rankings').select('week_start,week_end,entries').lte('week_start',mEnd).gte('week_end',mStart).order('week_start',{ascending:true}),
-      db.from('premiacoes').select('user_id,created_at').gte('created_at',`${mStart}T00:00:00`).lte('created_at',`${mEnd}T23:59:59`),
+      db.from('premiacao_vencedores').select('membro_id,created_at').gte('created_at',`${mStart}T00:00:00`).lte('created_at',`${mEnd}T23:59:59`),
     ]);
     const fetchError = [r1,r2,r3,r4,r5,r6].find(r => r.error)?.error;
     if (fetchError) throw fetchError;
@@ -213,7 +213,10 @@ async function initDesempenho() {
     });
 
     const premByM = {};
-    premiacoes.forEach(p => { premByM[p.user_id] = (premByM[p.user_id] || 0) + 1; });
+    premiacoes.forEach(p => {
+      if (!p.membro_id) return;
+      premByM[p.membro_id] = (premByM[p.membro_id] || 0) + 1;
+    });
 
     const membrosScored = membros.map(m => {
       const acts    = actsByM[m.id] || { total:0, concluidas:0, atrasadas:0, pendentes:0, andamento:0 };
