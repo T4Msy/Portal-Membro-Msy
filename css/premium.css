@@ -78,45 +78,10 @@
   .topbar,
   .modal,
   .notif-dropdown,
-  #msy-confirm-overlay,
-  #msy-theme-toggle {
+  #msy-confirm-overlay {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-}
-
-/* ============================================================
-   TEMA TOGGLE — Botão flutuante
-   ============================================================ */
-#msy-theme-toggle {
-  position: fixed;
-  bottom: 28px;
-  right: 24px;
-  z-index: 500;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--black-3);
-  border: 1px solid var(--border-gold);
-  color: var(--gold);
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 0 0 var(--gold-glow);
-  transition: all 0.25s var(--ease);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-#msy-theme-toggle:hover {
-  transform: scale(1.1) rotate(15deg);
-  box-shadow: 0 6px 28px rgba(0,0,0,0.5), 0 0 16px var(--gold-glow);
-  border-color: var(--gold);
-}
-#msy-theme-toggle:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 3px;
 }
 
 /* ============================================================
@@ -713,9 +678,6 @@ table {
   #msy-confirm-overlay { align-items: center; }
   #msy-confirm-box { border-radius: var(--radius-xl) !important; }
 
-  /* Theme toggle: repositionar no mobile para não colidir com conteúdo */
-  #msy-theme-toggle { bottom: 20px; right: 16px; }
-
   .card,
   .skeleton-card {
     padding: 18px;
@@ -822,7 +784,7 @@ table {
    PRINT STYLES
    ============================================================ */
 @media print {
-  .sidebar, .topbar, #msy-theme-toggle, #msy-reload-banner { display: none !important; }
+  .sidebar, .topbar, #msy-reload-banner { display: none !important; }
   .main-wrapper { margin-left: 0 !important; }
   .page-content { padding: 0 !important; }
 }
@@ -916,6 +878,265 @@ table {
 }
 .notif-item:hover {
   transform: translateX(3px);
+}
+
+/* ============================================================
+   PROFILE PREFERENCES / THEME CONTROLS
+   ============================================================ */
+#msy-theme-toggle {
+  display: none !important;
+}
+
+.profile-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.profile-pref-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-pref-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+
+.profile-pref-text {
+  color: var(--text-3);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.theme-choice-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(100px, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.theme-choice-btn {
+  min-height: 46px;
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-faint);
+  background: var(--black-4);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--t2) var(--ease), border-color var(--t2) var(--ease), color var(--t2) var(--ease), transform var(--t1) var(--ease);
+}
+
+.theme-choice-btn:hover {
+  border-color: var(--border-gold);
+  color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.theme-choice-btn.active {
+  background: var(--gold-subtle);
+  border-color: var(--border-gold);
+  color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.08);
+}
+
+/* ============================================================
+   LIGHT THEME COMPLETION
+   ============================================================ */
+[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(201,168,76,0.14), transparent 28%),
+    radial-gradient(circle at 90% 16%, rgba(185,28,28,0.08), transparent 30%),
+    var(--black) !important;
+}
+
+[data-theme="light"] .topbar {
+  background: rgba(255,255,255,0.86) !important;
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px rgba(31,31,38,0.08) !important;
+}
+
+[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(245,243,239,0.98)) !important;
+  border-right-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 1px 0 0 rgba(0,0,0,0.04), 10px 0 32px rgba(31,31,38,0.06) !important;
+}
+
+[data-theme="light"] .sidebar-logo,
+[data-theme="light"] .sidebar-user,
+[data-theme="light"] .card,
+[data-theme="light"] .profile-avatar-card,
+[data-theme="light"] .skeleton-card,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .small-list-item,
+[data-theme="light"] .activity-card,
+[data-theme="light"] .feed-card,
+[data-theme="light"] .bib-card,
+[data-theme="light"] .meet-card,
+[data-theme="light"] .meet-req-card,
+[data-theme="light"] .rank-card,
+[data-theme="light"] .admin-card,
+[data-theme="light"] .jornal-wrap,
+[data-theme="light"] .offline-card {
+  background: rgba(255,255,255,0.82) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 12px 34px rgba(31,31,38,0.08) !important;
+}
+
+[data-theme="light"] .card:hover,
+[data-theme="light"] .small-list-item:hover,
+[data-theme="light"] .activity-card:hover,
+[data-theme="light"] .feed-card:hover,
+[data-theme="light"] .bib-card:hover,
+[data-theme="light"] .meet-card:hover {
+  background: rgba(255,255,255,0.94) !important;
+  border-color: rgba(165,120,40,0.26) !important;
+}
+
+[data-theme="light"] .modal,
+[data-theme="light"] .modal[style],
+[data-theme="light"] #msy-confirm-box {
+  background: rgba(255,255,255,0.96) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+  box-shadow: 0 22px 70px rgba(31,31,38,0.22) !important;
+}
+
+[data-theme="light"] .modal-header,
+[data-theme="light"] .modal-header[style] {
+  background: rgba(255,255,255,0.92) !important;
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .modal-overlay,
+[data-theme="light"] #msy-confirm-overlay {
+  background: rgba(245,243,239,0.68) !important;
+}
+
+[data-theme="light"] .form-input,
+[data-theme="light"] .form-select,
+[data-theme="light"] .form-textarea,
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: rgba(255,255,255,0.9) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+  color: var(--text-1) !important;
+}
+
+[data-theme="light"] .form-input::placeholder,
+[data-theme="light"] .form-textarea::placeholder,
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #8b8793 !important;
+}
+
+[data-theme="light"] .nav-item {
+  color: var(--text-2) !important;
+}
+
+[data-theme="light"] .nav-item:hover {
+  background: rgba(0,0,0,0.04) !important;
+  color: var(--text-1) !important;
+}
+
+[data-theme="light"] .nav-item.active {
+  background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(185,28,28,0.06)) !important;
+  color: var(--text-1) !important;
+}
+
+[data-theme="light"] .topbar-search-btn,
+[data-theme="light"] .notif-bell,
+[data-theme="light"] .theme-choice-btn,
+[data-theme="light"] .profile-avatar-upload-btn,
+[data-theme="light"] .jornal-nav-btn {
+  background: rgba(255,255,255,0.86) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  color: var(--text-2) !important;
+}
+
+[data-theme="light"] .topbar-search-btn:hover,
+[data-theme="light"] .notif-bell:hover,
+[data-theme="light"] .theme-choice-btn:hover,
+[data-theme="light"] .theme-choice-btn.active {
+  color: #8a651f !important;
+  border-color: rgba(165,120,40,0.34) !important;
+  background: rgba(201,168,76,0.12) !important;
+}
+
+[data-theme="light"] .notif-dropdown {
+  background: rgba(255,255,255,0.96) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 18px 50px rgba(31,31,38,0.14) !important;
+}
+
+[data-theme="light"] .notif-item:hover,
+[data-theme="light"] .notif-item.unread {
+  background: rgba(201,168,76,0.08) !important;
+}
+
+[data-theme="light"] .notif-item-icon,
+[data-theme="light"] .empty-state-icon,
+[data-theme="light"] .offline-mark {
+  background: rgba(201,168,76,0.12) !important;
+  border-color: rgba(165,120,40,0.24) !important;
+}
+
+[data-theme="light"] .btn-ghost:hover {
+  background: rgba(0,0,0,0.05) !important;
+  color: var(--text-1) !important;
+}
+
+[data-theme="light"] .btn-outline {
+  background: rgba(255,255,255,0.5) !important;
+  border-color: rgba(165,120,40,0.3) !important;
+  color: #8a651f !important;
+}
+
+[data-theme="light"] .badge,
+[data-theme="light"] .chip,
+[data-theme="light"] .filter-btn,
+[data-theme="light"] .feed-chip,
+[data-theme="light"] .rank-main-tab,
+[data-theme="light"] .dp-tab {
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .member-profile-detail-row,
+[data-theme="light"] .profile-bio-display,
+[data-theme="light"] .profile-stats-row,
+[data-theme="light"] .profile-join-info,
+[data-theme="light"] .notif-dropdown-header,
+[data-theme="light"] .notif-item {
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+[data-theme="light"] .jornal-wrap[style],
+[data-theme="light"] [style*="#0d0d12"],
+[data-theme="light"] [style*="#0e0e13"],
+[data-theme="light"] [style*="#111116"] {
+  background: rgba(255,255,255,0.9) !important;
+}
+
+@media (max-width: 640px) {
+  .profile-pref-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .theme-choice-group {
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
 }
 
 /* ============================================================

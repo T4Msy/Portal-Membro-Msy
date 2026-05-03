@@ -1,5 +1,5 @@
 /**
- * MSYTheme — toggle claro/escuro com persistência em localStorage.
+ * MSYTheme — tema claro/escuro com persistência em localStorage.
  * Classic script. Aplica o tema antes do render para evitar flash.
  *
  * Usa: document.documentElement.dataset.theme = 'light' | 'dark'
@@ -42,33 +42,25 @@
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.setAttribute('content', theme === LIGHT_KEY ? '#f5f3ef' : '#07070a');
     });
-    _updateToggleBtn(theme);
+    _syncThemeControls(theme);
+    window.dispatchEvent(new CustomEvent('msy:themechange', { detail: { theme } }));
   }
 
-  function _updateToggleBtn(theme) {
-    const btn = document.getElementById('msy-theme-toggle');
-    if (!btn) return;
-    const isDark = theme === DARK_KEY;
-    btn.innerHTML      = isDark
-      ? '<i class="fa-solid fa-sun"></i>'
-      : '<i class="fa-solid fa-moon"></i>';
-    btn.title          = isDark ? 'Ativar modo claro' : 'Ativar modo escuro';
-    btn.setAttribute('aria-label', btn.title);
-    btn.setAttribute('aria-pressed', isDark ? 'false' : 'true');
-  }
-
-  function _injectToggleBtn() {
-    if (document.getElementById('msy-theme-toggle')) return;
-    const btn = document.createElement('button');
-    btn.id = 'msy-theme-toggle';
-    btn.setAttribute('tabindex', '0');
-    document.body.appendChild(btn);
-    _updateToggleBtn(_getTheme());
-
-    btn.addEventListener('click', () => {
-      const next = _getTheme() === DARK_KEY ? LIGHT_KEY : DARK_KEY;
-      _setTheme(next);
+  function _syncThemeControls(theme = _getTheme()) {
+    document.querySelectorAll('[data-msy-theme-option]').forEach((btn) => {
+      const active = btn.dataset.msyThemeOption === theme;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+  }
+
+  function bindControls(root = document) {
+    root.querySelectorAll('[data-msy-theme-option]').forEach((btn) => {
+      if (btn.dataset.themeBound === 'true') return;
+      btn.dataset.themeBound = 'true';
+      btn.addEventListener('click', () => _setTheme(btn.dataset.msyThemeOption));
+    });
+    _syncThemeControls();
   }
 
   /* ── Registrar Service Worker (PWA caching) ─────────────── */
@@ -82,10 +74,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    if (document.body.dataset.page === 'login') return;
-    _injectToggleBtn();
-    _updateToggleBtn(_getTheme());
+    bindControls();
   });
 
-  window.MSYTheme = { getTheme: _getTheme, setTheme: _setTheme };
+  window.MSYTheme = { getTheme: _getTheme, setTheme: _setTheme, bindControls, syncControls: _syncThemeControls };
 })();

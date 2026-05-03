@@ -5179,6 +5179,31 @@
                </div>
              </div>
            </div>
+
+           <!-- Preferências do Portal -->
+           <div class="card" id="portalPrefsCard">
+             <div class="card-title"><i class="fa-solid fa-sliders"></i> Preferências do Portal</div>
+             <div class="profile-pref-row">
+               <div class="profile-pref-copy">
+                 <div class="profile-pref-title">
+                   <i class="fa-solid fa-circle-half-stroke" style="color:var(--gold);margin-right:6px"></i>Aparência
+                 </div>
+                 <div class="profile-pref-text">
+                   Escolha o tema mais confortável para leitura. A preferência fica salva neste navegador.
+                 </div>
+               </div>
+               <div class="theme-choice-group" role="group" aria-label="Tema do portal">
+                 <button type="button" class="theme-choice-btn" data-msy-theme-option="dark">
+                   <i class="fa-solid fa-moon"></i>
+                   <span>Escuro</span>
+                 </button>
+                 <button type="button" class="theme-choice-btn" data-msy-theme-option="light">
+                   <i class="fa-solid fa-sun"></i>
+                   <span>Claro</span>
+                 </button>
+               </div>
+             </div>
+           </div>
    
            <!-- Preferências de Notificação -->
            <div class="card" id="notifPrefsCard">
@@ -5292,6 +5317,11 @@
 
      // ── ICM BADGES ──────────────────────────────────────────────
      renderICMBadgesSection(icmData, selectedBadges, profile.id);
+
+     /* ── Preferências de Aparência ───────────────────────────── */
+     if (window.MSYTheme?.bindControls) {
+       window.MSYTheme.bindControls(document.getElementById('portalPrefsCard'));
+     }
    
      /* ── Preferências de Notificação ────────────────────────── */
      (async () => {
