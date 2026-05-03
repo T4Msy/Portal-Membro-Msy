@@ -1408,7 +1408,11 @@ async function renderBadgesNoPerfil(userId, containerId) {
    ============================================================ */
 
 // Cache de sessão: evita recalcular enquanto o portal estiver aberto
+/** @global {Array|null} window._msyRecordesCache — cache em memória dos dados de recordes.
+ *  Lido/escrito por _carregarDadosRecordes(). TTL de 5 min.
+ *  ⚠️  Será substituído por /js/core/cache.js na Fase 4. */
 window._msyRecordesCache = window._msyRecordesCache || null;
+/** @global {number} window._msyRecordesCacheTs — timestamp (ms) da última atualização do cache. */
 window._msyRecordesCacheTs = window._msyRecordesCacheTs || 0;
 const MSY_RECORDES_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 

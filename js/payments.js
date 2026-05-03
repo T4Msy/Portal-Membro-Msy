@@ -205,7 +205,7 @@ const Payments = {
       p_type:    'success',
       p_icon:    '💳',
       p_link:    'mensalidade.html',
-    }).catch(() => {}); // silencia erro caso a função não exista
+    }).catch(err => console.error('[MSY] Erro ao enviar notificação de mensalidade:', err));
   },
 
   /* Inicia fluxo completo de pagamento */

@@ -10,6 +10,9 @@
    SISTEMA DE PERMISSÕES — MSYPerms
    Permissões individuais por membro, independentes de cargo.
    ============================================================ */
+/** @global {object} MSYPerms — sistema de permissões granulares por membro.
+ *  Independente de cargo (tier). Cache em memória (_cache/_cacheUid).
+ *  API: MSYPerms.load(userId), .check(), .checkAny(), .save(), .invalidate(). */
 const MSYPerms = {
   // Todas as permissões disponíveis no portal
   ALL: [

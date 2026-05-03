@@ -7,11 +7,17 @@
 
 
    const { createClient } = supabase;
+
+   /** @global {import('@supabase/supabase-js').SupabaseClient} db
+    *  Cliente Supabase compartilhado. Inicializado aqui, usado por TODOS os módulos.
+    *  Depende de MSY_CONFIG (config.js) estar carregado antes. */
    const db = createClient(MSY_CONFIG.SUPABASE_URL, MSY_CONFIG.SUPABASE_ANON_KEY);
 
    /* ============================================================
       VIEW MODE — Simulação de visão de membro para admins
       ============================================================ */
+   /** @global {object} ViewMode — permite à diretoria visualizar o portal como membro comum.
+    *  Estado persiste em sessionStorage (limpo ao fechar a aba). */
    const ViewMode = {
      STORAGE_KEY: 'msy_view_as_member',
 
@@ -84,6 +90,8 @@
    /* ============================================================
       AUTH
       ============================================================ */
+   /** @global {object} Auth — gerencia sessão, login, logout e proteção de páginas.
+    *  Lido por todos os módulos via `Auth.requireAuth()` no topo de cada initPage(). */
    const Auth = {
      async getSession() {
        const { data: { session } } = await db.auth.getSession();
@@ -120,6 +128,8 @@
    /* ============================================================
       UTILS
       ============================================================ */
+   /** @global {object} Utils — funções utilitárias compartilhadas (formatação, toasts, spinners, escape HTML).
+    *  Usado por todos os módulos. Única fonte de verdade para escapeHtml e getInitials. */
    const Utils = {
      formatDate(dateStr) {
        if (!dateStr) return '—';
@@ -4506,7 +4516,7 @@
          // Registrar co-criadores adicionais se houver
          if (helpers.length > 1 && evData?.id) {
            const extraHelpers = helpers.slice(1).map(uid => ({ event_id: evData.id, helper_id: uid }));
-           await db.from('event_co_creators').insert(extraHelpers).catch(() => {});
+           await db.from('event_co_creators').insert(extraHelpers).catch(err => console.error('[MSY] Erro ao inserir co-criadores:', err));
          }
          if (!is_private) {
            await db.rpc('notify_member', { p_user_id: null, p_message: `Novo evento: "${title}" em ${Utils.formatDate(event_date)}`, p_type: 'event', p_icon: '🗓️' });
@@ -4877,7 +4887,7 @@
            p_user_id: result.userId,
            p_message: 'Bem-vindo à Masayoshi Order! Seu acesso foi criado pela Diretoria.',
            p_type: 'member', p_icon: '✅',
-         }).catch(() => {});
+         }).catch(err => console.error('[MSY] Erro ao enviar notificação de boas-vindas:', err));
          initAdmin();
        } catch (err) {
          errEl.textContent = err.message || 'Erro ao criar membro.';

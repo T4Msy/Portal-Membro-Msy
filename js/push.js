@@ -6,15 +6,17 @@
    'use strict';
 
    const PUSH_CONFIG = {
-     VAPID_PUBLIC_KEY: 'BLhU7dYmzQxxgCAmvSV8pN1oZODjoSmHjSEi0EIS-rbG3WcH6o-GjaoYvVWGyhtGmVts1_plszGPJMFw_3eeFpI',
-     PUSH_ENDPOINT:  'https://lldzgkxpoyqauxdcjyaw.supabase.co/functions/v1/send-push',
-     EMAIL_ENDPOINT: 'https://lldzgkxpoyqauxdcjyaw.supabase.co/functions/v1/send-email',
-     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZHpna3hwb3lxYXV4ZGNqeWF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1OTg4OTgsImV4cCI6MjA4OTE3NDg5OH0.HlYCSLVnDF2FlASgUCSyfd3ZMi1VJXCxHszOhwBy9KQ',
+     VAPID_PUBLIC_KEY:  'BLhU7dYmzQxxgCAmvSV8pN1oZODjoSmHjSEi0EIS-rbG3WcH6o-GjaoYvVWGyhtGmVts1_plszGPJMFw_3eeFpI',
+     PUSH_ENDPOINT:    `${MSY_CONFIG.SUPABASE_URL}/functions/v1/send-push`,
+     EMAIL_ENDPOINT:   `${MSY_CONFIG.SUPABASE_URL}/functions/v1/send-email`,
+     SUPABASE_ANON_KEY: MSY_CONFIG.SUPABASE_ANON_KEY,
    };
    
    /* ============================================================
       PushManager — gerencia registro e preferências
       ============================================================ */
+   /** @global {object} PushManager — gerencia subscrição de Web Push (VAPID).
+    *  Usa service worker em /sw.js. Credenciais via PUSH_CONFIG (derivado de MSY_CONFIG). */
    const PushManager = {
    
      _urlBase64ToUint8Array(base64String) {
@@ -152,6 +154,7 @@
    /* ============================================================
       EmailManager — envia email via Edge Function send-email
       ============================================================ */
+   /** @global {object} EmailManager — envia emails via Edge Function send-email (Resend API). */
    const EmailManager = {
    
      _headers() {
@@ -190,6 +193,8 @@
    /* ============================================================
       NotifPrefs — salva preferências e despacha notificações
       ============================================================ */
+   /** @global {object} NotifPrefs — salva preferências de notificação do usuário
+    *  e despacha notificações via push, email ou in-app. */
    const NotifPrefs = {
    
      async save(userId, { notif_push, notif_email, notif_email_address }) {
