@@ -118,31 +118,33 @@
        } catch { return false; }
      },
    
-     _headers() {
+     async _authHeaders() {
+       const { data: { session } } = await db.auth.getSession();
+       const token = session?.access_token ?? PUSH_CONFIG.SUPABASE_ANON_KEY;
        return {
          'Content-Type':  'application/json',
-         'Authorization': `Bearer ${PUSH_CONFIG.SUPABASE_ANON_KEY}`,
+         'Authorization': `Bearer ${token}`,
          'apikey':         PUSH_CONFIG.SUPABASE_ANON_KEY,
        };
      },
-   
+
      async sendToUser(userId, { title, body, url, icon }) {
        try {
          await fetch(PUSH_CONFIG.PUSH_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ userId, title, body, url, icon }),
          });
        } catch (err) {
          console.warn('[Push] Falha ao enviar push:', err);
        }
      },
-   
+
      async sendToAll({ title, body, url, icon }) {
        try {
          await fetch(PUSH_CONFIG.PUSH_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ all: true, title, body, url, icon }),
          });
        } catch (err) {
@@ -150,38 +152,40 @@
        }
      },
    };
-   
+
    /* ============================================================
       EmailManager — envia email via Edge Function send-email
       ============================================================ */
    /** @global {object} EmailManager — envia emails via Edge Function send-email (Resend API). */
    const EmailManager = {
-   
-     _headers() {
+
+     async _authHeaders() {
+       const { data: { session } } = await db.auth.getSession();
+       const token = session?.access_token ?? PUSH_CONFIG.SUPABASE_ANON_KEY;
        return {
          'Content-Type':  'application/json',
-         'Authorization': `Bearer ${PUSH_CONFIG.SUPABASE_ANON_KEY}`,
+         'Authorization': `Bearer ${token}`,
          'apikey':         PUSH_CONFIG.SUPABASE_ANON_KEY,
        };
      },
-   
+
      async sendToUser(userId, { subject, message }) {
        try {
          await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ userId, subject, message }),
          });
        } catch (err) {
          console.warn('[Email] Falha ao enviar email:', err);
        }
      },
-   
+
      async sendToAll({ subject, message }) {
        try {
          await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ all: true, subject, message }),
          });
        } catch (err) {
