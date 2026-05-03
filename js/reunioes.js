@@ -63,10 +63,10 @@ async function initReunioes() {
 
     const schedQuery = isDiretoria
       ? db.from('scheduled_meetings')
-          .select('*, member:assigned_to(name,initials,color,avatar_url)')
+          .select('*')
           .order('meeting_date', { ascending: false })
       : db.from('scheduled_meetings')
-          .select('*, member:assigned_to(name,initials,color,avatar_url)')
+          .select('*')
           .eq('assigned_to', profile.id)
           .order('meeting_date', { ascending: false });
 
@@ -77,6 +77,27 @@ async function initReunioes() {
       if (errP) throw errP;
       reunioes = reunioesData || [];
       pessoais = pessoaisData || [];
+
+      if (isDiretoria && pessoais.length) {
+        const memberIds = [...new Set(pessoais.map(r => r.assigned_to).filter(Boolean))];
+        if (memberIds.length) {
+          const { data: members, error: membersError } = await db
+            .from('profiles')
+            .select('id,name,initials,color,avatar_url')
+            .in('id', memberIds);
+
+          if (membersError) {
+            console.warn('[MSY][reunioes] Erro ao carregar membros das reuniões agendadas:', membersError);
+          } else {
+            const memberMap = {};
+            (members || []).forEach(member => { memberMap[member.id] = member; });
+            pessoais = pessoais.map(reuniao => ({
+              ...reuniao,
+              member: memberMap[reuniao.assigned_to] || null,
+            }));
+          }
+        }
+      }
     } catch (err) {
       console.error('[MSY][reunioes] Erro ao carregar reuniões:', err);
       tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar reuniões.</div>`;
