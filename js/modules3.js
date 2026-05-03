@@ -368,9 +368,9 @@ async function openPermissionsManager() {
         updateActiveCount();
       });
     });
-    body.querySelector('.pm-clear-member')?.addEventListener('click', () => {
+    body.querySelector('.pm-clear-member')?.addEventListener('click', async () => {
       const name = members.find(m=>m.id===memberId)?.name || 'este membro';
-      if (!confirm(`Remover todas as permissões de ${name}?`)) return;
+      if (!(await MSYConfirm.show(`Remover todas as permissões de ${name}?`, { title: 'Limpar permissões' }))) return;
       body.querySelectorAll('.pm-toggle-input').forEach(cb => { cb.checked = false; cb.closest('.pm-perm-card')?.classList.remove('active'); });
       updateActiveCount();
     });
@@ -1269,7 +1269,7 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
       btn.addEventListener('click', () => setPresenca(btn.dataset.membro, btn.dataset.status));
     });
     document.getElementById('presMarcarTodosBtn')?.addEventListener('click', async () => {
-      if (!confirm(`Marcar todos os ${membros.length} membros como presentes?`)) return;
+      if (!(await MSYConfirm.show(`Marcar todos os ${membros.length} membros como presentes?`, { title: 'Confirmar presenças', type: 'warn' }))) return;
       for (const m of membros) await setPresenca(m.id, 'confirmado');
       Utils.showToast('Todos marcados!');
     });

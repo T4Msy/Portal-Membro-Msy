@@ -227,7 +227,7 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
     btn.addEventListener('click', async () => {
       const memberId = btn.dataset.id;
       const memberName = btn.dataset.name;
-      if (!confirm(`Marcar ${memberName} como pago no mês atual?`)) return;
+      if (!(await MSYConfirm.show(`Marcar ${memberName} como pago no mês atual?`, { title: 'Confirmar pagamento', type: 'warn' }))) return;
 
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';

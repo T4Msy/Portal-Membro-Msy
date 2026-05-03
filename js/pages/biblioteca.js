@@ -201,7 +201,7 @@ async function initBiblioteca() {
     grid.querySelectorAll('.bib-delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm('Remover este conteúdo da biblioteca?')) return;
+        if (!(await MSYConfirm.show('Remover este conteúdo da biblioteca?', { title: 'Remover conteúdo' }))) return;
         const id = btn.dataset.id;
         try {
           const { error } = await db.from('biblioteca_conteudos').delete().eq('id', id);

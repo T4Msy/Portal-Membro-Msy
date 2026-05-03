@@ -272,7 +272,7 @@ async function initFeed() {
     feedList.querySelectorAll('.feed-del-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        if (!confirm('Excluir esta publicação?')) return;
+        if (!(await MSYConfirm.show('Excluir esta publicação?', { title: 'Excluir publicação' }))) return;
         const { error } = await db.from('feed_atividade').delete().eq('id', btn.dataset.id);
         if (!error) {
           Utils.showToast('Removido.');

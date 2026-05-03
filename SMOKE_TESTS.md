@@ -17,7 +17,7 @@ Execute este checklist manualmente **antes de promover qualquer deploy** para ga
 
 - [ ] Preview Deployment abre `/` e redireciona para `login.html`
 - [ ] `login.html`, `dashboard.html`, `admin.html`, `membros.html`, `reunioes.html`, `mensalidade.html`, `eventos.html`, `atividades.html`, `comunicados.html`, `ranking.html`, `feed.html` e `biblioteca.html` retornam 200
-- [ ] `css/style.css`, `js/config.js`, `js/app.js` e `sw.js` retornam 200
+- [ ] `css/style.css`, `css/premium.css`, `js/config.js`, `js/app.js`, `manifest.json`, `offline.html`, `icons/icon-192.png` e `sw.js` retornam 200
 - [ ] `sw.js` não fica preso em cache antigo após novo deploy
 - [ ] Supabase Auth Redirect URLs incluem produção, preview Vercel e localhost
 - [ ] `portalmsy.site` está com HTTPS válido após a troca de DNS
@@ -78,6 +78,16 @@ Execute este checklist manualmente **antes de promover qualquer deploy** para ga
 ### PWA / Mobile
 - [ ] Abrir em celular Android (Chrome) → layout responsivo sem scroll horizontal
 - [ ] Abrir em celular iOS (Safari) → layout responsivo sem scroll horizontal
+- [ ] App oferece instalação no Android quando servido por HTTPS
+- [ ] iOS usa ícone correto ao adicionar à Tela de Início
+- [ ] Após visitar o portal online, abrir `offline.html` e páginas já visitadas funciona sem conexão
+- [ ] Toggle claro/escuro persiste após reload
+
+### Acessibilidade
+- [ ] Tab navega por botões, links e campos com foco visível
+- [ ] Botões só com ícone possuem nome acessível
+- [ ] Modais abrem com `role="dialog"` e fecham com Escape
+- [ ] Inputs principais possuem label ou `aria-label`
 
 ### Segurança
 - [ ] Acessar Supabase Studio → confirmar que tabela `profiles` tem RLS habilitado

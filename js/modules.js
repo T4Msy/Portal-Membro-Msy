@@ -209,7 +209,7 @@ async function initBiblioteca() {
     grid.querySelectorAll('.bib-delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm('Remover este conteúdo da biblioteca?')) return;
+        if (!(await MSYConfirm.show('Remover este conteúdo da biblioteca?', { title: 'Remover conteúdo' }))) return;
         const id = btn.dataset.id;
         try {
           const { error } = await db.from('biblioteca_conteudos').delete().eq('id', id);
@@ -893,7 +893,7 @@ async function initPremiacoes() {
     document.querySelectorAll('.venc-del-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm('Remover este vencedor do histórico?')) return;
+        if (!(await MSYConfirm.show('Remover este vencedor do histórico?', { title: 'Remover vencedor' }))) return;
         try {
           const { error } = await db.from('premiacao_vencedores').delete().eq('id', btn.dataset.id);
           if (error) throw error;

@@ -201,7 +201,7 @@ async function initReunioes() {
     }));
 
     tab.querySelectorAll('.meet-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
-      if (!confirm('Excluir esta reunião?')) return;
+      if (!(await MSYConfirm.show('Excluir esta reunião?', { title: 'Excluir reunião' }))) return;
       try {
         const { error } = await db.from('meetings').delete().eq('id', btn.dataset.id);
         if (error) throw error;
@@ -226,7 +226,7 @@ async function initReunioes() {
     }));
 
     tab.querySelectorAll('.sched-cancel-btn').forEach(btn => btn.addEventListener('click', async () => {
-      if (!confirm('Cancelar esta reunião?')) return;
+      if (!(await MSYConfirm.show('Cancelar esta reunião?', { title: 'Cancelar reunião', type: 'warn' }))) return;
       try {
         const { error } = await db.from('scheduled_meetings').update({ status: 'cancelada' }).eq('id', btn.dataset.id);
         if (error) throw error;
@@ -239,7 +239,7 @@ async function initReunioes() {
     }));
 
     tab.querySelectorAll('.sched-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
-      if (!confirm('Excluir?')) return;
+      if (!(await MSYConfirm.show('Excluir este item?', { title: 'Excluir reunião' }))) return;
       try {
         const { error } = await db.from('scheduled_meetings').delete().eq('id', btn.dataset.id);
         if (error) throw error;
@@ -420,7 +420,7 @@ async function initReunioes() {
     tab.querySelectorAll('.delete-ata-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        if (!confirm('Excluir esta ata?')) return;
+        if (!(await MSYConfirm.show('Excluir esta ata?', { title: 'Excluir ata' }))) return;
         const { error } = await db.from('meeting_minutes').delete().eq('id', btn.dataset.id);
         if (!error) { Utils.showToast('Ata excluída.'); loadAtas(); }
         else Utils.showToast('Erro ao excluir.', 'error');

@@ -229,6 +229,16 @@
 
      const sidebar = document.getElementById('sidebar');
      if (!sidebar) return;
+
+     /* Skip-link de acessibilidade (inserido uma vez) */
+     if (!document.getElementById('msy-skip-link')) {
+       const skip = document.createElement('a');
+       skip.id = 'msy-skip-link';
+       skip.className = 'skip-link';
+       skip.href = '#pageContent';
+       skip.textContent = 'Ir para o conteúdo principal';
+       document.body.prepend(skip);
+     }
    
      const isDiretoria = profile.tier === 'diretoria';
    
@@ -321,8 +331,8 @@
    
      document.getElementById('logoutBtn').addEventListener('click', () => Auth.logout());
 
-     document.getElementById('viewAsMemberBtn')?.addEventListener('click', () => {
-       if (confirm('Ativar modo de visualização como membro?\n\nVocê verá o portal exatamente como um membro comum, sem permissões administrativas.\n\nSuas permissões reais não serão alteradas.')) {
+     document.getElementById('viewAsMemberBtn')?.addEventListener('click', async () => {
+       if (await MSYConfirm.show('Ativar modo de visualização como membro?\n\nVocê verá o portal exatamente como um membro comum, sem permissões administrativas.\n\nSuas permissões reais não serão alteradas.')) {
          ViewMode.activate();
          window.location.reload();
        }
@@ -347,12 +357,12 @@
    
      topbar.innerHTML = `
        <div class="topbar-left">
-         <button class="sidebar-toggle" id="sidebarToggle"><i class="fa-solid fa-bars"></i></button>
+         <button class="sidebar-toggle" id="sidebarToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar"><i class="fa-solid fa-bars"></i></button>
          <div class="topbar-page-title">${pageTitle}</div>
        </div>
        <div class="topbar-right">
-         <a href="busca.html" class="topbar-search-btn" title="Busca Global">
-           <i class="fa-solid fa-magnifying-glass"></i>
+         <a href="busca.html" class="topbar-search-btn" title="Busca Global" aria-label="Busca global">
+           <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
          </a>
          <div class="notif-bell-wrap">
            <button class="notif-bell" id="notifBell" aria-label="Notificações">
@@ -1087,7 +1097,7 @@
          grid.querySelectorAll('.anexo-delete-btn').forEach(btn => {
            btn.addEventListener('click', async e => {
              e.stopPropagation();
-             if (!confirm(`Excluir o anexo "${btn.dataset.name}"?\n\nO arquivo será removido permanentemente.`)) return;
+             if (!await MSYConfirm.show(`Excluir o anexo "${btn.dataset.name}"?\n\nO arquivo será removido permanentemente.`)) return;
              btn.disabled = true;
              btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
 
@@ -1585,7 +1595,7 @@
      document.querySelectorAll('.delete-response-btn').forEach(btn => {
        btn.addEventListener('click', async (e) => {
          e.stopPropagation();
-         if (!confirm('Excluir esta resposta?')) return;
+         if (!await MSYConfirm.show('Excluir esta resposta?')) return;
          const { error } = await db.from('activity_responses').delete().eq('id', btn.dataset.respId);
          if (!error) {
            document.getElementById(`resp-${btn.dataset.respId}`)?.remove();
@@ -1610,7 +1620,7 @@
      });
    
      document.getElementById('cancelActBtn')?.addEventListener('click', async () => {
-       if (!confirm('Cancelar esta atividade?')) return;
+       if (!await MSYConfirm.show('Cancelar esta atividade?')) return;
        await db.from('activities').update({ status: 'Cancelada' }).eq('id', id);
        modal.classList.remove('open');
        Utils.showToast('Atividade cancelada.');
@@ -1618,7 +1628,7 @@
      });
    
      document.getElementById('uncancelActBtn')?.addEventListener('click', async () => {
-       if (!confirm('Reativar esta atividade como Pendente?')) return;
+       if (!await MSYConfirm.show('Reativar esta atividade como Pendente?')) return;
        await db.from('activities').update({ status: 'Pendente' }).eq('id', id);
        await db.rpc('notify_member', { p_user_id: act.assigned_to, p_message: `A atividade "${act.title}" foi reativada pela Diretoria.`, p_type: 'activity', p_icon: '🔄' });
        modal.classList.remove('open');
@@ -1627,7 +1637,7 @@
      });
    
      document.getElementById('deleteActBtn')?.addEventListener('click', async () => {
-       if (!confirm(`Excluir permanentemente "${act.title}"? Esta ação não pode ser desfeita.`)) return;
+       if (!await MSYConfirm.show(`Excluir permanentemente "${act.title}"? Esta ação não pode ser desfeita.`)) return;
        const { error } = await db.from('activities').delete().eq('id', id);
        if (!error) {
          modal.classList.remove('open');
@@ -2051,7 +2061,7 @@
        list.querySelectorAll('.delete-com').forEach(btn => {
          btn.addEventListener('click', async e => {
            e.stopPropagation();
-           if (!confirm('Excluir este comunicado permanentemente?')) return;
+           if (!await MSYConfirm.show('Excluir este comunicado permanentemente?')) return;
            await db.from('comunicados').delete().eq('id', btn.dataset.id);
            Utils.showToast('Comunicado excluído.');
            loadComunicados();
@@ -2555,7 +2565,7 @@
      // Promote
      content.querySelectorAll('.promote-btn').forEach(btn => {
        btn.addEventListener('click', async () => {
-         if (!confirm('Elevar membro à Diretoria? Esta ação dá acesso administrativo completo.')) return;
+         if (!await MSYConfirm.show('Elevar membro à Diretoria? Esta ação dá acesso administrativo completo.')) return;
          await db.from('profiles').update({ tier: 'diretoria', role: 'Diretor' }).eq('id', btn.dataset.id);
          Utils.showToast('Membro elevado à Diretoria.');
          initMembros();
@@ -2565,7 +2575,7 @@
      // Demote
      content.querySelectorAll('.demote-btn').forEach(btn => {
        btn.addEventListener('click', async () => {
-         if (!confirm('Rebaixar para Membro comum? Ele perderá acesso administrativo.')) return;
+         if (!await MSYConfirm.show('Rebaixar para Membro comum? Ele perderá acesso administrativo.')) return;
          await db.from('profiles').update({ tier: 'membro', role: 'Membro' }).eq('id', btn.dataset.id);
          await db.rpc('notify_member', { p_user_id: btn.dataset.id, p_message: 'Seu cargo foi alterado para Membro pela Diretoria.', p_type: 'member', p_icon: 'ℹ️' });
          Utils.showToast('Membro rebaixado.');
@@ -2599,7 +2609,7 @@
      // Remove (desativar)
      content.querySelectorAll('.remove-btn').forEach(btn => {
        btn.addEventListener('click', async () => {
-         if (!confirm('Desativar este membro? Ele perderá acesso ao portal mas os dados serão mantidos.')) return;
+         if (!await MSYConfirm.show('Desativar este membro? Ele perderá acesso ao portal mas os dados serão mantidos.')) return;
          await db.from('profiles').update({ status: 'inativo' }).eq('id', btn.dataset.id);
          Utils.showToast('Membro desativado.');
          initMembros();
@@ -3443,7 +3453,7 @@
        tab.querySelectorAll('.delete-event-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
            e.stopPropagation();
-           if (!confirm('Excluir este evento permanentemente?')) return;
+           if (!await MSYConfirm.show('Excluir este evento permanentemente?')) return;
            const { error } = await db.from('events').delete().eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Evento excluído.'); loadEventos(); }
            else Utils.showToast('Erro ao excluir.', 'error');
@@ -3560,7 +3570,7 @@
        tab.querySelectorAll('.delete-ata-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
            e.stopPropagation();
-           if (!confirm('Excluir esta ata?')) return;
+           if (!await MSYConfirm.show('Excluir esta ata?')) return;
            const { error } = await db.from('meeting_minutes').delete().eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Ata excluída.'); loadAtas(); }
            else Utils.showToast('Erro ao excluir.', 'error');
@@ -3642,7 +3652,7 @@
        tab.querySelectorAll('.delete-ranking-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
            e.stopPropagation();
-           if (!confirm('Excluir este ranking?')) return;
+           if (!await MSYConfirm.show('Excluir este ranking?')) return;
            const { error } = await db.from('weekly_rankings').delete().eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Ranking excluído.'); loadRanking(); }
            else Utils.showToast('Erro ao excluir.', 'error');
@@ -4923,8 +4933,8 @@
      });
 
      /* ── Botão: Visualizar como Membro ── */
-     document.getElementById('viewAsMemberAdminBtn')?.addEventListener('click', () => {
-       if (confirm('Ativar modo de visualização como membro?\n\nVocê verá o portal como um membro comum.\nSuas permissões reais não serão alteradas.')) {
+     document.getElementById('viewAsMemberAdminBtn')?.addEventListener('click', async () => {
+       if (await MSYConfirm.show('Ativar modo de visualização como membro? Você verá o portal como um membro comum. Suas permissões reais não serão alteradas.', { title: 'Modo Membro', type: 'warn', confirmText: 'Ativar' })) {
          ViewMode.activate();
          window.location.href = 'dashboard.html';
        }
@@ -5455,7 +5465,7 @@
    
      // Remove avatar
      document.getElementById('removeAvatarBtn')?.addEventListener('click', async () => {
-       if (!confirm('Remover foto de perfil?')) return;
+       if (!await MSYConfirm.show('Remover foto de perfil?')) return;
        const { error } = await db.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
        if (!error) { Utils.showToast('Foto removida.'); setTimeout(() => initPerfil(), 300); }
        else Utils.showToast('Erro ao remover foto.', 'error');
@@ -6135,7 +6145,7 @@
              e.stopPropagation();
              const avisoId = btn.dataset.avisoId;
              if (!avisoId) return;
-             if (!confirm('Excluir este aviso do Jornal MSY?')) return;
+             if (!await MSYConfirm.show('Excluir este aviso do Jornal MSY?')) return;
              btn.disabled = true;
              btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
              const { error } = await db.from('jornal_avisos')
@@ -6210,8 +6220,7 @@
        const total = card.querySelectorAll('.notif-item-dash').length;
        if (total === 0) return;
    
-       const ok = confirm(`Tem certeza que deseja limpar ${total > 1 ? 'todas as ' + total + ' notificações' : 'esta notificação'}?\n\nEsta ação não pode ser desfeita.`);
-       if (!ok) return;
+       if (!await MSYConfirm.show(`Limpar ${total > 1 ? 'todas as ' + total + ' notificações' : 'esta notificação'}? Esta ação não pode ser desfeita.`, { type: 'danger', confirmText: 'Limpar' })) return;
    
        const btn = document.getElementById('notifClearAllBtn');
        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; }

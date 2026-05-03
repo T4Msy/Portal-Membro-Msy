@@ -2,6 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MSY Portal">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script>!function(){try{var t=localStorage.getItem("msy_theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){document.documentElement.removeAttribute("data-theme")}}();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#07070a">
   <title>MSY Portal — ICM</title>
@@ -9,6 +16,7 @@
 
   <!-- Portal global CSS -->
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/premium.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <!-- Fontes do ICM -->
@@ -23,10 +31,10 @@
 
 <body data-page="icm">
   <div class="layout">
-    <aside class="sidebar" id="sidebar"></aside>
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu principal"></aside>
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <div class="main-wrapper">
-      <header class="topbar" id="topbar"></header>
+      <header class="topbar" id="topbar" role="banner"></header>
 
       <main class="page-content" id="pageContent">
 
@@ -407,11 +415,14 @@
 
   <!-- Scripts: ordem importa -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/core/theme.js"></script>
   <script src="js/config.js"></script>
   <script src="js/core/cache.js"></script>
   <script src="js/features.js"></script>
   <script src="js/app.js"></script>
   <script src="js/core/realtime.js"></script>
+  <script src="js/core/confirm.js"></script>
+  <script src="js/core/a11y.js"></script>
   <script src="js/badges_unificado.js"></script>
   <script src="js/modules.js"></script>
   <script src="js/modules2.js"></script>

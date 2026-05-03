@@ -454,7 +454,7 @@ async function initFeed() {
     feedList.querySelectorAll('.feed-del-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        if (!confirm('Excluir esta publicação?')) return;
+        if (!(await MSYConfirm.show('Excluir esta publicação?', { title: 'Excluir publicação' }))) return;
         const { error } = await db.from('feed_atividade').delete().eq('id', btn.dataset.id);
         if (!error) { Utils.showToast('Removido.'); allFeed=allFeed.filter(f=>f.id!==btn.dataset.id); const c=document.getElementById('feedTotalCount'); if(c)c.textContent=allFeed.length; renderFeed(); }
         else Utils.showToast('Erro ao remover.','error');
@@ -795,7 +795,7 @@ async function initPresencas() {
       btn.addEventListener('click',()=>setPresenca(btn.dataset.membro,btn.dataset.status));
     });
     document.getElementById('presMarcarTodosBtn')?.addEventListener('click',async()=>{
-      if(!confirm(`Marcar todos os ${membros.length} membros como presentes?`))return;
+      if (!(await MSYConfirm.show(`Marcar todos os ${membros.length} membros como presentes?`, { title: 'Confirmar presenças', type: 'warn' }))) return;
       for(const m of membros) await setPresenca(m.id,'confirmado');
       Utils.showToast('Todos marcados!');
     });
@@ -1909,7 +1909,7 @@ async function initRanking() {
 
     el.querySelectorAll('.ranking-del-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Excluir este ranking?')) return;
+        if (!(await MSYConfirm.show('Excluir este ranking?', { title: 'Excluir ranking' }))) return;
         const { error } = await db.from('weekly_rankings').delete().eq('id', btn.dataset.id);
         if (!error) {
           if (abaAtiva === 'semanal') semanais = semanais.filter(r => r.id !== btn.dataset.id);
@@ -2108,7 +2108,7 @@ async function initRanking() {
     modal.querySelectorAll('.trono-del-diario').forEach(btn => {
       btn.addEventListener('click', async () => {
         const pos = parseInt(btn.dataset.pos);
-        if (!confirm(`Remover o ${pos}º lugar do Trono Diário?`)) return;
+        if (!(await MSYConfirm.show(`Remover o ${pos}º lugar do Trono Diário?`, { title: 'Remover registro' }))) return;
         const { error } = await db.from('msy_recordes_top3').delete().eq('tipo', 'diario').eq('posicao', pos);
         if (!error) {
           tronoBanco.diario = tronoBanco.diario.filter(r => r.posicao !== pos);

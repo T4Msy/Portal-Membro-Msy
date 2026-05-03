@@ -14,7 +14,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 - Supabase (PostgreSQL + Auth + Edge Functions em Deno/TypeScript)
 - Web Push VAPID + Email via Resend API
 - Mercado Pago (integração de pagamentos — ainda em fase de teste)
-- Service Worker (`sw.js`) — apenas para Web Push
+- Service Worker (`sw.js`) — Web Push, cache PWA e fallback offline
 - Vercel para deploy estático e Preview Deployments
 
 ---
@@ -31,6 +31,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 ├── js/
 │   ├── config.js       Configuração pública do frontend
 │   ├── config.example.js Template de configuração pública
+│   ├── core/           Helpers globais leves (tema, cache, realtime, acessibilidade)
 │   ├── app.js          Core: auth, utils, sidebar, topbar, init de todas as páginas
 │   ├── modules.js      Biblioteca, Premiações, Ordem
 │   ├── modules2.js     Feed, Ranking, Busca, Presenças, Desempenho, Onboarding
@@ -48,7 +49,10 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   └── functions/
 │       ├── send-email/ Edge Function: emails via Resend
 │       └── send-push/  Edge Function: Web Push VAPID
-├── sw.js               Service Worker (push notifications)
+├── manifest.json       Manifest PWA
+├── offline.html        Fallback offline parcial
+├── icons/              Ícones PWA e iOS
+├── sw.js               Service Worker (push notifications + cache)
 ├── vercel.json         Configuração do deploy estático na Vercel
 └── CNAME               portalmsy.site (mantido enquanto houver rollback GitHub Pages)
 ```
@@ -184,5 +188,5 @@ Ver plano completo de 6 fases em `.claude/plans/`.
 **Fase 2** (concluída): Padronização de JS/CSS (error handling, duplicatas, CSS inline)<br>
 **Fase 3**: Modularização ES6 (quebrar app.js em módulos)  
 **Fase 4**: Hardening Supabase (RLS, Mercado Pago, cache, realtime)  
-**Fase 5**: UI/UX, PWA, responsividade  
+**Fase 5** (concluída): UI/UX, PWA, responsividade<br>
 **Fase 6**: Vite + CI/CD + TypeScript  
