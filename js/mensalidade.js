@@ -6,9 +6,10 @@
 'use strict';
 
 async function initMensalidade() {
-  const profile = await renderSidebar('mensalidade');
-  if (!profile) return;
-  await renderTopBar('Mensalidade', profile);
+  try {
+    const profile = await renderSidebar('mensalidade');
+    if (!profile) return;
+    await renderTopBar('Mensalidade', profile);
 
   const content     = document.getElementById('pageContent');
   const isDiretoria = profile.tier === 'diretoria';
@@ -145,7 +146,15 @@ async function initMensalidade() {
       <div class="mens-stat-pill vermelho"><i class="fa-solid fa-xmark"></i> ${pendentes} pendentes</div>
       <div class="mens-stat-pill gold"><i class="fa-solid fa-users"></i> ${total} membros</div>
     `;
-  });
+    });
+  } catch (err) {
+    console.error('[MSY][mensalidade] Erro ao inicializar mensalidade:', err);
+    const content = document.getElementById('pageContent');
+    if (content) {
+      content.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="empty-state-text">Erro ao carregar mensalidade. Tente recarregar.</div></div>';
+    }
+    Utils.showToast?.('Erro ao carregar mensalidade.', 'error');
+  }
 }
 
 /* ── Renderiza lista de membros ──────────────────────────── */
@@ -154,8 +163,20 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
 
   // Se não for diretoria, ainda mostramos mas SEM revelar status alheio
   // (apenas o próprio usuário e o status geral)
-  const membros = await Payments.getStatusTodos();
-  onDone(membros);
+  let membros = [];
+  try {
+    membros = await Payments.getStatusTodos();
+    onDone(membros);
+  } catch (err) {
+    console.error('[MSY][mensalidade] Erro ao carregar membros:', err);
+    Utils.showToast?.('Erro ao carregar membros.', 'error');
+    lista.innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--text-3)">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:12px"></i>
+        Erro ao carregar membros.
+      </div>`;
+    return;
+  }
 
   if (!membros || membros.length === 0) {
     lista.innerHTML = `
@@ -211,26 +232,33 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
 
-      await Payments.confirmarPagamento(memberId, 'manual-diretoria', Payments.getMesAtual());
+      try {
+        await Payments.confirmarPagamento(memberId, 'manual-diretoria', Payments.getMesAtual());
 
-      // Atualiza a linha na tela sem recarregar tudo
-      const item = lista.querySelector(`[data-member-id="${memberId}"]`);
-      if (item) {
-        const badgeEl = item.querySelector('.mens-badge');
-        if (badgeEl) { badgeEl.className = 'mens-badge pago'; badgeEl.textContent = '✓ Pago'; }
-        btn.remove();
+        // Atualiza a linha na tela sem recarregar tudo
+        const item = lista.querySelector(`[data-member-id="${memberId}"]`);
+        if (item) {
+          const badgeEl = item.querySelector('.mens-badge');
+          if (badgeEl) { badgeEl.className = 'mens-badge pago'; badgeEl.textContent = '✓ Pago'; }
+          btn.remove();
+        }
+
+        Utils.showToast(`✅ ${memberName} marcado como pago!`, 'success');
+
+        // Atualiza pills de resumo
+        const pagosNow = lista.querySelectorAll('.mens-badge.pago').length;
+        const totalNow = lista.querySelectorAll('.mens-membro-item').length;
+        document.getElementById('ordeSummary').innerHTML = `
+          <div class="mens-stat-pill verde"><i class="fa-solid fa-check"></i> ${pagosNow} pagos</div>
+          <div class="mens-stat-pill vermelho"><i class="fa-solid fa-xmark"></i> ${totalNow - pagosNow} pendentes</div>
+          <div class="mens-stat-pill gold"><i class="fa-solid fa-users"></i> ${totalNow} membros</div>
+        `;
+      } catch (err) {
+        console.error('[MSY][mensalidade] Erro ao confirmar pagamento manual:', err);
+        Utils.showToast?.('Erro ao confirmar pagamento.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Marcar pago';
       }
-
-      Utils.showToast(`✅ ${memberName} marcado como pago!`, 'success');
-
-      // Atualiza pills de resumo
-      const pagosNow = lista.querySelectorAll('.mens-badge.pago').length;
-      const totalNow = lista.querySelectorAll('.mens-membro-item').length;
-      document.getElementById('ordeSummary').innerHTML = `
-        <div class="mens-stat-pill verde"><i class="fa-solid fa-check"></i> ${pagosNow} pagos</div>
-        <div class="mens-stat-pill vermelho"><i class="fa-solid fa-xmark"></i> ${totalNow - pagosNow} pendentes</div>
-        <div class="mens-stat-pill gold"><i class="fa-solid fa-users"></i> ${totalNow} membros</div>
-      `;
     });
   });
 

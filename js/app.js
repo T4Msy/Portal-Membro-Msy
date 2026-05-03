@@ -5931,7 +5931,9 @@
              text:`${ev.title} em ${diff} dias`,
              meta:`${Utils.formatDate(ev.event_date)}${ev.event_time ? ' · '+ev.event_time : ''}${ev.mandatory?' · Presença obrigatória':''}` });
          }
-       } catch(e) {}
+      } catch(e) {
+        console.warn('[MSY][jornal] Erro ao buscar próximo evento:', e);
+      }
      }
    
      // Reordenar após adições
@@ -5954,7 +5956,10 @@
          meta: a.autor_nome ? `Diretoria · ${a.autor_nome}` : 'Diretoria',
          avisoId: a.id, // id para exclusão
        }));
-     } catch(e) { return []; }
+    } catch(e) {
+      console.warn('[MSY][jornal] Erro ao buscar avisos manuais:', e);
+      return [];
+    }
    }
    
    let _jornalTimer = null;
@@ -6071,8 +6076,8 @@
      if (!container) return;
    
      let auto=[], man=[];
-     try { auto = await _jornalFetchAuto(); }   catch(e) { console.warn('[Jornal auto]',e); }
-     try { man  = await _jornalFetchManuais(); } catch(e) {}
+    try { auto = await _jornalFetchAuto(); }   catch(e) { console.warn('[MSY][jornal] Erro ao montar slides automáticos:', e); }
+    try { man  = await _jornalFetchManuais(); } catch(e) { console.warn('[MSY][jornal] Erro ao montar avisos manuais:', e); }
    
      const high = man.filter(s=>s.type==='priority');
      const low  = man.filter(s=>s.type!=='priority');
@@ -6415,5 +6420,12 @@
        // Módulos v3.0 — gerenciados em modules.js
        // biblioteca, premiacoes, ordem são roteados via extraRoutes em modules.js
      };
-     init[page]?.();
+     Promise.resolve(init[page]?.()).catch(err => {
+       console.error('[MSY][router-app] Erro ao inicializar página:', err);
+       const content = document.getElementById('pageContent');
+       if (content && page !== 'login') {
+         content.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="empty-state-text">Erro ao carregar página. Tente recarregar.</div></div>';
+       }
+       Utils.showToast?.('Erro ao carregar página.', 'error');
+     });
    });

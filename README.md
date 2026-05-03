@@ -3,18 +3,19 @@
 Sistema de gestão interna para membros da Masayoshi Order.
 
 **Domínio:** [portalmsy.site](https://portalmsy.site)  
-**Hosting:** GitHub Pages (branch `main`)  
+**Hosting:** Vercel (deploy estático, branch `main`)<br>
 **Backend:** Supabase — [Dashboard](https://supabase.com/dashboard/project/lldzgkxpoyqauxdcjyaw)
 
 ---
 
 ## Stack
 
-- HTML + CSS + JavaScript puro (sem framework, sem build step, sem npm)
+- HTML + CSS + JavaScript puro (sem framework, sem build step obrigatório, sem npm)
 - Supabase (PostgreSQL + Auth + Edge Functions em Deno/TypeScript)
 - Web Push VAPID + Email via Resend API
 - Mercado Pago (integração de pagamentos — ainda em fase de teste)
 - Service Worker (`sw.js`) — apenas para Web Push
+- Vercel para deploy estático e Preview Deployments
 
 ---
 
@@ -28,7 +29,8 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   ├── icm_style.css   Estilos do sistema ICM
 │   └── mensalidade.css Estilos de pagamentos
 ├── js/
-│   ├── config.js       Credenciais e configuração (EDITE AQUI)
+│   ├── config.js       Configuração pública do frontend
+│   ├── config.example.js Template de configuração pública
 │   ├── app.js          Core: auth, utils, sidebar, topbar, init de todas as páginas
 │   ├── modules.js      Biblioteca, Premiações, Ordem
 │   ├── modules2.js     Feed, Ranking, Busca, Presenças, Desempenho, Onboarding
@@ -47,7 +49,8 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │       ├── send-email/ Edge Function: emails via Resend
 │       └── send-push/  Edge Function: Web Push VAPID
 ├── sw.js               Service Worker (push notifications)
-└── CNAME               portalmsy.site
+├── vercel.json         Configuração do deploy estático na Vercel
+└── CNAME               portalmsy.site (mantido enquanto houver rollback GitHub Pages)
 ```
 
 ---
@@ -81,9 +84,15 @@ Sistema de gestão interna para membros da Masayoshi Order.
 
 ---
 
-## Como Fazer Deploy
+## Como Fazer Deploy na Vercel
 
-O portal é estático — nenhum build necessário. Basta fazer push para a branch `main`:
+O portal é estático — nenhum build é necessário. A Vercel deve ser configurada como projeto estático:
+
+- Framework Preset: `Other`
+- Build Command: vazio
+- Output Directory: raiz do repositório
+
+Fluxo recomendado:
 
 ```bash
 git add .
@@ -91,7 +100,7 @@ git commit -m "descrição da mudança"
 git push origin main
 ```
 
-O GitHub Pages publica automaticamente em `portalmsy.site` em ~1-2 minutos.
+Cada push na branch `main` gera deploy de produção na Vercel. Pull requests/branches geram Preview Deployments para validação antes de apontar ou promover produção.
 
 **Após o deploy, sempre execute o checklist em `SMOKE_TESTS.md`.**
 
@@ -99,7 +108,7 @@ O GitHub Pages publica automaticamente em `portalmsy.site` em ~1-2 minutos.
 
 ## Configuração
 
-Toda configuração fica em `js/config.js`. Edite este arquivo para atualizar credenciais:
+Toda configuração pública do frontend fica em `js/config.js`. Para ambientes novos, copie `js/config.example.js` e preencha somente valores públicos:
 
 ```javascript
 const MSY_CONFIG = {
@@ -109,10 +118,31 @@ const MSY_CONFIG = {
 };
 ```
 
-**Variáveis de ambiente das Edge Functions** (nunca no frontend):
+Pode ficar no frontend:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `MP_PUBLIC_KEY`
+
+**Variáveis de ambiente das Edge Functions/backend** (nunca no frontend):
 - `SUPABASE_SERVICE_ROLE_KEY` — chave de serviço (Supabase Secrets)
 - `RESEND_API_KEY` — chave da API do Resend para emails
+- `MERCADO_PAGO_ACCESS_TOKEN` — token privado do Mercado Pago
 - Credenciais VAPID — em `send-push/index.ts`
+
+Na Vercel, segredos devem ser cadastrados em Environment Variables apenas quando houver backend/Edge Functions consumindo esses valores. O site estático atual não injeta env vars no frontend.
+
+## Supabase Auth Redirect URLs
+
+Antes de trocar DNS ou promover produção, confirme no Supabase:
+
+- `https://portalmsy.site/login.html`
+- `https://portalmsy.site/dashboard.html`
+- `https://*.vercel.app/login.html`
+- `https://*.vercel.app/dashboard.html`
+- `http://localhost:8765/login.html`
+- `http://localhost:8765/dashboard.html`
+
+Preserve URLs `.html` nesta fase para não quebrar redirects existentes.
 
 ---
 
@@ -151,7 +181,7 @@ Estes arquivos só devem ser alterados para corrigir bugs diretos do sistema ICM
 Ver plano completo de 6 fases em `.claude/plans/`.
 
 **Fase 1** (concluída): Documentação e quick wins  
-**Fase 2**: Padronização de JS/CSS (error handling, duplicatas, CSS inline)  
+**Fase 2** (concluída): Padronização de JS/CSS (error handling, duplicatas, CSS inline)<br>
 **Fase 3**: Modularização ES6 (quebrar app.js em módulos)  
 **Fase 4**: Hardening Supabase (RLS, Mercado Pago, cache, realtime)  
 **Fase 5**: UI/UX, PWA, responsividade  

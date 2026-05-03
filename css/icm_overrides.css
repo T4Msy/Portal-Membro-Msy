@@ -1,0 +1,66 @@
+/* ============================================================
+   MSY PORTAL — ICM OVERRIDES
+   Ajustes para encaixar o ICM no layout global do portal.
+   Extraído de icm.html na Fase 2.
+   ============================================================ */
+
+/* Remove padding/max-width do page-content para o ICM ocupar tudo */
+body[data-page="icm"] .page-content {
+  padding: 0 !important;
+  max-width: none !important;
+  overflow: hidden;
+  animation: none;
+}
+
+/* Container principal do ICM */
+#icm-app {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - var(--topbar-h));
+  overflow: hidden;
+  background: #060606;
+  font-family: 'Barlow', system-ui, sans-serif;
+}
+
+/* Screens do ICM ficam absolutas dentro do #icm-app */
+#icm-app .screen {
+  position: absolute;
+  inset: 0;
+}
+
+/* Layers de atmosfera */
+#icm-app .noise,
+#icm-app .scanlines,
+#icm-app .vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* result-scroll: scroll dentro do container */
+#icm-app .result-scroll {
+  height: calc(100vh - var(--topbar-h));
+}
+
+/* Desativa cursor customizado no portal */
+#icm-app * { cursor: default !important; }
+
+/* Toast de save */
+#icm-save-toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 9999;
+  background: rgba(6,6,6,0.96);
+  border: 1px solid rgba(201,168,76,0.35);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 9px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.76rem; color: #c4a94e;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  transform: translateY(70px); opacity: 0;
+  transition: all 0.3s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+}
+#icm-save-toast.visible { transform: translateY(0); opacity: 1; }
+#icm-save-toast.error   { border-color: rgba(204,0,0,0.4); color: #e06060; }

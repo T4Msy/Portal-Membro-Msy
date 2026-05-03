@@ -93,26 +93,38 @@ async function initBusca() {
   async function doSearch(q) {
     if (!q || q.trim().length < 2) return;
     q = q.trim();
+    const results = document.getElementById('buscaResults');
     window.history.replaceState({}, '', `busca.html?q=${encodeURIComponent(q)}`);
-    document.getElementById('buscaResults').innerHTML = `
+    results.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-3);gap:12px">
         <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Buscando...
       </div>`;
-    const likeQ = `%${q}%`;
-    const [memRes, comRes, actRes, bibRes, evRes] = await Promise.all([
-      db.from('profiles').select('id,name,role,initials,color,avatar_url,tier').or(`name.ilike.${likeQ},role.ilike.${likeQ}`).limit(20),
-      db.from('comunicados').select('id,title,content,category,created_at').or(`title.ilike.${likeQ},content.ilike.${likeQ}`).limit(20),
-      db.from('activities').select('id,title,description,status,deadline').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
-      db.from('biblioteca_conteudos').select('id,titulo,descricao,categoria,link,created_at').or(`titulo.ilike.${likeQ},descricao.ilike.${likeQ}`).limit(20),
-      db.from('events').select('id,title,description,event_date,type').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
-    ]);
-    lastResults = {
-      membros:membros=memRes.data||[], comunicados:comRes.data||[],
-      atividades:actRes.data||[], biblioteca:bibRes.data||[], eventos:evRes.data||[]
-    };
-    const total = Object.values(lastResults).reduce((s,a) => s+a.length,0);
-    document.getElementById('buscaFilters').style.display = total>0 ? 'flex' : 'none';
-    renderResults(q);
+    try {
+      const likeQ = `%${q}%`;
+      const [memRes, comRes, actRes, bibRes, evRes] = await Promise.all([
+        db.from('profiles').select('id,name,role,initials,color,avatar_url,tier').or(`name.ilike.${likeQ},role.ilike.${likeQ}`).limit(20),
+        db.from('comunicados').select('id,title,content,category,created_at').or(`title.ilike.${likeQ},content.ilike.${likeQ}`).limit(20),
+        db.from('activities').select('id,title,description,status,deadline').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
+        db.from('biblioteca_conteudos').select('id,titulo,descricao,categoria,link,created_at').or(`titulo.ilike.${likeQ},descricao.ilike.${likeQ}`).limit(20),
+        db.from('events').select('id,title,description,event_date,type').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
+      ]);
+      const erroBusca = [memRes, comRes, actRes, bibRes, evRes].find(res => res.error)?.error;
+      if (erroBusca) throw erroBusca;
+      lastResults = {
+        membros: memRes.data || [], comunicados: comRes.data || [],
+        atividades: actRes.data || [], biblioteca: bibRes.data || [], eventos: evRes.data || []
+      };
+      const total = Object.values(lastResults).reduce((s,a) => s+a.length,0);
+      document.getElementById('buscaFilters').style.display = total>0 ? 'flex' : 'none';
+      renderResults(q);
+    } catch (err) {
+      console.error('[MSY][busca] Erro ao executar busca global:', err);
+      Utils.showToast('Erro ao buscar. Tente novamente.', 'error');
+      results.innerHTML = `<div class="busca-empty-state">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <p>Erro ao buscar. Tente novamente.</p>
+      </div>`;
+    }
   }
 
   function renderResults(q) {
@@ -301,23 +313,25 @@ async function initFeed() {
       if (!titulo) { Utils.showToast('Título obrigatório.','error'); return; }
       const btn = document.getElementById('feedSaveBtn');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-      let error;
-      if (isEdit) {
-        ({ error } = await db.from('feed_atividade')
-          .update({ titulo, descricao, link, tipo, icone, updated_at: new Date().toISOString() })
-          .eq('id', itemEdit.id));
-      } else {
-        ({ error } = await db.from('feed_atividade')
-          .insert({ titulo, descricao, link, tipo, icone, autor_id: profile.id }));
-      }
-      if (error) {
+      try {
+        let error;
+        if (isEdit) {
+          ({ error } = await db.from('feed_atividade')
+            .update({ titulo, descricao, link, tipo, icone, updated_at: new Date().toISOString() })
+            .eq('id', itemEdit.id));
+        } else {
+          ({ error } = await db.from('feed_atividade')
+            .insert({ titulo, descricao, link, tipo, icone, autor_id: profile.id }));
+        }
+        if (error) throw error;
+        Utils.showToast(isEdit?'Publicação atualizada!':'Publicado no feed!');
+        close(); page=1; await carregarFeed();
+      } catch (err) {
+        console.error('[MSY][feed] Erro ao salvar publicação:', err);
         Utils.showToast('Erro ao salvar.','error');
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-${isEdit?'floppy-disk':'paper-plane'}"></i> ${isEdit?'Salvar':'Publicar'}`;
-        return;
       }
-      Utils.showToast(isEdit?'Publicação atualizada!':'Publicado no feed!');
-      close(); page=1; await carregarFeed();
     });
   }
 
@@ -328,18 +342,21 @@ async function initFeed() {
       <div style="display:flex;align-items:center;justify-content:center;height:160px;color:var(--text-3);gap:12px">
         <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...
       </div>`;
-    const { data, error } = await db.from('feed_atividade')
-      .select('*, autor:autor_id(name,initials,color,avatar_url)')
-      .order('created_at', { ascending: false })
-      .limit(300);
-    if (error) {
-      if (feedList) feedList.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro: ${error.message}</div>`;
-      return;
+    try {
+      const { data, error } = await db.from('feed_atividade')
+        .select('*, autor:autor_id(name,initials,color,avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      allFeed = data||[];
+      const countEl = document.getElementById('feedTotalCount');
+      if (countEl) countEl.textContent = allFeed.length;
+      renderFeed();
+    } catch (err) {
+      console.error('[MSY][feed] Erro ao carregar feed:', err);
+      if (feedList) feedList.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar feed.</div>`;
+      Utils.showToast('Erro ao carregar feed.', 'error');
     }
-    allFeed = data||[];
-    const countEl = document.getElementById('feedTotalCount');
-    if (countEl) countEl.textContent = allFeed.length;
-    renderFeed();
   }
 
   /* ---- RENDER ---- */
@@ -485,58 +502,64 @@ async function initFeed() {
    BADGES VISÍVEIS NO MODAL DE OUTRO MEMBRO
    ============================================================ */
 async function renderBadgesMembro(userId, containerId) {
-  /* Delega ao sistema unificado MSYBadges quando disponível */
-  if (typeof MSYBadges !== 'undefined') {
-    return MSYBadges.render(userId, containerId, { compact: true });
-  }
-
-  /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
   const container = document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = `<div style="padding:10px 0;color:var(--text-3);font-size:.8rem;display:flex;align-items:center;gap:8px">
-    <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...
-  </div>`;
+  try {
+    /* Delega ao sistema unificado MSYBadges quando disponível */
+    if (typeof MSYBadges !== 'undefined') {
+      return MSYBadges.render(userId, containerId, { compact: true });
+    }
 
-  const [badgesRes, insigniasRecordes] = await Promise.all([
-    db.rpc('get_member_badges', { p_user_id: userId }),
-    typeof calcInsigniasRecordes === 'function'
-      ? calcInsigniasRecordes(userId)
-      : Promise.resolve([]),
-  ]);
-
-  const badges      = badgesRes.data || [];
-  const temQualquer = badges.length > 0 || insigniasRecordes.length > 0;
-
-  if (!temQualquer) {
-    container.innerHTML = `<div style="padding:8px 0;color:var(--text-3);font-size:.8rem;font-style:italic">Nenhuma insígnia ainda.</div>`;
-    return;
-  }
-
-  const COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
-
-  const recordesHtml = insigniasRecordes.map(ins => `
-    <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
-      <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
-      <div class="badge-info">
-        <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
-        <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
-      </div>
-    </div>`).join('');
-
-  const badgesHtml = badges.map(b => {
-    const color = COLORS[b.importancia] || 'var(--gold)';
-    return `<div class="badge-item" title="${Utils.escapeHtml((b.periodos||[]).slice(0,5).join(' · '))}" style="--badge-color:${color}">
-      <div class="badge-icon">${b.icone||'🏆'}</div>
-      <div class="badge-info">
-        <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
-        <div class="badge-qtd" style="color:${color}">${b.quantidade}×</div>
-      </div>
+    /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
+    if (!container) return;
+    container.innerHTML = `<div style="padding:10px 0;color:var(--text-3);font-size:.8rem;display:flex;align-items:center;gap:8px">
+      <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i> Carregando...
     </div>`;
-  }).join('');
 
-  container.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0">
-    ${recordesHtml}${badgesHtml}
-  </div>`;
+    const [badgesRes, insigniasRecordes] = await Promise.all([
+      db.rpc('get_member_badges', { p_user_id: userId }),
+      typeof calcInsigniasRecordes === 'function'
+        ? calcInsigniasRecordes(userId)
+        : Promise.resolve([]),
+    ]);
+    if (badgesRes.error) throw badgesRes.error;
+
+    const badges      = badgesRes.data || [];
+    const temQualquer = badges.length > 0 || insigniasRecordes.length > 0;
+
+    if (!temQualquer) {
+      container.innerHTML = `<div style="padding:8px 0;color:var(--text-3);font-size:.8rem;font-style:italic">Nenhuma insígnia ainda.</div>`;
+      return;
+    }
+
+    const COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
+
+    const recordesHtml = insigniasRecordes.map(ins => `
+      <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
+        <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
+        <div class="badge-info">
+          <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
+          <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
+        </div>
+      </div>`).join('');
+
+    const badgesHtml = badges.map(b => {
+      const color = COLORS[b.importancia] || 'var(--gold)';
+      return `<div class="badge-item" title="${Utils.escapeHtml((b.periodos||[]).slice(0,5).join(' · '))}" style="--badge-color:${color}">
+        <div class="badge-icon">${b.icone||'🏆'}</div>
+        <div class="badge-info">
+          <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
+          <div class="badge-qtd" style="color:${color}">${b.quantidade}×</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0">
+      ${recordesHtml}${badgesHtml}
+    </div>`;
+  } catch (err) {
+    console.error('[MSY][badges] Erro ao renderizar badges do membro:', err);
+    if (container) container.innerHTML = `<div style="padding:8px 0;color:var(--text-3);font-size:.8rem;font-style:italic">Erro ao carregar insígnias.</div>`;
+  }
 }
 
 /* ============================================================
@@ -591,21 +614,36 @@ async function initPresencas() {
 
   async function renderLista() {
     Utils.showLoading(content);
-    const { data: eventos, error } = await db.from('events').select('*').order('event_date',{ascending:false}).limit(60);
-    if (error) { content.innerHTML=`<div style="padding:40px;text-align:center;color:var(--text-3)">Erro: ${error.message}</div>`; return; }
+    let eventos = [];
+    try {
+      const { data, error } = await db.from('events').select('*').order('event_date',{ascending:false}).limit(60);
+      if (error) throw error;
+      eventos = data || [];
+    } catch (err) {
+      console.error('[MSY][presencas] Erro ao carregar eventos:', err);
+      content.innerHTML=`<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar eventos.</div>`;
+      Utils.showToast?.('Erro ao carregar presenças.', 'error');
+      return;
+    }
 
     let presencaMap = {};
     if (eventos?.length) {
       const eIds = eventos.map(e=>e.id);
-      if (isDiretoria) {
-        const {data:counts} = await db.from('event_presencas').select('event_id,status').in('event_id',eIds);
-        (counts||[]).forEach(c=>{
-          if(!presencaMap[c.event_id])presencaMap[c.event_id]={confirmado:0,ausente:0,justificado:0};
-          presencaMap[c.event_id][c.status]=(presencaMap[c.event_id][c.status]||0)+1;
-        });
-      } else {
-        const {data:mine}=await db.from('event_presencas').select('event_id,status').eq('user_id',profile.id).in('event_id',eIds);
-        (mine||[]).forEach(p=>{presencaMap[p.event_id]=p.status;});
+      try {
+        if (isDiretoria) {
+          const {data:counts, error: countsError} = await db.from('event_presencas').select('event_id,status').in('event_id',eIds);
+          if (countsError) throw countsError;
+          (counts||[]).forEach(c=>{
+            if(!presencaMap[c.event_id])presencaMap[c.event_id]={confirmado:0,ausente:0,justificado:0};
+            presencaMap[c.event_id][c.status]=(presencaMap[c.event_id][c.status]||0)+1;
+          });
+        } else {
+          const {data:mine, error: mineError}=await db.from('event_presencas').select('event_id,status').eq('user_id',profile.id).in('event_id',eIds);
+          if (mineError) throw mineError;
+          (mine||[]).forEach(p=>{presencaMap[p.event_id]=p.status;});
+        }
+      } catch (err) {
+        console.error('[MSY][presencas] Erro ao carregar mapa de presenças:', err);
       }
     }
 
@@ -665,10 +703,20 @@ async function initPresencas() {
 
   async function renderDetalhe(eventId, evento) {
     Utils.showLoading(content);
-    const [memRes,presRes] = await Promise.all([
-      db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
-      db.from('event_presencas').select('*').eq('event_id',eventId)
-    ]);
+    let memRes, presRes;
+    try {
+      ([memRes,presRes] = await Promise.all([
+        db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
+        db.from('event_presencas').select('*').eq('event_id',eventId)
+      ]));
+      const detailError = [memRes, presRes].find(res => res.error)?.error;
+      if (detailError) throw detailError;
+    } catch (err) {
+      console.error('[MSY][presencas] Erro ao carregar detalhe:', err);
+      content.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar detalhes de presença.</div>`;
+      Utils.showToast?.('Erro ao carregar detalhes.', 'error');
+      return;
+    }
     const membros   = memRes.data||[];
     const presencas = presRes.data||[];
     const presMap   = {};
@@ -680,16 +728,22 @@ async function initPresencas() {
     const semReg = membros.length - Object.keys(presMap).length;
 
     async function setPresenca(membroId, status) {
-      const ex = presMap[membroId];
-      let error;
-      if (ex) {
-        ({error}=await db.from('event_presencas').update({status,marcado_por:profile.id}).eq('id',ex.id));
-        if (!error) presMap[membroId].status=status;
-      } else {
-        const {data,error:e}=await db.from('event_presencas').insert({event_id:eventId,membro_id:membroId,status,marcado_por:profile.id}).select().single();
-        error=e; if(!error) presMap[membroId]=data;
+      try {
+        const ex = presMap[membroId];
+        let error;
+        if (ex) {
+          ({error}=await db.from('event_presencas').update({status,marcado_por:profile.id}).eq('id',ex.id));
+          if (!error) presMap[membroId].status=status;
+        } else {
+          const {data,error:e}=await db.from('event_presencas').insert({event_id:eventId,membro_id:membroId,status,marcado_por:profile.id}).select().single();
+          error=e; if(!error) presMap[membroId]=data;
+        }
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][presencas] Erro ao registrar presença:', err);
+        Utils.showToast('Erro ao registrar.','error');
+        return;
       }
-      if (error) { Utils.showToast('Erro ao registrar.','error'); return; }
       const row = content.querySelector(`.presenca-membro-row[data-id="${membroId}"]`);
       if (row) row.querySelectorAll('.presenca-btn-status').forEach(b=>{
         b.classList.remove('active-confirmed','active-absent','active-justified');
@@ -776,8 +830,23 @@ async function initOnboarding() {
   await renderSidebar('onboarding');
   await renderTopBar('Integração', profile);
   const content = document.getElementById('pageContent');
-  await db.rpc('init_onboarding', { p_membro_id: profile.id });
-  const {data:steps} = await db.from('onboarding_steps').select('*').eq('membro_id',profile.id);
+  Utils.showLoading(content, 'Carregando integração...');
+  let steps = [];
+  try {
+    const { error: initError } = await db.rpc('init_onboarding', { p_membro_id: profile.id });
+    if (initError) throw initError;
+    const { data, error } = await db.from('onboarding_steps').select('*').eq('membro_id',profile.id);
+    if (error) throw error;
+    steps = data || [];
+  } catch (err) {
+    console.error('[MSY][onboarding] Erro ao carregar integração:', err);
+    Utils.showToast('Erro ao carregar integração.', 'error');
+    content.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="empty-state-text">Erro ao carregar integração. Tente recarregar a página.</div>
+    </div>`;
+    return;
+  }
   const stepsMap={};
   (steps||[]).forEach(s=>{stepsMap[s.step]=s;});
   const STEPS=[
@@ -788,11 +857,18 @@ async function initOnboarding() {
     {key:'participar_evento', icon:'🗓️',titulo:'Participe de um Evento',       desc:'Marque presença no próximo evento ou reunião.',             link:'eventos.html',   linkLabel:'Ver Eventos'},
   ];
   async function toggle(key, val) {
-    const ex=stepsMap[key];
-    if(ex) await db.from('onboarding_steps').update({concluido:val}).eq('id',ex.id);
-    else await db.from('onboarding_steps').insert({membro_id:profile.id,step:key,concluido:val});
-    stepsMap[key]={...(stepsMap[key]||{}),concluido:val};
-    renderAll();
+    try {
+      const ex=stepsMap[key];
+      const { error } = ex
+        ? await db.from('onboarding_steps').update({concluido:val}).eq('id',ex.id)
+        : await db.from('onboarding_steps').insert({membro_id:profile.id,step:key,concluido:val});
+      if (error) throw error;
+      stepsMap[key]={...(stepsMap[key]||{}),concluido:val};
+      renderAll();
+    } catch (err) {
+      console.error('[MSY][onboarding] Erro ao atualizar etapa:', err);
+      Utils.showToast('Erro ao atualizar etapa.', 'error');
+    }
   }
   function renderAll() {
     const done=STEPS.filter(s=>stepsMap[s.key]?.concluido).length;
@@ -929,13 +1005,19 @@ function _tronCalcTop3FromRankings(todos) {
  * Retorna { semanal: [...3], mensal: [...3], diario: [...3] }
  */
 async function _tronLerTop3Banco() {
-  const { data, error } = await db.from('msy_recordes_top3').select('*').order('tipo').order('posicao');
-  if (error || !data) return { semanal: [], mensal: [], diario: [] };
-  const result = { semanal: [], mensal: [], diario: [] };
-  for (const row of data) {
-    if (result[row.tipo]) result[row.tipo].push(row);
+  try {
+    const { data, error } = await db.from('msy_recordes_top3').select('*').order('tipo').order('posicao');
+    if (error) throw error;
+    if (!data) return { semanal: [], mensal: [], diario: [] };
+    const result = { semanal: [], mensal: [], diario: [] };
+    for (const row of data) {
+      if (result[row.tipo]) result[row.tipo].push(row);
+    }
+    return result;
+  } catch (err) {
+    console.error('[MSY][ranking] Erro ao ler Top 3 do banco:', err);
+    return { semanal: [], mensal: [], diario: [] };
   }
-  return result;
 }
 
 /**
@@ -943,25 +1025,32 @@ async function _tronLerTop3Banco() {
  * Só grava tipos que foram recalculados (semanal e/ou mensal).
  */
 async function _tronGravarTop3(novoTop3, tiposAtualizar, profileId) {
-  for (const tipo of tiposAtualizar) {
-    const lista = novoTop3[tipo] || [];
-    for (const item of lista) {
-      await db.from('msy_recordes_top3').upsert({
-        tipo,
-        posicao:    item.posicao,
-        nome:       item.nome,
-        mensagens:  item.mensagens,
-        periodo:    item.periodo || null,
-        data_ref:   item.data_ref || null,
-        updated_by: profileId,
-      }, { onConflict: 'tipo,posicao' });
-    }
-    // Se há menos de 3 entradas, limpar posições excedentes
-    if (lista.length < 3) {
-      for (let pos = lista.length + 1; pos <= 3; pos++) {
-        await db.from('msy_recordes_top3').delete().eq('tipo', tipo).eq('posicao', pos);
+  try {
+    for (const tipo of tiposAtualizar) {
+      const lista = novoTop3[tipo] || [];
+      for (const item of lista) {
+        const { error } = await db.from('msy_recordes_top3').upsert({
+          tipo,
+          posicao:    item.posicao,
+          nome:       item.nome,
+          mensagens:  item.mensagens,
+          periodo:    item.periodo || null,
+          data_ref:   item.data_ref || null,
+          updated_by: profileId,
+        }, { onConflict: 'tipo,posicao' });
+        if (error) throw error;
+      }
+      // Se há menos de 3 entradas, limpar posições excedentes
+      if (lista.length < 3) {
+        for (let pos = lista.length + 1; pos <= 3; pos++) {
+          const { error } = await db.from('msy_recordes_top3').delete().eq('tipo', tipo).eq('posicao', pos);
+          if (error) throw error;
+        }
       }
     }
+  } catch (err) {
+    console.error('[MSY][ranking] Erro ao gravar Top 3:', err);
+    throw err;
   }
 }
 
@@ -1065,47 +1154,54 @@ function _tronMensagemEvento(evento) {
  * Respeita prioridade visual: Top 1 = prioridade 2, demais = 1 ou 0.
  */
 async function _tronPublicarJornal(eventos, profileId) {
-  if (!eventos || !eventos.length) return;
+  try {
+    if (!eventos || !eventos.length) return;
 
-  // Buscar avisos do Jornal dos últimos 2 dias para deduplicar
-  const cutoff = new Date(Date.now() - 2 * 86400000).toISOString();
-  const { data: recentes } = await db.from('jornal_avisos')
-    .select('mensagem')
-    .eq('ativo', true)
-    .gte('created_at', cutoff);
+    // Buscar avisos do Jornal dos últimos 2 dias para deduplicar
+    const cutoff = new Date(Date.now() - 2 * 86400000).toISOString();
+    const { data: recentes, error: recentesError } = await db.from('jornal_avisos')
+      .select('mensagem')
+      .eq('ativo', true)
+      .gte('created_at', cutoff);
+    if (recentesError) throw recentesError;
 
-  const mensagensExistentes = new Set((recentes || []).map(a => a.mensagem));
+    const mensagensExistentes = new Set((recentes || []).map(a => a.mensagem));
 
-  for (const evento of eventos) {
-    const mensagem = _tronMensagemEvento(evento);
-    if (mensagensExistentes.has(mensagem)) continue; // já existe, pular
+    for (const evento of eventos) {
+      const mensagem = _tronMensagemEvento(evento);
+      if (mensagensExistentes.has(mensagem)) continue; // já existe, pular
 
-    // Prioridade visual: Top 1 e auto-recorde Top 1 = 2 (urgente/destaque máx)
-    // Auto-recorde Top 2 e subida Top 2 = 1 (alta)
-    // Demais = 0 (normal)
-    let prioridade = 0;
-    if (evento.tipo === 'novo_top1' || evento.tipo === 'auto_recorde_top1') prioridade = 2;
-    else if (evento.tipo === 'auto_recorde_top2' || evento.tipo === 'subida_top2') prioridade = 1;
+      // Prioridade visual: Top 1 e auto-recorde Top 1 = 2 (urgente/destaque máx)
+      // Auto-recorde Top 2 e subida Top 2 = 1 (alta)
+      // Demais = 0 (normal)
+      let prioridade = 0;
+      if (evento.tipo === 'novo_top1' || evento.tipo === 'auto_recorde_top1') prioridade = 2;
+      else if (evento.tipo === 'auto_recorde_top2' || evento.tipo === 'subida_top2') prioridade = 1;
 
-    // Ícone por tipo
-    const icones = {
-      novo_top1:         '🏆',
-      auto_recorde_top1: '🔥',
-      auto_recorde_top2: '🔥',
-      subida_top2:       '🥈',
-      auto_recorde_top3: '🔥',
-      entrada_top3:      '🥉',
-    };
+      // Ícone por tipo
+      const icones = {
+        novo_top1:         '🏆',
+        auto_recorde_top1: '🔥',
+        auto_recorde_top2: '🔥',
+        subida_top2:       '🥈',
+        auto_recorde_top3: '🔥',
+        entrada_top3:      '🥉',
+      };
 
-    await db.from('jornal_avisos').insert({
-      mensagem,
-      icone:      icones[evento.tipo] || '🏆',
-      prioridade,
-      ativo:      true,
-      autor_id:   profileId,
-      autor_nome: 'Sistema — Trono dos Recordes',
-      expira_em:  null,
-    });
+      const { error } = await db.from('jornal_avisos').insert({
+        mensagem,
+        icone:      icones[evento.tipo] || '🏆',
+        prioridade,
+        ativo:      true,
+        autor_id:   profileId,
+        autor_nome: 'Sistema — Trono dos Recordes',
+        expira_em:  null,
+      });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.error('[MSY][ranking] Erro ao publicar eventos no Jornal:', err);
+    throw err;
   }
 }
 
@@ -1694,11 +1790,6 @@ async function initRanking() {
     const tronoPosEmojis = ['🥇', '🥈', '🥉'];
     const tronoPosLabels = ['1º Lugar', '2º Lugar', '3º Lugar'];
 
-    // Função para obter iniciais do nome
-    function getInitials(nome) {
-      return nome.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
-    }
-
     el.innerHTML = `<div class="trono-wrap">
       ${CATS.map(cat => {
         const top3 = tronoBanco[cat.tipo] || [];
@@ -1741,7 +1832,7 @@ async function initRanking() {
                       <div class="trono-card">
                         ${isFirst ? '<span class="trono-coroa">👑</span>' : ''}
                         <div class="trono-medal">${tronoPosEmojis[origIdx]}</div>
-                        <div class="trono-avatar">${getInitials(item.nome)}</div>
+                        <div class="trono-avatar">${Utils.getInitials(item.nome)}</div>
                         <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
                         <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
                         ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
@@ -2146,7 +2237,14 @@ document.addEventListener('DOMContentLoaded', () => {
     ranking:    initRanking,
     mensalidade: typeof initMensalidade !== 'undefined' ? initMensalidade : undefined,
   };
-  routes[page]?.();
+  Promise.resolve(routes[page]?.()).catch(err => {
+    console.error('[MSY][router-modules2] Erro ao inicializar módulo:', err);
+    Utils.showToast?.('Erro ao carregar módulo.', 'error');
+  });
   // Patch de badges no modal de membros (sempre que membros.html for carregado)
-  patchMemberModal();
+  try {
+    patchMemberModal();
+  } catch (err) {
+    console.error('[MSY][badges] Erro ao preparar badges do modal de membros:', err);
+  }
 });

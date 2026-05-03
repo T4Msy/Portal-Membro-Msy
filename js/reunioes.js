@@ -10,46 +10,7 @@ async function initReunioes() {
   const content     = document.getElementById('pageContent');
   const isDiretoria = profile.tier === 'diretoria';
 
-  /* ── CSS ── */
-  if (!document.getElementById('msy-meet-css')) {
-    const s = document.createElement('style');
-    s.id = 'msy-meet-css';
-    s.textContent = `
-      .meet-card {
-        background: var(--black-3); border: 1px solid var(--border-faint);
-        border-radius: var(--radius-lg); margin-bottom: 10px; overflow: hidden;
-        transition: border-color .2s, box-shadow .2s;
-      }
-      .meet-card:hover { border-color: rgba(201,168,76,.22); box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-      .meet-card-inner { padding: 16px 20px; }
-      .meet-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px; }
-      .meet-card-title { font-family:'Cinzel',serif; font-size:.95rem; font-weight:700; color:var(--text-1); line-height:1.3; }
-      .meet-card-meta { font-size:.74rem; color:var(--text-3); display:flex; gap:14px; flex-wrap:wrap; }
-      .meet-card-desc { font-size:.81rem; color:var(--text-2); line-height:1.6; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-faint); }
-      .meet-section-label {
-        display:flex; align-items:center; gap:10px;
-        font-size:.62rem; color:var(--gold); text-transform:uppercase;
-        letter-spacing:.14em; font-weight:700; margin:20px 0 12px;
-      }
-      .meet-section-label::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border-gold),transparent); }
-      .meet-section-label:first-child { margin-top:0; }
-      .meet-req-card {
-        background: var(--black-3); border: 1px solid var(--border-faint);
-        border-radius: var(--radius-lg); padding:14px 18px; margin-bottom:10px;
-      }
-      .meet-badge {
-        display:inline-flex; align-items:center; gap:4px;
-        font-size:.62rem; font-weight:700; padding:3px 9px;
-        border-radius:20px; border:1px solid; letter-spacing:.05em; text-transform:uppercase;
-        white-space:nowrap;
-      }
-      .meet-badge-pending  { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); color:#f59e0b; }
-      .meet-badge-approved { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
-      .meet-badge-refused  { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
-      .meet-badge-personal { background:rgba(201,168,76,.1); border-color:rgba(201,168,76,.3); color:var(--gold); }
-    `;
-    document.head.appendChild(s);
-  }
+  /* CSS movido para css/reunioes.css — linkado em reunioes.html */
 
   /* ── Estrutura ── */
   content.innerHTML = `
@@ -109,10 +70,19 @@ async function initReunioes() {
           .eq('assigned_to', profile.id)
           .order('meeting_date', { ascending: false });
 
-    const [{ data: reunioes, error: errR }, { data: pessoais, error: errP }] = await Promise.all([geralQuery, schedQuery]);
-
-    if (errR) console.error('[MSY Reuniões] Erro meetings:', errR);
-    if (errP) console.error('[MSY Reuniões] Erro scheduled_meetings:', errP);
+    let reunioes = [], pessoais = [];
+    try {
+      const [{ data: reunioesData, error: errR }, { data: pessoaisData, error: errP }] = await Promise.all([geralQuery, schedQuery]);
+      if (errR) throw errR;
+      if (errP) throw errP;
+      reunioes = reunioesData || [];
+      pessoais = pessoaisData || [];
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao carregar reuniões:', err);
+      tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar reuniões.</div>`;
+      Utils.showToast('Erro ao carregar reuniões.', 'error');
+      return;
+    }
 
     const today  = new Date().toISOString().split('T')[0];
     const futG   = (reunioes||[]).filter(r => r.meeting_date >= today && r.status !== 'realizada');
@@ -219,36 +189,66 @@ async function initReunioes() {
     });
 
     tab.querySelectorAll('.meet-conclude-btn').forEach(btn => btn.addEventListener('click', async () => {
-      const { error } = await db.from('meetings').update({ status: 'realizada' }).eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Marcada como realizada!'); loadReunioes(); }
-      else Utils.showToast('Erro.', 'error');
+      try {
+        const { error } = await db.from('meetings').update({ status: 'realizada' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Marcada como realizada!');
+        loadReunioes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao concluir reunião:', err);
+        Utils.showToast('Erro.', 'error');
+      }
     }));
 
     tab.querySelectorAll('.meet-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
       if (!confirm('Excluir esta reunião?')) return;
-      const { error } = await db.from('meetings').delete().eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Excluída.'); loadReunioes(); }
-      else Utils.showToast('Erro.', 'error');
+      try {
+        const { error } = await db.from('meetings').delete().eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Excluída.');
+        loadReunioes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao excluir reunião:', err);
+        Utils.showToast('Erro.', 'error');
+      }
     }));
 
     tab.querySelectorAll('.sched-conclude-btn').forEach(btn => btn.addEventListener('click', async () => {
-      const { error } = await db.from('scheduled_meetings').update({ status: 'concluida' }).eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Concluída!'); loadReunioes(); }
-      else Utils.showToast('Erro.', 'error');
+      try {
+        const { error } = await db.from('scheduled_meetings').update({ status: 'concluida' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Concluída!');
+        loadReunioes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao concluir reunião pessoal:', err);
+        Utils.showToast('Erro.', 'error');
+      }
     }));
 
     tab.querySelectorAll('.sched-cancel-btn').forEach(btn => btn.addEventListener('click', async () => {
       if (!confirm('Cancelar esta reunião?')) return;
-      const { error } = await db.from('scheduled_meetings').update({ status: 'cancelada' }).eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Cancelada.'); loadReunioes(); }
-      else Utils.showToast('Erro.', 'error');
+      try {
+        const { error } = await db.from('scheduled_meetings').update({ status: 'cancelada' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Cancelada.');
+        loadReunioes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao cancelar reunião pessoal:', err);
+        Utils.showToast('Erro.', 'error');
+      }
     }));
 
     tab.querySelectorAll('.sched-delete-btn').forEach(btn => btn.addEventListener('click', async () => {
       if (!confirm('Excluir?')) return;
-      const { error } = await db.from('scheduled_meetings').delete().eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Excluída.'); loadReunioes(); }
-      else Utils.showToast('Erro.', 'error');
+      try {
+        const { error } = await db.from('scheduled_meetings').delete().eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Excluída.');
+        loadReunioes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao excluir reunião pessoal:', err);
+        Utils.showToast('Erro.', 'error');
+      }
     }));
   }
 
@@ -258,17 +258,31 @@ async function initReunioes() {
     const tab = document.getElementById('meetTab');
     tab.innerHTML = `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>`;
 
-    const { data: reqs, error } = await db.from('meeting_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) { tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar solicitações.</div>`; return; }
+    let reqs = [];
+    try {
+      const { data, error } = await db.from('meeting_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      reqs = data || [];
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao carregar solicitações:', err);
+      tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar solicitações.</div>`;
+      Utils.showToast('Erro ao carregar solicitações.', 'error');
+      return;
+    }
 
     // Buscar nomes dos solicitantes
     const uids = [...new Set((reqs||[]).map(r => r.user_id).filter(Boolean))];
     let profileMap = {};
     if (uids.length) {
-      const { data: profs } = await db.from('profiles').select('id,name,initials,color').in('id', uids);
-      (profs||[]).forEach(p => { profileMap[p.id] = p; });
+      try {
+        const { data: profs, error: profsError } = await db.from('profiles').select('id,name,initials,color').in('id', uids);
+        if (profsError) throw profsError;
+        (profs||[]).forEach(p => { profileMap[p.id] = p; });
+      } catch (err) {
+        console.warn('[MSY][reunioes] Erro ao carregar perfis das solicitações:', err);
+      }
     }
     // Injetar requester em cada request
     (reqs||[]).forEach(r => { r.requester = profileMap[r.user_id] || null; });
@@ -307,20 +321,41 @@ async function initReunioes() {
 
     tab.querySelectorAll('.req-approve').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;
-      const { error } = await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Aprovado.'); loadSolicitacoes(); }
-      else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+      try {
+        const { error } = await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Aprovado.');
+        loadSolicitacoes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao aprovar solicitação:', err);
+        Utils.showToast('Erro.', 'error');
+        btn.disabled = false;
+      }
     }));
 
     tab.querySelectorAll('.req-refuse').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;
-      const { error } = await db.from('meeting_requests').update({ status: 'recusado' }).eq('id', btn.dataset.id);
-      if (!error) { Utils.showToast('Recusado.'); loadSolicitacoes(); }
-      else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+      try {
+        const { error } = await db.from('meeting_requests').update({ status: 'recusado' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+        Utils.showToast('Recusado.');
+        loadSolicitacoes();
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao recusar solicitação:', err);
+        Utils.showToast('Erro.', 'error');
+        btn.disabled = false;
+      }
     }));
 
     tab.querySelectorAll('.req-agendar').forEach(btn => btn.addEventListener('click', async () => {
-      await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.id);
+      try {
+        const { error } = await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][reunioes] Erro ao aprovar solicitação para agendamento:', err);
+        Utils.showToast('Erro ao aprovar solicitação.', 'error');
+        return;
+      }
       // Pré-preenche modal de agendar
       const sel = document.getElementById('ag-member');
       if (sel) sel.value = btn.dataset.uid;
@@ -342,11 +377,19 @@ async function initReunioes() {
     const tab = document.getElementById('meetTab');
     tab.innerHTML = `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>`;
 
-    const { data: atas, error } = await db.from('meeting_minutes')
-      .select('*, creator:created_by(name,initials,color)')
-      .order('meeting_date', { ascending: false });
-
-    if (error) { tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar atas.</div>`; return; }
+    let atas = [];
+    try {
+      const { data, error } = await db.from('meeting_minutes')
+        .select('*, creator:created_by(name,initials,color)')
+        .order('meeting_date', { ascending: false });
+      if (error) throw error;
+      atas = data || [];
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao carregar atas:', err);
+      tab.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar atas.</div>`;
+      Utils.showToast('Erro ao carregar atas.', 'error');
+      return;
+    }
 
     const dirAtas = (atas||[]).filter(a => a.type === 'diretoria');
     const gerAtas = (atas||[]).filter(a => a.type === 'geral');
@@ -498,15 +541,21 @@ function _bindSolicitarModal(profile) {
     if (!motivo) { Utils.showToast('Informe o motivo.', 'error'); return; }
     const btn = document.getElementById('solModalSave');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
-    const { error } = await db.from('meeting_requests').insert({
-      user_id: profile.id,
-      motivo,
-      descricao: document.getElementById('sol-desc').value.trim() || null,
-      data_sugerida: document.getElementById('sol-data').value.trim() || null,
-      status: 'pendente'
-    });
-    if (!error) { close(); Utils.showToast('Solicitação enviada!'); }
-    else Utils.showToast('Erro ao enviar.', 'error');
+    try {
+      const { error } = await db.from('meeting_requests').insert({
+        user_id: profile.id,
+        motivo,
+        descricao: document.getElementById('sol-desc').value.trim() || null,
+        data_sugerida: document.getElementById('sol-data').value.trim() || null,
+        status: 'pendente'
+      });
+      if (error) throw error;
+      close();
+      Utils.showToast('Solicitação enviada!');
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao enviar solicitação:', err);
+      Utils.showToast('Erro ao enviar.', 'error');
+    }
     btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
   });
 }
@@ -527,9 +576,16 @@ function _bindNewMeetModal(onSuccess) {
     if (!title || !date) { Utils.showToast('Preencha título e data.', 'error'); return; }
     const btn = document.getElementById('newMeetSave');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
-    const { error } = await db.from('meetings').insert({ title, meeting_date: date, meeting_time: time, type, description: desc||null, status: 'agendada' });
-    if (!error) { close(); Utils.showToast('Reunião criada!'); onSuccess(); }
-    else Utils.showToast('Erro ao criar.', 'error');
+    try {
+      const { error } = await db.from('meetings').insert({ title, meeting_date: date, meeting_time: time, type, description: desc||null, status: 'agendada' });
+      if (error) throw error;
+      close();
+      Utils.showToast('Reunião criada!');
+      onSuccess();
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao criar reunião:', err);
+      Utils.showToast('Erro ao criar.', 'error');
+    }
     btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Criar';
   });
 }
@@ -543,7 +599,15 @@ async function _bindAgendarModal(profile, onSuccess) {
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
 
   // Carrega membros
-  const { data: membros } = await db.from('profiles').select('id,name').eq('status','ativo').order('name');
+  let membros = [];
+  try {
+    const { data, error } = await db.from('profiles').select('id,name').eq('status','ativo').order('name');
+    if (error) throw error;
+    membros = data || [];
+  } catch (err) {
+    console.error('[MSY][reunioes] Erro ao carregar membros para agendamento:', err);
+    Utils.showToast('Erro ao carregar membros.', 'error');
+  }
   const sel = document.getElementById('ag-member');
   sel.innerHTML = `<option value="">Selecionar membro...</option>` +
     (membros||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}</option>`).join('');
@@ -556,13 +620,20 @@ async function _bindAgendarModal(profile, onSuccess) {
     if (!uid || !date || !time) { Utils.showToast('Preencha membro, data e horário.', 'error'); return; }
     const btn = document.getElementById('agendarSave');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Agendando...';
-    const { error } = await db.from('scheduled_meetings').insert({
-      created_by: profile.id, assigned_to: uid,
-      meeting_date: date, meeting_time: time,
-      description: desc||null, status: 'agendada'
-    });
-    if (!error) { close(); Utils.showToast('Reunião agendada!'); onSuccess(); }
-    else Utils.showToast('Erro ao agendar.', 'error');
+    try {
+      const { error } = await db.from('scheduled_meetings').insert({
+        created_by: profile.id, assigned_to: uid,
+        meeting_date: date, meeting_time: time,
+        description: desc||null, status: 'agendada'
+      });
+      if (error) throw error;
+      close();
+      Utils.showToast('Reunião agendada!');
+      onSuccess();
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao agendar reunião:', err);
+      Utils.showToast('Erro ao agendar.', 'error');
+    }
     btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-calendar-check"></i> Agendar';
   });
 }
@@ -607,11 +678,21 @@ async function openPresenceDetailModal(eventId, evento) {
   overlay.querySelector('#pdDone').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
-  const [memRes, presRes, cancelRes] = await Promise.all([
-    db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
-    db.from('event_presencas').select('*').eq('event_id', eventId),
-    db.from('event_cancel_requests').select('*, requester:user_id(name)').eq('event_id', eventId).order('created_at',{ascending:false})
-  ]);
+  let memRes, presRes, cancelRes;
+  try {
+    ([memRes, presRes, cancelRes] = await Promise.all([
+      db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
+      db.from('event_presencas').select('*').eq('event_id', eventId),
+      db.from('event_cancel_requests').select('*, requester:user_id(name)').eq('event_id', eventId).order('created_at',{ascending:false})
+    ]));
+    const detailError = [memRes, presRes, cancelRes].find(res => res.error)?.error;
+    if (detailError) throw detailError;
+  } catch (err) {
+    console.error('[MSY][reunioes-presencas] Erro ao carregar detalhes de presença:', err);
+    overlay.querySelector('#pdBody').innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar detalhes de presença.</div>`;
+    Utils.showToast?.('Erro ao carregar detalhes.', 'error');
+    return;
+  }
 
   const membros = memRes.data || [];
   const presMap = {};
@@ -711,20 +792,34 @@ async function openPresenceDetailModal(eventId, evento) {
   body.querySelectorAll('.pd-cr-approve').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      const [{ error: e1 }, { error: e2 }] = await Promise.all([
-        db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('membro_id', btn.dataset.uid),
-        db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
-      ]);
-      if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[style*="rgba(245"]').remove(); }
-      else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+      try {
+        const [{ error: e1 }, { error: e2 }] = await Promise.all([
+          db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('membro_id', btn.dataset.uid),
+          db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
+        ]);
+        if (e1 || e2) throw (e1 || e2);
+        Utils.showToast('Cancelamento aprovado.');
+        btn.closest('[style*="rgba(245"]').remove();
+      } catch (err) {
+        console.error('[MSY][reunioes-presencas] Erro ao aprovar cancelamento:', err);
+        Utils.showToast('Erro.', 'error');
+        btn.disabled = false;
+      }
     });
   });
   body.querySelectorAll('.pd-cr-refuse').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      const { error } = await db.from('event_cancel_requests').update({ status: 'recusado' }).eq('id', btn.dataset.rid);
-      if (!error) { Utils.showToast('Recusado.'); btn.closest('[style*="rgba(245"]').remove(); }
-      else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
+      try {
+        const { error } = await db.from('event_cancel_requests').update({ status: 'recusado' }).eq('id', btn.dataset.rid);
+        if (error) throw error;
+        Utils.showToast('Recusado.');
+        btn.closest('[style*="rgba(245"]').remove();
+      } catch (err) {
+        console.error('[MSY][reunioes-presencas] Erro ao recusar cancelamento:', err);
+        Utils.showToast('Erro.', 'error');
+        btn.disabled = false;
+      }
     });
   });
 }
@@ -753,10 +848,20 @@ async function openPresenceManageModal(eventId, evento, onSuccess) {
   overlay.querySelector('#pmDone').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
-  const [memRes, presRes] = await Promise.all([
-    db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
-    db.from('event_presencas').select('*').eq('event_id', eventId)
-  ]);
+  let memRes, presRes;
+  try {
+    ([memRes, presRes] = await Promise.all([
+      db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status','ativo').order('name'),
+      db.from('event_presencas').select('*').eq('event_id', eventId)
+    ]));
+    const manageError = [memRes, presRes].find(res => res.error)?.error;
+    if (manageError) throw manageError;
+  } catch (err) {
+    console.error('[MSY][reunioes-presencas] Erro ao carregar gerenciador de presenças:', err);
+    overlay.querySelector('#pmBody').innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar presenças.</div>`;
+    Utils.showToast?.('Erro ao carregar presenças.', 'error');
+    return;
+  }
 
   const membros  = memRes.data || [];
   const presMap  = {};
@@ -818,19 +923,25 @@ async function openPresenceManageModal(eventId, evento, onSuccess) {
     </div>`;
 
   async function setStatus(uid, status) {
-    const ex = presMap[uid];
-    let error;
-    if (ex) {
-      ({ error } = await db.from('event_presencas').update({ status }).eq('id', ex.id));
-      if (!error) presMap[uid].status = status;
-    } else {
-      const { data, error: e } = await db.from('event_presencas').insert({
-        event_id: eventId, user_id: uid, status
-      }).select().single();
-      error = e;
-      if (!error) presMap[uid] = data;
+    try {
+      const ex = presMap[uid];
+      let error;
+      if (ex) {
+        ({ error } = await db.from('event_presencas').update({ status }).eq('id', ex.id));
+        if (!error) presMap[uid].status = status;
+      } else {
+        const { data, error: e } = await db.from('event_presencas').insert({
+          event_id: eventId, user_id: uid, status
+        }).select().single();
+        error = e;
+        if (!error) presMap[uid] = data;
+      }
+      if (error) throw error;
+    } catch (err) {
+      console.error('[MSY][reunioes-presencas] Erro ao registrar presença:', err);
+      Utils.showToast('Erro ao registrar.', 'error');
+      return;
     }
-    if (error) { Utils.showToast('Erro ao registrar.', 'error'); return; }
 
     // Update row visually
     const row = body.querySelector(`.pm-row[data-uid="${uid}"]`);
@@ -891,15 +1002,16 @@ function openNewAtaModal(profile, onSuccess) {
     const btn = document.getElementById('newAtaSave');
     btn.disabled = true; btn.textContent = 'Salvando...';
 
-    const { error } = await db.from('meeting_minutes').insert({
-      title, meeting_date, type, content: content || null, created_by: profile.id
-    });
-
-    if (!error) {
+    try {
+      const { error } = await db.from('meeting_minutes').insert({
+        title, meeting_date, type, content: content || null, created_by: profile.id
+      });
+      if (error) throw error;
       modal.classList.remove('open');
       Utils.showToast('Ata registrada!');
       onSuccess();
-    } else {
+    } catch (err) {
+      console.error('[MSY][reunioes] Erro ao salvar ata:', err);
       Utils.showToast('Erro ao salvar ata.', 'error');
       btn.disabled = false; btn.textContent = 'Salvar Ata';
     }
@@ -965,5 +1077,10 @@ function _injectAtaModals() {
 
 /* ── Router ── */
 document.addEventListener('DOMContentLoaded', () => {
-  if (document.body.dataset.page === 'reunioes') initReunioes();
+  if (document.body.dataset.page === 'reunioes') {
+    initReunioes().catch(err => {
+      console.error('[MSY][reunioes] Erro ao inicializar página:', err);
+      Utils.showToast?.('Erro ao carregar reuniões.', 'error');
+    });
+  }
 });

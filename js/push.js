@@ -216,7 +216,9 @@
            p_icon:    icon || '🔔',
            p_link:    link || null,
          });
-       } catch (_) {}
+       } catch (err) {
+         console.warn('[MSY][notifications] Falha ao registrar notificação in-app:', err);
+       }
    
        if (!channels || channels.length === 0) return;
    

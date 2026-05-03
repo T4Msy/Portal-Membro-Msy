@@ -11,7 +11,7 @@
    ─────────────────────────────────────────────────────────── */
 const MP_CONFIG = {
   // URL base do seu site (para redirect após pagamento)
-  BASE_URL: 'https://t4msy.github.io/Portal-Membro-Msy',
+  BASE_URL: 'https://portalmsy.site',
 
   VALOR_MENSALIDADE: 10.00,
   DESCRICAO: 'Mensalidade MSY – Masayoshi Order',
@@ -60,47 +60,56 @@ const Payments = {
 
   /* Busca status da mensalidade do usuário no mês atual */
   async getStatusAtual(userId) {
-    const mesAtual = this.getMesAtual();
-    const { data, error } = await db
-      .from('mensalidades')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('mes_referencia', mesAtual)
-      .maybeSingle();
+    try {
+      const mesAtual = this.getMesAtual();
+      const { data, error } = await db
+        .from('mensalidades')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('mes_referencia', mesAtual)
+        .maybeSingle();
 
-    if (error) {
-      console.error('[Payments] Erro ao buscar mensalidade:', error);
+      if (error) throw error;
+      return data; // null = não existe registro (pendente)
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao buscar mensalidade:', err);
       return null;
     }
-    return data; // null = não existe registro (pendente)
   },
 
   /* Busca status de TODOS os membros ativos (para painel Diretoria) */
   async getStatusTodos() {
-    const mesAtual = this.getMesAtual();
+    try {
+      const mesAtual = this.getMesAtual();
 
-    // Busca membros ativos com suas mensalidades do mês
-    const { data: members, error: mErr } = await db
-      .from('profiles')
-      .select('id, name, role, tier, avatar_url, color, initials')
-      .eq('status', 'ativo')
-      .order('name');
+      // Busca membros ativos com suas mensalidades do mês
+      const { data: members, error: mErr } = await db
+        .from('profiles')
+        .select('id, name, role, tier, avatar_url, color, initials')
+        .eq('status', 'ativo')
+        .order('name');
 
-    if (mErr || !members) return [];
+      if (mErr) throw mErr;
+      if (!members) return [];
 
-    const { data: mensalidades } = await db
-      .from('mensalidades')
-      .select('user_id, status, data_pagamento')
-      .eq('mes_referencia', mesAtual);
+      const { data: mensalidades, error: mensalidadesErr } = await db
+        .from('mensalidades')
+        .select('user_id, status, data_pagamento')
+        .eq('mes_referencia', mesAtual);
+      if (mensalidadesErr) throw mensalidadesErr;
 
-    const mensMap = {};
-    (mensalidades || []).forEach(m => { mensMap[m.user_id] = m; });
+      const mensMap = {};
+      (mensalidades || []).forEach(m => { mensMap[m.user_id] = m; });
 
-    return members.map(m => ({
-      ...m,
-      mensalidade: mensMap[m.id] || null,
-      status_mensalidade: mensMap[m.id]?.status || 'pendente',
-    }));
+      return members.map(m => ({
+        ...m,
+        mensalidade: mensMap[m.id] || null,
+        status_mensalidade: mensMap[m.id]?.status || 'pendente',
+      }));
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao buscar status de mensalidades:', err);
+      return [];
+    }
   },
 
   /* ──────────────────────────────────────────────────────────
@@ -112,100 +121,124 @@ const Payments = {
          Para fins de desenvolvimento, a chamada está aqui.
   ────────────────────────────────────────────────────────── */
   async criarPreferencia(profile) {
-    const mesAtual = this.getMesAtual();
+    try {
+      const mesAtual = this.getMesAtual();
 
-    // Busca a sessão atual para enviar o token de autenticação
-    const { data: { session } } = await db.auth.getSession();
-    if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+      // Busca a sessão atual para enviar o token de autenticação
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
 
-    // Chama a Edge Function — o ACCESS_TOKEN fica seguro no servidor
-    const resp = await fetch(MP_CONFIG.EDGE_CREATE_PREF, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        baseUrl:  MP_CONFIG.BASE_URL,
-        mesAtual,
-      }),
-    });
+      // Chama a Edge Function — o ACCESS_TOKEN fica seguro no servidor
+      const resp = await fetch(MP_CONFIG.EDGE_CREATE_PREF, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          baseUrl:  MP_CONFIG.BASE_URL,
+          mesAtual,
+        }),
+      });
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '');
-      let msg = `HTTP ${resp.status}`;
-      try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) { if (text) msg = text.slice(0, 120); }
-      console.error('[Payments] Edge Function erro:', resp.status, text);
-      throw new Error(msg);
+      if (!resp.ok) {
+        const text = await resp.text().catch(err => {
+          console.error('[MSY][payments] Erro ao ler resposta da Edge Function:', err);
+          return '';
+        });
+        let msg = `HTTP ${resp.status}`;
+        try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) { if (text) msg = text.slice(0, 120); }
+        console.error('[MSY][payments] Edge Function erro:', resp.status, text);
+        throw new Error(msg);
+      }
+
+      return await resp.json(); // { id, init_point, sandbox_init_point }
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao criar preferência:', err);
+      throw err;
     }
-
-    return await resp.json(); // { id, init_point, sandbox_init_point }
   },
 
   /* Salva preferência de pagamento no banco antes do redirect */
   async salvarPreferencia(userId, preferenceId) {
-    const mesAtual = this.getMesAtual();
+    try {
+      const mesAtual = this.getMesAtual();
 
-    // Verifica se já existe registro no mês
-    const { data: existente } = await db
-      .from('mensalidades')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('mes_referencia', mesAtual)
-      .maybeSingle();
+      // Verifica se já existe registro no mês
+      const { data: existente, error: existenteErr } = await db
+        .from('mensalidades')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('mes_referencia', mesAtual)
+        .maybeSingle();
+      if (existenteErr) throw existenteErr;
 
-    if (existente) {
-      // Atualiza preferência existente
-      await db.from('mensalidades')
-        .update({ mp_preference_id: preferenceId, status: 'pendente', updated_at: new Date().toISOString() })
-        .eq('id', existente.id);
-    } else {
-      // Cria novo registro
-      await db.from('mensalidades').insert({
-        user_id:         userId,
-        mes_referencia:  mesAtual,
-        status:          'pendente',
-        mp_preference_id: preferenceId,
-        valor:           MP_CONFIG.VALOR_MENSALIDADE,
-      });
+      if (existente) {
+        // Atualiza preferência existente
+        const { error } = await db.from('mensalidades')
+          .update({ mp_preference_id: preferenceId, status: 'pendente', updated_at: new Date().toISOString() })
+          .eq('id', existente.id);
+        if (error) throw error;
+      } else {
+        // Cria novo registro
+        const { error } = await db.from('mensalidades').insert({
+          user_id:         userId,
+          mes_referencia:  mesAtual,
+          status:          'pendente',
+          mp_preference_id: preferenceId,
+          valor:           MP_CONFIG.VALOR_MENSALIDADE,
+        });
+        if (error) throw error;
+      }
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao salvar preferência:', err);
+      throw err;
     }
   },
 
   /* Confirma pagamento aprovado (chamado no retorno do MP) */
   async confirmarPagamento(userId, paymentId, mesRef) {
-    const { data: existente } = await db
-      .from('mensalidades')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('mes_referencia', mesRef)
-      .maybeSingle();
+    try {
+      const { data: existente, error: existenteErr } = await db
+        .from('mensalidades')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('mes_referencia', mesRef)
+        .maybeSingle();
+      if (existenteErr) throw existenteErr;
 
-    const payload = {
-      status:         'pago',
-      data_pagamento: new Date().toISOString(),
-      mp_payment_id:  paymentId,
-      mes_referencia: mesRef,
-      updated_at:     new Date().toISOString(),
-    };
+      const payload = {
+        status:         'pago',
+        data_pagamento: new Date().toISOString(),
+        mp_payment_id:  paymentId,
+        mes_referencia: mesRef,
+        updated_at:     new Date().toISOString(),
+      };
 
-    if (existente) {
-      await db.from('mensalidades').update(payload).eq('id', existente.id);
-    } else {
-      await db.from('mensalidades').insert({
-        user_id:   userId,
-        valor:     MP_CONFIG.VALOR_MENSALIDADE,
-        ...payload,
-      });
+      if (existente) {
+        const { error } = await db.from('mensalidades').update(payload).eq('id', existente.id);
+        if (error) throw error;
+      } else {
+        const { error } = await db.from('mensalidades').insert({
+          user_id:   userId,
+          valor:     MP_CONFIG.VALOR_MENSALIDADE,
+          ...payload,
+        });
+        if (error) throw error;
+      }
+
+      // Notificação interna
+      await db.rpc('notify_member', {
+        p_user_id: userId,
+        p_message: `✅ Mensalidade de ${this.formatMes(mesRef)} confirmada!`,
+        p_type:    'success',
+        p_icon:    '💳',
+        p_link:    'mensalidade.html',
+      }).catch(err => console.error('[MSY][payments] Erro ao enviar notificação de mensalidade:', err));
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao confirmar pagamento:', err);
+      throw err;
     }
-
-    // Notificação interna
-    await db.rpc('notify_member', {
-      p_user_id: userId,
-      p_message: `✅ Mensalidade de ${this.formatMes(mesRef)} confirmada!`,
-      p_type:    'success',
-      p_icon:    '💳',
-      p_link:    'mensalidade.html',
-    }).catch(err => console.error('[MSY] Erro ao enviar notificação de mensalidade:', err));
   },
 
   /* Inicia fluxo completo de pagamento */
@@ -235,32 +268,38 @@ const Payments = {
 
   /* Processa retorno da URL do Mercado Pago */
   async processarRetorno(profile) {
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get('status');
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('status');
 
-    if (!status) return false; // Acesso normal, não é retorno
+      if (!status) return false; // Acesso normal, não é retorno
 
-    // Limpa URL imediatamente
-    window.history.replaceState({}, '', 'mensalidade.html');
+      // Limpa URL imediatamente
+      window.history.replaceState({}, '', 'mensalidade.html');
 
-    if (status === 'success') {
-      const paymentId = params.get('payment_id') || params.get('collection_id') || 'manual';
-      const mesRef    = params.get('mes') || this.getMesAtual();
-      await this.confirmarPagamento(profile.id, paymentId, mesRef);
-      Utils.showToast('🎉 Pagamento confirmado! Mensalidade quitada.', 'success');
-      return 'success';
+      if (status === 'success') {
+        const paymentId = params.get('payment_id') || params.get('collection_id') || 'manual';
+        const mesRef    = params.get('mes') || this.getMesAtual();
+        await this.confirmarPagamento(profile.id, paymentId, mesRef);
+        Utils.showToast('🎉 Pagamento confirmado! Mensalidade quitada.', 'success');
+        return 'success';
+      }
+
+      if (status === 'pending') {
+        Utils.showToast('⏳ Pagamento em processamento. Aguarde a confirmação.', 'info');
+        return 'pending';
+      }
+
+      if (status === 'failure') {
+        Utils.showToast('❌ Pagamento não concluído. Tente novamente.', 'error');
+        return 'failure';
+      }
+
+      return false;
+    } catch (err) {
+      console.error('[MSY][payments] Erro ao processar retorno do pagamento:', err);
+      Utils.showToast?.('Erro ao processar retorno do pagamento.', 'error');
+      return false;
     }
-
-    if (status === 'pending') {
-      Utils.showToast('⏳ Pagamento em processamento. Aguarde a confirmação.', 'info');
-      return 'pending';
-    }
-
-    if (status === 'failure') {
-      Utils.showToast('❌ Pagamento não concluído. Tente novamente.', 'error');
-      return 'failure';
-    }
-
-    return false;
   },
 };

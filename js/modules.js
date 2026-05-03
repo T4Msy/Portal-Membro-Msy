@@ -115,11 +115,13 @@ async function initBiblioteca() {
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
 
-      const { error } = await db.from('biblioteca_conteudos').insert({
-        titulo, descricao, link, categoria, criado_por: profile.id
-      });
-
-      if (error) {
+      try {
+        const { error } = await db.from('biblioteca_conteudos').insert({
+          titulo, descricao, link, categoria, criado_por: profile.id
+        });
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][biblioteca] Erro ao salvar conteúdo:', err);
         Utils.showToast('Erro ao salvar conteúdo.', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Conteúdo';
@@ -130,13 +132,17 @@ async function initBiblioteca() {
       modal.classList.remove('open');
 
       // Notificar todos os membros
-      await db.rpc('notify_member', {
-        p_user_id: null,
-        p_message: `📚 Novo conteúdo na Biblioteca: "${titulo}"`,
-        p_type:    'info',
-        p_icon:    '📚',
-        p_link:    'biblioteca.html'
-      });
+      try {
+        await db.rpc('notify_member', {
+          p_user_id: null,
+          p_message: `📚 Novo conteúdo na Biblioteca: "${titulo}"`,
+          p_type:    'info',
+          p_icon:    '📚',
+          p_link:    'biblioteca.html'
+        });
+      } catch (err) {
+        console.warn('[MSY][biblioteca] Falha ao notificar novo conteúdo:', err);
+      }
 
       await carregarConteudos();
     });
@@ -205,9 +211,15 @@ async function initBiblioteca() {
         e.stopPropagation();
         if (!confirm('Remover este conteúdo da biblioteca?')) return;
         const id = btn.dataset.id;
-        const { error } = await db.from('biblioteca_conteudos').delete().eq('id', id);
-        if (!error) { Utils.showToast('Conteúdo removido.'); await carregarConteudos(); }
-        else Utils.showToast('Erro ao remover.', 'error');
+        try {
+          const { error } = await db.from('biblioteca_conteudos').delete().eq('id', id);
+          if (error) throw error;
+          Utils.showToast('Conteúdo removido.');
+          await carregarConteudos();
+        } catch (err) {
+          console.error('[MSY][biblioteca] Erro ao remover conteúdo:', err);
+          Utils.showToast('Erro ao remover.', 'error');
+        }
       });
     });
 
@@ -286,11 +298,13 @@ async function initBiblioteca() {
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
 
-      const { error } = await db.from('biblioteca_conteudos')
-        .update({ titulo, descricao, link, categoria, updated_at: new Date().toISOString() })
-        .eq('id', item.id);
-
-      if (error) {
+      try {
+        const { error } = await db.from('biblioteca_conteudos')
+          .update({ titulo, descricao, link, categoria, updated_at: new Date().toISOString() })
+          .eq('id', item.id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][biblioteca] Erro ao editar conteúdo:', err);
         Utils.showToast('Erro ao salvar alterações.', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações';
@@ -317,22 +331,22 @@ async function initBiblioteca() {
   async function carregarConteudos() {
     Utils.showLoading(document.getElementById('bibGrid'), 'Carregando biblioteca...');
 
-    const { data, error } = await db
-      .from('biblioteca_conteudos')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[MSY] Erro biblioteca:', error);
+    try {
+      const { data, error } = await db
+        .from('biblioteca_conteudos')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      allConteudos = data || [];
+    } catch (err) {
+      console.error('[MSY][biblioteca] Erro ao carregar conteúdos:', err);
       document.getElementById('bibGrid').innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--text-3)">
         <i class="fa-solid fa-triangle-exclamation" style="color:var(--red-bright);font-size:1.5rem;margin-bottom:12px;display:block"></i>
         Erro ao carregar conteúdos.<br>
-        <small style="color:var(--text-3);font-size:.75rem;margin-top:8px;display:block">${error.message || 'Verifique se o schema_modules.sql foi executado no Supabase.'}</small>
+        <small style="color:var(--text-3);font-size:.75rem;margin-top:8px;display:block">${err.message || 'Verifique se o schema_modules.sql foi executado no Supabase.'}</small>
       </div>`;
       return;
     }
-
-    allConteudos = data || [];
 
     // Atualizar contador
     document.getElementById('bibCount').textContent = `${allConteudos.length} conteúdo${allConteudos.length !== 1 ? 's' : ''}`;
@@ -483,14 +497,16 @@ async function initPremiacoes() {
 
       const payload = { titulo, descricao, importancia, icone, imagem_url };
 
-      let error;
-      if (isEdit) {
-        ({ error } = await db.from('premiacoes').update(payload).eq('id', premiacao.id));
-      } else {
-        ({ error } = await db.from('premiacoes').insert({ ...payload, criado_por: profile.id }));
-      }
-
-      if (error) {
+      try {
+        let error;
+        if (isEdit) {
+          ({ error } = await db.from('premiacoes').update(payload).eq('id', premiacao.id));
+        } else {
+          ({ error } = await db.from('premiacoes').insert({ ...payload, criado_por: profile.id }));
+        }
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][premiacoes] Erro ao salvar premiação:', err);
         Utils.showToast('Erro ao salvar premiação.', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> ' + (isEdit ? 'Atualizar' : 'Criar Premiação');
@@ -508,10 +524,15 @@ async function initPremiacoes() {
   // -------- MODAL: Adicionar Vencedor --------
   async function renderModalVencedor(premiacaoId) {
     // Buscar membros ativos
-    const { data: membros } = await db.from('profiles')
+    const { data: membros, error: membrosError } = await db.from('profiles')
       .select('id, name, role')
       .eq('status', 'ativo')
       .order('name');
+    if (membrosError) {
+      console.error('[MSY][premiacoes] Erro ao carregar membros para vencedor:', membrosError);
+      Utils.showToast('Erro ao carregar membros.', 'error');
+      return;
+    }
 
     let modal = document.getElementById('vencModal');
     if (!modal) {
@@ -567,28 +588,34 @@ async function initPremiacoes() {
       const btn = document.getElementById('vencSaveBtn');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
 
-      const { error } = await db.from('premiacao_vencedores').insert({
-        premiacao_id:  premiacaoId,
-        membro_id:     membroId,
-        periodo,
-        observacao,
-        concedido_por: profile.id
-      });
-
-      if (error) {
+      try {
+        const { error } = await db.from('premiacao_vencedores').insert({
+          premiacao_id:  premiacaoId,
+          membro_id:     membroId,
+          periodo,
+          observacao,
+          concedido_por: profile.id
+        });
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][premiacoes] Erro ao registrar vencedor:', err);
         Utils.showToast('Erro ao registrar vencedor.', 'error');
         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Registrar Vencedor';
         return;
       }
 
       // Notificar o membro premiado
-      await db.rpc('notify_member', {
-        p_user_id: membroId,
-        p_message: `🏆 Você recebeu uma premiação! Verifique suas conquistas.`,
-        p_type:    'approval',
-        p_icon:    '🏆',
-        p_link:    `premiacoes.html?id=${premiacaoId}`
-      });
+      try {
+        await db.rpc('notify_member', {
+          p_user_id: membroId,
+          p_message: `🏆 Você recebeu uma premiação! Verifique suas conquistas.`,
+          p_type:    'approval',
+          p_icon:    '🏆',
+          p_link:    `premiacoes.html?id=${premiacaoId}`
+        });
+      } catch (err) {
+        console.warn('[MSY][premiacoes] Falha ao notificar vencedor:', err);
+      }
 
       Utils.showToast('Vencedor registrado com sucesso!');
       modal.classList.remove('open');
@@ -602,19 +629,22 @@ async function initPremiacoes() {
     window.history.replaceState({}, '', 'premiacoes.html');
     Utils.showLoading(content);
 
-    const { data: premiacoes, error } = await db
-      .from('premiacoes')
-      .select('*')
-      .eq('ativo', true)
-      .order('importancia')
-      .order('titulo');
-
-    if (error) {
-      console.error('[MSY] Erro premiacoes:', error);
+    let premiacoes = [];
+    try {
+      const { data, error } = await db
+        .from('premiacoes')
+        .select('*')
+        .eq('ativo', true)
+        .order('importancia')
+        .order('titulo');
+      if (error) throw error;
+      premiacoes = data || [];
+    } catch (err) {
+      console.error('[MSY][premiacoes] Erro ao carregar lista:', err);
       content.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">
         <i class="fa-solid fa-triangle-exclamation" style="color:var(--red-bright);font-size:1.5rem;margin-bottom:12px;display:block"></i>
         Erro ao carregar premiações.<br>
-        <small style="color:var(--text-3);font-size:.75rem;margin-top:8px;display:block">${error.message || 'Verifique se o schema_modules.sql foi executado no Supabase.'}</small>
+        <small style="color:var(--text-3);font-size:.75rem;margin-top:8px;display:block">${err.message || 'Verifique se o schema_modules.sql foi executado no Supabase.'}</small>
       </div>`;
       return;
     }
@@ -864,9 +894,15 @@ async function initPremiacoes() {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm('Remover este vencedor do histórico?')) return;
-        const { error } = await db.from('premiacao_vencedores').delete().eq('id', btn.dataset.id);
-        if (!error) { Utils.showToast('Removido.'); renderDetalhe(id); }
-        else Utils.showToast('Erro ao remover.', 'error');
+        try {
+          const { error } = await db.from('premiacao_vencedores').delete().eq('id', btn.dataset.id);
+          if (error) throw error;
+          Utils.showToast('Removido.');
+          renderDetalhe(id);
+        } catch (err) {
+          console.error('[MSY][premiacoes] Erro ao remover vencedor:', err);
+          Utils.showToast('Erro ao remover.', 'error');
+        }
       });
     });
   }
@@ -881,14 +917,26 @@ async function initPremiacoes() {
       <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando recordes...
     </div>`;
 
-    // Busca recordes manuais do banco
-    const { data: recordes } = await db.from('msy_recordes').select('*').order('tipo');
+    let recordes = [], semRes = { data: [] }, mesRes = { data: [] };
+    try {
+      // Busca recordes manuais do banco
+      const recordesRes = await db.from('msy_recordes').select('*').order('tipo');
+      if (recordesRes.error) throw recordesRes.error;
+      recordes = recordesRes.data || [];
 
-    // Busca rankings — uma query só para semanal, uma para mensal
-    const [semRes, mesRes] = await Promise.all([
-      db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'semanal').order('week_start', { ascending: false }),
-      db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'mensal').order('week_start', { ascending: false }),
-    ]);
+      // Busca rankings — uma query só para semanal, uma para mensal
+      ([semRes, mesRes] = await Promise.all([
+        db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'semanal').order('week_start', { ascending: false }),
+        db.from('weekly_rankings').select('entries, week_start, week_end').eq('tipo', 'mensal').order('week_start', { ascending: false }),
+      ]));
+      const rankingsError = [semRes, mesRes].find(res => res.error)?.error;
+      if (rankingsError) throw rankingsError;
+    } catch (err) {
+      console.error('[MSY][recordes] Erro ao carregar recordes:', err);
+      sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar recordes.</div>`;
+      Utils.showToast('Erro ao carregar recordes.', 'error');
+      return;
+    }
     const semRankings = semRes.data || [];
     const mesRankings = mesRes.data || [];
 
@@ -1336,70 +1384,76 @@ async function initOrdem() {
    Chamada dentro de initPerfil() após carregar o perfil.
    ============================================================ */
 async function renderBadgesNoPerfil(userId, containerId) {
-  /* Delega ao sistema unificado MSYBadges quando disponível */
-  if (typeof MSYBadges !== 'undefined') {
-    return MSYBadges.render(userId, containerId, { compact: false });
-  }
-
-  /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
   const container = document.getElementById(containerId);
-  if (!container) return;
+  try {
+    /* Delega ao sistema unificado MSYBadges quando disponível */
+    if (typeof MSYBadges !== 'undefined') {
+      return MSYBadges.render(userId, containerId, { compact: false });
+    }
 
-  container.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--text-3)">
-      <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando insígnias...
-    </div>
-  `;
+    /* Fallback legado — só executa se badges_unificado.js não estiver carregado */
+    if (!container) return;
 
-  const [badgesRes, insigniasRecordes] = await Promise.all([
-    db.rpc('get_member_badges', { p_user_id: userId }),
-    calcInsigniasRecordes(userId),
-  ]);
-
-  const badges    = badgesRes.data || [];
-  const temBadges = badges.length > 0 || insigniasRecordes.length > 0;
-
-  if (!temBadges) {
     container.innerHTML = `
-      <div style="text-align:center;padding:28px;color:var(--text-3)">
-        <div style="font-size:2rem;margin-bottom:8px">🎖️</div>
-        <div style="font-size:.82rem">Nenhuma insígnia conquistada ainda.</div>
+      <div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--text-3)">
+        <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando insígnias...
       </div>
     `;
-    return;
-  }
 
-  const IMPORTANCIA_COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
+    const [badgesRes, insigniasRecordes] = await Promise.all([
+      db.rpc('get_member_badges', { p_user_id: userId }),
+      calcInsigniasRecordes(userId),
+    ]);
+    if (badgesRes.error) throw badgesRes.error;
 
-  const badgesHtml = badges.map(b => {
-    const color   = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
-    const tooltip = b.periodos ? b.periodos.join(' · ') : '';
-    return `
-      <div class="badge-item" title="${Utils.escapeHtml(tooltip)}" style="--badge-color:${color}">
-        <div class="badge-icon">${b.icone || '🏆'}</div>
+    const badges    = badgesRes.data || [];
+    const temBadges = badges.length > 0 || insigniasRecordes.length > 0;
+
+    if (!temBadges) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:28px;color:var(--text-3)">
+          <div style="font-size:2rem;margin-bottom:8px">🎖️</div>
+          <div style="font-size:.82rem">Nenhuma insígnia conquistada ainda.</div>
+        </div>
+      `;
+      return;
+    }
+
+    const IMPORTANCIA_COLORS = { 'Semanal':'#3b82f6','Mensal':'var(--gold)','Anual':'var(--red-bright)','Especial':'#8b5cf6' };
+
+    const badgesHtml = badges.map(b => {
+      const color   = IMPORTANCIA_COLORS[b.importancia] || 'var(--gold)';
+      const tooltip = b.periodos ? b.periodos.join(' · ') : '';
+      return `
+        <div class="badge-item" title="${Utils.escapeHtml(tooltip)}" style="--badge-color:${color}">
+          <div class="badge-icon">${b.icone || '🏆'}</div>
+          <div class="badge-info">
+            <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
+            <div class="badge-qtd" style="color:${color}">${b.quantidade}x</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const recordesHtml = insigniasRecordes.map(ins => `
+      <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
+        <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
         <div class="badge-info">
-          <div class="badge-titulo">${Utils.escapeHtml(b.titulo)}</div>
-          <div class="badge-qtd" style="color:${color}">${b.quantidade}x</div>
+          <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
+          <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
         </div>
       </div>
-    `;
-  }).join('');
+    `).join('');
 
-  const recordesHtml = insigniasRecordes.map(ins => `
-    <div class="badge-item" title="${Utils.escapeHtml(ins.tooltip)}" style="--badge-color:${ins.cor}">
-      <div class="badge-icon" style="filter:drop-shadow(0 0 6px ${ins.cor}88)">${ins.emoji}</div>
-      <div class="badge-info">
-        <div class="badge-titulo">${Utils.escapeHtml(ins.titulo)}</div>
-        <div class="badge-qtd" style="color:${ins.cor};font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">Recorde</div>
+    container.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">
+        ${recordesHtml}${badgesHtml}
       </div>
-    </div>
-  `).join('');
-
-  container.innerHTML = `
-    <div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">
-      ${recordesHtml}${badgesHtml}
-    </div>
-  `;
+    `;
+  } catch (err) {
+    console.error('[MSY][badges] Erro ao renderizar badges no perfil:', err);
+    if (container) container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-3)">Erro ao carregar insígnias.</div>`;
+  }
 }
 
 /* ============================================================
@@ -1417,44 +1471,52 @@ window._msyRecordesCacheTs = window._msyRecordesCacheTs || 0;
 const MSY_RECORDES_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 async function _carregarDadosRecordes() {
-  const agora = Date.now();
-  if (window._msyRecordesCache && (agora - window._msyRecordesCacheTs) < MSY_RECORDES_CACHE_TTL) {
-    return window._msyRecordesCache;
+  try {
+    const agora = Date.now();
+    if (window._msyRecordesCache && (agora - window._msyRecordesCacheTs) < MSY_RECORDES_CACHE_TTL) {
+      return window._msyRecordesCache;
+    }
+
+    // Lê o Top 3 persistido na tabela dedicada — fonte de verdade do Trono dos Recordes
+    const { data: top3Rows, error } = await db.from('msy_recordes_top3')
+      .select('tipo, posicao, nome, mensagens, periodo, data_ref')
+      .order('tipo').order('posicao');
+    if (error) throw error;
+
+    const top3 = { semanal: [], mensal: [], diario: [] };
+    for (const row of (top3Rows || [])) {
+      if (top3[row.tipo]) top3[row.tipo].push(row);
+    }
+
+    // Compatibilidade com código que espera melhorSem / melhorMes / recDiario
+    // melhorSem e melhorMes = posição 1 de cada tipo (Top 1 histórico)
+    const semPos1  = top3.semanal.find(r => r.posicao === 1);
+    const mesPos1  = top3.mensal.find(r  => r.posicao === 1);
+    const diarPos1 = top3.diario.find(r  => r.posicao === 1);
+
+    const melhorSem  = semPos1  ? { name: semPos1.nome,  messages: semPos1.mensagens  } : null;
+    const melhorMes  = mesPos1  ? { name: mesPos1.nome,  messages: mesPos1.mensagens  } : null;
+    const recDiario  = diarPos1 ? { nome: diarPos1.nome, mensagens: diarPos1.mensagens } : null;
+
+    const dados = { melhorSem, melhorMes, recDiario, top3 };
+    window._msyRecordesCache   = dados;
+    window._msyRecordesCacheTs = agora;
+    return dados;
+  } catch (err) {
+    console.error('[MSY][recordes] Erro ao carregar dados de recordes:', err);
+    return { melhorSem: null, melhorMes: null, recDiario: null, top3: { semanal: [], mensal: [], diario: [] } };
   }
-
-  // Lê o Top 3 persistido na tabela dedicada — fonte de verdade do Trono dos Recordes
-  const { data: top3Rows } = await db.from('msy_recordes_top3')
-    .select('tipo, posicao, nome, mensagens, periodo, data_ref')
-    .order('tipo').order('posicao');
-
-  const top3 = { semanal: [], mensal: [], diario: [] };
-  for (const row of (top3Rows || [])) {
-    if (top3[row.tipo]) top3[row.tipo].push(row);
-  }
-
-  // Compatibilidade com código que espera melhorSem / melhorMes / recDiario
-  // melhorSem e melhorMes = posição 1 de cada tipo (Top 1 histórico)
-  const semPos1  = top3.semanal.find(r => r.posicao === 1);
-  const mesPos1  = top3.mensal.find(r  => r.posicao === 1);
-  const diarPos1 = top3.diario.find(r  => r.posicao === 1);
-
-  const melhorSem  = semPos1  ? { name: semPos1.nome,  messages: semPos1.mensagens  } : null;
-  const melhorMes  = mesPos1  ? { name: mesPos1.nome,  messages: mesPos1.mensagens  } : null;
-  const recDiario  = diarPos1 ? { nome: diarPos1.nome, mensagens: diarPos1.mensagens } : null;
-
-  const dados = { melhorSem, melhorMes, recDiario, top3 };
-  window._msyRecordesCache   = dados;
-  window._msyRecordesCacheTs = agora;
-  return dados;
 }
 
 async function calcInsigniasRecordes(userId) {
-  const insignias = [];
+  try {
+    const insignias = [];
 
-  // Busca nome do usuário
-  const { data: prof } = await db.from('profiles').select('name').eq('id', userId).limit(1);
-  if (!prof || prof.length === 0) return insignias;
-  const nome = prof[0].name;
+    // Busca nome do usuário
+    const { data: prof, error } = await db.from('profiles').select('name').eq('id', userId).limit(1);
+    if (error) throw error;
+    if (!prof || prof.length === 0) return insignias;
+    const nome = prof[0].name;
 
   // Normaliza para comparação sem acento/caixa
   const normNome = (n) => (n||'').toLowerCase().trim()
@@ -1488,7 +1550,11 @@ async function calcInsigniasRecordes(userId) {
     });
   }
 
-  return insignias;
+    return insignias;
+  } catch (err) {
+    console.error('[MSY][recordes] Erro ao calcular insígnias de recordes:', err);
+    return [];
+  }
 }
 
 /* ============================================================
@@ -1502,5 +1568,8 @@ document.addEventListener('DOMContentLoaded', () => {
     premiacoes: initPremiacoes,
     ordem:      initOrdem,
   };
-  extraRoutes[page]?.();
+  Promise.resolve(extraRoutes[page]?.()).catch(err => {
+    console.error('[MSY][router-modules] Erro ao inicializar módulo:', err);
+    Utils.showToast?.('Erro ao carregar módulo.', 'error');
+  });
 });

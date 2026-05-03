@@ -18,9 +18,8 @@ const MSY_CONFIG = {
 
   // ── Mercado Pago ──────────────────────────────────────────
   // Acesse: https://www.mercadopago.com.br/developers/panel
-  // ⚠️  Em produção, mova o ACCESS_TOKEN para um backend seguro
+  // O access token nunca deve ficar no frontend. Use Edge Function/backend.
   MP_PUBLIC_KEY:   'TEST-COLOQUE-SUA-PUBLIC-KEY',   // Chave pública
-  MP_ACCESS_TOKEN: 'TEST-COLOQUE-SEU-ACCESS-TOKEN', // Token de acesso
 
   // ── App ───────────────────────────────────────────────────
   APP_NAME: 'MSY Portal',

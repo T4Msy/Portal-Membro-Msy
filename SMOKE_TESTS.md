@@ -1,15 +1,26 @@
 # Smoke Tests — Portal MSY
 
-Execute este checklist manualmente **antes de qualquer deploy** para garantir que nenhuma funcionalidade crítica foi quebrada.
+Execute este checklist manualmente **antes de promover qualquer deploy** para garantir que nenhuma funcionalidade crítica foi quebrada.
 
 ---
 
 ## Como usar
 
-1. Faça o deploy
+1. Abra o Preview Deployment da Vercel ou o deploy local
 2. Abra o portal em uma aba **anônima** (para garantir sessão limpa)
 3. Execute os testes abaixo em ordem
-4. Se qualquer item falhar: **reverta o deploy** antes de investigar
+4. Se qualquer item falhar: **não promova para produção** ou reverta o deploy antes de investigar
+
+---
+
+## Deploy / Vercel
+
+- [ ] Preview Deployment abre `/` e redireciona para `login.html`
+- [ ] `login.html`, `dashboard.html`, `admin.html`, `membros.html`, `reunioes.html`, `mensalidade.html`, `eventos.html`, `atividades.html`, `comunicados.html`, `ranking.html`, `feed.html` e `biblioteca.html` retornam 200
+- [ ] `css/style.css`, `js/config.js`, `js/app.js` e `sw.js` retornam 200
+- [ ] `sw.js` não fica preso em cache antigo após novo deploy
+- [ ] Supabase Auth Redirect URLs incluem produção, preview Vercel e localhost
+- [ ] `portalmsy.site` está com HTTPS válido após a troca de DNS
 
 ---
 
@@ -44,7 +55,7 @@ Execute este checklist manualmente **antes de qualquer deploy** para garantir qu
 ### Erros de Console
 - [ ] Abrir DevTools → Console
 - [ ] Navegar por 5 páginas → **zero erros vermelhos no console**
-- [ ] `grep "catch(() => {})"` no código → deve retornar zero resultados
+- [ ] busca por `catch` vazio no código → deve retornar zero resultados
 
 ---
 
@@ -88,7 +99,13 @@ Execute este checklist manualmente **antes de qualquer deploy** para garantir qu
 
 ```bash
 # Verificar se há catches silenciosos no código
-grep -rn "catch(() => {})" js/
+rg "catch\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*\\}\\s*\\)" js/
+
+# Verificar dependências antigas do GitHub Pages no portal
+rg "t4msy\\.github\\.io/Portal-Membro-Msy" .
+
+# Verificar tokens privados expostos no frontend
+rg "MP_ACCESS_TOKEN|MERCADO_PAGO_ACCESS_TOKEN|RESEND_API_KEY|SUPABASE_SERVICE_ROLE_KEY" js *.html css -g '!js/config.example.js'
 
 # Verificar títulos únicos em todas as páginas
 grep -h "<title>" *.html | sort | uniq -d

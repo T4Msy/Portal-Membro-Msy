@@ -1,0 +1,13 @@
+/* ============================================================
+   MSY PORTAL — LOGIN.CSS
+   Estilos específicos da tela de acesso.
+   Extraído de login.html na Fase 2.
+   ============================================================ */
+
+.input-wrap { position: relative; }
+.input-wrap .form-input { padding-right: 42px; }
+.pw-toggle { position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-3);cursor:pointer;font-size:.9rem;background:none;border:none;padding:4px;transition:color var(--t1) var(--ease); }
+.pw-toggle:hover { color: var(--gold); }
+.orb { position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none; }
+.orb-1 { width:350px;height:350px;background:radial-gradient(circle,rgba(185,28,28,.08),transparent 70%);top:-80px;left:-80px; }
+.orb-2 { width:280px;height:280px;background:radial-gradient(circle,rgba(201,168,76,.06),transparent 70%);bottom:-60px;right:-60px; }

@@ -56,10 +56,18 @@ const MSYPerms = {
   /** Carrega permissões do usuário atual do banco */
   async load(userId) {
     if (this._cacheUid === userId && this._cache !== null) return this._cache;
-    const { data } = await db.from('member_permissions').select('permissions').eq('user_id', userId).single();
-    this._cache = (data?.permissions) || [];
-    this._cacheUid = userId;
-    return this._cache;
+    try {
+      const { data, error } = await db.from('member_permissions').select('permissions').eq('user_id', userId).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      this._cache = (data?.permissions) || [];
+      this._cacheUid = userId;
+      return this._cache;
+    } catch (err) {
+      console.error('[MSY][permissoes] Erro ao carregar permissões:', err);
+      this._cache = [];
+      this._cacheUid = userId;
+      return this._cache;
+    }
   },
 
   /** Invalida cache */
@@ -81,38 +89,46 @@ const MSYPerms = {
 
   /** Salva permissões de um membro (admin only) — INSERT ou UPDATE separados para evitar RLS */
   async save(userId, permissions) {
-    const ts = new Date().toISOString();
-    // Tenta UPDATE primeiro
-    const { error: updErr, data: updData } = await db
-      .from('member_permissions')
-      .update({ permissions, updated_at: ts })
-      .eq('user_id', userId)
-      .select('user_id');
+    try {
+      const ts = new Date().toISOString();
+      // Tenta UPDATE primeiro
+      const { error: updErr, data: updData } = await db
+        .from('member_permissions')
+        .update({ permissions, updated_at: ts })
+        .eq('user_id', userId)
+        .select('user_id');
 
-    if (!updErr && updData && updData.length > 0) {
-      // UPDATE ok
+      if (!updErr && updData && updData.length > 0) {
+        // UPDATE ok
+        if (userId === this._cacheUid) this.invalidate();
+        return true;
+      }
+
+      // Registro não existe ainda — INSERT
+      const { error: insErr } = await db
+        .from('member_permissions')
+        .insert({ user_id: userId, permissions, updated_at: ts });
+
+      if (insErr) throw insErr;
+
       if (userId === this._cacheUid) this.invalidate();
       return true;
-    }
-
-    // Registro não existe ainda — INSERT
-    const { error: insErr } = await db
-      .from('member_permissions')
-      .insert({ user_id: userId, permissions, updated_at: ts });
-
-    if (insErr) {
-      console.error('[MSY Perms] Erro ao salvar permissões:', insErr);
+    } catch (err) {
+      console.error('[MSY][permissoes] Erro ao salvar permissões:', err);
       return false;
     }
-
-    if (userId === this._cacheUid) this.invalidate();
-    return true;
   },
 
   /** Carrega permissões de um membro específico */
   async loadFor(userId) {
-    const { data } = await db.from('member_permissions').select('permissions').eq('user_id', userId).single();
-    return (data?.permissions) || [];
+    try {
+      const { data, error } = await db.from('member_permissions').select('permissions').eq('user_id', userId).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return (data?.permissions) || [];
+    } catch (err) {
+      console.error('[MSY][permissoes] Erro ao carregar permissões do membro:', err);
+      return [];
+    }
   },
 };
 
@@ -121,183 +137,7 @@ const MSYPerms = {
    Acessível apenas para diretoria, via painel admin.
    ============================================================ */
 async function openPermissionsManager() {
-  /* ── Injetar CSS premium ── */
-  if (!document.getElementById('msy-perms-modal-css')) {
-    const s = document.createElement('style');
-    s.id = 'msy-perms-modal-css';
-    s.textContent = `
-      #permsManagerModal .modal {
-        max-width: 820px; max-height: 92vh;
-        display: flex; flex-direction: column;
-        padding: 0; overflow: hidden;
-        background: #0b0b0f;
-        border: 1px solid rgba(201,168,76,.22);
-      }
-      #permsManagerModal .modal-header {
-        background: linear-gradient(135deg,#0f0f15,#0b0b0f);
-        border-bottom: 1px solid rgba(201,168,76,.15);
-        padding: 18px 24px; flex-shrink: 0; position: relative;
-      }
-      #permsManagerModal .modal-header::after {
-        content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
-        background: linear-gradient(90deg,transparent,rgba(201,168,76,.5) 40%,rgba(201,168,76,.5) 60%,transparent);
-      }
-      #permsManagerBody {
-        display: grid; grid-template-columns: 230px 1fr;
-        flex: 1; min-height: 0; overflow: hidden;
-      }
-      .pm-sidebar {
-        background: #08080c; border-right: 1px solid rgba(255,255,255,.06);
-        display: flex; flex-direction: column; overflow: hidden;
-      }
-      .pm-sidebar-head {
-        padding: 12px 14px 10px; border-bottom: 1px solid rgba(255,255,255,.05);
-        font-size: .62rem; color: var(--gold); letter-spacing: .12em;
-        text-transform: uppercase; font-weight: 700; flex-shrink: 0;
-      }
-      .pm-sidebar-search {
-        padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.04); flex-shrink: 0;
-      }
-      .pm-sidebar-search input {
-        width: 100%; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-        border-radius: 6px; padding: 6px 10px; font-size: .75rem; color: var(--text-1);
-        outline: none; transition: border .2s; box-sizing: border-box;
-      }
-      .pm-sidebar-search input:focus { border-color: rgba(201,168,76,.4); }
-      .pm-member-list { overflow-y: auto; flex: 1; }
-      .pm-member-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 14px; cursor: pointer;
-        border-bottom: 1px solid rgba(255,255,255,.03);
-        transition: background .15s; position: relative;
-      }
-      .pm-member-item:hover { background: rgba(255,255,255,.03); }
-      .pm-member-item.active {
-        background: linear-gradient(135deg,rgba(201,168,76,.1),rgba(201,168,76,.04));
-        border-left: 2px solid var(--gold); padding-left: 12px;
-      }
-      .pm-member-item.active .pm-member-name { color: var(--gold); }
-      .pm-member-name { font-size: .82rem; font-weight: 600; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .pm-member-count {
-        font-size: .65rem; padding: 2px 7px; border-radius: 20px; margin-top: 2px;
-        display: inline-block; font-weight: 700;
-      }
-      .pm-member-count.has-perms { background: rgba(201,168,76,.15); color: var(--gold); border: 1px solid rgba(201,168,76,.25); }
-      .pm-member-count.no-perms  { background: rgba(255,255,255,.05); color: var(--text-3); }
-      .pm-panel { display: flex; flex-direction: column; overflow: hidden; background: #0d0d12; }
-      .pm-panel-head {
-        padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,.06);
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; flex-wrap: wrap; flex-shrink: 0;
-        background: linear-gradient(135deg,rgba(201,168,76,.06),transparent);
-      }
-      .pm-panel-member-info { display: flex; align-items: center; gap: 12px; }
-      .pm-panel-member-name { font-weight: 700; font-size: .95rem; color: var(--text-1); }
-      .pm-panel-member-role { font-size: .72rem; color: var(--text-3); margin-top: 1px; }
-      .pm-panel-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .pm-active-count {
-        font-size: .72rem; padding: 4px 12px; border-radius: 20px;
-        background: rgba(201,168,76,.12); border: 1px solid rgba(201,168,76,.25);
-        color: var(--gold); font-weight: 700; min-width: 80px; text-align: center;
-      }
-      .pm-scroll { overflow-y: auto; flex: 1; padding: 20px 22px 24px; }
-      .pm-group { margin-bottom: 24px; }
-      .pm-group-header {
-        display: flex; align-items: center; justify-content: space-between;
-        margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.06);
-      }
-      .pm-group-title {
-        display: flex; align-items: center; gap: 8px;
-        font-size: .72rem; color: var(--gold); font-weight: 700;
-        letter-spacing: .1em; text-transform: uppercase;
-      }
-      .pm-group-icon {
-        width: 22px; height: 22px; background: rgba(201,168,76,.12);
-        border: 1px solid rgba(201,168,76,.2); border-radius: 5px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: .65rem; color: var(--gold);
-      }
-      .pm-group-toggle { display: flex; gap: 6px; }
-      .pm-group-btn {
-        font-size: .62rem; padding: 3px 9px; border-radius: 4px; cursor: pointer;
-        border: 1px solid rgba(255,255,255,.1); background: transparent;
-        color: var(--text-3); transition: all .15s; font-weight: 600; letter-spacing: .04em;
-      }
-      .pm-group-btn:hover { background: rgba(201,168,76,.1); color: var(--gold); border-color: rgba(201,168,76,.3); }
-      .pm-perms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-      .pm-perm-card {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; padding: 12px 14px; border-radius: 8px;
-        border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02);
-        cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1);
-        position: relative; overflow: hidden; user-select: none;
-      }
-      .pm-perm-card::before {
-        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-        background: transparent; border-radius: 8px 0 0 8px; transition: background .2s;
-      }
-      .pm-perm-card:hover { background: rgba(255,255,255,.04); border-color: rgba(201,168,76,.2); }
-      .pm-perm-card.active {
-        background: linear-gradient(135deg,rgba(201,168,76,.1),rgba(201,168,76,.04));
-        border-color: rgba(201,168,76,.35);
-      }
-      .pm-perm-card.active::before { background: var(--gold); }
-      .pm-perm-card.critical.active {
-        background: linear-gradient(135deg,rgba(185,28,28,.15),rgba(185,28,28,.06));
-        border-color: rgba(239,68,68,.35);
-      }
-      .pm-perm-card.critical.active::before { background: #ef4444; }
-      .pm-perm-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-      .pm-perm-icon {
-        width: 30px; height: 30px; border-radius: 7px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: .75rem; flex-shrink: 0; transition: all .2s;
-        background: rgba(255,255,255,.04); color: var(--text-3); border: 1px solid rgba(255,255,255,.07);
-      }
-      .pm-perm-card.active .pm-perm-icon { background: rgba(201,168,76,.18); color: var(--gold); border-color: rgba(201,168,76,.3); }
-      .pm-perm-card.critical.active .pm-perm-icon { background: rgba(239,68,68,.15); color: #ef4444; border-color: rgba(239,68,68,.3); }
-      .pm-perm-label { font-size: .8rem; font-weight: 600; color: var(--text-2); line-height: 1.3; transition: color .2s; }
-      .pm-perm-card.active .pm-perm-label { color: var(--text-1); }
-      .pm-perm-critical-badge {
-        font-size: .55rem; padding: 1px 5px;
-        background: rgba(239,68,68,.15); color: #ef4444;
-        border: 1px solid rgba(239,68,68,.25); border-radius: 3px;
-        font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-        margin-top: 3px; display: inline-block;
-      }
-      .pm-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
-      .pm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-      .pm-toggle-track {
-        position: absolute; inset: 0; border-radius: 10px;
-        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-        transition: all .25s cubic-bezier(.4,0,.2,1); cursor: pointer;
-      }
-      .pm-toggle-track::after {
-        content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
-        width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.3);
-        transition: all .25s cubic-bezier(.4,0,.2,1); box-shadow: 0 1px 3px rgba(0,0,0,.4);
-      }
-      .pm-toggle input:checked + .pm-toggle-track { background: rgba(201,168,76,.3); border-color: rgba(201,168,76,.5); }
-      .pm-toggle input:checked + .pm-toggle-track::after { left: calc(100% - 16px); background: var(--gold); box-shadow: 0 0 6px rgba(201,168,76,.6); }
-      .pm-perm-card.critical .pm-toggle input:checked + .pm-toggle-track { background: rgba(239,68,68,.25); border-color: rgba(239,68,68,.4); }
-      .pm-perm-card.critical .pm-toggle input:checked + .pm-toggle-track::after { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,.5); }
-      .pm-footer {
-        padding: 14px 22px; border-top: 1px solid rgba(255,255,255,.06);
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; flex-shrink: 0; background: #09090d;
-      }
-      .pm-footer-hint { font-size: .72rem; color: var(--text-3); display: flex; align-items: center; gap: 7px; }
-      .pm-member-list::-webkit-scrollbar, .pm-scroll::-webkit-scrollbar { width: 4px; }
-      .pm-member-list::-webkit-scrollbar-thumb, .pm-scroll::-webkit-scrollbar-thumb { background: rgba(201,168,76,.2); border-radius: 4px; }
-      @keyframes pm-ripple { 0% { transform:scale(0);opacity:.4; } 100% { transform:scale(2.5);opacity:0; } }
-      .pm-ripple {
-        position:absolute; border-radius:50%; background:rgba(201,168,76,.3);
-        width:60px; height:60px; margin:-30px 0 0 -30px;
-        animation:pm-ripple .45s linear; pointer-events:none;
-      }
-    `;
-    document.head.appendChild(s);
-  }
+  /* CSS movido para css/modules3.css */
 
   /* ── Modal shell ── */
   let modal = document.getElementById('permsManagerModal');
@@ -331,17 +171,34 @@ async function openPermissionsManager() {
   body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--text-3)"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);font-size:1.4rem"></i></div>`;
 
   /* ── Dados ── */
-  const { data: members } = await db.from('profiles')
-    .select('id,name,role,initials,color,avatar_url,tier')
-    .eq('status','ativo').neq('tier','diretoria').order('name');
+  let members = [], allPermsData = [];
+  try {
+    const { data: membersData, error: membersError } = await db.from('profiles')
+      .select('id,name,role,initials,color,avatar_url,tier')
+      .eq('status','ativo').neq('tier','diretoria').order('name');
+    if (membersError) throw membersError;
+    members = membersData || [];
+  } catch (err) {
+    console.error('[MSY][permissoes] Erro ao carregar membros:', err);
+    body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-3);font-size:.84rem">Erro ao carregar membros.</div>`;
+    Utils.showToast?.('Erro ao carregar membros.', 'error');
+    return;
+  }
 
   if (!members || members.length === 0) {
     body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-3);font-size:.84rem">Nenhum membro encontrado.</div>`;
     return;
   }
 
-  const { data: allPermsData } = await db.from('member_permissions')
-    .select('user_id,permissions').in('user_id', members.map(m => m.id));
+  try {
+    const { data, error } = await db.from('member_permissions')
+      .select('user_id,permissions').in('user_id', members.map(m => m.id));
+    if (error) throw error;
+    allPermsData = data || [];
+  } catch (err) {
+    console.error('[MSY][permissoes] Erro ao carregar permissões dos membros:', err);
+    Utils.showToast?.('Erro ao carregar permissões.', 'error');
+  }
   const permsMap = {};
   (allPermsData || []).forEach(p => { permsMap[p.user_id] = p.permissions || []; });
 
@@ -785,7 +642,9 @@ async function renderSystemAlerts(containerEl) {
       .lt('created_at', new Date(today.getTime()-30*86400000).toISOString())
       .gte('created_at', new Date(today.getTime()-60*86400000).toISOString());
     respostas60d = r.data||[];
-  } catch(e) {}
+  } catch(e) {
+    console.warn('[MSY][alerts] Erro ao buscar respostas 30-60d:', e);
+  }
   const uids60d = new Set(respostas60d.map(r=>r.user_id));
   const membrosDesaparecidos = membrosAtivos.filter(m => uids60d.has(m.id) && !activeUids.has(m.id));
 
@@ -1229,21 +1088,36 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
 
   async function renderLista() {
     Utils.showLoading(content);
-    const { data: eventos, error } = await db.from('events').select('*').order('event_date', { ascending: false }).limit(60);
-    if (error) { content.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar eventos.</div>`; return; }
+    let eventos = [];
+    try {
+      const { data, error } = await db.from('events').select('*').order('event_date', { ascending: false }).limit(60);
+      if (error) throw error;
+      eventos = data || [];
+    } catch (err) {
+      console.error('[MSY][presencas-permissao] Erro ao carregar eventos:', err);
+      content.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar eventos.</div>`;
+      Utils.showToast?.('Erro ao carregar presenças.', 'error');
+      return;
+    }
 
     let presencaMap = {};
     if (eventos?.length) {
       const eIds = eventos.map(e => e.id);
-      if (canManage) {
-        const { data: counts } = await db.from('event_presencas').select('event_id,status').in('event_id', eIds);
-        (counts || []).forEach(c => {
-          if (!presencaMap[c.event_id]) presencaMap[c.event_id] = { confirmado: 0, ausente: 0, justificado: 0 };
-          presencaMap[c.event_id][c.status] = (presencaMap[c.event_id][c.status] || 0) + 1;
-        });
-      } else {
-        const { data: mine } = await db.from('event_presencas').select('event_id,status').eq('user_id', profile.id).in('event_id', eIds);
-        (mine || []).forEach(p => { presencaMap[p.event_id] = p.status; });
+      try {
+        if (canManage) {
+          const { data: counts, error: countsError } = await db.from('event_presencas').select('event_id,status').in('event_id', eIds);
+          if (countsError) throw countsError;
+          (counts || []).forEach(c => {
+            if (!presencaMap[c.event_id]) presencaMap[c.event_id] = { confirmado: 0, ausente: 0, justificado: 0 };
+            presencaMap[c.event_id][c.status] = (presencaMap[c.event_id][c.status] || 0) + 1;
+          });
+        } else {
+          const { data: mine, error: mineError } = await db.from('event_presencas').select('event_id,status').eq('user_id', profile.id).in('event_id', eIds);
+          if (mineError) throw mineError;
+          (mine || []).forEach(p => { presencaMap[p.event_id] = p.status; });
+        }
+      } catch (err) {
+        console.error('[MSY][presencas-permissao] Erro ao carregar mapa de presenças:', err);
       }
     }
 
@@ -1303,10 +1177,20 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
 
   async function renderDetalhe(eventId, evento) {
     Utils.showLoading(content);
-    const [memRes, presRes] = await Promise.all([
-      db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status', 'ativo').order('name'),
-      db.from('event_presencas').select('*').eq('event_id', eventId)
-    ]);
+    let memRes, presRes;
+    try {
+      ([memRes, presRes] = await Promise.all([
+        db.from('profiles').select('id,name,role,initials,color,avatar_url').eq('status', 'ativo').order('name'),
+        db.from('event_presencas').select('*').eq('event_id', eventId)
+      ]));
+      const detailError = [memRes, presRes].find(res => res.error)?.error;
+      if (detailError) throw detailError;
+    } catch (err) {
+      console.error('[MSY][presencas-permissao] Erro ao carregar detalhe:', err);
+      content.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar detalhes de presença.</div>`;
+      Utils.showToast?.('Erro ao carregar detalhes.', 'error');
+      return;
+    }
     const membros = memRes.data || [];
     const presencas = presRes.data || [];
     const presMap = {};
@@ -1318,16 +1202,22 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
     const semReg = membros.length - Object.keys(presMap).length;
 
     async function setPresenca(membroId, status) {
-      const ex = presMap[membroId];
-      let error;
-      if (ex) {
-        ({ error } = await db.from('event_presencas').update({ status, marcado_por: profile.id }).eq('id', ex.id));
-        if (!error) presMap[membroId].status = status;
-      } else {
-        const { data, error: e } = await db.from('event_presencas').insert({ event_id: eventId, membro_id: membroId, status, marcado_por: profile.id }).select().single();
-        error = e; if (!error) presMap[membroId] = data;
+      try {
+        const ex = presMap[membroId];
+        let error;
+        if (ex) {
+          ({ error } = await db.from('event_presencas').update({ status, marcado_por: profile.id }).eq('id', ex.id));
+          if (!error) presMap[membroId].status = status;
+        } else {
+          const { data, error: e } = await db.from('event_presencas').insert({ event_id: eventId, membro_id: membroId, status, marcado_por: profile.id }).select().single();
+          error = e; if (!error) presMap[membroId] = data;
+        }
+        if (error) throw error;
+      } catch (err) {
+        console.error('[MSY][presencas-permissao] Erro ao registrar presença:', err);
+        Utils.showToast('Erro ao registrar.', 'error');
+        return;
       }
-      if (error) { Utils.showToast('Erro ao registrar.', 'error'); return; }
       const row = content.querySelector(`.presenca-membro-row[data-id="${membroId}"]`);
       if (row) row.querySelectorAll('.presenca-btn-status').forEach(b => {
         b.classList.remove('active-confirmed', 'active-absent', 'active-justified');
@@ -1388,39 +1278,7 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
   await renderLista();
 }
 
-/* ============================================================
-   CSS ADICIONAL — Estilos do sistema de permissões
-   ============================================================ */
-(function injectStyles() {
-  if (document.getElementById('msy-perms-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'msy-perms-styles';
-  style.textContent = `
-    /* ─── Permission Manager ─── */
-    .perm-member-item:hover {
-      background: var(--black-4) !important;
-    }
-    .perm-member-item.active {
-      background: var(--black-4) !important;
-    }
-    .perm-toggle-item:hover {
-      background: var(--black-4) !important;
-      border-color: rgba(201,168,76,.4) !important;
-    }
-    .perm-checkbox {
-      cursor: pointer;
-    }
-    /* ─── Alert card ─── */
-    #systemAlertsCard .card-title {
-      margin-bottom: 14px;
-    }
-    /* ─── Permissions button in admin ─── */
-    #managePermsBtn:hover {
-      background: rgba(201,168,76,.08);
-    }
-  `;
-  document.head.appendChild(style);
-})();
+/* CSS movido para css/modules3.css — linkado nas páginas que carregam modules3.js */
 
 /* ============================================================
    ROUTER — Módulos3
