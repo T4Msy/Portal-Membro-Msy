@@ -864,9 +864,22 @@ async function initOnboarding() {
  * Usado para agrupar variações como "Naira" e "Naíra".
  */
 function _tronNormalize(name) {
-  return (name||'').toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/\s+/g,' ');
+  const raw = String(name || '');
+  let base = raw
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+    .toLowerCase();
+
+  try {
+    base = base
+      .replace(/\p{Extended_Pictographic}/gu, '')
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+  } catch (_) {
+    base = base.replace(/[^a-z0-9]+/gi, '');
+  }
+
+  return base || raw.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
 /**
@@ -1641,9 +1654,17 @@ async function initRanking() {
   //── População inicial automática ───────────────────────────
   // Se a tabela msy_recordes_top3 está vazia mas existem rankings,
   // calcula e persiste o Top 3 imediatamente (migração silenciosa).
-  const tronoBancoVazio = !tronoBanco.semanal.length && !tronoBanco.mensal.length;
-  if (tronoBancoVazio && todos.length > 0) {
+  const tronoSnapshot = (lista = []) => (lista || [])
+    .slice()
+    .sort((a, b) => (a.posicao || 0) - (b.posicao || 0))
+    .map(i => `${i.posicao}:${_tronNormalize(i.nome)}:${parseInt(i.mensagens) || 0}:${i.periodo || ''}:${i.data_ref || ''}`)
+    .join('|');
+  if (todos.length > 0) {
     const novoCalc = _tronCalcTop3FromRankings(todos);
+    const precisaAtualizar =
+      tronoSnapshot(tronoBanco.semanal) !== tronoSnapshot(novoCalc.semanal) ||
+      tronoSnapshot(tronoBanco.mensal)  !== tronoSnapshot(novoCalc.mensal);
+    if (precisaAtualizar) {
     // Grava sem detectar eventos (primeira carga, não gera spam no Jornal)
     await _tronGravarTop3(
       { semanal: novoCalc.semanal, mensal: novoCalc.mensal },
@@ -1655,6 +1676,7 @@ async function initRanking() {
     // Invalida cache de insígnias para refletir o novo estado
     window._msyRecordesCache   = null;
     window._msyRecordesCacheTs = 0;
+  }
   }
 
   const medals = ['🥇', '🥈', '🥉'];
@@ -1823,6 +1845,16 @@ async function initRanking() {
         if (!error) {
           if (abaAtiva === 'semanal') semanais = semanais.filter(r => r.id !== btn.dataset.id);
           else mensais = mensais.filter(r => r.id !== btn.dataset.id);
+          const novoCalc = _tronCalcTop3FromRankings([...semanais, ...mensais]);
+          await _tronGravarTop3(
+            { semanal: novoCalc.semanal, mensal: novoCalc.mensal },
+            ['semanal', 'mensal'],
+            profile.id
+          );
+          tronoBanco.semanal = novoCalc.semanal;
+          tronoBanco.mensal  = novoCalc.mensal;
+          window._msyRecordesCache   = null;
+          window._msyRecordesCacheTs = 0;
           Utils.showToast('Ranking removido.');
           renderListaRanking();
         } else {
@@ -1891,10 +1923,16 @@ async function initRanking() {
       const end   = document.getElementById('rankEnd').value;
       if (!start || !end) { Utils.showToast('Informe as datas.', 'error'); return; }
 
-      const entries = [...document.querySelectorAll('#rankEntries > div')]
+      const rawEntries = [...document.querySelectorAll('#rankEntries > div')]
         .map(r => ({ name: r.querySelector('.rank-name').value.trim(), messages: parseInt(r.querySelector('.rank-msgs').value) || 0 }))
-        .filter(e => e.name)
-        .sort((a, b) => b.messages - a.messages);
+        .filter(e => e.name);
+      const melhorPorNome = new Map();
+      rawEntries.forEach(e => {
+        const key = _tronNormalize(e.name);
+        const atual = melhorPorNome.get(key);
+        if (!atual || e.messages > atual.messages) melhorPorNome.set(key, e);
+      });
+      const entries = Array.from(melhorPorNome.values()).sort((a, b) => b.messages - a.messages);
 
       if (!entries.length) { Utils.showToast('Adicione participantes.', 'error'); return; }
 

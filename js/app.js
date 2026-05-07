@@ -4660,21 +4660,37 @@
    
      const [
        { count: totalMembers },
+       { count: activeMembers },
        { count: pendingMembers },
        { count: totalActs },
        { count: pendingActs },
        { count: totalComs },
+       { data: pendingList },
        { data: recentMembers }
      ] = await Promise.all([
        db.from('profiles').select('id', { count: 'exact', head: true }),
+       db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
        db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
        db.from('activities').select('id', { count: 'exact', head: true }),
        db.from('activities').select('id', { count: 'exact', head: true }).eq('status', 'Pendente'),
        db.from('comunicados').select('id', { count: 'exact', head: true }),
+       db.from('profiles').select('*').eq('status', 'pendente').order('created_at', { ascending: false }).limit(6),
        db.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
      ]);
    
      content.innerHTML = `
+       <div class="admin-shell">
+       <div class="admin-hero card-enter">
+         <div class="admin-hero-main">
+           <div class="admin-kicker"><i class="fa-solid fa-shield-halved"></i> Centro de comando</div>
+           <div class="page-header-title">Painel Administrativo</div>
+           <div class="page-header-sub">Visao geral, operacao e controle da Masayoshi Order</div>
+         </div>
+         <div class="admin-hero-status ${pendingMembers > 0 ? 'attention' : 'stable'}">
+           <span>${pendingMembers > 0 ? 'Atencao requerida' : 'Operacao estavel'}</span>
+           <strong>${pendingMembers > 0 ? `${pendingMembers} pendente${pendingMembers > 1 ? 's' : ''}` : `${activeMembers || 0} ativos`}</strong>
+         </div>
+       </div>
        <div class="page-header">
          <div>
            <div class="page-header-title">Painel Administrativo</div>
@@ -4707,7 +4723,7 @@
          <div class="card card-enter" style="border-color:var(--border-red);margin-bottom:20px">
            <div class="card-title" style="color:var(--red-bright)"><i class="fa-solid fa-triangle-exclamation"></i> Membros Aguardando Aprovação (${pendingMembers})</div>
            <div class="small-list">
-             ${(recentMembers||[]).filter(m=>m.status==='pendente').map(m => `
+             ${(pendingList||[]).map(m => `
                <div class="small-list-item">
                  <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${m.initials||'?'}</div>
                  <div class="small-list-info">
@@ -4719,6 +4735,8 @@
            </div>
          </div>` : ''}
    
+       </div>
+
        <div class="modal-overlay" id="addMemberModal">
          <div class="modal" style="max-width:480px">
            <div class="modal-header">
@@ -4802,6 +4820,11 @@
          </div>
        </div>
      `;
+
+     const adminCards = content.querySelectorAll('.admin-shell > .card');
+     adminCards[0]?.classList.add('admin-actions-card');
+     adminCards[0]?.querySelector(':scope > div:last-child')?.classList.add('admin-actions-grid');
+     adminCards[1]?.classList.add('admin-pending-card');
    
      content.querySelectorAll('.quick-approve').forEach(btn => {
        btn.addEventListener('click', async () => {
