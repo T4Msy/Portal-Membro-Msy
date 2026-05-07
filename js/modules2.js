@@ -1857,7 +1857,10 @@ async function initRanking() {
 
     el.innerHTML = `<div class="trono-wrap">
       ${CATS.map(cat => {
-        const top3 = tronoBanco[cat.tipo] || [];
+        const top3 = _tronDedupRecords(tronoBanco[cat.tipo] || [])
+          .slice(0, 3)
+          .map((item, i) => ({ ...item, posicao: i + 1 }));
+        tronoBanco[cat.tipo] = top3;
         // Ordem de renderização: pos2, pos1, pos3 (esquerda, centro, direita)
         const ordered = top3.length > 0
           ? [top3[1], top3[0], top3[2]].filter(Boolean)

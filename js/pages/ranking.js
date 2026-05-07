@@ -704,7 +704,10 @@ async function initRanking() {
 
     el.innerHTML = `<div class="trono-wrap">
       ${CATS.map(cat => {
-        const top3 = tronoBanco[cat.tipo] || [];
+        const top3 = _tronDedupRecords(tronoBanco[cat.tipo] || [])
+          .slice(0, 3)
+          .map((item, i) => ({ ...item, posicao: i + 1 }));
+        tronoBanco[cat.tipo] = top3;
         const ordered = top3.length > 0 ? [top3[1], top3[0], top3[2]].filter(Boolean) : [];
         const posClasses = top3.length > 0 ? [top3[1] ? 'trono-pos2' : null, 'trono-pos1', top3[2] ? 'trono-pos3' : null].filter(Boolean) : [];
         const posIdxs = top3.length > 0 ? [top3[1] ? 1 : null, 0, top3[2] ? 2 : null].filter(v => v !== null) : [];
