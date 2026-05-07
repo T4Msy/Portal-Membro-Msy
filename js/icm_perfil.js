@@ -193,12 +193,8 @@
     return `${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}`;
   }
 
-  /* Helper: escapeHtml local (app.js pode não estar disponível no momento) */
-  function escapeHtmlLocal(str) {
-    return String(str)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  /* Usa Utils.escapeHtml de app.js (sempre carregado antes) */
+  const escapeHtmlLocal = str => Utils.escapeHtml(str);
 
   /* Injeta a seção no card de avatar do perfil */
   function injectICMSection(icm) {

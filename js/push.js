@@ -6,15 +6,17 @@
    'use strict';
 
    const PUSH_CONFIG = {
-     VAPID_PUBLIC_KEY: 'BLhU7dYmzQxxgCAmvSV8pN1oZODjoSmHjSEi0EIS-rbG3WcH6o-GjaoYvVWGyhtGmVts1_plszGPJMFw_3eeFpI',
-     PUSH_ENDPOINT:  'https://lldzgkxpoyqauxdcjyaw.supabase.co/functions/v1/send-push',
-     EMAIL_ENDPOINT: 'https://lldzgkxpoyqauxdcjyaw.supabase.co/functions/v1/send-email',
-     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZHpna3hwb3lxYXV4ZGNqeWF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1OTg4OTgsImV4cCI6MjA4OTE3NDg5OH0.HlYCSLVnDF2FlASgUCSyfd3ZMi1VJXCxHszOhwBy9KQ',
+     VAPID_PUBLIC_KEY:  'BLhU7dYmzQxxgCAmvSV8pN1oZODjoSmHjSEi0EIS-rbG3WcH6o-GjaoYvVWGyhtGmVts1_plszGPJMFw_3eeFpI',
+     PUSH_ENDPOINT:    `${MSY_CONFIG.SUPABASE_URL}/functions/v1/send-push`,
+     EMAIL_ENDPOINT:   `${MSY_CONFIG.SUPABASE_URL}/functions/v1/send-email`,
+     SUPABASE_ANON_KEY: MSY_CONFIG.SUPABASE_ANON_KEY,
    };
    
    /* ============================================================
       PushManager — gerencia registro e preferências
       ============================================================ */
+   /** @global {object} PushManager — gerencia subscrição de Web Push (VAPID).
+    *  Usa service worker em /sw.js. Credenciais via PUSH_CONFIG (derivado de MSY_CONFIG). */
    const PushManager = {
    
      _urlBase64ToUint8Array(base64String) {
@@ -116,31 +118,33 @@
        } catch { return false; }
      },
    
-     _headers() {
+     async _authHeaders() {
+       const { data: { session } } = await db.auth.getSession();
+       const token = session?.access_token ?? PUSH_CONFIG.SUPABASE_ANON_KEY;
        return {
          'Content-Type':  'application/json',
-         'Authorization': `Bearer ${PUSH_CONFIG.SUPABASE_ANON_KEY}`,
+         'Authorization': `Bearer ${token}`,
          'apikey':         PUSH_CONFIG.SUPABASE_ANON_KEY,
        };
      },
-   
+
      async sendToUser(userId, { title, body, url, icon }) {
        try {
          await fetch(PUSH_CONFIG.PUSH_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ userId, title, body, url, icon }),
          });
        } catch (err) {
          console.warn('[Push] Falha ao enviar push:', err);
        }
      },
-   
+
      async sendToAll({ title, body, url, icon }) {
        try {
          await fetch(PUSH_CONFIG.PUSH_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ all: true, title, body, url, icon }),
          });
        } catch (err) {
@@ -148,37 +152,40 @@
        }
      },
    };
-   
+
    /* ============================================================
       EmailManager — envia email via Edge Function send-email
       ============================================================ */
+   /** @global {object} EmailManager — envia emails via Edge Function send-email (Resend API). */
    const EmailManager = {
-   
-     _headers() {
+
+     async _authHeaders() {
+       const { data: { session } } = await db.auth.getSession();
+       const token = session?.access_token ?? PUSH_CONFIG.SUPABASE_ANON_KEY;
        return {
          'Content-Type':  'application/json',
-         'Authorization': `Bearer ${PUSH_CONFIG.SUPABASE_ANON_KEY}`,
+         'Authorization': `Bearer ${token}`,
          'apikey':         PUSH_CONFIG.SUPABASE_ANON_KEY,
        };
      },
-   
+
      async sendToUser(userId, { subject, message }) {
        try {
          await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ userId, subject, message }),
          });
        } catch (err) {
          console.warn('[Email] Falha ao enviar email:', err);
        }
      },
-   
+
      async sendToAll({ subject, message }) {
        try {
          await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
            method:  'POST',
-           headers: this._headers(),
+           headers: await this._authHeaders(),
            body:    JSON.stringify({ all: true, subject, message }),
          });
        } catch (err) {
@@ -190,6 +197,8 @@
    /* ============================================================
       NotifPrefs — salva preferências e despacha notificações
       ============================================================ */
+   /** @global {object} NotifPrefs — salva preferências de notificação do usuário
+    *  e despacha notificações via push, email ou in-app. */
    const NotifPrefs = {
    
      async save(userId, { notif_push, notif_email, notif_email_address }) {
@@ -211,7 +220,9 @@
            p_icon:    icon || '🔔',
            p_link:    link || null,
          });
-       } catch (_) {}
+       } catch (err) {
+         console.warn('[MSY][notifications] Falha ao registrar notificação in-app:', err);
+       }
    
        if (!channels || channels.length === 0) return;
    

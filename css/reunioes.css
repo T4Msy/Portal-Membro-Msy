@@ -1,0 +1,38 @@
+/* ============================================================
+   MSY PORTAL — REUNIOES.CSS
+   Estilos dos cards e badges de reuniões (meet-*)
+   Extraído de reunioes.js na Fase 2.
+   ============================================================ */
+
+.meet-card {
+  background: var(--black-3); border: 1px solid var(--border-faint);
+  border-radius: var(--radius-lg); margin-bottom: 10px; overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.meet-card:hover { border-color: rgba(201,168,76,.22); box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.meet-card-inner { padding: 16px 20px; }
+.meet-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.meet-card-title { font-family:'Cinzel',serif; font-size:.95rem; font-weight:700; color:var(--text-1); line-height:1.3; }
+.meet-card-meta { font-size:.74rem; color:var(--text-3); display:flex; gap:14px; flex-wrap:wrap; }
+.meet-card-desc { font-size:.81rem; color:var(--text-2); line-height:1.6; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-faint); }
+.meet-section-label {
+  display:flex; align-items:center; gap:10px;
+  font-size:.62rem; color:var(--gold); text-transform:uppercase;
+  letter-spacing:.14em; font-weight:700; margin:20px 0 12px;
+}
+.meet-section-label::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border-gold),transparent); }
+.meet-section-label:first-child { margin-top:0; }
+.meet-req-card {
+  background: var(--black-3); border: 1px solid var(--border-faint);
+  border-radius: var(--radius-lg); padding:14px 18px; margin-bottom:10px;
+}
+.meet-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:.62rem; font-weight:700; padding:3px 9px;
+  border-radius:20px; border:1px solid; letter-spacing:.05em; text-transform:uppercase;
+  white-space:nowrap;
+}
+.meet-badge-pending  { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); color:#f59e0b; }
+.meet-badge-approved { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
+.meet-badge-refused  { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
+.meet-badge-personal { background:rgba(201,168,76,.1); border-color:rgba(201,168,76,.3); color:var(--gold); }

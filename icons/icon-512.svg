@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#111116"/>
+      <stop offset="100%" stop-color="#07070a"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8c060"/>
+      <stop offset="100%" stop-color="#c9a84c"/>
+    </linearGradient>
+    <radialGradient id="redGlow" cx="75%" cy="25%" r="50%">
+      <stop offset="0%" stop-color="#b91c1c" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#b91c1c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="80" fill="url(#redGlow)"/>
+  <rect x="2" y="2" width="508" height="508" rx="78" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-opacity="0.4"/>
+  <text x="256" y="308" dominant-baseline="middle" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-weight="700" font-size="192" fill="url(#goldGrad)"
+        letter-spacing="4">MSY</text>
+  <line x1="96" y1="346" x2="416" y2="346" stroke="url(#goldGrad)" stroke-width="1.5" stroke-opacity="0.35"/>
+  <text x="256" y="388" dominant-baseline="middle" text-anchor="middle"
+        font-family="Georgia, serif" font-weight="400" font-size="34"
+        fill="#c9a84c" fill-opacity="0.55" letter-spacing="16">PORTAL</text>
+</svg>
