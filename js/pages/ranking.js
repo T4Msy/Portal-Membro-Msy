@@ -48,9 +48,68 @@ const Paginator = {
    ============================================================ */
 
 function _tronNormalize(name) {
-  return (name||'').toLowerCase().trim()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'')
-    .replace(/\s+/g,' ');
+  const raw = String(name || '');
+  let base = raw
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+    .toLowerCase();
+
+  try {
+    base = base
+      .replace(/\p{Extended_Pictographic}/gu, '')
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+  } catch (_) {
+    base = base.replace(/[^a-z0-9]+/gi, '');
+  }
+
+  return base || raw.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+window.MSYNormalizeRankingName = _tronNormalize;
+
+function _tronPreferirRecorde(atual, candidato) {
+  if (!atual) return true;
+  if ((candidato.mensagens || 0) !== (atual.mensagens || 0)) {
+    return (candidato.mensagens || 0) > (atual.mensagens || 0);
+  }
+  if (candidato.data_ref && atual.data_ref) return candidato.data_ref < atual.data_ref;
+  if (candidato.data_ref && !atual.data_ref) return true;
+  return false;
+}
+
+function _tronDedupRecords(lista = []) {
+  const melhorPorMembro = new Map();
+  for (const item of (lista || [])) {
+    const nome = item.nome ?? item.name;
+    const mensagens = parseInt(item.mensagens ?? item.messages) || 0;
+    const key = _tronNormalize(nome);
+    if (!key || !mensagens) continue;
+    const candidato = {
+      ...item,
+      nome,
+      name: nome,
+      mensagens,
+      messages: mensagens,
+      data_ref: item.data_ref || item.week_start || null,
+    };
+    const atual = melhorPorMembro.get(key);
+    if (_tronPreferirRecorde(atual, candidato)) melhorPorMembro.set(key, candidato);
+  }
+  return Array.from(melhorPorMembro.values()).sort((a, b) => {
+    if ((b.mensagens || 0) !== (a.mensagens || 0)) return (b.mensagens || 0) - (a.mensagens || 0);
+    if (a.data_ref && b.data_ref) return a.data_ref.localeCompare(b.data_ref);
+    return 0;
+  });
+}
+
+function _tronDedupRankingEntries(entries = []) {
+  return _tronDedupRecords(entries.map(e => ({
+    name: e.name,
+    nome: e.name,
+    messages: parseInt(e.messages) || 0,
+    mensagens: parseInt(e.messages) || 0,
+  }))).map(e => ({ name: e.name, messages: e.messages }));
 }
 
 function _tronCalcTop3FromRankings(todos) {
@@ -74,22 +133,12 @@ function _tronCalcTop3FromRankings(todos) {
   }
 
   function top3(lista) {
-    const melhorPorMembro = new Map();
-    for (const item of lista) {
-      const nomeKey = _tronNormalize(item.nome);
-      const atual = melhorPorMembro.get(nomeKey);
-      if (!atual || item.mensagens > atual.mensagens ||
-          (item.mensagens === atual.mensagens && item.data_ref && atual.data_ref && item.data_ref < atual.data_ref)) {
-        melhorPorMembro.set(nomeKey, item);
-      }
-    }
-    const dedup = Array.from(melhorPorMembro.values());
-    const sorted = dedup.slice().sort((a, b) => {
-      if (b.mensagens !== a.mensagens) return b.mensagens - a.mensagens;
-      if (a.data_ref && b.data_ref) return a.data_ref.localeCompare(b.data_ref);
-      return 0;
-    });
-    return sorted.slice(0, 3).map((item, i) => ({ ...item, posicao: i + 1 }));
+    return _tronDedupRecords(lista).slice(0, 3).map((item, i) => ({
+      ...item,
+      nome: item.nome,
+      mensagens: item.mensagens,
+      posicao: i + 1,
+    }));
   }
 
   return {
@@ -107,6 +156,11 @@ async function _tronLerTop3Banco() {
     for (const row of data) {
       if (result[row.tipo]) result[row.tipo].push(row);
     }
+    for (const tipo of Object.keys(result)) {
+      result[tipo] = _tronDedupRecords(result[tipo])
+        .slice(0, 3)
+        .map((item, i) => ({ ...item, posicao: i + 1 }));
+    }
     return result;
   } catch (err) {
     console.error('[MSY][ranking] Erro ao ler Top 3 do banco:', err);
@@ -117,9 +171,13 @@ async function _tronLerTop3Banco() {
 async function _tronGravarTop3(novoTop3, tiposAtualizar, profileId) {
   try {
     for (const tipo of tiposAtualizar) {
-      const lista = novoTop3[tipo] || [];
+      const lista = _tronDedupRecords(novoTop3[tipo] || [])
+        .slice(0, 3)
+        .map((item, i) => ({ ...item, posicao: i + 1 }));
+      const { error: delErr } = await db.from('msy_recordes_top3').delete().eq('tipo', tipo);
+      if (delErr) throw delErr;
       for (const item of lista) {
-        const { error } = await db.from('msy_recordes_top3').upsert({
+        const { error } = await db.from('msy_recordes_top3').insert({
           tipo,
           posicao:    item.posicao,
           nome:       item.nome,
@@ -127,14 +185,8 @@ async function _tronGravarTop3(novoTop3, tiposAtualizar, profileId) {
           periodo:    item.periodo || null,
           data_ref:   item.data_ref || null,
           updated_by: profileId,
-        }, { onConflict: 'tipo,posicao' });
+        });
         if (error) throw error;
-      }
-      if (lista.length < 3) {
-        for (let pos = lista.length + 1; pos <= 3; pos++) {
-          const { error } = await db.from('msy_recordes_top3').delete().eq('tipo', tipo).eq('posicao', pos);
-          if (error) throw error;
-        }
       }
     }
   } catch (err) {
@@ -611,18 +663,28 @@ async function initRanking() {
   mensais  = todos.filter(r => r.tipo === 'mensal');
   tronoBanco = tronoDB;
 
-  const tronoBancoVazio = !tronoBanco.semanal.length && !tronoBanco.mensal.length;
-  if (tronoBancoVazio && todos.length > 0) {
+  const tronoSnapshot = (lista = []) => (lista || [])
+    .slice()
+    .sort((a, b) => (a.posicao || 0) - (b.posicao || 0))
+    .map(i => `${i.posicao}:${_tronNormalize(i.nome)}:${parseInt(i.mensagens) || 0}:${i.periodo || ''}:${i.data_ref || ''}`)
+    .join('|');
+
+  if (todos.length > 0) {
     const novoCalc = _tronCalcTop3FromRankings(todos);
-    await _tronGravarTop3(
-      { semanal: novoCalc.semanal, mensal: novoCalc.mensal },
-      ['semanal', 'mensal'],
-      profile.id
-    );
+    const precisaAtualizar =
+      tronoSnapshot(tronoBanco.semanal) !== tronoSnapshot(novoCalc.semanal) ||
+      tronoSnapshot(tronoBanco.mensal)  !== tronoSnapshot(novoCalc.mensal);
     tronoBanco.semanal = novoCalc.semanal;
     tronoBanco.mensal  = novoCalc.mensal;
-    window._msyRecordesCache   = null;
-    window._msyRecordesCacheTs = 0;
+    if (precisaAtualizar) {
+      await _tronGravarTop3(
+        { semanal: novoCalc.semanal, mensal: novoCalc.mensal },
+        ['semanal', 'mensal'],
+        profile.id
+      ).catch(err => console.warn('[MSY][ranking] Top 3 normalizado em tela, mas nao foi possivel persistir:', err));
+      window._msyRecordesCache   = null;
+      window._msyRecordesCacheTs = 0;
+    }
   }
 
   const medals = ['🥇', '🥈', '🥉'];
@@ -694,7 +756,7 @@ async function initRanking() {
   }
 
   function rankCard(r, idx, offset) {
-    const entries  = r.entries || [];
+    const entries  = _tronDedupRankingEntries(r.entries || []);
     const top3C    = entries.slice(0, 3);
     const rest     = entries.slice(3);
     const isRecente = offset === 0 && idx === 0;
@@ -755,6 +817,16 @@ async function initRanking() {
         if (!error) {
           if (abaAtiva === 'semanal') semanais = semanais.filter(r => r.id !== btn.dataset.id);
           else mensais = mensais.filter(r => r.id !== btn.dataset.id);
+          const novoCalc = _tronCalcTop3FromRankings([...semanais, ...mensais]);
+          tronoBanco.semanal = novoCalc.semanal;
+          tronoBanco.mensal  = novoCalc.mensal;
+          await _tronGravarTop3(
+            { semanal: novoCalc.semanal, mensal: novoCalc.mensal },
+            ['semanal', 'mensal'],
+            profile.id
+          ).catch(err => console.warn('[MSY][ranking] Ranking removido em tela, mas nao foi possivel atualizar Top 3:', err));
+          window._msyRecordesCache   = null;
+          window._msyRecordesCacheTs = 0;
           Utils.showToast('Ranking removido.');
           renderListaRanking();
         } else {
@@ -821,10 +893,9 @@ async function initRanking() {
       const end   = document.getElementById('rankEnd').value;
       if (!start || !end) { Utils.showToast('Informe as datas.', 'error'); return; }
 
-      const entries = [...document.querySelectorAll('#rankEntries > div')]
+      const entries = _tronDedupRankingEntries([...document.querySelectorAll('#rankEntries > div')]
         .map(r => ({ name: r.querySelector('.rank-name').value.trim(), messages: parseInt(r.querySelector('.rank-msgs').value) || 0 }))
-        .filter(e => e.name)
-        .sort((a, b) => b.messages - a.messages);
+        .filter(e => e.name));
 
       if (!entries.length) { Utils.showToast('Adicione participantes.', 'error'); return; }
 

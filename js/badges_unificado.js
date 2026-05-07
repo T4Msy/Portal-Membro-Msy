@@ -73,9 +73,21 @@
   /* ── HELPERS ─────────────────────────────────────────────── */
 
   function normalizeName(n) {
-    return (n || '').toLowerCase().trim()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ');
+    if (typeof global.MSYNormalizeRankingName === 'function') {
+      return global.MSYNormalizeRankingName(n);
+    }
+    const raw = String(n || '');
+    let base = raw
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+      .toLowerCase();
+    try {
+      base = base.replace(/\p{Extended_Pictographic}/gu, '').replace(/[^\p{L}\p{N}]+/gu, '');
+    } catch (_) {
+      base = base.replace(/[^a-z0-9]+/gi, '');
+    }
+    return base || raw.toLowerCase().trim().replace(/\s+/g, ' ');
   }
 
   /* ── FONTE 1: PREMIAÇÕES ─────────────────────────────────── */
