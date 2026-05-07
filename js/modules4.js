@@ -12,13 +12,15 @@
    Resolve: "PH" → "Pedro Henrique", "Naira" → "Naíra", etc.
    ============================================================ */
 function normalizeName(name) {
+  if (typeof window !== 'undefined' && typeof window.MSYNormalizeRankingName === 'function') {
+    return window.MSYNormalizeRankingName(name);
+  }
   return (name || '')
-    .toLowerCase()
-    .normalize('NFD')
+    .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, '');
 }
 
 function buildNameMap(membros) {

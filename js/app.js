@@ -3615,7 +3615,20 @@
          ${(rankings||[]).length === 0
            ? `<div class="empty-state" style="padding:40px"><div class="empty-state-icon"><i class="fa-solid fa-chart-bar"></i></div><div class="empty-state-text">Nenhum ranking registrado ainda.</div></div>`
            : (rankings||[]).map(r => {
-               const sorted = [...(r.entries||[])].sort((a,b) => b.messages - a.messages);
+               const normalizeRankingName = window.MSYNormalizeRankingName || ((name) => String(name || '')
+                 .normalize('NFKD')
+                 .replace(/[\u0300-\u036f]/g, '')
+                 .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+                 .toLowerCase()
+                 .replace(/[^a-z0-9]+/gi, ''));
+               const bestByName = new Map();
+               (r.entries||[]).forEach(e => {
+                 const key = normalizeRankingName(e.name);
+                 const messages = parseInt(e.messages) || 0;
+                 const current = bestByName.get(key);
+                 if (key && (!current || messages > current.messages)) bestByName.set(key, { ...e, messages });
+               });
+               const sorted = Array.from(bestByName.values()).sort((a,b) => b.messages - a.messages);
                return `
                  <div class="card card-enter" style="margin-bottom:16px">
                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -4635,10 +4648,24 @@
        const names = [...document.querySelectorAll('.rk-name')].map(el => el.value.trim());
        const msgs  = [...document.querySelectorAll('.rk-msgs')].map(el => parseInt(el.value) || 0);
    
-       const entries = names
+      const normalizeRankingName = window.MSYNormalizeRankingName || ((name) => String(name || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\u200B-\u200D\uFE0E\uFE0F\uFEFF]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/gi, ''));
+
+      const bestByName = new Map();
+      names
          .map((name, i) => ({ name, messages: msgs[i] }))
          .filter(e => e.name)
-         .sort((a, b) => b.messages - a.messages);
+         .forEach(e => {
+           const key = normalizeRankingName(e.name);
+           if (!key) return;
+           const current = bestByName.get(key);
+           if (!current || e.messages > current.messages) bestByName.set(key, e);
+         });
+      const entries = Array.from(bestByName.values()).sort((a, b) => b.messages - a.messages);
    
        if (entries.length === 0) { Utils.showToast('Adicione ao menos um membro.', 'error'); return; }
    
@@ -4709,6 +4736,23 @@
          <div class="admin-hero-status ${pendingMembers > 0 ? 'attention' : 'stable'}">
            <span>${pendingMembers > 0 ? 'Atencao requerida' : 'Operacao estavel'}</span>
            <strong>${pendingMembers > 0 ? `${pendingMembers} pendente${pendingMembers > 1 ? 's' : ''}` : `${activeMembers || 0} ativos`}</strong>
+         </div>
+       </div>
+       <div class="admin-command-strip card-enter">
+         <div class="admin-command-node">
+           <span>Diretoria</span>
+           <strong>${activeMembers || 0}</strong>
+           <small>membros ativos sob gestao</small>
+         </div>
+         <div class="admin-command-node accent">
+           <span>Operacao</span>
+           <strong>${pendingActs || 0}</strong>
+           <small>atividades aguardando acao</small>
+         </div>
+         <div class="admin-command-node">
+           <span>Comunicacao</span>
+           <strong>${totalComs || 0}</strong>
+           <small>comunicados publicados</small>
          </div>
        </div>
        <div class="page-header">
