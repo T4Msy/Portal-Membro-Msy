@@ -344,6 +344,57 @@
    /* ============================================================
       TOP BAR
       ============================================================ */
+   const MSYNotificationRouter = {
+     buildUrl(notif) {
+       if (!notif) return 'dashboard.html';
+       if (notif.target_url) return notif.target_url;
+       if (notif.link) return notif.link;
+
+       const id = notif.target_id;
+       const type = notif.target_type || notif.type;
+       const map = {
+         ranking:    'ranking.html',
+         post:       id ? `feed.html?post=${id}` : 'feed.html',
+         comment:    id ? `feed.html?comment=${id}` : 'feed.html',
+         profile:    id ? `feed.html?profile=${id}` : 'membros.html',
+         story:      id ? `feed.html?story=${id}` : 'feed.html',
+         event:      id ? `eventos.html?id=${id}` : 'eventos.html',
+         evento:     id ? `eventos.html?id=${id}` : 'eventos.html',
+         message:    'feed.html?message=latest',
+         record:     'dashboard.html#recordes',
+         recorde:    'dashboard.html#recordes',
+         mention:    id ? `feed.html?post=${id}` : 'feed.html',
+         conquista:  'premiacoes.html',
+         achievement:'premiacoes.html',
+         social:     'feed.html',
+       };
+       return map[type] || 'dashboard.html';
+     },
+
+     async open(notifOrId, profile) {
+       let notif = notifOrId;
+       if (typeof notifOrId === 'string') {
+         const { data } = await db.from('notifications')
+           .select('*')
+           .eq('id', notifOrId)
+           .single();
+         notif = data;
+       }
+       if (!notif) return;
+
+       if (profile?.id && !notif.read) {
+         db.from('notifications')
+           .update({ read: true })
+           .eq('id', notif.id)
+           .eq('user_id', profile.id)
+           .then(() => {});
+       }
+
+       const url = this.buildUrl(notif);
+       window.location.href = url;
+     },
+   };
+
    async function renderTopBar(pageTitle, profile) {
      const topbar = document.getElementById('topbar');
      if (!topbar || !profile) return;
@@ -377,7 +428,7 @@
              ${(notifs || []).length === 0
                ? `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:0.82rem">Sem notificações</div>`
                : (notifs || []).map(n => `
-                 <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}">
+                 <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}" title="Abrir destino">
                    <div class="notif-item-icon">${n.icon || '🔔'}</div>
                    <div class="notif-item-text">
                      <div class="notif-item-msg">${Utils.escapeHtml(n.message)}</div>
@@ -405,6 +456,12 @@
      });
      document.addEventListener('click', () => document.getElementById('notifDropdown')?.classList.remove('open'));
      document.getElementById('notifDropdown').addEventListener('click', e => e.stopPropagation());
+     document.getElementById('notifDropdown').querySelectorAll('.notif-item').forEach(item => {
+       item.addEventListener('click', () => {
+         const notif = (notifs || []).find(n => n.id === item.dataset.id);
+         MSYNotificationRouter.open(notif || item.dataset.id, profile);
+       });
+     });
    
      document.getElementById('markAllRead').addEventListener('click', async () => {
        await db.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false).is('deleted_at', null);
@@ -691,7 +748,7 @@
              ${notifs.length === 0
                ? `<div class="notif-empty-state"><i class="fa-solid fa-bell-slash" style="opacity:.3;font-size:1.1rem"></i><span>Nenhuma notificação recente.</span></div>`
                : notifs.map(n => `
-                 <div class="small-list-item notif-item-dash" data-notif-id="${n.id}">
+                 <div class="small-list-item notif-item-dash" data-notif-id="${n.id}" title="Abrir destino">
                    <div class="small-list-icon">${n.icon||'🔔'}</div>
                    <div class="small-list-info">
                      <div class="small-list-title">${Utils.escapeHtml(n.message)}</div>
@@ -6309,6 +6366,14 @@
          await db.from('notifications')
            .update({ deleted_at: new Date().toISOString() })
            .eq('id', notifId).eq('user_id', profile.id);
+       });
+     });
+
+     card.querySelectorAll('.notif-item-dash').forEach(item => {
+       item.addEventListener('click', (e) => {
+         if (e.target.closest('.notif-del-btn')) return;
+         const notifId = item.dataset.notifId;
+         if (notifId) MSYNotificationRouter.open(notifId, profile);
        });
      });
    

@@ -108,6 +108,16 @@
           <div class="notif-item-time">${fmtFn(notif.created_at)}</div>
         </div>
       `;
+      item.addEventListener('click', () => {
+        const target = notif.target_url || notif.link || (
+          notif.target_type === 'post' && notif.target_id ? `feed.html?post=${notif.target_id}` :
+          notif.target_type === 'comment' && notif.target_id ? `feed.html?comment=${notif.target_id}` :
+          notif.target_type === 'profile' && notif.target_id ? `feed.html?profile=${notif.target_id}` :
+          notif.target_type === 'story' && notif.target_id ? `feed.html?story=${notif.target_id}` :
+          'dashboard.html'
+        );
+        window.location.href = target;
+      });
 
       const header = list.querySelector('.notif-dropdown-header');
       if (header) header.after(item);

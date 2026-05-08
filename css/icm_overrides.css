@@ -64,3 +64,82 @@ body[data-page="icm"] .page-content {
 }
 #icm-save-toast.visible { transform: translateY(0); opacity: 1; }
 #icm-save-toast.error   { border-color: rgba(204,0,0,0.4); color: #e06060; }
+
+/* Light mode do ICM: acompanha automaticamente o tema do portal */
+[data-theme="light"] #icm-app {
+  --icm-bg: #f7f5f1;
+  --icm-bg2: #ffffff;
+  --icm-bg3: #f0ede7;
+  --icm-bg4: #e9e4dc;
+  --icm-surface: #ffffff;
+  --icm-surface2: #f4f0e8;
+  --icm-border: rgba(22,22,28,0.09);
+  --icm-border-mid: rgba(22,22,28,0.14);
+  --icm-border-hot: rgba(185,28,28,0.32);
+  --icm-border-gold: rgba(165,120,40,0.28);
+  --icm-red: #b91c1c;
+  --icm-red-b: #dc2626;
+  --icm-red-dim: rgba(185,28,28,0.08);
+  --icm-red-glow: rgba(185,28,28,0.18);
+  --icm-gold: #9f7928;
+  --icm-gold-dim: rgba(159,121,40,0.11);
+  --icm-white: #171720;
+  --icm-muted: #5f6270;
+  --icm-dim: #8a8d99;
+  --icm-subtle: #3d4050;
+  background: #f7f5f1;
+  color: var(--icm-white);
+}
+
+[data-theme="light"] #icm-app .noise { opacity: .08; }
+[data-theme="light"] #icm-app .scanlines {
+  opacity: .16;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(120,80,40,.035) 3px, rgba(120,80,40,.035) 4px);
+}
+[data-theme="light"] #icm-app .vignette {
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(100,70,40,.16) 100%);
+}
+[data-theme="light"] #screen-intro {
+  background:
+    radial-gradient(ellipse at 12% 65%, rgba(185,28,28,.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 88% 12%, rgba(159,121,40,.08) 0%, transparent 48%),
+    var(--icm-bg);
+}
+[data-theme="light"] #screen-test,
+[data-theme="light"] #icm-app .test-header {
+  background: var(--icm-bg);
+}
+
+[data-theme="light"] #icm-app .intro-specs,
+[data-theme="light"] #icm-app .history-banner,
+[data-theme="light"] #icm-app .resume-banner,
+[data-theme="light"] #icm-app .q-card,
+[data-theme="light"] #icm-app .r-section,
+[data-theme="light"] #icm-app .result-wrap,
+[data-theme="light"] #icm-app .analysis-terminal {
+  background: rgba(255,255,255,.78);
+  border-color: var(--icm-border);
+  box-shadow: 0 12px 34px rgba(30,25,20,.08);
+}
+
+[data-theme="light"] #icm-app .btn-primary {
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(185,28,28,.22);
+}
+
+[data-theme="light"] #icm-app .btn-ghost,
+[data-theme="light"] #icm-app .btn-nav {
+  background: rgba(255,255,255,.66);
+  color: var(--icm-subtle);
+}
+
+[data-theme="light"] #icm-app .progress-bar {
+  background: rgba(20,20,25,.08);
+}
+
+[data-theme="light"] #icm-save-toast {
+  background: rgba(255,255,255,.96);
+  color: #9f7928;
+  border-color: rgba(159,121,40,.28);
+  box-shadow: 0 8px 28px rgba(30,25,20,.14);
+}
