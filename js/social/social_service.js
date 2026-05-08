@@ -38,7 +38,7 @@ export class SocialService {
 
     if (before) request = request.lt('created_at', before);
     if (authorId) request = request.eq('author_id', authorId);
-    if (query) request = request.or(`content.ilike.%${query}%,author.name.ilike.%${query}%`);
+    if (query) request = request.ilike('content', `%${query}%`);
 
     const { data, error } = await request;
     if (error) throw error;
@@ -232,9 +232,20 @@ export class SocialService {
         author_id: this.profile.id,
         content: clean,
       })
-      .select('*, author:author_id(id,name,username,initials,color,avatar_url,role,tier)')
+      .select('*')
       .single();
     if (error) throw error;
+
+    data.author = {
+      id: this.profile.id,
+      name: this.profile.name,
+      username: this.profile.username,
+      initials: this.profile.initials,
+      color: this.profile.color,
+      avatar_url: this.profile.avatar_url,
+      role: this.profile.role,
+      tier: this.profile.tier,
+    };
 
     await this.notify(post.author_id, {
       message: `${this.profile.name} comentou na sua publicacao.`,
@@ -441,4 +452,3 @@ export class SocialService {
     }
   }
 }
-

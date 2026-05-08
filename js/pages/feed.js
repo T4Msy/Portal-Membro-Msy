@@ -145,11 +145,24 @@ async function loadInitial() {
     state.hasSocialTables = false;
     state.posts = await state.service.loadLegacyFeed();
     state.stories = [];
-    state.members = [];
+    state.members = await loadBasicMembers();
     state.follows = [];
     state.messages = [];
   }
   renderAll();
+}
+
+async function loadBasicMembers() {
+  try {
+    const { data } = await db
+      .from('profiles')
+      .select('id,name,role,tier,initials,color,avatar_url,bio')
+      .eq('status', 'ativo')
+      .order('name');
+    return data || [];
+  } catch {
+    return [];
+  }
 }
 
 function renderAll() {
@@ -246,7 +259,7 @@ function renderPost(post) {
           <form class="comment-form" data-comment-form="${post.id}">
             ${avatar(state.profile, 32)}
             <input class="comment-input" name="comment" placeholder="Adicionar comentario...">
-            <button class="social-icon-btn" title="Enviar"><i class="fa-solid fa-arrow-up"></i></button>
+            <button class="social-icon-btn" type="submit" title="Enviar"><i class="fa-solid fa-arrow-up"></i></button>
           </form>` : ''}
       </div>
     </article>`;
@@ -431,7 +444,8 @@ async function addComment(e) {
     post.comments_count += 1;
     input.value = '';
     renderPosts();
-  } catch {
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast('Erro ao comentar.', 'error');
   }
 }
@@ -473,20 +487,30 @@ function renderSuggestions() {
   const items = state.members.filter((m) => m.id !== state.profile.id).slice(0, 6);
   el.innerHTML = items.length ? items.map((m) => `
     <div class="member-suggestion">
-      ${avatar(m, 36)}
+      <div data-open-member-profile="${m.id}" style="cursor:pointer">${avatar(m, 36)}</div>
       <div class="member-copy"><div class="member-name">${Utils.escapeHtml(m.name)}</div><div class="member-role">${Utils.escapeHtml(m.role || 'Membro')}</div></div>
       <button class="follow-btn ${isFollowing(m.id) ? 'following' : ''}" data-follow="${m.id}">${isFollowing(m.id) ? 'Seguindo' : 'Seguir'}</button>
     </div>`).join('') : '<div class="message-sub">Sugestoes aparecem depois da migration social.</div>';
   el.querySelectorAll('[data-follow]').forEach((btn) => btn.addEventListener('click', () => toggleFollow(btn.dataset.follow)));
+  el.querySelectorAll('[data-open-member-profile]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.openMemberProfile)));
 }
 
 async function toggleFollow(memberId) {
+  if (!state.hasSocialTables) {
+    Utils.showToast('Para seguir membros, aplique a migration social no Supabase.', 'error');
+    return;
+  }
   try {
     const following = isFollowing(memberId);
     const nowFollowing = await state.service.toggleFollow(memberId, following);
     if (nowFollowing) state.follows.push({ follower_id: state.profile.id, following_id: memberId });
     else state.follows = state.follows.filter((f) => !(f.follower_id === state.profile.id && f.following_id === memberId));
     renderSuggestions();
+    const btn = document.querySelector(`[data-profile-follow="${memberId}"]`);
+    if (btn) {
+      btn.classList.toggle('following', nowFollowing);
+      btn.textContent = nowFollowing ? 'Seguindo' : 'Seguir';
+    }
   } catch {
     Utils.showToast('Erro ao seguir membro.', 'error');
   }
@@ -510,8 +534,8 @@ function bindSearch() {
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const q = input.value.trim();
-      if (q.length < 2 || !state.hasSocialTables) { box.classList.remove('open'); box.innerHTML = ''; return; }
-      const res = await state.service.search(q);
+      if (q.length < 2) { box.classList.remove('open'); box.innerHTML = ''; return; }
+      const res = state.hasSocialTables ? await state.service.search(q) : searchLocalMembers(q);
       box.innerHTML = [
         ...res.members.map((m) => `<div class="social-result-item" data-open-profile="${m.id}">${avatar(m, 32)}<div><strong>${Utils.escapeHtml(m.name)}</strong><div class="message-sub">@${Utils.escapeHtml(m.username || 'membro')}</div></div></div>`),
         ...res.posts.map((p) => `<div class="social-result-item" data-open-post="${p.id}"><i class="fa-regular fa-message"></i><div>${Utils.escapeHtml((p.content || '').slice(0, 90))}</div></div>`),
@@ -524,18 +548,39 @@ function bindSearch() {
   });
 }
 
+function searchLocalMembers(query) {
+  const q = query.toLowerCase();
+  return {
+    posts: [],
+    hashtags: [],
+    members: state.members.filter((m) =>
+      (m.name || '').toLowerCase().includes(q)
+      || (m.role || '').toLowerCase().includes(q)
+      || (m.username || '').toLowerCase().includes(q)
+    ).slice(0, 10),
+  };
+}
+
 function openProfile(memberId) {
   const member = state.members.find((m) => m.id === memberId) || state.posts.find((p) => p.author_id === memberId)?.author;
   if (!member) return;
   const postsCount = state.posts.filter((p) => p.author_id === memberId).length;
   const followers = state.follows.filter((f) => f.following_id === memberId).length;
   const following = state.follows.filter((f) => f.follower_id === memberId).length;
+  const isMe = memberId === state.profile.id;
+  const followingMember = isFollowing(memberId);
   const modal = document.getElementById('profileViewer');
   modal.innerHTML = `
     <div class="profile-panel">
       <div class="profile-cover">${member.banner_url ? `<img src="${Utils.escapeHtml(member.banner_url)}">` : ''}</div>
       <div class="profile-modal-body">
-        <div class="profile-modal-head">${avatar(member, 92)}<button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="profile-modal-head">
+          ${avatar(member, 92)}
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            ${!isMe ? `<button class="follow-btn ${followingMember ? 'following' : ''}" data-profile-follow="${memberId}">${followingMember ? 'Seguindo' : 'Seguir'}</button>` : ''}
+            <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
         <div class="profile-modal-name">${Utils.escapeHtml(member.name)}</div>
         <div class="profile-modal-meta">@${Utils.escapeHtml(member.username || Utils.getInitials(member.name).toLowerCase())} · ${Utils.escapeHtml(member.role || 'Membro')} · ${member.tier === 'diretoria' ? 'Verificado' : 'Membro'}</div>
         <p class="profile-modal-bio">${Utils.escapeHtml(member.social_bio || member.bio || 'Sem bio ainda.')}</p>
@@ -547,6 +592,10 @@ function openProfile(memberId) {
       </div>
     </div>`;
   modal.classList.add('open');
+  modal.querySelector('[data-profile-follow]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFollow(memberId);
+  });
 }
 
 function openShare(postId) {
