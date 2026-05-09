@@ -67,7 +67,7 @@ function normalizeItem(item) {
     id: item.id,
     title: item.title || categoryMeta(item.category).label,
     category: item.category || 'outro',
-    content: item.content || item.descricao || '',
+    content: item.content || item.body || item.descricao || '',
     status: item.status || 'nova',
     admin_note: item.admin_note || '',
     author_id: item.author_id || item.authorId,
@@ -121,6 +121,7 @@ async function createSuggestion(payload) {
       title: payload.title,
       category: payload.category,
       content: payload.content,
+      body: payload.content,
       status: 'nova',
     })
     .select('*, author:author_id(id,name,role,tier,initials,color,avatar_url)')
