@@ -257,6 +257,7 @@
        { page: 'reunioes',    icon: 'fa-solid fa-handshake',     label: 'Reuniões' },
        { page: 'ranking',     icon: 'fa-solid fa-ranking-star',  label: 'Ranking' },
        { page: 'feed',        icon: 'fa-solid fa-rss',           label: 'Feed' },
+       { page: 'sugestoes',   icon: 'fa-solid fa-lightbulb',     label: 'Sugestões' },
        { page: 'biblioteca',  icon: 'fa-solid fa-book-open',     label: 'Biblioteca' },
        { page: 'premiacoes',  icon: 'fa-solid fa-trophy',        label: 'Premiações' },
        { page: 'ordem',       icon: 'fa-solid fa-crown',         label: 'Estrutura' },
@@ -350,17 +351,25 @@
        if (notif.target_url) return notif.target_url;
        if (notif.link) return notif.link;
 
-       const id = notif.target_id;
-       const type = notif.target_type || notif.type;
+      const id = notif.target_id;
+       const raw = `${notif.target_type || notif.type || ''} ${notif.message || ''}`.toLowerCase();
+       const type = raw.includes('comunicado') || raw.includes('announcement') ? 'comunicado'
+         : raw.includes('atividade') || raw.includes('activity') ? 'atividade'
+         : (notif.target_type || notif.type);
        const map = {
          ranking:    'ranking.html',
+         comunicado: id ? `comunicados.html?id=${id}` : 'comunicados.html',
+         comunicados:id ? `comunicados.html?id=${id}` : 'comunicados.html',
+         announcement:id ? `comunicados.html?id=${id}` : 'comunicados.html',
+         atividade:  id ? `atividades.html?id=${id}` : 'atividades.html',
+         atividades: id ? `atividades.html?id=${id}` : 'atividades.html',
+         activity:   id ? `atividades.html?id=${id}` : 'atividades.html',
          post:       id ? `feed.html?post=${id}` : 'feed.html',
          comment:    id ? `feed.html?comment=${id}` : 'feed.html',
          profile:    id ? `feed.html?profile=${id}` : 'membros.html',
          story:      id ? `feed.html?story=${id}` : 'feed.html',
          event:      id ? `eventos.html?id=${id}` : 'eventos.html',
          evento:     id ? `eventos.html?id=${id}` : 'eventos.html',
-         message:    'feed.html?message=latest',
          record:     'dashboard.html#recordes',
          recorde:    'dashboard.html#recordes',
          mention:    id ? `feed.html?post=${id}` : 'feed.html',
@@ -394,6 +403,18 @@
        window.location.href = url;
      },
    };
+
+   function _focusInternalTarget(paramName = 'id', selector = '[data-id]') {
+     const targetId = new URLSearchParams(window.location.search).get(paramName);
+     if (!targetId) return;
+     requestAnimationFrame(() => {
+       const node = [...document.querySelectorAll(selector)].find((item) => item.dataset.id === targetId);
+       if (!node) return;
+       node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+       node.classList.add('route-highlight');
+       setTimeout(() => node.classList.remove('route-highlight'), 2600);
+     });
+   }
 
    async function renderTopBar(pageTitle, profile) {
      const topbar = document.getElementById('topbar');
@@ -432,7 +453,8 @@
                    <div class="notif-item-icon">${n.icon || '🔔'}</div>
                    <div class="notif-item-text">
                      <div class="notif-item-msg">${Utils.escapeHtml(n.message)}</div>
-                     <div class="notif-item-time">${Utils.formatDate(n.created_at)}</div>
+                     <div class="notif-item-time">${Utils.formatDateTime(n.created_at)}</div>
+                     <button class="notif-open-btn" type="button">Ver publicação</button>
                    </div>
                  </div>`).join('')
              }
@@ -752,9 +774,10 @@
                    <div class="small-list-icon">${n.icon||'🔔'}</div>
                    <div class="small-list-info">
                      <div class="small-list-title">${Utils.escapeHtml(n.message)}</div>
-                     <div class="small-list-sub">${Utils.formatDate(n.created_at)}</div>
+                     <div class="small-list-sub">${Utils.formatDateTime(n.created_at)}</div>
                    </div>
                    ${!n.read ? '<span class="badge badge-red" style="font-size:.62rem;padding:2px 7px">Nova</span>' : ''}
+                   <button class="notif-view-btn" data-notif-id="${n.id}">Ver publicação</button>
                    <button class="notif-del-btn" data-notif-id="${n.id}" title="Remover notificação"><i class="fa-solid fa-xmark"></i></button>
                  </div>`).join('')
              }
@@ -1103,9 +1126,10 @@
        grid.querySelectorAll('.open-activity').forEach(el => {
          el.addEventListener('click', e => { e.stopPropagation(); openActivityModal(el.dataset.id, acts, profile); });
        });
-       grid.querySelectorAll('.activity-card').forEach(card => {
-         card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile));
-       });
+     grid.querySelectorAll('.activity-card').forEach(card => {
+       card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile));
+     });
+      _focusInternalTarget('id', '.activity-card');
      }
 
      async function loadAnexosView() {
@@ -2124,6 +2148,7 @@
            loadComunicados();
          });
        });
+       _focusInternalTarget('id', '.comunicado-card');
      }
    
      content.innerHTML = `
@@ -2594,9 +2619,17 @@
        const q = document.getElementById('memberSearch').value.toLowerCase();
        document.querySelectorAll('.member-card').forEach(card => {
          const nameMatch = card.dataset.name.includes(q);
-         const tierMatch = tierFilter === 'todos' || tierFilter === card.dataset.tier || (tierFilter === 'pendente' && card.dataset.status === 'pendente');
-         card.style.display = nameMatch && tierMatch ? '' : 'none';
-       });
+       const status = card.dataset.status;
+       const tier = card.dataset.tier;
+       const tierMatch =
+         tierFilter === 'todos'
+         || (tierFilter === 'diretoria' && tier === 'diretoria' && status === 'ativo')
+         || (tierFilter === 'membro' && tier !== 'diretoria' && status === 'ativo')
+         || (tierFilter === 'pendente' && status === 'pendente');
+       const visible = nameMatch && tierMatch;
+       card.classList.toggle('member-card-hidden', !visible);
+       card.style.display = visible ? '' : 'none';
+     });
      };
      document.getElementById('memberSearch').addEventListener('input', filterMembers);
      content.querySelectorAll('.filter-btn').forEach(btn => {

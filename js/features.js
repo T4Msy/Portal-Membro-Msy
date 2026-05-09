@@ -20,6 +20,7 @@ const MSY_FEATURES = {
   ordem:       true,
   tecnologias: true,
   feed:        true,
+  sugestoes:   true,
   presencas:   true,
   eventos:     true,
   membros:     true,

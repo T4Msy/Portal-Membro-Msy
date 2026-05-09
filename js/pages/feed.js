@@ -17,6 +17,8 @@ const state = {
   follows: [],
   messages: [],
   previews: [],
+  storyPreview: null,
+  modalScrollY: 0,
   hasSocialTables: true,
   loadingMore: false,
 };
@@ -55,6 +57,38 @@ function canManage(post) {
   return state.profile.tier === 'diretoria' || post.author_id === state.profile.id;
 }
 
+function canEditPost(post) {
+  return post.author_id === state.profile.id;
+}
+
+function canManageStory(story) {
+  return state.profile.tier === 'diretoria' || story.author_id === state.profile.id;
+}
+
+function lockBodyScroll() {
+  if (document.body.classList.contains('social-modal-locked')) return;
+  state.modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.body.style.top = `-${state.modalScrollY}px`;
+  document.body.classList.add('social-modal-locked');
+}
+
+function unlockBodyScroll() {
+  if (!document.body.classList.contains('social-modal-locked')) return;
+  document.body.classList.remove('social-modal-locked');
+  document.body.style.top = '';
+  window.scrollTo({ top: state.modalScrollY, behavior: 'auto' });
+}
+
+function openModal(modal) {
+  lockBodyScroll();
+  modal.classList.add('open');
+}
+
+function closeSocialModals() {
+  document.querySelectorAll('.story-viewer,.profile-viewer,.story-composer-modal').forEach((m) => m.classList.remove('open'));
+  unlockBodyScroll();
+}
+
 async function initFeed() {
   const profile = await renderSidebar('feed');
   if (!profile) return;
@@ -77,7 +111,7 @@ function layout() {
         <div class="social-hero">
           <div>
             <div class="social-title">Feed Social MSY</div>
-            <div class="social-subtitle">Posts, fotos, stories, comentarios e interacoes da comunidade.</div>
+          <div class="social-subtitle">Posts, fotos, stories, comentarios e interacoes da comunidade.</div>
           </div>
           <div class="social-pill"><i class="fa-solid fa-sparkles"></i> Rede interna</div>
         </div>
@@ -124,16 +158,12 @@ function layout() {
           <div class="side-title"><i class="fa-solid fa-user-plus"></i>Sugestoes para seguir</div>
           <div id="suggestionsList"></div>
         </div>
-        <div class="social-card">
-          <div class="side-title"><i class="fa-solid fa-inbox"></i>Mensagens recebidas</div>
-          <div id="messagesList"></div>
-        </div>
       </aside>
     </div>
 
     <div class="story-viewer" id="storyViewer"></div>
-    <div class="profile-viewer" id="profileViewer"></div>
-    <div class="share-viewer" id="shareViewer"></div>`;
+    <div class="story-composer-modal" id="storyComposerModal"></div>
+    <div class="profile-viewer" id="profileViewer"></div>`;
 }
 
 async function loadInitial() {
@@ -169,7 +199,6 @@ function renderAll() {
   renderStories();
   renderPosts();
   renderSuggestions();
-  renderMessages();
 }
 
 function renderStories() {
@@ -225,13 +254,13 @@ function renderPost(post) {
           ${avatar(author, 44)}
           <div class="post-author-copy">
             <div class="post-author-name"><span>${Utils.escapeHtml(author.name || 'Membro MSY')}</span>${verified}</div>
-            <div class="post-meta"><span>@${Utils.escapeHtml(author.username || Utils.getInitials(author.name || 'msy').toLowerCase())}</span><span>·</span><span>${Utils.escapeHtml(author.role || 'Membro')}</span><span>·</span><span>${timeAgo(post.created_at)}</span>${post.edited_at ? '<span>editado</span>' : ''}</div>
+            <div class="post-meta"><span>@${Utils.escapeHtml(author.username || Utils.getInitials(author.name || 'msy').toLowerCase())}</span><span>·</span><span>${Utils.escapeHtml(author.role || 'Membro')}</span><span>·</span><span>${timeAgo(post.created_at)}</span>${post.edited_at ? '<span class="edited-badge">Editado</span>' : ''}</div>
           </div>
         </div>
         <div class="post-menu-wrap">
           <button class="social-icon-btn post-more-btn"><i class="fa-solid fa-ellipsis"></i></button>
           <div class="post-menu">
-            ${canManage(post) && !post.legacy ? `<button data-edit-post="${post.id}"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
+            ${canEditPost(post) && !post.legacy ? `<button data-edit-post="${post.id}"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
             ${state.profile.tier === 'diretoria' && !post.legacy ? `<button data-pin-post="${post.id}"><i class="fa-solid fa-thumbtack"></i> ${post.is_pinned ? 'Desfixar' : 'Fixar'}</button>` : ''}
             ${canManage(post) && !post.legacy ? `<button class="danger" data-delete-post="${post.id}"><i class="fa-solid fa-trash"></i> Excluir</button>` : ''}
             <button data-copy-post="${post.id}"><i class="fa-solid fa-link"></i> Copiar link</button>
@@ -245,7 +274,6 @@ function renderPost(post) {
         <div class="post-actions-left">
           <button class="social-action ${post.liked_by_me ? 'active' : ''}" data-like-post="${post.id}" title="Curtir"><i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-heart"></i></button>
           <button class="social-action" data-focus-comment="${post.id}" title="Comentar"><i class="fa-regular fa-comment"></i></button>
-          <button class="social-action" data-share-post="${post.id}" title="Compartilhar"><i class="fa-regular fa-paper-plane"></i></button>
         </div>
         <button class="social-action ${post.saved_by_me ? 'active' : ''}" data-save-post="${post.id}" title="Salvar"><i class="fa-${post.saved_by_me ? 'solid' : 'regular'} fa-bookmark"></i></button>
       </div>
@@ -287,7 +315,6 @@ function bindPostEvents(root) {
 
   root.querySelectorAll('[data-like-post]').forEach((btn) => btn.addEventListener('click', () => toggleLike(btn.dataset.likePost, btn)));
   root.querySelectorAll('[data-save-post]').forEach((btn) => btn.addEventListener('click', () => toggleSave(btn.dataset.savePost)));
-  root.querySelectorAll('[data-share-post]').forEach((btn) => btn.addEventListener('click', () => openShare(btn.dataset.sharePost)));
   root.querySelectorAll('[data-focus-comment]').forEach((btn) => btn.addEventListener('click', () => document.querySelector(`[data-comment-form="${btn.dataset.focusComment}"] input`)?.focus()));
   root.querySelectorAll('[data-profile-id]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.profileId)));
   root.querySelectorAll('[data-delete-post]').forEach((btn) => btn.addEventListener('click', () => deletePost(btn.dataset.deletePost)));
@@ -388,17 +415,73 @@ async function createStoryFromFile() {
   if (!file) return;
   try {
     validateMediaFile(file);
-    Utils.showToast('Enviando story...');
-    const media = await uploadSocialMedia(db, state.profile.id, file, 'stories');
-    await state.service.createStory(media);
+    state.storyPreview = filePreview(file);
+    openStoryComposer();
+  } catch (err) {
+    console.error(err);
+    Utils.showToast(err.message || 'Erro ao preparar story.', 'error');
+  } finally {
+    input.value = '';
+  }
+}
+
+function openStoryComposer() {
+  const item = state.storyPreview;
+  if (!item) return;
+  const modal = document.getElementById('storyComposerModal');
+  modal.innerHTML = `
+    <div class="story-compose-panel">
+      <div class="story-compose-preview">
+        ${item.media_type === 'video' ? `<video src="${item.url}" controls playsinline></video>` : `<img src="${item.url}" alt="Preview do story">`}
+      </div>
+      <div class="story-compose-side">
+        <div class="story-compose-head">
+          <div>
+            <div class="social-title" style="font-size:1.05rem">Novo story</div>
+            <div class="social-subtitle">A legenda aceita emojis e @mencoes.</div>
+          </div>
+          <button class="social-icon-btn" data-close-story-composer><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda..."></textarea>
+        <div class="story-caption-count"><span id="storyCaptionCount">0</span>/160</div>
+        <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> Publicar story</button>
+      </div>
+    </div>`;
+  openModal(modal);
+  const input = document.getElementById('storyCaptionInput');
+  input.addEventListener('input', () => {
+    document.getElementById('storyCaptionCount').textContent = String(input.value.length);
+  });
+  modal.querySelector('[data-close-story-composer]').addEventListener('click', closeStoryComposer);
+  document.getElementById('publishStoryBtn').addEventListener('click', publishStoryFromPreview);
+}
+
+function closeStoryComposer() {
+  if (state.storyPreview) revokePreviews([state.storyPreview]);
+  state.storyPreview = null;
+  closeSocialModals();
+}
+
+async function publishStoryFromPreview() {
+  if (!state.storyPreview) return;
+  const btn = document.getElementById('publishStoryBtn');
+  const caption = document.getElementById('storyCaptionInput')?.value.trim() || '';
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
+  try {
+    const media = await uploadSocialMedia(db, state.profile.id, state.storyPreview.file, 'stories');
+    await state.service.createStory(media, caption);
+    revokePreviews([state.storyPreview]);
+    state.storyPreview = null;
+    closeSocialModals();
     state.stories = await state.service.loadStories();
     renderStories();
     Utils.showToast('Story publicado por 24 horas!');
   } catch (err) {
     console.error(err);
-    Utils.showToast('Erro ao criar story.', 'error');
-  } finally {
-    input.value = '';
+    Utils.showToast('Erro ao publicar story.', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Publicar story';
   }
 }
 
@@ -451,20 +534,34 @@ async function addComment(e) {
 }
 
 async function deletePost(postId) {
-  if (!await MSYConfirm.show('Excluir esta publicacao?', { title: 'Excluir publicacao' })) return;
-  await state.service.deletePost(postId);
-  state.posts = state.posts.filter((p) => p.id !== postId);
-  renderPosts();
+  const post = state.posts.find((p) => p.id === postId);
+  if (!post || !canManage(post)) return Utils.showToast('Sem permissao para excluir esta publicacao.', 'error');
+  if (!await MSYConfirm.show('Excluir esta publicacao? Esta acao remove o post do feed.', { title: 'Excluir publicacao', type: 'danger', confirmText: 'Excluir' })) return;
+  try {
+    await state.service.deletePost(postId);
+    state.posts = state.posts.filter((p) => p.id !== postId);
+    renderPosts();
+    Utils.showToast('Publicacao excluida.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao excluir post:', err);
+    Utils.showToast(err.message || 'Erro ao excluir publicacao.', 'error');
+  }
 }
 
 async function editPost(postId) {
   const post = state.posts.find((p) => p.id === postId);
+  if (!post || !canEditPost(post)) return Utils.showToast('Apenas o autor pode editar esta publicacao.', 'error');
   const next = prompt('Editar publicacao:', post?.content || '');
   if (next === null) return;
-  await state.service.updatePost(postId, next.trim());
-  post.content = next.trim();
-  post.edited_at = new Date().toISOString();
-  renderPosts();
+  try {
+    await state.service.updatePost(postId, next.trim());
+    post.content = next.trim();
+    post.edited_at = new Date().toISOString();
+    renderPosts();
+    Utils.showToast('Publicacao atualizada.');
+  } catch (err) {
+    Utils.showToast(err.message || 'Erro ao editar publicacao.', 'error');
+  }
 }
 
 async function pinPost(postId) {
@@ -514,16 +611,6 @@ async function toggleFollow(memberId) {
   } catch {
     Utils.showToast('Erro ao seguir membro.', 'error');
   }
-}
-
-function renderMessages() {
-  const el = document.getElementById('messagesList');
-  if (!el) return;
-  el.innerHTML = state.messages.length ? state.messages.map((m) => `
-    <div class="message-row">
-      ${avatar(m.sender, 34)}
-      <div class="message-copy"><div class="message-name">${Utils.escapeHtml(m.sender?.name || 'Membro')}</div><div class="message-sub">${Utils.escapeHtml(m.body || 'Enviou uma publicacao')}</div></div>
-    </div>`).join('') : '<div class="message-sub">Nenhuma mensagem nova.</div>';
 }
 
 function bindSearch() {
@@ -591,60 +678,87 @@ function openProfile(memberId) {
         </div>
       </div>
     </div>`;
-  modal.classList.add('open');
+  openModal(modal);
   modal.querySelector('[data-profile-follow]')?.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleFollow(memberId);
   });
 }
 
-function openShare(postId) {
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post || post.legacy) return Utils.showToast('Compartilhamento disponivel no novo Feed social.', 'error');
-  const modal = document.getElementById('shareViewer');
-  const members = state.members.filter((m) => m.id !== state.profile.id);
-  modal.innerHTML = `
-    <div class="share-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div><div class="social-title" style="font-size:1.1rem">Enviar publicacao</div><div class="social-subtitle">Escolha um membro para receber no inbox.</div></div>
-        <button class="social-icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="share-member-list">
-        ${members.map((m) => `<div class="share-member" data-send-post="${post.id}" data-recipient="${m.id}">${avatar(m, 36)}<div><strong>${Utils.escapeHtml(m.name)}</strong><div class="message-sub">${Utils.escapeHtml(m.role || 'Membro')}</div></div></div>`).join('')}
-      </div>
-    </div>`;
-  modal.classList.add('open');
-  modal.querySelectorAll('[data-send-post]').forEach((node) => node.addEventListener('click', async () => {
-    await state.service.sharePost(post, node.dataset.recipient);
-    modal.classList.remove('open');
-    Utils.showToast('Publicacao enviada.');
-  }));
-}
-
-function openStory(groupIndex, storyIndex) {
+async function openStory(groupIndex, storyIndex) {
   const group = state.stories[groupIndex];
   const story = group?.stories?.[storyIndex];
   if (!story) return;
   state.service.markStoryViewed(story.id);
+  let reactions = [];
+  try {
+    reactions = await state.service.loadStoryReactions(story.id);
+  } catch (err) {
+    console.warn('[MSY][feed-social] Reacoes do story indisponiveis:', err);
+  }
+  const reactionSummary = reactions.reduce((acc, row) => {
+    acc[row.reaction] = (acc[row.reaction] || 0) + 1;
+    return acc;
+  }, {});
   const modal = document.getElementById('storyViewer');
   modal.innerHTML = `
     <div class="story-panel">
       <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay controls playsinline></video>` : `<img src="${Utils.escapeHtml(story.media_url)}">`}</div>
-      <div class="story-top">${avatar(group.author, 34)}<strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button></div>
-      <div class="story-bottom">${['❤️','🔥','👏','✨'].map((r) => `<button class="story-reaction" data-story-reaction="${r}">${r}</button>`).join('')}</div>
+      <div class="story-top">
+        ${avatar(group.author, 34)}
+        <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>${timeAgo(story.created_at)}</span></div>
+        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
+        <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      ${story.caption ? `<div class="story-caption">${richText(story.caption)}</div>` : ''}
+      <div class="story-bottom">
+        <div class="story-reactions-row">${['❤️','🔥','👏','✨'].map((r) => `<button class="story-reaction" data-story-reaction="${r}">${r}<span>${reactionSummary[r] || ''}</span></button>`).join('')}</div>
+        ${canManageStory(story) ? `<button class="story-reactions-toggle" data-toggle-story-reactions>${reactions.length} reacao${reactions.length === 1 ? '' : 'es'}</button>` : ''}
+      </div>
+      <div class="story-reactions-panel" id="storyReactionsPanel">
+        <div class="story-reactions-title">Reacoes</div>
+        ${reactions.length ? reactions.map((r) => `
+          <div class="story-reaction-row">
+            ${avatar(r.user || {}, 30)}
+            <div><strong>${Utils.escapeHtml(r.user?.name || 'Membro')}</strong><span>${timeAgo(r.created_at)}</span></div>
+            <em>${Utils.escapeHtml(r.reaction)}</em>
+          </div>`).join('') : '<div class="message-sub">Nenhuma reacao ainda.</div>'}
+      </div>
     </div>`;
-  modal.classList.add('open');
+  openModal(modal);
   modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async () => {
     await state.service.reactToStory(story, btn.dataset.storyReaction);
     Utils.showToast('Reacao enviada.');
+    openStory(groupIndex, storyIndex);
   }));
+  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
+    document.getElementById('storyReactionsPanel')?.classList.toggle('open');
+  });
+  modal.querySelector('[data-delete-story]')?.addEventListener('click', () => deleteStory(story.id));
+}
+
+async function deleteStory(storyId) {
+  if (!await MSYConfirm.show('Excluir este story?', { title: 'Excluir story', type: 'danger', confirmText: 'Excluir' })) return;
+  try {
+    await state.service.deleteStory(storyId);
+    closeSocialModals();
+    state.stories = await state.service.loadStories();
+    renderStories();
+    Utils.showToast('Story excluido.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao excluir story:', err);
+    Utils.showToast(err.message || 'Erro ao excluir story.', 'error');
+  }
 }
 
 function bindModals() {
   document.addEventListener('click', (e) => {
-    if (e.target.matches('.story-viewer,.profile-viewer,.share-viewer,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
-      document.querySelectorAll('.story-viewer,.profile-viewer,.share-viewer').forEach((m) => m.classList.remove('open'));
+    if (e.target.matches('.story-viewer,.profile-viewer,.story-composer-modal,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
+      closeSocialModals();
     }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSocialModals();
   });
 }
 

@@ -12,14 +12,13 @@ export class SocialService {
   }
 
   async loadBootstrap() {
-    const [posts, stories, members, follows, messages] = await Promise.all([
+    const [posts, stories, members, follows] = await Promise.all([
       this.loadPosts({ limit: this.pageSize }),
       this.loadStories(),
       this.loadMembers(),
       this.loadFollows(),
-      this.loadUnreadMessages(),
     ]);
-    return { posts, stories, members, follows, messages };
+    return { posts, stories, members, follows, messages: [] };
   }
 
   async loadPosts({ limit = this.pageSize, before = null, query = '', authorId = null } = {}) {
@@ -149,19 +148,26 @@ export class SocialService {
   }
 
   async updatePost(postId, content) {
-    const { error } = await this.db
+    const { data, error } = await this.db
       .from('social_posts')
       .update({ content, edited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', postId);
+      .eq('id', postId)
+      .eq('author_id', this.profile.id)
+      .select('id')
+      .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Sem permissao para editar esta publicacao.');
   }
 
   async deletePost(postId) {
-    const { error } = await this.db
+    let request = this.db
       .from('social_posts')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
       .eq('id', postId);
+    if (this.profile.tier !== 'diretoria') request = request.eq('author_id', this.profile.id);
+    const { data, error } = await request.select('id').maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Sem permissao para excluir esta publicacao.');
   }
 
   async togglePin(postId, pinned) {
@@ -327,6 +333,28 @@ export class SocialService {
     });
   }
 
+  async deleteStory(storyId) {
+    let request = this.db
+      .from('social_stories')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', storyId);
+    if (this.profile.tier !== 'diretoria') request = request.eq('author_id', this.profile.id);
+    const { data, error } = await request.select('id').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Sem permissao para excluir este story.');
+  }
+
+  async loadStoryReactions(storyId) {
+    const { data, error } = await this.db
+      .from('social_story_reactions')
+      .select('id,reaction,created_at,user:user_id(id,name,username,initials,color,avatar_url)')
+      .eq('story_id', storyId)
+      .order('created_at', { ascending: false })
+      .limit(80);
+    if (error) throw error;
+    return data || [];
+  }
+
   async loadMembers() {
     const { data, error } = await this.db
       .from('profiles')
@@ -371,36 +399,6 @@ export class SocialService {
       target_url: `feed.html?profile=${this.profile.id}`,
     });
     return true;
-  }
-
-  async sharePost(post, recipientId, body = '') {
-    const { error } = await this.db.from('social_messages').insert({
-      sender_id: this.profile.id,
-      recipient_id: recipientId,
-      post_id: post.id,
-      body: body || null,
-    });
-    if (error) throw error;
-    await this.notify(recipientId, {
-      message: `${this.profile.name} enviou uma publicacao para voce.`,
-      type: 'social_share',
-      icon: '📨',
-      target_type: 'message',
-      target_id: post.id,
-      target_url: `feed.html?message=latest&post=${post.id}`,
-    });
-  }
-
-  async loadUnreadMessages() {
-    const { data, error } = await this.db
-      .from('social_messages')
-      .select('*, sender:sender_id(id,name,username,initials,color,avatar_url), post:post_id(id,content)')
-      .eq('recipient_id', this.profile.id)
-      .is('read_at', null)
-      .order('created_at', { ascending: false })
-      .limit(12);
-    if (error) throw error;
-    return data || [];
   }
 
   async search(query) {
