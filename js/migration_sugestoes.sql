@@ -17,6 +17,50 @@ CREATE TABLE IF NOT EXISTS public.msy_suggestions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Se a tabela ja existia em outro formato, CREATE TABLE IF NOT EXISTS
+-- nao adiciona colunas novas. Estes ALTERs tornam a migration reparavel.
+ALTER TABLE public.msy_suggestions
+  ADD COLUMN IF NOT EXISTS author_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS title text,
+  ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'outro',
+  ADD COLUMN IF NOT EXISTS content text,
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'nova',
+  ADD COLUMN IF NOT EXISTS admin_note text,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+UPDATE public.msy_suggestions
+SET title = COALESCE(NULLIF(title, ''), 'Sugestao'),
+    content = COALESCE(NULLIF(content, ''), admin_note, 'Sem descricao registrada')
+WHERE title IS NULL OR content IS NULL;
+
+ALTER TABLE public.msy_suggestions
+  ALTER COLUMN title SET NOT NULL,
+  ALTER COLUMN content SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'msy_suggestions_category_check'
+      AND conrelid = 'public.msy_suggestions'::regclass
+  ) THEN
+    ALTER TABLE public.msy_suggestions
+      ADD CONSTRAINT msy_suggestions_category_check
+      CHECK (category IN ('melhoria','bug','evento','interface','outro'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'msy_suggestions_status_check'
+      AND conrelid = 'public.msy_suggestions'::regclass
+  ) THEN
+    ALTER TABLE public.msy_suggestions
+      ADD CONSTRAINT msy_suggestions_status_check
+      CHECK (status IN ('nova','analise','planejada','concluida','recusada'));
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_msy_suggestions_author
   ON public.msy_suggestions(author_id, created_at DESC);
 
@@ -51,3 +95,6 @@ CREATE POLICY "Diretoria remove sugestoes"
 
 COMMENT ON TABLE public.msy_suggestions IS
   'Ideias e melhorias enviadas pelos membros para análise da Diretoria.';
+
+-- Atualiza o schema cache do PostgREST/Supabase imediatamente apos a migration.
+NOTIFY pgrst, 'reload schema';
