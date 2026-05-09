@@ -5751,7 +5751,7 @@
          background:
            radial-gradient(circle at 10% 0%, rgba(201,168,76,.22), transparent 34%),
            radial-gradient(circle at 96% 12%, rgba(127,29,29,.22), transparent 32%),
-           linear-gradient(135deg, rgba(23,18,18,.96), rgba(8,8,12,.98) 58%, rgba(15,12,9,.96));
+           linear-gradient(135deg, rgba(23,18,18,.96), rgba(8,8,12,.98) 58%, rgba(15,12,9,.96)) !important;
          border:1px solid rgba(201,168,76,.32);
          box-shadow:0 18px 54px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08);
        }
@@ -5759,11 +5759,31 @@
          content:''; position:absolute; top:0; left:0; right:0; height:3px;
          background:linear-gradient(90deg,rgba(127,29,29,.15),rgba(201,168,76,.9) 34%,#f3d37a 50%,rgba(201,168,76,.65) 74%,rgba(127,29,29,.12));
        }
+       .jornal-wrap::after {
+         content:''; position:absolute; inset:0; pointer-events:none; opacity:.5;
+         background:
+           linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,.05) 46%, transparent 52%),
+           repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 62px);
+         mix-blend-mode:screen;
+       }
+       .jornal-wrap.jornal-current-breaking {
+         border-color:rgba(239,68,68,.46);
+         box-shadow:0 22px 70px rgba(0,0,0,.44), 0 0 0 1px rgba(201,168,76,.12), inset 0 1px 0 rgba(255,255,255,.11);
+       }
+       .jornal-wrap.jornal-current-breaking::before {
+         height:4px;
+         background:linear-gradient(90deg,#7f1d1d,#ef4444 22%,#f3d37a 52%,#c9a84c 78%,#7f1d1d);
+         box-shadow:0 0 22px rgba(239,68,68,.34);
+       }
+       .jornal-wrap.jornal-current-major::before {
+         height:4px;
+         background:linear-gradient(90deg,rgba(201,168,76,.2),#c9a84c 28%,#f3d37a 50%,rgba(201,168,76,.8) 72%,rgba(201,168,76,.18));
+       }
        .jornal-header {
          position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between;
          gap:14px; padding:17px 20px 13px; border-bottom:1px solid rgba(201,168,76,.14);
        }
-       .jornal-header-left { display:flex; align-items:center; gap:12px; min-width:0; }
+       .jornal-header-left { display:flex; align-items:center; gap:12px; min-width:0; flex-wrap:wrap; }
        .jornal-logo {
          width:44px; height:44px; border-radius:13px; flex-shrink:0;
          background:linear-gradient(135deg,rgba(201,168,76,.25),rgba(127,29,29,.28));
@@ -5776,6 +5796,14 @@
          color:var(--text-1); letter-spacing:.08em; text-transform:uppercase;
        }
        .jornal-subtitle { font-size:.66rem; color:var(--gold); letter-spacing:.14em; margin-top:2px; text-transform:uppercase; }
+       .jornal-edition {
+         display:inline-flex; align-items:center; gap:7px; margin-left:6px; padding:6px 10px;
+         border:1px solid rgba(201,168,76,.2); border-radius:999px;
+         color:var(--text-3); background:rgba(255,255,255,.035);
+         font-size:.58rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+         white-space:nowrap;
+       }
+       .jornal-edition i { color:var(--gold); font-size:.62rem; }
        .jornal-live-dot {
          width:8px; height:8px; border-radius:50%; background:#10b981;
          box-shadow:0 0 10px rgba(16,185,129,.7); animation:jpulse 2s infinite; flex-shrink:0;
@@ -5790,21 +5818,41 @@
        }
        .jornal-add-btn:hover { background:rgba(201,168,76,.2); transform:translateY(-1px); }
        .jornal-board {
-         display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:0;
-         min-height:176px;
+         position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) 244px; gap:0;
+         min-height:196px;
        }
-       .jornal-carousel { position:relative; min-height:176px; overflow:hidden; }
+       .jornal-carousel {
+         position:relative; min-height:196px; overflow:hidden;
+         background:
+           radial-gradient(circle at 14% 52%, rgba(201,168,76,.1), transparent 30%),
+           linear-gradient(90deg, rgba(255,255,255,.025), transparent 64%);
+       }
        .jornal-slide {
-         display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:18px; padding:24px 22px 22px;
+         display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:20px; padding:28px 24px 25px;
          position:absolute; top:0; left:0; width:100%; box-sizing:border-box;
          opacity:0; transform:translateX(30px);
          transition:opacity .45s ease, transform .45s ease; pointer-events:none;
        }
        .jornal-slide.active { opacity:1; transform:translateX(0); pointer-events:auto; position:relative; }
        .jornal-slide-icon {
-         width:68px; height:68px; border-radius:18px; flex-shrink:0;
+         position:relative; width:74px; height:74px; border-radius:20px; flex-shrink:0;
          display:flex; align-items:center; justify-content:center; font-size:1.55rem;
          box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 10px 28px rgba(0,0,0,.26);
+       }
+       .jornal-slide-icon::after {
+         content:''; position:absolute; inset:-8px; border-radius:26px; z-index:-1;
+         background:radial-gradient(circle, rgba(201,168,76,.16), transparent 66%);
+         opacity:.7;
+       }
+       .jornal-impact-breaking .jornal-slide-icon {
+         width:84px; height:84px; border-radius:24px; font-size:1.8rem;
+         background:linear-gradient(135deg, rgba(239,68,68,.22), rgba(201,168,76,.18));
+         border:1px solid rgba(239,68,68,.42);
+         box-shadow:0 16px 38px rgba(127,29,29,.34), inset 0 1px 0 rgba(255,255,255,.14);
+       }
+       .jornal-impact-major .jornal-slide-icon {
+         background:linear-gradient(135deg, rgba(201,168,76,.22), rgba(245,158,11,.12));
+         border-color:rgba(201,168,76,.42);
        }
        .jornal-slide-icon.aniversario { background:rgba(236,72,153,.12); border:1px solid rgba(236,72,153,.25); }
        .jornal-slide-icon.recorde     { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.3); }
@@ -5825,8 +5873,22 @@
        .jornal-slide-tag.aviso       { background:rgba(168,85,247,.15); color:#c084fc; }
        .jornal-slide-tag.priority    { background:rgba(239,68,68,.15);  color:#ef4444; }
        .jornal-slide-tag.desempenho  { background:rgba(22,163,74,.15); color:#4ade80; }
-       .jornal-slide-text { font-size:1.16rem; font-weight:900; color:var(--text-1); line-height:1.34; letter-spacing:.01em; max-width:720px; }
-       .jornal-slide-meta { font-size:.78rem; color:var(--text-3); margin-top:8px; line-height:1.42; max-width:760px; }
+       .jornal-impact-label {
+         display:inline-flex; align-items:center; gap:6px; margin-left:7px; padding:4px 9px;
+         border-radius:999px; border:1px solid rgba(201,168,76,.18);
+         background:rgba(255,255,255,.035); color:var(--text-3);
+         font-size:.57rem; font-weight:900; letter-spacing:.11em; text-transform:uppercase;
+       }
+       .jornal-impact-breaking .jornal-impact-label {
+         color:#fecaca; border-color:rgba(239,68,68,.34); background:rgba(239,68,68,.1);
+       }
+       .jornal-impact-major .jornal-impact-label {
+         color:var(--gold); border-color:rgba(201,168,76,.3); background:rgba(201,168,76,.1);
+       }
+       .jornal-slide-text { font-size:1.22rem; font-weight:950; color:var(--text-1); line-height:1.3; letter-spacing:0; max-width:760px; }
+       .jornal-impact-breaking .jornal-slide-text { font-size:1.42rem; line-height:1.2; max-width:820px; }
+       .jornal-impact-major .jornal-slide-text { font-size:1.3rem; }
+       .jornal-slide-meta { font-size:.8rem; color:var(--text-3); margin-top:9px; line-height:1.42; max-width:780px; }
        .jornal-kicker {
          display:flex; align-items:center; gap:8px; color:var(--text-3); font-size:.62rem;
          letter-spacing:.16em; text-transform:uppercase; font-weight:800;
@@ -5834,25 +5896,39 @@
        .jornal-kicker::before { content:''; width:18px; height:1px; background:rgba(201,168,76,.55); }
        .jornal-rail {
          border-left:1px solid rgba(255,255,255,.06);
-         background:rgba(0,0,0,.13);
-         padding:14px;
+         background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.16));
+         padding:15px;
          display:flex; flex-direction:column; gap:8px;
        }
        .jornal-rail-title {
+         display:flex; align-items:center; justify-content:space-between; gap:8px;
          color:var(--text-3); font-size:.58rem; font-weight:900; letter-spacing:.14em;
-         text-transform:uppercase; margin-bottom:2px;
+         text-transform:uppercase; margin-bottom:3px;
        }
+       .jornal-rail-title i { color:var(--gold); }
        .jornal-rail-item {
          border:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.035);
-         color:var(--text-2); border-radius:12px; padding:9px 10px; cursor:pointer;
+         color:var(--text-2); border-radius:14px; padding:10px 11px; cursor:pointer;
          display:flex; align-items:flex-start; gap:8px; text-align:left; transition:all .18s var(--ease);
        }
        .jornal-rail-item:hover,
-       .jornal-rail-item.active { border-color:rgba(201,168,76,.28); background:rgba(201,168,76,.08); color:var(--text-1); }
+       .jornal-rail-item.active { border-color:rgba(201,168,76,.34); background:rgba(201,168,76,.09); color:var(--text-1); transform:translateX(-2px); }
+       .jornal-rail-item[data-impact="breaking"] { border-color:rgba(239,68,68,.2); }
+       .jornal-rail-item[data-impact="breaking"].active { background:rgba(239,68,68,.11); border-color:rgba(239,68,68,.4); }
        .jornal-rail-item i { color:var(--gold); font-size:.72rem; margin-top:2px; }
        .jornal-rail-copy { min-width:0; }
        .jornal-rail-tag { color:var(--gold); font-size:.56rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; margin-bottom:2px; }
        .jornal-rail-text { font-size:.68rem; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+       .jornal-progress {
+         position:relative; height:3px; overflow:hidden; background:rgba(255,255,255,.055);
+       }
+       .jornal-progress span {
+         display:block; width:0; height:100%;
+         background:linear-gradient(90deg, rgba(127,29,29,.7), var(--gold), #f3d37a);
+         box-shadow:0 0 16px rgba(201,168,76,.36);
+       }
+       .jornal-progress span.is-running { animation:jornalProgress 7.5s linear forwards; }
+       @keyframes jornalProgress { from { width:0; } to { width:100%; } }
        .jornal-footer {
          display:flex; align-items:center; justify-content:space-between;
          padding:10px 20px 13px; border-top:1px solid rgba(255,255,255,.05);
@@ -5891,19 +5967,28 @@
        [data-theme="light"] .jornal-title { color:#2a2224; }
        [data-theme="light"] .jornal-footer { background:rgba(255,255,255,.34); }
        [data-theme="light"] .jornal-logo { color:#8a6318; }
+       [data-theme="light"] .jornal-carousel { background:linear-gradient(90deg, rgba(201,168,76,.08), rgba(255,255,255,.12)); }
+       @media (max-width: 980px) {
+         .jornal-board { grid-template-columns:1fr; }
+         .jornal-rail { display:none; }
+       }
        @media (max-width: 640px) {
          .jornal-header { align-items:flex-start; padding:15px 14px 12px; }
          .jornal-logo { width:38px; height:38px; border-radius:11px; }
          .jornal-title { font-size:.86rem; }
          .jornal-subtitle { font-size:.58rem; }
+         .jornal-edition { display:none; }
          .jornal-add-btn { padding:7px 10px; }
          .jornal-board { grid-template-columns:1fr; min-height:0; }
-         .jornal-carousel { min-height:168px; }
+         .jornal-carousel { min-height:182px; }
          .jornal-slide { grid-template-columns:auto minmax(0,1fr); padding:20px 14px 18px; gap:12px; }
          .jornal-slide-del { grid-column:2; justify-self:start; margin-top:2px; }
          .jornal-slide-icon { width:50px; height:50px; border-radius:14px; }
+         .jornal-impact-breaking .jornal-slide-icon { width:56px; height:56px; border-radius:16px; font-size:1.32rem; }
          .jornal-slide-text { font-size:.98rem; }
-         .jornal-rail { display:none; }
+         .jornal-impact-breaking .jornal-slide-text,
+         .jornal-impact-major .jornal-slide-text { font-size:1.08rem; line-height:1.26; }
+         .jornal-impact-label { display:none; }
          .jornal-footer { padding:10px 14px 12px; }
        }
      `;
@@ -5951,8 +6036,16 @@
      const todayMM  = String(today.getMonth()+1).padStart(2,'0');
      const todayDD  = String(today.getDate()).padStart(2,'0');
      const slides   = [];
+     const MS_DAY   = 86400000;
+     const daysSince = (value) => {
+       if (!value) return Infinity;
+       const dateValue = String(value).includes('T') ? value : `${value}T00:00:00`;
+       const date = new Date(dateValue);
+       return Number.isNaN(date.getTime()) ? Infinity : Math.floor((today - date) / MS_DAY);
+     };
+     const isRecent = (value, maxDays) => daysSince(value) <= maxDays;
    
-     const em3dias = new Date(today.getTime() + 3*86400000).toISOString().split('T')[0];
+     const em3dias = new Date(today.getTime() + 3*MS_DAY).toISOString().split('T')[0];
    
      // Mês atual para desempenho
      const mesAtual = todayStr.slice(0,7); // "YYYY-MM"
@@ -6011,7 +6104,7 @@
    
      /* Eventos */
      eventos.forEach(ev => {
-       const diff   = Math.round((new Date(ev.event_date+'T00:00:00') - today) / 86400000);
+       const diff   = Math.round((new Date(ev.event_date+'T00:00:00') - today) / MS_DAY);
        const quando = diff===0 ? `hoje às ${ev.event_time||'?'}` : diff===1 ? 'amanhã' : `em ${diff} dias`;
        slides.push({ type:'evento', priority: diff===0 ? 9 : 5,
          icon: diff===0 ? '📍' : '📅', tag: diff===0 ? 'Acontece Hoje' : 'Evento Próximo',
@@ -6023,7 +6116,8 @@
      if (ranking) {
        const entries  = ranking.entries || [];
        const leader   = entries[0];
-       const diffDays = Math.round((today - new Date(ranking.week_start+'T00:00:00')) / 86400000);
+       const rankingAgeDays = Math.min(daysSince(ranking.created_at), daysSince(ranking.week_end), daysSince(ranking.week_start));
+       const diffDays = rankingAgeDays <= 7 ? 0 : 11;
        if (diffDays <= 10) { // até 10 dias para pegar semanas que ainda são relevantes
          const periodoRank = `${ranking.week_start?.split('-').reverse().join('/')} a ${ranking.week_end?.split('-').reverse().join('/')}`;
          const mesRank = new Date(ranking.week_start+'T00:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
@@ -6033,7 +6127,8 @@
    
          /* Recorde semanal — exibe se o líder supera o Top 1 histórico */
          const recSem = recSemTop1;
-         if (leader && recSem && leader.messages > recSem.mensagens)
+         const recordeSemRecente = rankingAgeDays <= 5;
+         if (recordeSemRecente && leader && recSem && leader.messages > recSem.mensagens)
            slides.push({ type:'recorde', priority:10, icon:'🏆', tag:'Novo Recorde!',
              text:`${leader.name} bateu o recorde semanal com ${leader.messages} msgs!`,
              meta:`Anterior: ${recSem.mensagens} msgs — ${recSem.nome} · ${periodoRank}` });
@@ -6045,6 +6140,7 @@
        const ultimo     = rankingsMes[0];
        const criadoEm   = new Date(ultimo.created_at);
        const horasAtras = (today - criadoEm) / 3600000;
+       const rankingMesRecente = isRecent(ultimo.created_at || ultimo.week_end, 7);
        if (horasAtras <= 48) {
          const entries    = ultimo.entries || [];
          const lider      = entries[0];
@@ -6066,7 +6162,7 @@
            });
          });
          const topMes = Object.entries(totalMes).sort((a,b)=>b[1]-a[1])[0];
-         if (topMes && topMes[1] > recMes.mensagens)
+         if (rankingMesRecente && topMes && topMes[1] > recMes.mensagens)
            slides.push({ type:'recorde', priority:9, icon:'🏆', tag:'Recorde Mensal!',
              text:`${topMes[0]} está batendo o recorde mensal com ${topMes[1]} msgs!`,
              meta:`Recorde anterior: ${recMes.mensagens} msgs — ${recMes.nome}` });
@@ -6081,7 +6177,7 @@
        const leader = entries[0];
        if (leader) {
          const mediaLider = Math.round(leader.messages / 7);
-         if (mediaLider > recDia.mensagens)
+         if (mediaLider > recDia.mensagens && isRecent(ranking.created_at || ranking.week_end, 2))
            slides.push({ type:'recorde', priority:8, icon:'⚡', tag:'Recorde Diário!',
              text:`${leader.name} pode estar batendo o recorde diário!`,
              meta:`Recorde atual: ${recDia.mensagens} msgs/dia — ${recDia.nome}` });
@@ -6154,7 +6250,7 @@
      /* ── SLIDES DE GARANTIA: sempre presentes se não há conteúdo suficiente ── */
    
      // Slide: ranking histórico (sempre exibe o líder do último ranking disponível)
-     if (slides.filter(s=>s.type==='ranking').length === 0 && ranking) {
+     if (slides.filter(s=>s.type==='ranking').length === 0 && ranking && isRecent(ranking.created_at || ranking.week_end, 14)) {
        const entries    = ranking.entries || [];
        const leader     = entries[0];
        if (leader) {
@@ -6167,13 +6263,22 @@
      }
    
      // Slide: recordes atuais do sistema (sempre informativo) — usa Top 1 do Trono
-     const recSemGlobal = recSemTop1;
-     if (recSemGlobal && slides.filter(s=>s.type==='recorde').length === 0) {
-       slides.push({ type:'recorde', priority:2, icon:'🏆', tag:'Recorde Semanal',
-         text:`Recorde semanal: ${recSemGlobal.mensagens} msgs por ${recSemGlobal.nome}`,
-         meta: recSemGlobal.periodo ? `Período: ${recSemGlobal.periodo}` : 'Recorde histórico da Masayoshi' });
+     if (slides.filter(s=>s.type==='recorde').length === 0) {
+       const recordeHistorico = [
+         { row: recSemTop1, tag: 'Recorde Histórico', scope: 'em uma única semana', meta: 'Maior marca semanal da história da Masayoshi' },
+         { row: recMesTop1, tag: 'Recorde Histórico', scope: 'em um único mês', meta: 'Maior marca mensal da história da Masayoshi' },
+         { row: recDiarTop1, tag: 'Recorde Histórico', scope: 'em um único dia', meta: 'Maior marca diária da história da Masayoshi' },
+       ].find(item => item.row);
+
+       if (recordeHistorico) {
+         const r = recordeHistorico.row;
+         const mensagens = Number(r.mensagens || 0).toLocaleString('pt-BR');
+         slides.push({ type:'recorde', priority:2, icon:'🏛️', tag:recordeHistorico.tag,
+           text:`${r.nome} está em primeiro lugar no número de mensagens ${recordeHistorico.scope}, com ${mensagens} msgs.`,
+           meta: r.periodo ? `${recordeHistorico.meta} · Período: ${r.periodo}` : recordeHistorico.meta });
+       }
      }
-   
+
      // Slide: total de membros ativos
      if (membros.length > 0) {
        slides.push({ type:'aviso', priority:1, icon:'⚔️', tag:'Masayoshi',
@@ -6192,7 +6297,7 @@
            .order('event_date',{ascending:true}).limit(1);
          if (proximoEv?.[0]) {
            const ev = proximoEv[0];
-           const diff = Math.round((new Date(ev.event_date+'T00:00:00') - today) / 86400000);
+           const diff = Math.round((new Date(ev.event_date+'T00:00:00') - today) / MS_DAY);
            slides.push({ type:'evento', priority:3, icon:'📅', tag:'Próximo Evento',
              text:`${ev.title} em ${diff} dias`,
              meta:`${Utils.formatDate(ev.event_date)}${ev.event_time ? ' · '+ev.event_time : ''}${ev.mandatory?' · Presença obrigatória':''}` });
@@ -6231,6 +6336,38 @@
    let _jornalTimer = null;
    let _jornalCur   = 0;
    let _jornalSlides = [];
+
+   function _jornalImpact(s) {
+     const priority = Number(s?.priority || 0);
+     const tag = String(s?.tag || '').toLowerCase();
+     if (s?.type === 'priority' || priority >= 11 || tag.includes('urgente')) return 'breaking';
+     if (priority >= 8 || ['recorde','aniversario'].includes(s?.type)) return 'major';
+     return 'standard';
+   }
+
+   function _jornalKicker(s) {
+     if (s?.type === 'priority') return 'Comunicado da Diretoria';
+     if (s?.type === 'recorde') return 'Marco historico';
+     if (s?.type === 'evento' && Number(s?.priority || 0) >= 9) return 'Acontece hoje';
+     if (s?.type === 'ranking') return 'Movimento da semana';
+     if (s?.type === 'aniversario') return 'Celebracao interna';
+     return 'Boletim interno';
+   }
+
+   function _jornalImpactLabel(impact, s) {
+     if (impact === 'breaking') return 'Prioridade alta';
+     if (impact === 'major' && s?.type === 'recorde') return 'Destaque maximo';
+     if (impact === 'major') return 'Em evidencia';
+     return '';
+   }
+
+   function _jornalResetProgress() {
+     const progress = document.getElementById('jornalProgress');
+     if (!progress) return;
+     progress.classList.remove('is-running');
+     void progress.offsetWidth;
+     if (_jornalSlides.length > 1) progress.classList.add('is-running');
+   }
    
    function _jornalShow(idx) {
      _jornalCur = idx;
@@ -6239,8 +6376,14 @@
      });
      document.querySelectorAll('.jornal-dot').forEach((d,i) => d.classList.toggle('active',i===idx));
      document.querySelectorAll('.jornal-rail-item').forEach((d,i) => d.classList.toggle('active',i===idx));
+     const wrap = document.querySelector('.jornal-wrap');
+     if (wrap) {
+       wrap.classList.remove('jornal-current-breaking','jornal-current-major','jornal-current-standard');
+       wrap.classList.add(`jornal-current-${_jornalImpact(_jornalSlides[idx])}`);
+     }
      const cnt = document.getElementById('jornalCount');
      if (cnt) cnt.textContent = `${idx+1} / ${_jornalSlides.length}`;
+     _jornalResetProgress();
    }
    
    function _jornalNext() { _jornalShow((_jornalCur+1) % _jornalSlides.length); }
@@ -6248,20 +6391,24 @@
    
    function _jornalStartTimer() {
      clearInterval(_jornalTimer);
+     _jornalResetProgress();
      if (_jornalSlides.length > 1)
        _jornalTimer = setInterval(_jornalNext, 7500);
    }
    
    function _jornalSlideHTML(s, i, canDelete) {
+     const impact = _jornalImpact(s);
+     const label = _jornalImpactLabel(impact, s);
      const delBtn = (canDelete && s.avisoId)
        ? `<button class="jornal-slide-del" data-aviso-id="${s.avisoId}" title="Excluir aviso"><i class="fa-solid fa-trash-can"></i></button>`
        : '';
      return `
-       <div class="jornal-slide${i===0?' active':''}" data-idx="${i}">
+       <div class="jornal-slide jornal-impact-${impact}${i===0?' active':''}" data-idx="${i}" data-impact="${impact}">
          <div class="jornal-slide-icon ${s.type}">${s.icon}</div>
          <div class="jornal-slide-body">
-           <div class="jornal-kicker">Boletim interno</div>
+           <div class="jornal-kicker">${_jornalKicker(s)}</div>
            <div class="jornal-slide-tag ${s.type}">${s.tag}</div>
+           ${label ? `<span class="jornal-impact-label"><i class="fa-solid fa-bolt"></i>${label}</span>` : ''}
            <div class="jornal-slide-text">${Utils.escapeHtml(s.text)}</div>
            ${s.meta ? `<div class="jornal-slide-meta">${Utils.escapeHtml(s.meta)}</div>` : ''}
          </div>
@@ -6271,8 +6418,8 @@
 
    function _jornalRailHTML(slides) {
      return slides.slice(0, 4).map((s, i) => `
-       <button class="jornal-rail-item${i===0?' active':''}" data-idx="${i}" type="button">
-         <i class="fa-solid fa-angle-right"></i>
+       <button class="jornal-rail-item${i===0?' active':''}" data-idx="${i}" data-impact="${_jornalImpact(s)}" type="button">
+         <i class="fa-solid ${_jornalImpact(s)==='breaking' ? 'fa-bolt' : 'fa-angle-right'}"></i>
          <span class="jornal-rail-copy">
            <span class="jornal-rail-tag">${Utils.escapeHtml(s.tag)}</span>
            <span class="jornal-rail-text">${Utils.escapeHtml(s.text)}</span>
@@ -6365,9 +6512,10 @@
    
      const canAdd = profile.tier === 'diretoria';
      const hasSlides = _jornalSlides.length > 0;
+     const currentImpact = hasSlides ? _jornalImpact(_jornalSlides[0]) : 'standard';
    
      container.innerHTML = `
-       <div class="jornal-wrap">
+       <div class="jornal-wrap jornal-current-${currentImpact}">
          <div class="jornal-header">
            <div class="jornal-header-left">
              <div class="jornal-logo">📰</div>
@@ -6375,6 +6523,7 @@
                <div class="jornal-title">Jornal MSY</div>
                <div class="jornal-subtitle">Acontecimentos da Ordem</div>
              </div>
+             ${hasSlides ? `<div class="jornal-edition"><i class="fa-solid fa-signal"></i>${_jornalSlides.length} pautas</div>` : ''}
              ${hasSlides ? '<div class="jornal-live-dot"></div>' : ''}
            </div>
            ${canAdd ? `<button class="jornal-add-btn" id="jornalAddBtn"><i class="fa-solid fa-plus"></i> Aviso</button>` : ''}
@@ -6385,10 +6534,11 @@
                ${_jornalSlides.map((s,i)=>_jornalSlideHTML(s,i,canAdd)).join('')}
              </div>
              <div class="jornal-rail">
-               <div class="jornal-rail-title">Em destaque</div>
+               <div class="jornal-rail-title"><span>Pauta editorial</span><i class="fa-solid fa-newspaper"></i></div>
                ${_jornalRailHTML(_jornalSlides)}
              </div>
            </div>
+           <div class="jornal-progress"><span id="jornalProgress"></span></div>
            <div class="jornal-footer">
              <div class="jornal-dots">
                ${_jornalSlides.map((_,i)=>`<div class="jornal-dot${i===0?' active':''}" data-idx="${i}"></div>`).join('')}
