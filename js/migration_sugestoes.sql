@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.msy_suggestions (
     CHECK (category IN ('melhoria','bug','evento','interface','outro')),
   content text NOT NULL,
   body text NOT NULL DEFAULT 'Sem descricao registrada',
-  status text NOT NULL DEFAULT 'nova'
+  status text NOT NULL DEFAULT 'analise'
     CHECK (status IN ('nova','analise','planejada','concluida','recusada')),
   admin_note text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -26,7 +26,7 @@ ALTER TABLE public.msy_suggestions
   ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'outro',
   ADD COLUMN IF NOT EXISTS content text,
   ADD COLUMN IF NOT EXISTS body text,
-  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'nova',
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'analise',
   ADD COLUMN IF NOT EXISTS admin_note text,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
@@ -40,7 +40,8 @@ WHERE title IS NULL OR content IS NULL OR body IS NULL;
 ALTER TABLE public.msy_suggestions
   ALTER COLUMN title SET NOT NULL,
   ALTER COLUMN content SET NOT NULL,
-  ALTER COLUMN body SET NOT NULL;
+  ALTER COLUMN body SET NOT NULL,
+  ALTER COLUMN status SET DEFAULT 'analise';
 
 ALTER TABLE public.msy_suggestions
   DROP CONSTRAINT IF EXISTS msy_suggestions_category_check,

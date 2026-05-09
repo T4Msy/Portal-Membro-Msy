@@ -406,6 +406,21 @@
   font-size: .98rem;
   margin: 0 0 7px;
 }
+.suggestion-card-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+.suggestion-card-info span {
+  border: 1px solid var(--border-faint);
+  background: rgba(255,255,255,.035);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+.suggestion-card-info strong { color: var(--text-2); }
 .suggestion-card p {
   color: var(--text-2);
   line-height: 1.55;
@@ -445,6 +460,33 @@
   text-transform: uppercase;
   margin-bottom: 6px;
 }
+.suggestion-action-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.suggestion-action-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border-faint);
+  background: var(--black-4);
+  color: var(--text-2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 900;
+  transition: border-color var(--t1) var(--ease), background var(--t1) var(--ease), color var(--t1) var(--ease);
+}
+.suggestion-action-btn:hover { border-color: var(--border-gold); color: var(--gold); }
+.suggestion-action-btn.accept { color:#4ade80; border-color:rgba(74,222,128,.22); background:rgba(74,222,128,.06); }
+.suggestion-action-btn.review { color:#60a5fa; border-color:rgba(96,165,250,.22); background:rgba(96,165,250,.06); }
+.suggestion-action-btn.done { color:var(--gold); border-color:rgba(201,168,76,.24); background:rgba(201,168,76,.08); }
+.suggestion-action-btn.reject,
+.suggestion-action-btn.delete { color:#ef4444; border-color:rgba(239,68,68,.24); background:rgba(239,68,68,.06); }
 .suggestions-empty {
   border: 1px dashed var(--border-faint);
   background: rgba(17,17,22,.9);

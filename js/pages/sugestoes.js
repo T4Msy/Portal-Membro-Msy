@@ -108,6 +108,7 @@ async function createSuggestion(payload) {
       ...payload,
       authorId: state.profile.id,
       authorName: state.profile.name,
+      status: 'analise',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       source: 'local',
@@ -122,7 +123,7 @@ async function createSuggestion(payload) {
       category: payload.category,
       content: payload.content,
       body: payload.content,
-      status: 'nova',
+      status: 'analise',
     })
     .select('*, author:author_id(id,name,role,tier,initials,color,avatar_url)')
     .single();
@@ -145,6 +146,21 @@ async function updateSuggestionStatus(id, status) {
   const { error } = await db
     .from('msy_suggestions')
     .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteSuggestion(id) {
+  if (!state.isDiretoria) return;
+  if (!state.hasDatabase) {
+    state.items = state.items.filter((entry) => entry.id !== id);
+    saveLocalItems(state.items);
+    return;
+  }
+
+  const { error } = await db
+    .from('msy_suggestions')
+    .delete()
     .eq('id', id);
   if (error) throw error;
 }
@@ -400,16 +416,36 @@ function renderSuggestions() {
   }
 
   list.innerHTML = items.map(renderSuggestionCard).join('');
-  list.querySelectorAll('[data-update-status]').forEach((select) => {
-    select.addEventListener('change', async () => {
+  list.querySelectorAll('[data-status-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
       try {
-        await updateSuggestionStatus(select.dataset.updateStatus, select.value);
-        const item = state.items.find((entry) => entry.id === select.dataset.updateStatus);
-        if (item) item.status = select.value;
+        const nextStatus = button.dataset.statusAction;
+        await updateSuggestionStatus(button.dataset.suggestionId, nextStatus);
+        const item = state.items.find((entry) => entry.id === button.dataset.suggestionId);
+        if (item) item.status = nextStatus;
         renderSuggestions();
         Utils.showToast('Status atualizado.');
       } catch (err) {
         Utils.showToast(err.message || 'Erro ao atualizar status.', 'error');
+      }
+    });
+  });
+
+  list.querySelectorAll('[data-delete-suggestion]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.dataset.deleteSuggestion;
+      if (!await MSYConfirm.show('Excluir esta sugestão permanentemente?', {
+        title: 'Excluir sugestão',
+        type: 'danger',
+        confirmText: 'Excluir',
+      })) return;
+      try {
+        await deleteSuggestion(id);
+        state.items = state.items.filter((entry) => entry.id !== id);
+        renderSuggestions();
+        Utils.showToast('Sugestão excluída.');
+      } catch (err) {
+        Utils.showToast(err.message || 'Erro ao excluir sugestão.', 'error');
       }
     });
   });
@@ -427,6 +463,10 @@ function renderSuggestionCard(item) {
           <span class="suggestion-status status-${item.status}"><i class="fa-solid ${status.icon}"></i> ${status.label}</span>
           <span class="suggestion-meta">${formatDate(item.created_at)}</span>
         </div>
+        <div class="suggestion-card-info">
+          <span><strong>Categoria:</strong> ${cat.label}</span>
+          <span><strong>Status:</strong> ${status.label}</span>
+        </div>
         <h3>${Utils.escapeHtml(item.title)}</h3>
         <p>${Utils.escapeHtml(item.content)}</p>
         <div class="suggestion-author">
@@ -436,10 +476,14 @@ function renderSuggestionCard(item) {
       </div>
       ${state.isDiretoria && state.view === 'admin' ? `
         <div class="suggestion-admin-actions">
-          <label>Status</label>
-          <select class="form-input form-select" data-update-status="${item.id}">
-            ${STATUSES.map((option) => `<option value="${option.key}" ${option.key === item.status ? 'selected' : ''}>${option.label}</option>`).join('')}
-          </select>
+          <label>Ações da Diretoria</label>
+          <div class="suggestion-action-stack">
+            <button class="suggestion-action-btn accept" data-suggestion-id="${item.id}" data-status-action="planejada"><i class="fa-solid fa-check"></i> Aceitar</button>
+            <button class="suggestion-action-btn review" data-suggestion-id="${item.id}" data-status-action="analise"><i class="fa-solid fa-magnifying-glass"></i> Em análise</button>
+            <button class="suggestion-action-btn done" data-suggestion-id="${item.id}" data-status-action="concluida"><i class="fa-solid fa-circle-check"></i> Concluir</button>
+            <button class="suggestion-action-btn reject" data-suggestion-id="${item.id}" data-status-action="recusada"><i class="fa-solid fa-xmark"></i> Recusar</button>
+            <button class="suggestion-action-btn delete" data-delete-suggestion="${item.id}"><i class="fa-solid fa-trash"></i> Excluir</button>
+          </div>
         </div>` : ''}
     </article>`;
 }
