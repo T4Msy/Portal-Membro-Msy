@@ -42,28 +42,30 @@ ALTER TABLE public.msy_suggestions
   ALTER COLUMN content SET NOT NULL,
   ALTER COLUMN body SET NOT NULL;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'msy_suggestions_category_check'
-      AND conrelid = 'public.msy_suggestions'::regclass
-  ) THEN
-    ALTER TABLE public.msy_suggestions
-      ADD CONSTRAINT msy_suggestions_category_check
-      CHECK (category IN ('melhoria','bug','evento','interface','outro'));
-  END IF;
+ALTER TABLE public.msy_suggestions
+  DROP CONSTRAINT IF EXISTS msy_suggestions_category_check,
+  DROP CONSTRAINT IF EXISTS msy_suggestions_status_check;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'msy_suggestions_status_check'
-      AND conrelid = 'public.msy_suggestions'::regclass
-  ) THEN
-    ALTER TABLE public.msy_suggestions
-      ADD CONSTRAINT msy_suggestions_status_check
-      CHECK (status IN ('nova','analise','planejada','concluida','recusada'));
-  END IF;
-END $$;
+UPDATE public.msy_suggestions
+SET category = CASE
+  WHEN category IN ('melhoria','bug','evento','interface','outro') THEN category
+  ELSE 'outro'
+END,
+status = CASE
+  WHEN status IN ('nova','analise','planejada','concluida','recusada') THEN status
+  WHEN status IN ('pendente','aberta','novo','enviada') THEN 'nova'
+  WHEN status IN ('em_analise','analisando') THEN 'analise'
+  WHEN status IN ('aprovada','aprovado') THEN 'planejada'
+  WHEN status IN ('finalizada','feito','implementada','implementado') THEN 'concluida'
+  WHEN status IN ('rejeitada','rejeitado') THEN 'recusada'
+  ELSE 'nova'
+END;
+
+ALTER TABLE public.msy_suggestions
+  ADD CONSTRAINT msy_suggestions_category_check
+  CHECK (category IN ('melhoria','bug','evento','interface','outro')),
+  ADD CONSTRAINT msy_suggestions_status_check
+  CHECK (status IN ('nova','analise','planejada','concluida','recusada'));
 
 CREATE INDEX IF NOT EXISTS idx_msy_suggestions_author
   ON public.msy_suggestions(author_id, created_at DESC);
