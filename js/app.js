@@ -2615,21 +2615,25 @@
    
      // Search & filter
      let tierFilter = 'todos';
+     const normalizeMemberValue = value => (value || '').toString().trim().toLowerCase();
      const filterMembers = () => {
-       const q = document.getElementById('memberSearch').value.toLowerCase();
+       const q = normalizeMemberValue(document.getElementById('memberSearch').value);
        document.querySelectorAll('.member-card').forEach(card => {
          const nameMatch = card.dataset.name.includes(q);
-       const status = card.dataset.status;
-       const tier = card.dataset.tier;
-       const tierMatch =
-         tierFilter === 'todos'
-         || (tierFilter === 'diretoria' && tier === 'diretoria' && status === 'ativo')
-         || (tierFilter === 'membro' && tier !== 'diretoria' && status === 'ativo')
-         || (tierFilter === 'pendente' && status === 'pendente');
-       const visible = nameMatch && tierMatch;
-       card.classList.toggle('member-card-hidden', !visible);
-       card.style.display = visible ? '' : 'none';
-     });
+         const status = normalizeMemberValue(card.dataset.status);
+         const tier = normalizeMemberValue(card.dataset.tier);
+         const isActive = status === 'ativo';
+         const isPending = status === 'pendente';
+         const isDiretoriaMember = tier === 'diretoria';
+         const tierMatch =
+           (tierFilter === 'todos' && (isActive || (canAprovar && isPending)))
+           || (tierFilter === 'diretoria' && isDiretoriaMember && isActive)
+           || (tierFilter === 'membro' && !isDiretoriaMember && isActive)
+           || (tierFilter === 'pendente' && canAprovar && isPending);
+         const visible = nameMatch && tierMatch;
+         card.classList.toggle('member-card-hidden', !visible);
+         card.style.display = visible ? '' : 'none';
+       });
      };
      document.getElementById('memberSearch').addEventListener('input', filterMembers);
      content.querySelectorAll('.filter-btn').forEach(btn => {
@@ -2640,6 +2644,7 @@
          filterMembers();
        });
      });
+     filterMembers();
 
    
      // Approve
@@ -5742,53 +5747,59 @@
      s.id = 'msy-jornal-css';
      s.textContent = `
        .jornal-wrap {
-         position:relative; background:linear-gradient(135deg,#0d0d12,#0a0a0e);
-         border:1px solid rgba(201,168,76,.22); border-radius:var(--radius); overflow:hidden;
+         position:relative; overflow:hidden; border-radius:18px;
+         background:
+           radial-gradient(circle at 12% 0%, rgba(201,168,76,.18), transparent 34%),
+           linear-gradient(135deg, rgba(23,18,18,.96), rgba(8,8,12,.98) 54%, rgba(15,12,9,.96));
+         border:1px solid rgba(201,168,76,.28);
+         box-shadow:0 18px 54px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.07);
        }
        .jornal-wrap::before {
-         content:''; position:absolute; top:0; left:0; right:0; height:2px;
-         background:linear-gradient(90deg,transparent,rgba(201,168,76,.7) 25%,#c9a84c 50%,rgba(201,168,76,.7) 75%,transparent);
+         content:''; position:absolute; top:0; left:0; right:0; height:3px;
+         background:linear-gradient(90deg,rgba(127,29,29,.15),rgba(201,168,76,.9) 34%,#f3d37a 50%,rgba(201,168,76,.65) 74%,rgba(127,29,29,.12));
        }
        .jornal-header {
-         display:flex; align-items:center; justify-content:space-between;
-         padding:13px 18px 11px; border-bottom:1px solid rgba(201,168,76,.1);
+         position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between;
+         gap:14px; padding:16px 18px 13px; border-bottom:1px solid rgba(201,168,76,.13);
        }
-       .jornal-header-left { display:flex; align-items:center; gap:10px; }
+       .jornal-header-left { display:flex; align-items:center; gap:12px; min-width:0; }
        .jornal-logo {
-         width:28px; height:28px; border-radius:7px;
-         background:linear-gradient(135deg,rgba(201,168,76,.25),rgba(120,40,30,.2));
-         border:1px solid rgba(201,168,76,.35);
-         display:flex; align-items:center; justify-content:center; font-size:.85rem;
+         width:42px; height:42px; border-radius:12px; flex-shrink:0;
+         background:linear-gradient(135deg,rgba(201,168,76,.25),rgba(127,29,29,.28));
+         border:1px solid rgba(201,168,76,.42);
+         display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:1rem;
+         box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.24);
        }
        .jornal-title {
-         font-family:'Cinzel',serif; font-size:.75rem; font-weight:700;
-         color:var(--gold); letter-spacing:.14em; text-transform:uppercase;
+         font-family:'Cinzel',serif; font-size:.98rem; font-weight:800;
+         color:var(--text-1); letter-spacing:.08em; text-transform:uppercase;
        }
-       .jornal-subtitle { font-size:.58rem; color:var(--text-3); letter-spacing:.06em; margin-top:1px; }
+       .jornal-subtitle { font-size:.66rem; color:var(--gold); letter-spacing:.14em; margin-top:2px; text-transform:uppercase; }
        .jornal-live-dot {
-         width:6px; height:6px; border-radius:50%; background:#10b981;
-         box-shadow:0 0 6px rgba(16,185,129,.6); animation:jpulse 2s infinite;
+         width:8px; height:8px; border-radius:50%; background:#10b981;
+         box-shadow:0 0 10px rgba(16,185,129,.7); animation:jpulse 2s infinite; flex-shrink:0;
        }
        @keyframes jpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
        .jornal-add-btn {
-         display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
-         border-radius:6px; cursor:pointer; background:rgba(201,168,76,.1);
-         border:1px solid rgba(201,168,76,.2); color:var(--gold);
-         font-size:.65rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+         display:inline-flex; align-items:center; gap:7px; padding:8px 12px;
+         border-radius:999px; cursor:pointer; background:rgba(201,168,76,.11);
+         border:1px solid rgba(201,168,76,.28); color:var(--gold);
+         font-size:.68rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
          transition:all .2s;
        }
-       .jornal-add-btn:hover { background:rgba(201,168,76,.18); }
-       .jornal-carousel { position:relative; min-height:72px; overflow:hidden; }
+       .jornal-add-btn:hover { background:rgba(201,168,76,.2); transform:translateY(-1px); }
+       .jornal-carousel { position:relative; min-height:132px; overflow:hidden; }
        .jornal-slide {
-         display:flex; align-items:center; gap:14px; padding:14px 18px;
+         display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:15px; padding:20px 18px 18px;
          position:absolute; top:0; left:0; width:100%; box-sizing:border-box;
          opacity:0; transform:translateX(30px);
          transition:opacity .45s ease, transform .45s ease; pointer-events:none;
        }
        .jornal-slide.active { opacity:1; transform:translateX(0); pointer-events:auto; position:relative; }
        .jornal-slide-icon {
-         width:40px; height:40px; border-radius:10px; flex-shrink:0;
-         display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+         width:56px; height:56px; border-radius:16px; flex-shrink:0;
+         display:flex; align-items:center; justify-content:center; font-size:1.35rem;
+         box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 10px 28px rgba(0,0,0,.26);
        }
        .jornal-slide-icon.aniversario { background:rgba(236,72,153,.12); border:1px solid rgba(236,72,153,.25); }
        .jornal-slide-icon.recorde     { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.3); }
@@ -5797,10 +5808,10 @@
        .jornal-slide-icon.aviso       { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.25); }
        .jornal-slide-icon.priority    { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.3); }
        .jornal-slide-icon.desempenho  { background:rgba(22,163,74,.15); border:1px solid rgba(34,197,94,.3); }
-       .jornal-slide-body { flex:1; min-width:0; }
+       .jornal-slide-body { min-width:0; }
        .jornal-slide-tag {
-         display:inline-block; padding:1px 7px; border-radius:20px; margin-bottom:4px;
-         font-size:.55rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+         display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; margin-bottom:8px;
+         font-size:.58rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
        }
        .jornal-slide-tag.aniversario { background:rgba(236,72,153,.15); color:#f472b6; }
        .jornal-slide-tag.recorde     { background:rgba(245,158,11,.15); color:#f59e0b; }
@@ -5809,11 +5820,17 @@
        .jornal-slide-tag.aviso       { background:rgba(168,85,247,.15); color:#c084fc; }
        .jornal-slide-tag.priority    { background:rgba(239,68,68,.15);  color:#ef4444; }
        .jornal-slide-tag.desempenho  { background:rgba(22,163,74,.15); color:#4ade80; }
-       .jornal-slide-text { font-size:.84rem; font-weight:600; color:var(--text-1); line-height:1.35; }
-       .jornal-slide-meta { font-size:.65rem; color:var(--text-3); margin-top:2px; }
+       .jornal-slide-text { font-size:1rem; font-weight:800; color:var(--text-1); line-height:1.35; letter-spacing:.01em; }
+       .jornal-slide-meta { font-size:.72rem; color:var(--text-3); margin-top:6px; line-height:1.35; }
+       .jornal-kicker {
+         display:flex; align-items:center; gap:8px; color:var(--text-3); font-size:.62rem;
+         letter-spacing:.16em; text-transform:uppercase; font-weight:800;
+       }
+       .jornal-kicker::before { content:''; width:18px; height:1px; background:rgba(201,168,76,.55); }
        .jornal-footer {
          display:flex; align-items:center; justify-content:space-between;
-         padding:8px 18px 10px; border-top:1px solid rgba(255,255,255,.04);
+         padding:10px 18px 13px; border-top:1px solid rgba(255,255,255,.05);
+         background:rgba(0,0,0,.14);
        }
        .jornal-dots { display:flex; gap:5px; align-items:center; }
        .jornal-dot {
@@ -5821,25 +5838,45 @@
          background:rgba(255,255,255,.15); transition:all .3s; cursor:pointer;
        }
        .jornal-dot.active { background:var(--gold); width:16px; border-radius:3px; }
-       .jornal-nav { display:flex; gap:4px; }
+       .jornal-nav { display:flex; gap:5px; }
        .jornal-nav-btn {
-         width:24px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.08);
+         width:30px; height:30px; border-radius:9px; border:1px solid rgba(255,255,255,.1);
          background:rgba(255,255,255,.03); color:var(--text-3);
          display:flex; align-items:center; justify-content:center;
          cursor:pointer; font-size:.65rem; transition:all .15s;
        }
        .jornal-nav-btn:hover { background:rgba(201,168,76,.12); color:var(--gold); border-color:rgba(201,168,76,.2); }
-       .jornal-count { font-size:.62rem; color:var(--text-3); }
+       .jornal-count { font-size:.66rem; color:var(--text-3); font-weight:800; letter-spacing:.08em; }
        .jornal-slide-del {
          flex-shrink:0; background:none; border:1px solid rgba(239,68,68,.25);
-         border-radius:6px; color:rgba(239,68,68,.6); cursor:pointer;
-         font-size:.65rem; padding:3px 7px; transition:all .2s;
-         align-self:flex-start; margin-left:6px;
+         border-radius:9px; color:rgba(239,68,68,.7); cursor:pointer;
+         font-size:.7rem; padding:7px 9px; transition:all .2s;
        }
        .jornal-slide-del:hover { background:rgba(239,68,68,.12); color:#ef4444; border-color:rgba(239,68,68,.5); }
        .jornal-empty {
          display:flex; align-items:center; justify-content:center;
-         gap:10px; padding:20px; color:var(--text-3); font-size:.78rem;
+         gap:10px; padding:32px 20px; color:var(--text-3); font-size:.82rem;
+       }
+       [data-theme="light"] .jornal-wrap {
+         background:
+           radial-gradient(circle at 12% 0%, rgba(201,168,76,.22), transparent 34%),
+           linear-gradient(135deg, rgba(255,255,255,.9), rgba(239,234,224,.88)) !important;
+       }
+       [data-theme="light"] .jornal-title { color:#2a2224; }
+       [data-theme="light"] .jornal-footer { background:rgba(255,255,255,.34); }
+       [data-theme="light"] .jornal-logo { color:#8a6318; }
+       @media (max-width: 640px) {
+         .jornal-header { align-items:flex-start; padding:15px 14px 12px; }
+         .jornal-logo { width:38px; height:38px; border-radius:11px; }
+         .jornal-title { font-size:.86rem; }
+         .jornal-subtitle { font-size:.58rem; }
+         .jornal-add-btn { padding:7px 10px; }
+         .jornal-carousel { min-height:148px; }
+         .jornal-slide { grid-template-columns:auto minmax(0,1fr); padding:18px 14px 16px; }
+         .jornal-slide-del { grid-column:2; justify-self:start; margin-top:2px; }
+         .jornal-slide-icon { width:48px; height:48px; border-radius:14px; }
+         .jornal-slide-text { font-size:.92rem; }
+         .jornal-footer { padding:10px 14px 12px; }
        }
      `;
      document.head.appendChild(s);
@@ -6194,6 +6231,7 @@
        <div class="jornal-slide${i===0?' active':''}" data-idx="${i}">
          <div class="jornal-slide-icon ${s.type}">${s.icon}</div>
          <div class="jornal-slide-body">
+           <div class="jornal-kicker">Boletim interno</div>
            <div class="jornal-slide-tag ${s.type}">${s.tag}</div>
            <div class="jornal-slide-text">${Utils.escapeHtml(s.text)}</div>
            ${s.meta ? `<div class="jornal-slide-meta">${Utils.escapeHtml(s.meta)}</div>` : ''}

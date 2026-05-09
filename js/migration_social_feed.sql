@@ -136,6 +136,18 @@ CREATE TABLE IF NOT EXISTS public.social_story_reactions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+WITH duplicated_reactions AS (
+  SELECT id,
+         row_number() OVER (PARTITION BY story_id, user_id ORDER BY created_at DESC, id DESC) AS rn
+  FROM public.social_story_reactions
+)
+DELETE FROM public.social_story_reactions r
+USING duplicated_reactions d
+WHERE r.id = d.id AND d.rn > 1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_story_reactions_unique
+  ON public.social_story_reactions(story_id, user_id);
+
 -- ── MENSAGENS INTERNAS ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.social_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -376,6 +388,12 @@ CREATE POLICY "Membros registram view story"
 DROP POLICY IF EXISTS "Membros criam reactions story" ON public.social_story_reactions;
 CREATE POLICY "Membros criam reactions story"
   ON public.social_story_reactions FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Membros atualizam propria reaction story" ON public.social_story_reactions;
+CREATE POLICY "Membros atualizam propria reaction story"
+  ON public.social_story_reactions FOR UPDATE
+  USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Membros leem reactions story" ON public.social_story_reactions;

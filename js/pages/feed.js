@@ -65,6 +65,14 @@ function canManageStory(story) {
   return state.profile.tier === 'diretoria' || story.author_id === state.profile.id;
 }
 
+function findStoryById(storyId) {
+  for (const group of state.stories) {
+    const story = group.stories?.find((item) => item.id === storyId);
+    if (story) return story;
+  }
+  return null;
+}
+
 function lockBodyScroll() {
   if (document.body.classList.contains('social-modal-locked')) return;
   state.modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
@@ -134,7 +142,6 @@ function layout() {
             <div class="composer-tools">
               <button class="social-icon-btn" id="mediaBtn" title="Adicionar fotos ou videos"><i class="fa-solid fa-image"></i></button>
               <button class="social-icon-btn" id="emojiBtn" title="Adicionar emoji"><i class="fa-regular fa-face-smile"></i></button>
-              <button class="social-icon-btn" id="storyBtn" title="Criar story"><i class="fa-solid fa-circle-plus"></i></button>
             </div>
             <button class="btn btn-primary social-submit" id="publishBtn"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
           </div>
@@ -336,7 +343,6 @@ function bindComposer() {
     input.value += input.value.endsWith(' ') || !input.value ? '✨ ' : ' ✨ ';
     input.focus();
   });
-  document.getElementById('storyBtn').addEventListener('click', () => document.getElementById('storyFiles').click());
   document.getElementById('storyFiles').addEventListener('change', createStoryFromFile);
   document.getElementById('publishBtn').addEventListener('click', publishPost);
   files.addEventListener('change', () => addFiles([...files.files]));
@@ -700,6 +706,8 @@ async function openStory(groupIndex, storyIndex) {
     acc[row.reaction] = (acc[row.reaction] || 0) + 1;
     return acc;
   }, {});
+  const canViewReactions = canManageStory(story);
+  const reactionsTotal = reactions.length;
   const modal = document.getElementById('storyViewer');
   modal.innerHTML = `
     <div class="story-panel">
@@ -713,19 +721,27 @@ async function openStory(groupIndex, storyIndex) {
       ${story.caption ? `<div class="story-caption">${richText(story.caption)}</div>` : ''}
       <div class="story-bottom">
         <div class="story-reactions-row">${['❤️','🔥','👏','✨'].map((r) => `<button class="story-reaction" data-story-reaction="${r}">${r}<span>${reactionSummary[r] || ''}</span></button>`).join('')}</div>
-        ${canManageStory(story) ? `<button class="story-reactions-toggle" data-toggle-story-reactions>${reactions.length} reacao${reactions.length === 1 ? '' : 'es'}</button>` : ''}
+        ${canViewReactions ? `<button class="story-reactions-toggle" data-toggle-story-reactions><i class="fa-solid fa-chart-simple"></i> ${reactionsTotal} reacao${reactionsTotal === 1 ? '' : 'es'}</button>` : ''}
       </div>
-      <div class="story-reactions-panel" id="storyReactionsPanel">
-        <div class="story-reactions-title">Reacoes</div>
+      ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel">
+        <div class="story-reactions-title">Reacoes recebidas</div>
+        <div class="story-reactions-summary">${Object.entries(reactionSummary).map(([reaction, count]) => `<span>${Utils.escapeHtml(reaction)} ${count}</span>`).join('') || '<span>Nenhuma ainda</span>'}</div>
         ${reactions.length ? reactions.map((r) => `
           <div class="story-reaction-row">
             ${avatar(r.user || {}, 30)}
             <div><strong>${Utils.escapeHtml(r.user?.name || 'Membro')}</strong><span>${timeAgo(r.created_at)}</span></div>
             <em>${Utils.escapeHtml(r.reaction)}</em>
           </div>`).join('') : '<div class="message-sub">Nenhuma reacao ainda.</div>'}
-      </div>
+      </div>` : ''}
     </div>`;
   openModal(modal);
+  requestAnimationFrame(() => {
+    modal.scrollTop = 0;
+    const panel = modal.querySelector('.story-panel');
+    const media = modal.querySelector('.story-media');
+    if (panel) panel.scrollTop = 0;
+    if (media) media.scrollLeft = 0;
+  });
   modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async () => {
     await state.service.reactToStory(story, btn.dataset.storyReaction);
     Utils.showToast('Reacao enviada.');
@@ -734,10 +750,15 @@ async function openStory(groupIndex, storyIndex) {
   modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
     document.getElementById('storyReactionsPanel')?.classList.toggle('open');
   });
-  modal.querySelector('[data-delete-story]')?.addEventListener('click', () => deleteStory(story.id));
+  modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteStory(story.id);
+  });
 }
 
 async function deleteStory(storyId) {
+  const story = findStoryById(storyId);
+  if (!story || !canManageStory(story)) return Utils.showToast('Sem permissao para excluir este story.', 'error');
   if (!await MSYConfirm.show('Excluir este story?', { title: 'Excluir story', type: 'danger', confirmText: 'Excluir' })) return;
   try {
     await state.service.deleteStory(storyId);

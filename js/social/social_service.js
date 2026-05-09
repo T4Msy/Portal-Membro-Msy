@@ -317,10 +317,13 @@ export class SocialService {
   }
 
   async reactToStory(story, reaction) {
-    const { error } = await this.db.from('social_story_reactions').insert({
+    const { error } = await this.db.from('social_story_reactions').upsert({
       story_id: story.id,
       user_id: this.profile.id,
       reaction,
+      created_at: new Date().toISOString(),
+    }, {
+      onConflict: 'story_id,user_id',
     });
     if (error) throw error;
     await this.notify(story.author_id, {
@@ -334,14 +337,30 @@ export class SocialService {
   }
 
   async deleteStory(storyId) {
+    const { data: story, error: storyError } = await this.db
+      .from('social_stories')
+      .select('id,author_id,storage_path')
+      .eq('id', storyId)
+      .maybeSingle();
+    if (storyError) throw storyError;
+    if (!story || (this.profile.tier !== 'diretoria' && story.author_id !== this.profile.id)) {
+      throw new Error('Sem permissao para excluir este story.');
+    }
+
     let request = this.db
       .from('social_stories')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', storyId);
     if (this.profile.tier !== 'diretoria') request = request.eq('author_id', this.profile.id);
-    const { data, error } = await request.select('id').maybeSingle();
+    const { error } = await request;
     if (error) throw error;
-    if (!data) throw new Error('Sem permissao para excluir este story.');
+    if (story.storage_path) {
+      try {
+        await this.db.storage.from('social-media').remove([story.storage_path]);
+      } catch (err) {
+        console.warn('[MSY][social] Story removido do feed, mas a midia nao foi removida do storage:', err);
+      }
+    }
   }
 
   async loadStoryReactions(storyId) {
