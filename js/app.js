@@ -5927,7 +5927,7 @@
          background:linear-gradient(90deg, rgba(127,29,29,.7), var(--gold), #f3d37a);
          box-shadow:0 0 16px rgba(201,168,76,.36);
        }
-       .jornal-progress span.is-running { animation:jornalProgress 7.5s linear forwards; }
+       .jornal-progress span.is-running { animation:jornalProgress var(--jornal-progress-duration, 7.5s) linear forwards; }
        @keyframes jornalProgress { from { width:0; } to { width:100%; } }
        .jornal-footer {
          display:flex; align-items:center; justify-content:space-between;
@@ -6032,7 +6032,13 @@
    /* ── Funções internas do Jornal ── */
    async function _jornalFetchAuto() {
      const today    = new Date();
-     const todayStr = today.toISOString().split('T')[0];
+     const toLocalDateKey = (date) => {
+       const yyyy = date.getFullYear();
+       const mm = String(date.getMonth()+1).padStart(2,'0');
+       const dd = String(date.getDate()).padStart(2,'0');
+       return `${yyyy}-${mm}-${dd}`;
+     };
+     const todayStr = toLocalDateKey(today);
      const todayMM  = String(today.getMonth()+1).padStart(2,'0');
      const todayDD  = String(today.getDate()).padStart(2,'0');
      const slides   = [];
@@ -6045,7 +6051,7 @@
      };
      const isRecent = (value, maxDays) => daysSince(value) <= maxDays;
    
-     const em3dias = new Date(today.getTime() + 3*MS_DAY).toISOString().split('T')[0];
+     const em3dias = toLocalDateKey(new Date(today.getTime() + 3*MS_DAY));
    
      // Mês atual para desempenho
      const mesAtual = todayStr.slice(0,7); // "YYYY-MM"
@@ -6245,7 +6251,13 @@
        }
      }
    
-     slides.sort((a,b) => (b.priority||0) - (a.priority||0));
+     const sortJornalSlides = (a,b) => {
+       if (a.type === 'aniversario' && b.type !== 'aniversario') return -1;
+       if (b.type === 'aniversario' && a.type !== 'aniversario') return 1;
+       return (b.priority||0) - (a.priority||0);
+     };
+
+     slides.sort(sortJornalSlides);
    
      /* ── SLIDES DE GARANTIA: sempre presentes se não há conteúdo suficiente ── */
    
@@ -6308,7 +6320,7 @@
      }
    
      // Reordenar após adições
-     slides.sort((a,b) => (b.priority||0) - (a.priority||0));
+     slides.sort(sortJornalSlides);
    
      return slides;
    }
@@ -6361,9 +6373,20 @@
      return '';
    }
 
+   function _jornalSort(a,b) {
+     if (a?.type === 'aniversario' && b?.type !== 'aniversario') return -1;
+     if (b?.type === 'aniversario' && a?.type !== 'aniversario') return 1;
+     return (b?.priority||0) - (a?.priority||0);
+   }
+
+   function _jornalSlideDuration(s) {
+     return s?.type === 'aniversario' ? 15000 : 7500;
+   }
+
    function _jornalResetProgress() {
      const progress = document.getElementById('jornalProgress');
      if (!progress) return;
+     progress.style.setProperty('--jornal-progress-duration', `${_jornalSlideDuration(_jornalSlides[_jornalCur])}ms`);
      progress.classList.remove('is-running');
      void progress.offsetWidth;
      if (_jornalSlides.length > 1) progress.classList.add('is-running');
@@ -6390,10 +6413,13 @@
    function _jornalPrev() { _jornalShow((_jornalCur-1+_jornalSlides.length) % _jornalSlides.length); }
    
    function _jornalStartTimer() {
-     clearInterval(_jornalTimer);
+     clearTimeout(_jornalTimer);
      _jornalResetProgress();
      if (_jornalSlides.length > 1)
-       _jornalTimer = setInterval(_jornalNext, 7500);
+       _jornalTimer = setTimeout(() => {
+         _jornalNext();
+         _jornalStartTimer();
+       }, _jornalSlideDuration(_jornalSlides[_jornalCur]));
    }
    
    function _jornalSlideHTML(s, i, canDelete) {
@@ -6507,7 +6533,7 @@
    
      const high = man.filter(s=>s.type==='priority');
      const low  = man.filter(s=>s.type!=='priority');
-     _jornalSlides = [...high, ...auto, ...low];
+     _jornalSlides = [...high, ...auto, ...low].sort(_jornalSort);
      _jornalCur = 0;
    
      const canAdd = profile.tier === 'diretoria';
