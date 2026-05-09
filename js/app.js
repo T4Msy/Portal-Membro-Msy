@@ -5749,10 +5749,11 @@
        .jornal-wrap {
          position:relative; overflow:hidden; border-radius:18px;
          background:
-           radial-gradient(circle at 12% 0%, rgba(201,168,76,.18), transparent 34%),
-           linear-gradient(135deg, rgba(23,18,18,.96), rgba(8,8,12,.98) 54%, rgba(15,12,9,.96));
-         border:1px solid rgba(201,168,76,.28);
-         box-shadow:0 18px 54px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.07);
+           radial-gradient(circle at 10% 0%, rgba(201,168,76,.22), transparent 34%),
+           radial-gradient(circle at 96% 12%, rgba(127,29,29,.22), transparent 32%),
+           linear-gradient(135deg, rgba(23,18,18,.96), rgba(8,8,12,.98) 58%, rgba(15,12,9,.96));
+         border:1px solid rgba(201,168,76,.32);
+         box-shadow:0 18px 54px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08);
        }
        .jornal-wrap::before {
          content:''; position:absolute; top:0; left:0; right:0; height:3px;
@@ -5760,18 +5761,18 @@
        }
        .jornal-header {
          position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between;
-         gap:14px; padding:16px 18px 13px; border-bottom:1px solid rgba(201,168,76,.13);
+         gap:14px; padding:17px 20px 13px; border-bottom:1px solid rgba(201,168,76,.14);
        }
        .jornal-header-left { display:flex; align-items:center; gap:12px; min-width:0; }
        .jornal-logo {
-         width:42px; height:42px; border-radius:12px; flex-shrink:0;
+         width:44px; height:44px; border-radius:13px; flex-shrink:0;
          background:linear-gradient(135deg,rgba(201,168,76,.25),rgba(127,29,29,.28));
          border:1px solid rgba(201,168,76,.42);
          display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:1rem;
          box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.24);
        }
        .jornal-title {
-         font-family:'Cinzel',serif; font-size:.98rem; font-weight:800;
+         font-family:'Cinzel',serif; font-size:1.05rem; font-weight:800;
          color:var(--text-1); letter-spacing:.08em; text-transform:uppercase;
        }
        .jornal-subtitle { font-size:.66rem; color:var(--gold); letter-spacing:.14em; margin-top:2px; text-transform:uppercase; }
@@ -5788,17 +5789,21 @@
          transition:all .2s;
        }
        .jornal-add-btn:hover { background:rgba(201,168,76,.2); transform:translateY(-1px); }
-       .jornal-carousel { position:relative; min-height:132px; overflow:hidden; }
+       .jornal-board {
+         display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:0;
+         min-height:176px;
+       }
+       .jornal-carousel { position:relative; min-height:176px; overflow:hidden; }
        .jornal-slide {
-         display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:15px; padding:20px 18px 18px;
+         display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:18px; padding:24px 22px 22px;
          position:absolute; top:0; left:0; width:100%; box-sizing:border-box;
          opacity:0; transform:translateX(30px);
          transition:opacity .45s ease, transform .45s ease; pointer-events:none;
        }
        .jornal-slide.active { opacity:1; transform:translateX(0); pointer-events:auto; position:relative; }
        .jornal-slide-icon {
-         width:56px; height:56px; border-radius:16px; flex-shrink:0;
-         display:flex; align-items:center; justify-content:center; font-size:1.35rem;
+         width:68px; height:68px; border-radius:18px; flex-shrink:0;
+         display:flex; align-items:center; justify-content:center; font-size:1.55rem;
          box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 10px 28px rgba(0,0,0,.26);
        }
        .jornal-slide-icon.aniversario { background:rgba(236,72,153,.12); border:1px solid rgba(236,72,153,.25); }
@@ -5810,8 +5815,8 @@
        .jornal-slide-icon.desempenho  { background:rgba(22,163,74,.15); border:1px solid rgba(34,197,94,.3); }
        .jornal-slide-body { min-width:0; }
        .jornal-slide-tag {
-         display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; margin-bottom:8px;
-         font-size:.58rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+         display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; margin-bottom:10px;
+         font-size:.61rem; font-weight:900; letter-spacing:.13em; text-transform:uppercase;
        }
        .jornal-slide-tag.aniversario { background:rgba(236,72,153,.15); color:#f472b6; }
        .jornal-slide-tag.recorde     { background:rgba(245,158,11,.15); color:#f59e0b; }
@@ -5820,16 +5825,37 @@
        .jornal-slide-tag.aviso       { background:rgba(168,85,247,.15); color:#c084fc; }
        .jornal-slide-tag.priority    { background:rgba(239,68,68,.15);  color:#ef4444; }
        .jornal-slide-tag.desempenho  { background:rgba(22,163,74,.15); color:#4ade80; }
-       .jornal-slide-text { font-size:1rem; font-weight:800; color:var(--text-1); line-height:1.35; letter-spacing:.01em; }
-       .jornal-slide-meta { font-size:.72rem; color:var(--text-3); margin-top:6px; line-height:1.35; }
+       .jornal-slide-text { font-size:1.16rem; font-weight:900; color:var(--text-1); line-height:1.34; letter-spacing:.01em; max-width:720px; }
+       .jornal-slide-meta { font-size:.78rem; color:var(--text-3); margin-top:8px; line-height:1.42; max-width:760px; }
        .jornal-kicker {
          display:flex; align-items:center; gap:8px; color:var(--text-3); font-size:.62rem;
          letter-spacing:.16em; text-transform:uppercase; font-weight:800;
        }
        .jornal-kicker::before { content:''; width:18px; height:1px; background:rgba(201,168,76,.55); }
+       .jornal-rail {
+         border-left:1px solid rgba(255,255,255,.06);
+         background:rgba(0,0,0,.13);
+         padding:14px;
+         display:flex; flex-direction:column; gap:8px;
+       }
+       .jornal-rail-title {
+         color:var(--text-3); font-size:.58rem; font-weight:900; letter-spacing:.14em;
+         text-transform:uppercase; margin-bottom:2px;
+       }
+       .jornal-rail-item {
+         border:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.035);
+         color:var(--text-2); border-radius:12px; padding:9px 10px; cursor:pointer;
+         display:flex; align-items:flex-start; gap:8px; text-align:left; transition:all .18s var(--ease);
+       }
+       .jornal-rail-item:hover,
+       .jornal-rail-item.active { border-color:rgba(201,168,76,.28); background:rgba(201,168,76,.08); color:var(--text-1); }
+       .jornal-rail-item i { color:var(--gold); font-size:.72rem; margin-top:2px; }
+       .jornal-rail-copy { min-width:0; }
+       .jornal-rail-tag { color:var(--gold); font-size:.56rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; margin-bottom:2px; }
+       .jornal-rail-text { font-size:.68rem; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
        .jornal-footer {
          display:flex; align-items:center; justify-content:space-between;
-         padding:10px 18px 13px; border-top:1px solid rgba(255,255,255,.05);
+         padding:10px 20px 13px; border-top:1px solid rgba(255,255,255,.05);
          background:rgba(0,0,0,.14);
        }
        .jornal-dots { display:flex; gap:5px; align-items:center; }
@@ -5871,11 +5897,13 @@
          .jornal-title { font-size:.86rem; }
          .jornal-subtitle { font-size:.58rem; }
          .jornal-add-btn { padding:7px 10px; }
-         .jornal-carousel { min-height:148px; }
-         .jornal-slide { grid-template-columns:auto minmax(0,1fr); padding:18px 14px 16px; }
+         .jornal-board { grid-template-columns:1fr; min-height:0; }
+         .jornal-carousel { min-height:168px; }
+         .jornal-slide { grid-template-columns:auto minmax(0,1fr); padding:20px 14px 18px; gap:12px; }
          .jornal-slide-del { grid-column:2; justify-self:start; margin-top:2px; }
-         .jornal-slide-icon { width:48px; height:48px; border-radius:14px; }
-         .jornal-slide-text { font-size:.92rem; }
+         .jornal-slide-icon { width:50px; height:50px; border-radius:14px; }
+         .jornal-slide-text { font-size:.98rem; }
+         .jornal-rail { display:none; }
          .jornal-footer { padding:10px 14px 12px; }
        }
      `;
@@ -6210,6 +6238,7 @@
        el.classList.toggle('active', i===idx);
      });
      document.querySelectorAll('.jornal-dot').forEach((d,i) => d.classList.toggle('active',i===idx));
+     document.querySelectorAll('.jornal-rail-item').forEach((d,i) => d.classList.toggle('active',i===idx));
      const cnt = document.getElementById('jornalCount');
      if (cnt) cnt.textContent = `${idx+1} / ${_jornalSlides.length}`;
    }
@@ -6220,7 +6249,7 @@
    function _jornalStartTimer() {
      clearInterval(_jornalTimer);
      if (_jornalSlides.length > 1)
-       _jornalTimer = setInterval(_jornalNext, 5000);
+       _jornalTimer = setInterval(_jornalNext, 7500);
    }
    
    function _jornalSlideHTML(s, i, canDelete) {
@@ -6238,6 +6267,17 @@
          </div>
          ${delBtn}
        </div>`;
+   }
+
+   function _jornalRailHTML(slides) {
+     return slides.slice(0, 4).map((s, i) => `
+       <button class="jornal-rail-item${i===0?' active':''}" data-idx="${i}" type="button">
+         <i class="fa-solid fa-angle-right"></i>
+         <span class="jornal-rail-copy">
+           <span class="jornal-rail-tag">${Utils.escapeHtml(s.tag)}</span>
+           <span class="jornal-rail-text">${Utils.escapeHtml(s.text)}</span>
+         </span>
+       </button>`).join('');
    }
    
    function _jornalBindModal(profile) {
@@ -6340,8 +6380,14 @@
            ${canAdd ? `<button class="jornal-add-btn" id="jornalAddBtn"><i class="fa-solid fa-plus"></i> Aviso</button>` : ''}
          </div>
          ${hasSlides ? `
-           <div class="jornal-carousel">
-             ${_jornalSlides.map((s,i)=>_jornalSlideHTML(s,i,canAdd)).join('')}
+           <div class="jornal-board">
+             <div class="jornal-carousel">
+               ${_jornalSlides.map((s,i)=>_jornalSlideHTML(s,i,canAdd)).join('')}
+             </div>
+             <div class="jornal-rail">
+               <div class="jornal-rail-title">Em destaque</div>
+               ${_jornalRailHTML(_jornalSlides)}
+             </div>
            </div>
            <div class="jornal-footer">
              <div class="jornal-dots">
@@ -6365,6 +6411,9 @@
        document.getElementById('jornalPrev')?.addEventListener('click',()=>{ _jornalPrev(); _jornalStartTimer(); });
        container.querySelectorAll('.jornal-dot').forEach(d=>{
          d.addEventListener('click',()=>{ _jornalShow(parseInt(d.dataset.idx)); _jornalStartTimer(); });
+       });
+       container.querySelectorAll('.jornal-rail-item').forEach(btn=>{
+         btn.addEventListener('click',()=>{ _jornalShow(parseInt(btn.dataset.idx)); _jornalStartTimer(); });
        });
    
        // Exclusão de avisos manuais (apenas diretoria)
