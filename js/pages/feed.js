@@ -76,19 +76,20 @@ function findStoryById(storyId) {
 function lockBodyScroll() {
   if (document.body.classList.contains('social-modal-locked')) return;
   state.modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-  document.body.style.top = `-${state.modalScrollY}px`;
+  document.documentElement.classList.add('social-modal-locked');
   document.body.classList.add('social-modal-locked');
 }
 
 function unlockBodyScroll() {
   if (!document.body.classList.contains('social-modal-locked')) return;
+  document.documentElement.classList.remove('social-modal-locked');
   document.body.classList.remove('social-modal-locked');
-  document.body.style.top = '';
   window.scrollTo({ top: state.modalScrollY, behavior: 'auto' });
 }
 
 function openModal(modal) {
   lockBodyScroll();
+  if (modal.parentElement !== document.body) document.body.appendChild(modal);
   modal.classList.add('open');
 }
 
