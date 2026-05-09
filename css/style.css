@@ -460,33 +460,74 @@
   text-transform: uppercase;
   margin-bottom: 6px;
 }
-.suggestion-action-stack {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
+.suggestion-admin-menu {
+  position: relative;
 }
-.suggestion-action-btn {
+.suggestion-menu-trigger {
   width: 100%;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 10px;
   border: 1px solid var(--border-faint);
-  background: var(--black-4);
-  color: var(--text-2);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)),
+    var(--black-4);
+  color: var(--text-1);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: .72rem;
+  font-size: .76rem;
   font-weight: 900;
-  transition: border-color var(--t1) var(--ease), background var(--t1) var(--ease), color var(--t1) var(--ease);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
 }
-.suggestion-action-btn:hover { border-color: var(--border-gold); color: var(--gold); }
-.suggestion-action-btn.accept { color:#4ade80; border-color:rgba(74,222,128,.22); background:rgba(74,222,128,.06); }
-.suggestion-action-btn.review { color:#60a5fa; border-color:rgba(96,165,250,.22); background:rgba(96,165,250,.06); }
-.suggestion-action-btn.done { color:var(--gold); border-color:rgba(201,168,76,.24); background:rgba(201,168,76,.08); }
-.suggestion-action-btn.reject,
-.suggestion-action-btn.delete { color:#ef4444; border-color:rgba(239,68,68,.24); background:rgba(239,68,68,.06); }
+.suggestion-menu-trigger span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.suggestion-menu-trigger:hover,
+.suggestion-admin-menu.open .suggestion-menu-trigger {
+  border-color: var(--border-gold);
+  color: var(--gold);
+}
+.suggestion-action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 25;
+  width: min(220px, 80vw);
+  display: none;
+  overflow: hidden;
+  border: 1px solid var(--border-faint);
+  background: rgba(18,18,23,.98);
+  border-radius: 12px;
+  box-shadow: var(--shadow-deep);
+}
+.suggestion-admin-menu.open .suggestion-action-menu { display: block; }
+.suggestion-action-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.suggestion-action-menu button:hover {
+  background: var(--black-4);
+  color: var(--text-1);
+}
+.suggestion-action-menu .accept { color:#4ade80; }
+.suggestion-action-menu .review { color:#60a5fa; }
+.suggestion-action-menu .done { color:var(--gold); }
+.suggestion-action-menu .reject,
+.suggestion-action-menu .delete { color:#ef4444; }
 .suggestions-empty {
   border: 1px dashed var(--border-faint);
   background: rgba(17,17,22,.9);

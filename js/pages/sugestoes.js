@@ -416,8 +416,23 @@ function renderSuggestions() {
   }
 
   list.innerHTML = items.map(renderSuggestionCard).join('');
+  list.querySelectorAll('[data-suggestion-menu-toggle]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wrap = button.closest('.suggestion-admin-menu');
+      document.querySelectorAll('.suggestion-admin-menu.open').forEach((menu) => {
+        if (menu !== wrap) menu.classList.remove('open');
+      });
+      wrap?.classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.suggestion-admin-menu.open').forEach((menu) => menu.classList.remove('open'));
+  }, { once: true });
+
   list.querySelectorAll('[data-status-action]').forEach((button) => {
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
       try {
         const nextStatus = button.dataset.statusAction;
         await updateSuggestionStatus(button.dataset.suggestionId, nextStatus);
@@ -432,7 +447,8 @@ function renderSuggestions() {
   });
 
   list.querySelectorAll('[data-delete-suggestion]').forEach((button) => {
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
       const id = button.dataset.deleteSuggestion;
       if (!await MSYConfirm.show('Excluir esta sugestão permanentemente?', {
         title: 'Excluir sugestão',
@@ -476,13 +492,19 @@ function renderSuggestionCard(item) {
       </div>
       ${state.isDiretoria && state.view === 'admin' ? `
         <div class="suggestion-admin-actions">
-          <label>Ações da Diretoria</label>
-          <div class="suggestion-action-stack">
-            <button class="suggestion-action-btn accept" data-suggestion-id="${item.id}" data-status-action="planejada"><i class="fa-solid fa-check"></i> Aceitar</button>
-            <button class="suggestion-action-btn review" data-suggestion-id="${item.id}" data-status-action="analise"><i class="fa-solid fa-magnifying-glass"></i> Em análise</button>
-            <button class="suggestion-action-btn done" data-suggestion-id="${item.id}" data-status-action="concluida"><i class="fa-solid fa-circle-check"></i> Concluir</button>
-            <button class="suggestion-action-btn reject" data-suggestion-id="${item.id}" data-status-action="recusada"><i class="fa-solid fa-xmark"></i> Recusar</button>
-            <button class="suggestion-action-btn delete" data-delete-suggestion="${item.id}"><i class="fa-solid fa-trash"></i> Excluir</button>
+          <label>Ações</label>
+          <div class="suggestion-admin-menu">
+            <button class="suggestion-menu-trigger" data-suggestion-menu-toggle>
+              <span><i class="fa-solid ${status.icon}"></i> ${status.label}</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div class="suggestion-action-menu">
+              <button class="accept" data-suggestion-id="${item.id}" data-status-action="planejada"><i class="fa-solid fa-check"></i> Aceitar</button>
+              <button class="review" data-suggestion-id="${item.id}" data-status-action="analise"><i class="fa-solid fa-magnifying-glass"></i> Em análise</button>
+              <button class="done" data-suggestion-id="${item.id}" data-status-action="concluida"><i class="fa-solid fa-circle-check"></i> Concluir</button>
+              <button class="reject" data-suggestion-id="${item.id}" data-status-action="recusada"><i class="fa-solid fa-xmark"></i> Recusar</button>
+              <button class="delete" data-delete-suggestion="${item.id}"><i class="fa-solid fa-trash"></i> Excluir</button>
+            </div>
           </div>
         </div>` : ''}
     </article>`;
