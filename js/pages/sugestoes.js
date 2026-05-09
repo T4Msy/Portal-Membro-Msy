@@ -478,6 +478,19 @@ function renderSuggestionCard(item) {
           <span class="suggestion-tag"><i class="fa-solid ${cat.icon}"></i> ${cat.label}</span>
           <span class="suggestion-status status-${item.status}"><i class="fa-solid ${status.icon}"></i> ${status.label}</span>
           <span class="suggestion-meta">${formatDate(item.created_at)}</span>
+          ${state.isDiretoria && state.view === 'admin' ? `
+            <div class="suggestion-admin-menu">
+              <button class="suggestion-menu-trigger" data-suggestion-menu-toggle title="Ações da Diretoria">
+                <i class="fa-solid fa-ellipsis"></i>
+              </button>
+              <div class="suggestion-action-menu">
+                <button class="accept" data-suggestion-id="${item.id}" data-status-action="planejada"><i class="fa-solid fa-check"></i> Aceitar</button>
+                <button class="review" data-suggestion-id="${item.id}" data-status-action="analise"><i class="fa-solid fa-magnifying-glass"></i> Em análise</button>
+                <button class="done" data-suggestion-id="${item.id}" data-status-action="concluida"><i class="fa-solid fa-circle-check"></i> Concluir</button>
+                <button class="reject" data-suggestion-id="${item.id}" data-status-action="recusada"><i class="fa-solid fa-xmark"></i> Recusar</button>
+                <button class="delete" data-delete-suggestion="${item.id}"><i class="fa-solid fa-trash"></i> Excluir</button>
+              </div>
+            </div>` : ''}
         </div>
         <div class="suggestion-card-info">
           <span><strong>Categoria:</strong> ${cat.label}</span>
@@ -490,23 +503,6 @@ function renderSuggestionCard(item) {
           <span><strong>${Utils.escapeHtml(item.author_name)}</strong><small>${Utils.escapeHtml(item.author_role || 'Membro')}</small></span>
         </div>
       </div>
-      ${state.isDiretoria && state.view === 'admin' ? `
-        <div class="suggestion-admin-actions">
-          <label>Ações</label>
-          <div class="suggestion-admin-menu">
-            <button class="suggestion-menu-trigger" data-suggestion-menu-toggle>
-              <span><i class="fa-solid ${status.icon}"></i> ${status.label}</span>
-              <i class="fa-solid fa-chevron-down"></i>
-            </button>
-            <div class="suggestion-action-menu">
-              <button class="accept" data-suggestion-id="${item.id}" data-status-action="planejada"><i class="fa-solid fa-check"></i> Aceitar</button>
-              <button class="review" data-suggestion-id="${item.id}" data-status-action="analise"><i class="fa-solid fa-magnifying-glass"></i> Em análise</button>
-              <button class="done" data-suggestion-id="${item.id}" data-status-action="concluida"><i class="fa-solid fa-circle-check"></i> Concluir</button>
-              <button class="reject" data-suggestion-id="${item.id}" data-status-action="recusada"><i class="fa-solid fa-xmark"></i> Recusar</button>
-              <button class="delete" data-delete-suggestion="${item.id}"><i class="fa-solid fa-trash"></i> Excluir</button>
-            </div>
-          </div>
-        </div>` : ''}
     </article>`;
 }
 
