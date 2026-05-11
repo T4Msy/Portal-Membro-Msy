@@ -241,6 +241,40 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.delete_social_post(p_post_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_author uuid;
+BEGIN
+  SELECT author_id INTO v_author
+  FROM public.social_posts
+  WHERE id = p_post_id
+    AND is_deleted = false;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Publicação não encontrada.';
+  END IF;
+
+  IF auth.uid() IS NULL OR (auth.uid() <> v_author AND NOT public.is_diretoria()) THEN
+    RAISE EXCEPTION 'Sem permissão para excluir esta publicação.';
+  END IF;
+
+  UPDATE public.social_posts
+  SET is_deleted = true,
+      updated_at = now(),
+      edited_at = COALESCE(edited_at, now())
+  WHERE id = p_post_id;
+
+  RETURN true;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.delete_social_post(uuid) TO authenticated;
+
 GRANT EXECUTE ON FUNCTION public.notify_social(uuid, uuid, text, text, text, text, uuid, text, text, jsonb) TO authenticated;
 
 -- ── STORAGE ───────────────────────────────────────────────
@@ -306,7 +340,14 @@ ALTER TABLE public.social_mentions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Membros leem posts sociais" ON public.social_posts;
 CREATE POLICY "Membros leem posts sociais"
   ON public.social_posts FOR SELECT
-  USING (auth.role() = 'authenticated' AND is_deleted = false);
+  USING (
+    auth.role() = 'authenticated'
+    AND (
+      is_deleted = false
+      OR auth.uid() = author_id
+      OR public.is_diretoria()
+    )
+  );
 
 DROP POLICY IF EXISTS "Membros criam posts sociais" ON public.social_posts;
 CREATE POLICY "Membros criam posts sociais"

@@ -16,8 +16,10 @@ const state = {
   members: [],
   follows: [],
   messages: [],
+  directConversations: [],
+  activeDirectConversationId: null,
   previews: [],
-  storyPreview: null,
+  storyPreviews: [],
   modalScrollY: 0,
   hasSocialTables: true,
   loadingMore: false,
@@ -67,6 +69,23 @@ function canEditPost(post) {
 
 function canManageStory(story) {
   return state.profile.tier === 'diretoria' || story.author_id === state.profile.id;
+}
+
+function displayUsername(member) {
+  return state.service?.getDisplayUsername(member) || 'membro';
+}
+
+function directStreakMeta(streak = {}) {
+  const level = streak.active ? streak.level || 'nascimento' : 'apagado';
+  const configs = {
+    apagado: { icon: '·', label: 'Vínculo adormecido' },
+    nascimento: { icon: '🐣', label: 'Nasceu' },
+    pequeno: { icon: '🐤', label: 'Pequeno' },
+    medio: { icon: '🐦', label: 'Médio' },
+    forte: { icon: '🐦‍⬛', label: 'Forte' },
+    lendario: { icon: '🪽', label: 'Lendário' },
+  };
+  return { level, ...configs[level] };
 }
 
 function findStoryById(storyId) {
@@ -124,9 +143,12 @@ function layout() {
         <div class="social-hero">
           <div>
             <div class="social-title">Feed Social MSY</div>
-          <div class="social-subtitle">Posts, fotos, stories, comentarios e interacoes da comunidade.</div>
+          <div class="social-subtitle">Posts, fotos, stories, comentarios e Direct da comunidade.</div>
           </div>
-          <div class="social-pill"><i class="fa-solid fa-sparkles"></i> Rede interna</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="social-icon-btn" id="openDirectBtn" title="Abrir Direct"><i class="fa-solid fa-paper-plane"></i></button>
+            <div class="social-pill"><i class="fa-solid fa-sparkles"></i> Rede interna</div>
+          </div>
         </div>
 
         <div class="stories-strip" id="storiesStrip"></div>
@@ -141,7 +163,7 @@ function layout() {
             Arraste imagens ou videos aqui, ou clique para escolher.
           </div>
           <input type="file" id="composerFiles" accept="image/*,video/mp4,video/webm,video/quicktime" multiple hidden>
-          <input type="file" id="storyFiles" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
+          <input type="file" id="storyFiles" accept="image/*,video/mp4,video/webm,video/quicktime" multiple hidden>
           <div class="composer-previews" id="composerPreviews"></div>
           <div class="composer-actions">
             <div class="composer-tools">
@@ -175,7 +197,8 @@ function layout() {
 
     <div class="story-viewer" id="storyViewer"></div>
     <div class="story-composer-modal" id="storyComposerModal"></div>
-    <div class="profile-viewer" id="profileViewer"></div>`;
+    <div class="profile-viewer" id="profileViewer"></div>
+    <div class="profile-viewer" id="directViewer"></div>`;
 }
 
 async function loadInitial() {
@@ -266,7 +289,7 @@ function renderPost(post) {
           ${avatar(author, 44)}
           <div class="post-author-copy">
             <div class="post-author-name"><span>${Utils.escapeHtml(author.name || 'Membro MSY')}</span>${verified}</div>
-            <div class="post-meta"><span>@${Utils.escapeHtml(author.username || Utils.getInitials(author.name || 'msy').toLowerCase())}</span><span>·</span><span>${Utils.escapeHtml(author.role || 'Membro')}</span><span>·</span><span>${timeAgo(post.created_at)}</span>${post.edited_at ? '<span class="edited-badge">Editado</span>' : ''}</div>
+            <div class="post-meta"><span>@${Utils.escapeHtml(displayUsername(author))}</span><span>·</span><span>${Utils.escapeHtml(author.role || 'Membro')}</span><span>·</span><span>${timeAgo(post.created_at)}</span>${post.edited_at ? '<span class="edited-badge">Editado</span>' : ''}</div>
           </div>
         </div>
         <div class="post-menu-wrap">
@@ -286,6 +309,7 @@ function renderPost(post) {
         <div class="post-actions-left">
           <button class="social-action ${post.liked_by_me ? 'active' : ''}" data-like-post="${post.id}" title="Curtir"><i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-heart"></i></button>
           <button class="social-action" data-focus-comment="${post.id}" title="Comentar"><i class="fa-regular fa-comment"></i></button>
+          <button class="social-action" data-message-post-author="${author.id || post.author_id}" title="Enviar direct"><i class="fa-regular fa-paper-plane"></i></button>
         </div>
         <button class="social-action ${post.saved_by_me ? 'active' : ''}" data-save-post="${post.id}" title="Salvar"><i class="fa-${post.saved_by_me ? 'solid' : 'regular'} fa-bookmark"></i></button>
       </div>
@@ -311,7 +335,7 @@ function renderComments(post) {
     <div class="comment-item${c.parent_id ? ' reply' : ''}" id="comment-${c.id}">
       ${avatar(c.author || {}, 30)}
       <div class="comment-body">
-        <div class="comment-name">${Utils.escapeHtml(c.author?.name || 'Membro')}</div>
+        <div class="comment-name">${Utils.escapeHtml(c.author?.name || 'Membro')} <span class="message-sub">@${Utils.escapeHtml(displayUsername(c.author || {}))}</span></div>
         <div class="comment-text">${richText(c.content)}</div>
         <div class="comment-meta"><span>${timeAgo(c.created_at)}</span><button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button></div>
       </div>
@@ -328,6 +352,7 @@ function bindPostEvents(root) {
   root.querySelectorAll('[data-like-post]').forEach((btn) => btn.addEventListener('click', () => toggleLike(btn.dataset.likePost, btn)));
   root.querySelectorAll('[data-save-post]').forEach((btn) => btn.addEventListener('click', () => toggleSave(btn.dataset.savePost)));
   root.querySelectorAll('[data-focus-comment]').forEach((btn) => btn.addEventListener('click', () => document.querySelector(`[data-comment-form="${btn.dataset.focusComment}"] input`)?.focus()));
+  root.querySelectorAll('[data-message-post-author]').forEach((btn) => btn.addEventListener('click', () => openDirectInbox(btn.dataset.messagePostAuthor)));
   root.querySelectorAll('[data-profile-id]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.profileId)));
   root.querySelectorAll('[data-delete-post]').forEach((btn) => btn.addEventListener('click', () => deletePost(btn.dataset.deletePost)));
   root.querySelectorAll('[data-edit-post]').forEach((btn) => btn.addEventListener('click', () => editPost(btn.dataset.editPost)));
@@ -347,6 +372,7 @@ function bindComposer() {
     drop.classList.toggle('visible');
     files.click();
   });
+  document.getElementById('openDirectBtn')?.addEventListener('click', () => openDirectInbox());
   document.getElementById('emojiBtn').addEventListener('click', () => {
     composerInput.value += composerInput.value.endsWith(' ') || !composerInput.value ? '✨ ' : ' ✨ ';
     composerInput.focus();
@@ -426,11 +452,11 @@ async function createStoryFromFile() {
     return;
   }
   const input = document.getElementById('storyFiles');
-  const file = input.files?.[0];
-  if (!file) return;
+  const files = [...(input.files || [])];
+  if (!files.length) return;
   try {
-    validateMediaFile(file);
-    state.storyPreview = filePreview(file);
+    files.forEach((file) => validateMediaFile(file));
+    state.storyPreviews = files.map((file) => filePreview(file));
     openStoryComposer();
   } catch (err) {
     console.error(err);
@@ -441,25 +467,28 @@ async function createStoryFromFile() {
 }
 
 function openStoryComposer() {
-  const item = state.storyPreview;
-  if (!item) return;
+  const items = state.storyPreviews;
+  if (!items.length) return;
   const modal = document.getElementById('storyComposerModal');
   modal.innerHTML = `
     <div class="story-compose-panel">
-      <div class="story-compose-preview">
-        ${item.media_type === 'video' ? `<video src="${item.url}" controls playsinline></video>` : `<img src="${item.url}" alt="Preview do story">`}
+      <div class="story-compose-preview" id="storyComposePreview">
+        ${items.map((item, index) => `<div class="story-compose-slide-preview${index === 0 ? ' active' : ''}" data-story-preview-slide="${index}">${item.media_type === 'video' ? `<video src="${item.url}" controls playsinline></video>` : `<img src="${item.url}" alt="Preview do story">`}</div>`).join('')}
       </div>
       <div class="story-compose-side">
         <div class="story-compose-head">
           <div>
             <div class="social-title" style="font-size:1.05rem">Novo story</div>
-            <div class="social-subtitle">A legenda aceita emojis e @mencoes.</div>
+            <div class="social-subtitle">Adicione legenda e publique todos os itens em sequência.</div>
           </div>
           <button class="social-icon-btn" data-close-story-composer><i class="fa-solid fa-xmark"></i></button>
         </div>
+        <div class="story-compose-strip">
+          ${items.map((item, index) => `<button type="button" class="story-compose-thumb${index === 0 ? ' active' : ''}" data-story-thumb="${index}">${item.media_type === 'video' ? '<i class="fa-solid fa-play"></i>' : `<img src="${item.url}" alt="Thumb">`}</button>`).join('')}
+        </div>
         <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda..."></textarea>
         <div class="story-caption-count"><span id="storyCaptionCount">0</span>/160</div>
-        <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> Publicar story</button>
+        <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> Publicar stories</button>
       </div>
     </div>`;
   openModal(modal);
@@ -468,35 +497,42 @@ function openStoryComposer() {
     document.getElementById('storyCaptionCount').textContent = String(input.value.length);
   });
   modal.querySelector('[data-close-story-composer]').addEventListener('click', closeStoryComposer);
+  modal.querySelectorAll('[data-story-thumb]').forEach((btn) => btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.storyThumb);
+    modal.querySelectorAll('[data-story-preview-slide]').forEach((slide) => slide.classList.toggle('active', Number(slide.dataset.storyPreviewSlide) === idx));
+    modal.querySelectorAll('[data-story-thumb]').forEach((thumb) => thumb.classList.toggle('active', Number(thumb.dataset.storyThumb) === idx));
+  }));
   document.getElementById('publishStoryBtn').addEventListener('click', publishStoryFromPreview);
 }
 
 function closeStoryComposer() {
-  if (state.storyPreview) revokePreviews([state.storyPreview]);
-  state.storyPreview = null;
+  if (state.storyPreviews?.length) revokePreviews(state.storyPreviews);
+  state.storyPreviews = [];
   closeSocialModals();
 }
 
 async function publishStoryFromPreview() {
-  if (!state.storyPreview) return;
+  if (!state.storyPreviews?.length) return;
   const btn = document.getElementById('publishStoryBtn');
   const caption = document.getElementById('storyCaptionInput')?.value.trim() || '';
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
   try {
-    const media = await uploadSocialMedia(db, state.profile.id, state.storyPreview.file, 'stories');
-    await state.service.createStory(media, caption);
-    revokePreviews([state.storyPreview]);
-    state.storyPreview = null;
+    for (const item of state.storyPreviews) {
+      const media = await uploadSocialMedia(db, state.profile.id, item.file, 'stories');
+      await state.service.createStory(media, caption);
+    }
+    revokePreviews(state.storyPreviews);
+    state.storyPreviews = [];
     closeSocialModals();
     state.stories = await state.service.loadStories();
     renderStories();
-    Utils.showToast('Story publicado por 24 horas!');
+    Utils.showToast('Stories publicados por 24 horas!');
   } catch (err) {
     console.error(err);
     Utils.showToast('Erro ao publicar story.', 'error');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Publicar story';
+    btn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Publicar stories';
   }
 }
 
@@ -640,7 +676,7 @@ function bindSearch() {
       if (q.length < 2) { box.classList.remove('open'); box.innerHTML = ''; return; }
       const res = state.hasSocialTables ? await state.service.search(q) : searchLocalMembers(q);
       box.innerHTML = [
-        ...res.members.map((m) => `<div class="social-result-item" data-open-profile="${m.id}">${avatar(m, 32)}<div><strong>${Utils.escapeHtml(m.name)}</strong><div class="message-sub">@${Utils.escapeHtml(m.username || 'membro')}</div></div></div>`),
+        ...res.members.map((m) => `<div class="social-result-item" data-open-profile="${m.id}">${avatar(m, 32)}<div><strong>${Utils.escapeHtml(m.name)}</strong><div class="message-sub">@${Utils.escapeHtml(displayUsername(m))}</div></div></div>`),
         ...res.posts.map((p) => `<div class="social-result-item" data-open-post="${p.id}"><i class="fa-regular fa-message"></i><div>${Utils.escapeHtml((p.content || '').slice(0, 90))}</div></div>`),
         ...res.hashtags.map((h) => `<div class="social-result-item"><i class="fa-solid fa-hashtag"></i><strong>${Utils.escapeHtml(h)}</strong></div>`),
       ].join('') || '<div class="message-sub">Nada encontrado.</div>';
@@ -685,12 +721,16 @@ function openProfile(memberId) {
           </div>
         </div>
         <div class="profile-modal-name">${Utils.escapeHtml(member.name)}</div>
-        <div class="profile-modal-meta">@${Utils.escapeHtml(member.username || Utils.getInitials(member.name).toLowerCase())} · ${Utils.escapeHtml(member.role || 'Membro')} · ${member.tier === 'diretoria' ? 'Verificado' : 'Membro'}</div>
+        <div class="profile-modal-meta">@${Utils.escapeHtml(displayUsername(member))} · ${Utils.escapeHtml(member.role || 'Membro')} · ${member.tier === 'diretoria' ? 'Verificado' : 'Membro'}</div>
         <p class="profile-modal-bio">${Utils.escapeHtml(member.social_bio || member.bio || 'Sem bio ainda.')}</p>
         <div class="profile-stats">
-          <div class="profile-stat"><strong>${postsCount}</strong><span>posts</span></div>
-          <div class="profile-stat"><strong>${followers}</strong><span>seguidores</span></div>
-          <div class="profile-stat"><strong>${following}</strong><span>seguindo</span></div>
+          <button class="profile-stat" type="button" data-open-member-posts="${memberId}"><strong>${postsCount}</strong><span>posts</span></button>
+          <button class="profile-stat" type="button" data-open-followers="${memberId}"><strong>${followers}</strong><span>seguidores</span></button>
+          <button class="profile-stat" type="button" data-open-following="${memberId}"><strong>${following}</strong><span>seguindo</span></button>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+          ${!isMe ? `<button class="social-icon-btn" data-start-direct="${memberId}" title="Enviar direct"><i class="fa-regular fa-paper-plane"></i></button>` : ''}
+          ${isMe ? `<button class="social-icon-btn" data-edit-social-profile title="Editar perfil"><i class="fa-solid fa-pen"></i></button>` : ''}
         </div>
       </div>
     </div>`;
@@ -699,18 +739,52 @@ function openProfile(memberId) {
     e.stopPropagation();
     toggleFollow(memberId);
   });
+  modal.querySelector('[data-start-direct]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openDirectInbox(memberId);
+  });
+  modal.querySelector('[data-open-followers]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFollowList(memberId, 'followers');
+  });
+  modal.querySelector('[data-open-following]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFollowList(memberId, 'following');
+  });
+  modal.querySelector('[data-open-member-posts]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeSocialModals();
+    setTimeout(() => {
+      document.querySelectorAll('.social-post').forEach((node) => node.classList.remove('highlight'));
+      document.querySelectorAll(`.social-post[data-post-id]`).forEach((node) => {
+        const post = state.posts.find((item) => item.id === node.dataset.postId);
+        if (post?.author_id === memberId) node.classList.add('highlight');
+      });
+    }, 80);
+  });
+  modal.querySelector('[data-edit-social-profile]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openSocialProfileEditor();
+  });
 }
 
 async function openStory(groupIndex, storyIndex) {
   const group = state.stories[groupIndex];
   const story = group?.stories?.[storyIndex];
   if (!story) return;
+  state.storyCursor = { groupIndex, storyIndex };
   state.service.markStoryViewed(story.id);
   let reactions = [];
+  let views = [];
   try {
     reactions = await state.service.loadStoryReactions(story.id);
   } catch (err) {
     console.warn('[MSY][feed-social] Reacoes do story indisponiveis:', err);
+  }
+  try {
+    views = await state.service.loadStoryViews(story.id);
+  } catch (err) {
+    console.warn('[MSY][feed-social] Views do story indisponiveis:', err);
   }
   const reactionSummary = reactions.reduce((acc, row) => {
     acc[row.reaction] = (acc[row.reaction] || 0) + 1;
@@ -724,13 +798,16 @@ async function openStory(groupIndex, storyIndex) {
       <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay controls playsinline></video>` : `<img src="${Utils.escapeHtml(story.media_url)}">`}</div>
       <div class="story-top">
         ${avatar(group.author, 34)}
-        <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>${timeAgo(story.created_at)}</span></div>
+        <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
+        <button class="social-icon-btn story-close" data-story-prev title="Story anterior"><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="social-icon-btn story-close" data-story-next title="Próximo story"><i class="fa-solid fa-chevron-right"></i></button>
         ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
       ${story.caption ? `<div class="story-caption">${richText(story.caption)}</div>` : ''}
       <div class="story-bottom">
         <div class="story-reactions-row">${['❤️','🔥','👏','✨'].map((r) => `<button class="story-reaction" data-story-reaction="${r}">${r}<span>${reactionSummary[r] || ''}</span></button>`).join('')}</div>
+        <button class="story-reaction" data-story-reply title="Responder story"><i class="fa-regular fa-paper-plane"></i><span>Responder</span></button>
         ${canViewReactions ? `<button class="story-reactions-toggle" data-toggle-story-reactions><i class="fa-solid fa-chart-simple"></i> ${reactionsTotal} reacao${reactionsTotal === 1 ? '' : 'es'}</button>` : ''}
       </div>
       ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel">
@@ -742,7 +819,22 @@ async function openStory(groupIndex, storyIndex) {
             <div><strong>${Utils.escapeHtml(r.user?.name || 'Membro')}</strong><span>${timeAgo(r.created_at)}</span></div>
             <em>${Utils.escapeHtml(r.reaction)}</em>
           </div>`).join('') : '<div class="message-sub">Nenhuma reacao ainda.</div>'}
+        <div class="story-reactions-title" style="margin-top:14px">Visualizacoes</div>
+        <div class="story-reactions-summary">${views.length ? `<span>${views.length} visualizacao${views.length === 1 ? '' : 'es'}</span>` : '<span>Nenhuma visualizacao ainda</span>'}</div>
+        ${views.length ? views.map((view) => `
+          <div class="story-reaction-row">
+            ${avatar(view.user || {}, 30)}
+            <div><strong>${Utils.escapeHtml(view.user?.name || 'Membro')}</strong><span>${timeAgo(view.viewed_at)}</span></div>
+            <em><i class="fa-regular fa-eye"></i></em>
+          </div>`).join('') : '<div class="message-sub">Ninguem viu este story ainda.</div>'}
       </div>` : ''}
+      <div class="story-reply-composer" id="storyReplyComposer" style="display:none">
+        <textarea id="storyReplyInput" class="story-caption-input" maxlength="160" placeholder="Responder story..."></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button class="social-icon-btn" type="button" data-close-story-reply>Cancelar</button>
+          <button class="btn btn-primary social-submit" type="button" data-send-story-reply>Enviar</button>
+        </div>
+      </div>
     </div>`;
   openModal(modal);
   requestAnimationFrame(() => {
@@ -757,6 +849,48 @@ async function openStory(groupIndex, storyIndex) {
     Utils.showToast('Reacao enviada.');
     openStory(groupIndex, storyIndex);
   }));
+  modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (storyIndex > 0) openStory(groupIndex, storyIndex - 1);
+    else if (groupIndex > 0) {
+      const prevGroup = state.stories[groupIndex - 1];
+      openStory(groupIndex - 1, prevGroup.stories.length - 1);
+    }
+  });
+  modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const groupStories = group.stories || [];
+    if (storyIndex < groupStories.length - 1) openStory(groupIndex, storyIndex + 1);
+    else if (groupIndex < state.stories.length - 1) openStory(groupIndex + 1, 0);
+  });
+  modal.querySelector('[data-story-reply]')?.addEventListener('click', () => {
+    const composer = document.getElementById('storyReplyComposer');
+    composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    composer?.querySelector('#storyReplyInput')?.focus();
+    composer?.style && (composer.style.display = 'block');
+  });
+  modal.querySelector('[data-close-story-reply]')?.addEventListener('click', () => {
+    const composer = document.getElementById('storyReplyComposer');
+    if (composer) composer.style.display = 'none';
+  });
+  modal.querySelector('[data-send-story-reply]')?.addEventListener('click', async () => {
+    const input = document.getElementById('storyReplyInput');
+    const text = input?.value.trim();
+    if (!text) return;
+    try {
+      const targetUserId = group?.author?.id;
+      if (!targetUserId) throw new Error('Não foi possível identificar o autor do story.');
+      const conversationId = await state.service.ensureDirectConversation(targetUserId);
+      await state.service.sendDirectMessage(conversationId, text);
+      input.value = '';
+      const composer = document.getElementById('storyReplyComposer');
+      if (composer) composer.style.display = 'none';
+      Utils.showToast('Resposta enviada no Direct.');
+    } catch (err) {
+      console.error(err);
+      Utils.showToast(err.message || 'Erro ao responder story.', 'error');
+    }
+  });
   modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
     document.getElementById('storyReactionsPanel')?.classList.toggle('open');
   });
@@ -779,6 +913,305 @@ async function deleteStory(storyId) {
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao excluir story:', err);
     Utils.showToast(err.message || 'Erro ao excluir story.', 'error');
+  }
+}
+
+function getFollowMembers(memberId, type = 'followers') {
+  const ids = type === 'followers'
+    ? state.follows.filter((follow) => follow.following_id === memberId).map((follow) => follow.follower_id)
+    : state.follows.filter((follow) => follow.follower_id === memberId).map((follow) => follow.following_id);
+
+  return ids
+    .map((id) => state.members.find((member) => member.id === id) || state.posts.find((post) => post.author_id === id)?.author)
+    .filter(Boolean);
+}
+
+function openFollowList(memberId, type = 'followers') {
+  const member = state.members.find((item) => item.id === memberId) || state.profile;
+  const list = getFollowMembers(memberId, type);
+  const modal = document.getElementById('profileViewer');
+  modal.innerHTML = `
+    <div class="profile-panel">
+      <div class="profile-modal-body">
+        <div class="profile-modal-head">
+          <div>
+            <div class="profile-modal-name">${type === 'followers' ? 'Seguidores' : 'Seguindo'}</div>
+            <div class="profile-modal-meta">${Utils.escapeHtml(member?.name || 'Membro')} · ${list.length} pessoa${list.length === 1 ? '' : 's'}</div>
+          </div>
+          <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="social-search-results open" style="position:static;display:flex;flex-direction:column;gap:10px;box-shadow:none;border:none;background:transparent;padding:0">
+          ${list.length ? list.map((person) => `
+            <div class="social-result-item" data-open-profile="${person.id}">
+              ${avatar(person, 36)}
+              <div>
+                <strong>${Utils.escapeHtml(person.name || 'Membro')}</strong>
+                <div class="message-sub">@${Utils.escapeHtml(displayUsername(person))}</div>
+              </div>
+            </div>`).join('') : '<div class="message-sub">Nenhum membro nesta lista ainda.</div>'}
+        </div>
+      </div>
+    </div>`;
+  openModal(modal);
+  modal.querySelectorAll('[data-open-profile]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.openProfile)));
+}
+
+function openSocialProfileEditor() {
+  const modal = document.getElementById('profileViewer');
+  modal.innerHTML = `
+    <div class="profile-panel">
+      <div class="profile-modal-body">
+        <div class="profile-modal-head">
+          <div>
+            <div class="profile-modal-name">Editar perfil</div>
+            <div class="profile-modal-meta">Dados públicos, bio e banner</div>
+          </div>
+          <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <label class="message-sub">Username</label>
+        <input id="socialUsernameInput" class="comment-input" maxlength="24" value="${Utils.escapeHtml(displayUsername(state.profile))}" placeholder="username">
+        <label class="message-sub" style="margin-top:12px">Bio</label>
+        <textarea id="socialBioInput" class="story-caption-input" maxlength="180" placeholder="Conte um pouco sobre voce.">${Utils.escapeHtml(state.profile.social_bio || state.profile.bio || '')}</textarea>
+        <label class="message-sub" style="margin-top:12px">Banner</label>
+        <input id="socialBannerInput" class="comment-input" value="${Utils.escapeHtml(state.profile.banner_url || '')}" placeholder="https://...">
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <button class="btn btn-primary social-submit" id="saveSocialProfileBtn"><i class="fa-solid fa-floppy-disk"></i> Salvar perfil</button>
+        </div>
+      </div>
+    </div>`;
+  openModal(modal);
+  modal.querySelector('#saveSocialProfileBtn')?.addEventListener('click', saveSocialProfile);
+}
+
+async function saveSocialProfile() {
+  const username = document.getElementById('socialUsernameInput')?.value || '';
+  const social_bio = document.getElementById('socialBioInput')?.value || '';
+  const banner_url = document.getElementById('socialBannerInput')?.value || '';
+  try {
+    const profile = await state.service.updateSocialProfile({ username, social_bio, banner_url });
+    state.profile = profile;
+    state.members = state.members.map((member) => member.id === profile.id ? { ...member, ...profile } : member);
+    state.posts = state.posts.map((post) => post.author_id === profile.id
+      ? { ...post, author: { ...post.author, ...profile, username: displayUsername(profile), social_bio: profile.social_bio, banner_url: profile.banner_url } }
+      : post);
+    renderPosts();
+    renderSuggestions();
+    Utils.showToast('Perfil social atualizado.');
+    openProfile(profile.id);
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao atualizar perfil social:', err);
+    Utils.showToast(err.message || 'Erro ao salvar perfil social.', 'error');
+  }
+}
+
+async function openDirectInbox(targetId = null) {
+  if (!state.hasSocialTables) {
+    Utils.showToast('Aplique as migrations sociais antes de usar o Direct.', 'error');
+    return;
+  }
+
+  const maybeUuid = typeof targetId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)
+    ? targetId
+    : null;
+
+  try {
+    state.directConversations = await state.service.loadDirectConversations();
+
+    if (maybeUuid) {
+      const directConversation = state.directConversations.find((conversation) => conversation.id === maybeUuid);
+      if (directConversation) {
+        state.activeDirectConversationId = directConversation.id;
+        directConversation.messages = directConversation.messages?.length
+          ? directConversation.messages
+          : await state.service.loadDirectMessages(directConversation.id);
+        await state.service.markDirectConversationRead(directConversation.id);
+      } else if (maybeUuid !== state.profile.id) {
+        state.activeDirectConversationId = await state.service.ensureDirectConversation(maybeUuid);
+        state.directConversations = await state.service.loadDirectConversations();
+      }
+    }
+
+    if (!state.activeDirectConversationId) {
+      state.activeDirectConversationId = state.directConversations[0]?.id || null;
+    }
+
+    renderDirectInbox();
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao abrir direct:', err);
+    Utils.showToast(err.message || 'Erro ao abrir Direct.', 'error');
+  }
+}
+
+function renderDirectInbox() {
+  const modal = document.getElementById('directViewer');
+  const activeConversation = state.directConversations.find((conversation) => conversation.id === state.activeDirectConversationId) || null;
+  const activeMessages = activeConversation?.messages || [];
+  const peer = activeConversation?.otherParticipants?.[0]?.profile || {};
+  const streak = activeConversation?.streak || { days: 0, active: false, level: 'apagado' };
+  const streakMeta = directStreakMeta(streak);
+  const shellClass = `direct-shell${activeConversation ? ' show-chat' : ''}`;
+
+  modal.innerHTML = `
+    <div class="${shellClass}">
+      <aside class="direct-sidebar">
+        <div class="direct-sidebar-header">
+          <div>
+            <div class="direct-title">Mensagens</div>
+            <div class="direct-subtitle">Seu Direct social</div>
+          </div>
+          <button class="social-icon-btn direct-mobile-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="direct-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input id="directSearchInput" placeholder="Pesquisar conversas">
+        </div>
+        <div class="direct-list">
+          ${state.directConversations.length ? state.directConversations.map((conversation) => {
+            const person = conversation.otherParticipants[0]?.profile || {};
+            const selected = conversation.id === state.activeDirectConversationId;
+            const preview = conversation.lastMessage?.body || conversation.lastMessage?.attachment?.kind || 'Nova conversa';
+            return `
+              <button type="button" class="direct-thread${selected ? ' active' : ''}" data-open-direct-conversation="${conversation.id}">
+                ${avatar(person, 54)}
+                <div class="direct-thread-copy">
+                  <div class="direct-thread-top">
+                    <strong>${Utils.escapeHtml(person.name || conversation.title || 'Membro')}</strong>
+                    <span>${timeAgo(conversation.last_message_at || conversation.updated_at || conversation.created_at)}</span>
+                  </div>
+                  <div class="direct-thread-handle">@${Utils.escapeHtml(displayUsername(person))}</div>
+                  <div class="direct-thread-preview">${Utils.escapeHtml(preview)}</div>
+                </div>
+                <div class="direct-thread-meta">
+                  ${conversation.unread_count ? `<span class="direct-unread">${conversation.unread_count}</span>` : ''}
+                </div>
+              </button>`;
+          }).join('') : '<div class="social-empty"><i class="fa-regular fa-paper-plane"></i>Nenhuma conversa ainda.</div>'}
+        </div>
+      </aside>
+      <section class="direct-chat">
+        <div class="direct-chat-header">
+          <button class="social-icon-btn direct-back-btn" data-direct-back><i class="fa-solid fa-arrow-left"></i></button>
+          ${avatar(peer, 44)}
+          <div class="direct-chat-head-copy">
+            <div class="direct-chat-name">${Utils.escapeHtml(activeConversation?.title || 'Selecione uma conversa')}</div>
+            <div class="direct-chat-handle">@${Utils.escapeHtml(displayUsername(peer))} · ${Utils.escapeHtml(activeConversation ? 'online agora' : 'escolha uma conversa')}</div>
+          </div>
+          <div class="direct-streak level-${streakMeta.level}">
+            <span class="direct-streak-icon">${streakMeta.icon}</span>
+            <div>
+              <strong>${streak.active ? `${streak.days} dias` : 'Sem sequência'}</strong>
+              <span>${streak.active ? streakMeta.label : 'Vínculo adormecido'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="direct-chat-body" id="directMessagesList">
+          ${activeMessages.length ? activeMessages.map((message, index) => {
+            const mine = message.sender_id === state.profile.id;
+            const prev = activeMessages[index - 1];
+            const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(message.created_at).toDateString();
+            return `
+              ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
+              <div class="direct-message-row ${mine ? 'mine' : 'theirs'}">
+                <div class="direct-message-bubble">
+                  ${message.attachment?.kind === 'media' ? `<div class="direct-message-media">${message.attachment.media_type === 'video' ? `<video src="${Utils.escapeHtml(message.attachment.url)}" controls playsinline></video>` : `<img src="${Utils.escapeHtml(message.attachment.url)}" alt="Anexo do Direct">`}</div>` : ''}
+                  ${message.body ? `<div class="direct-message-text">${Utils.escapeHtml(message.body || '')}</div>` : ''}
+                  <div class="direct-message-time">${new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>`;
+          }).join('') : '<div class="social-empty"><i class="fa-regular fa-paper-plane"></i>Nenhuma mensagem ainda.</div>'}
+        </div>
+        <form id="directComposer" class="direct-composer">
+          <button type="button" class="direct-composer-icon" aria-label="Emoji"><i class="fa-regular fa-face-smile"></i></button>
+          <button type="button" class="direct-composer-icon" aria-label="Anexo"><i class="fa-regular fa-square-plus"></i></button>
+          <input type="file" id="directMediaInput" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
+          <input id="directMessageInput" class="direct-composer-input" placeholder="Enviar mensagem..." ${activeConversation ? '' : 'disabled'}>
+          <button class="direct-composer-send" type="submit" ${activeConversation ? '' : 'disabled'}><i class="fa-solid fa-paper-plane"></i></button>
+        </form>
+      </section>
+    </div>`;
+
+  openModal(modal);
+  modal.querySelectorAll('[data-open-direct-conversation]').forEach((node) => node.addEventListener('click', async () => {
+    state.activeDirectConversationId = node.dataset.openDirectConversation;
+    const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+    if (conversation) {
+      conversation.messages = await state.service.loadDirectMessages(conversation.id);
+      await state.service.markDirectConversationRead(conversation.id);
+      conversation.unread_count = 0;
+      if (!conversation.streak || !conversation.streak.active) {
+        conversation.streak = state.service.calculateDirectStreak(conversation.messages, conversation.otherParticipants.map((participant) => participant.user_id));
+      }
+    }
+    renderDirectInbox();
+  }));
+  modal.querySelector('[data-direct-back]')?.addEventListener('click', () => {
+    state.activeDirectConversationId = null;
+    renderDirectInbox();
+  });
+  modal.querySelector('#directComposer')?.addEventListener('submit', sendDirectMessage);
+  modal.querySelector('.direct-composer-icon[aria-label="Anexo"]')?.addEventListener('click', () => modal.querySelector('#directMediaInput')?.click());
+  modal.querySelector('.direct-composer-icon[aria-label="Emoji"]')?.addEventListener('click', () => {
+    const input = modal.querySelector('#directMessageInput');
+    if (!input) return;
+    input.value += input.value.endsWith(' ') || !input.value ? '✨ ' : ' ✨ ';
+    input.focus();
+  });
+  modal.querySelector('#directMediaInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !state.activeDirectConversationId) return;
+    try {
+      validateMediaFile(file);
+      const media = await uploadSocialMedia(db, state.profile.id, file, 'direct');
+      const message = await state.service.sendDirectMessage(state.activeDirectConversationId, '', { kind: 'media', ...media });
+      const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+      if (conversation) {
+        conversation.messages = [...(conversation.messages || []), message];
+        conversation.lastMessage = message;
+        conversation.last_message_at = message.created_at;
+      }
+      renderDirectInbox();
+    } catch (err) {
+      console.error(err);
+      Utils.showToast(err.message || 'Erro ao enviar midia no direct.', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  });
+  if (activeConversation) modal.querySelector('#directMessageInput')?.focus();
+  const search = modal.querySelector('#directSearchInput');
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    modal.querySelectorAll('[data-open-direct-conversation]').forEach((node) => {
+      const text = node.textContent.toLowerCase();
+      node.style.display = !q || text.includes(q) ? '' : 'none';
+    });
+  });
+
+  requestAnimationFrame(() => {
+    const list = modal.querySelector('#directMessagesList');
+    if (list) list.scrollTop = list.scrollHeight;
+  });
+}
+
+async function sendDirectMessage(e) {
+  e.preventDefault();
+  const input = document.getElementById('directMessageInput');
+  const body = input?.value?.trim() || '';
+  if (!body || !state.activeDirectConversationId) return;
+  try {
+    const message = await state.service.sendDirectMessage(state.activeDirectConversationId, body);
+    const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+    if (conversation) {
+      conversation.messages = [...(conversation.messages || []), message];
+      conversation.lastMessage = message;
+      conversation.last_message_at = message.created_at;
+      conversation.streak = message.metadata?.direct_streak || conversation.streak;
+    }
+    input.value = '';
+    renderDirectInbox();
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao enviar mensagem direct:', err);
+    Utils.showToast(err.message || 'Erro ao enviar direct.', 'error');
   }
 }
 
@@ -923,6 +1356,7 @@ function handleDeepLink() {
   const commentId = params.get('comment');
   const profileId = params.get('profile');
   const storyId = params.get('story');
+  const directId = params.get('direct');
   if (postId) setTimeout(() => focusPost(postId), 500);
   if (commentId) setTimeout(() => {
     const node = document.getElementById(`comment-${commentId}`);
@@ -937,6 +1371,7 @@ function handleDeepLink() {
     const storyIndex = groupIndex >= 0 ? state.stories[groupIndex].stories.findIndex((s) => s.id === storyId) : -1;
     if (groupIndex >= 0 && storyIndex >= 0) setTimeout(() => openStory(groupIndex, storyIndex), 500);
   }
+  if (directId) setTimeout(() => openDirectInbox(directId), 500);
 }
 
 initFeed().catch((err) => {

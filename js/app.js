@@ -373,9 +373,11 @@
          record:     'dashboard.html#recordes',
          recorde:    'dashboard.html#recordes',
          mention:    id ? `feed.html?post=${id}` : 'feed.html',
+         direct_conversation: id ? `feed.html?direct=${id}` : 'feed.html',
          conquista:  'premiacoes.html',
          achievement:'premiacoes.html',
          social:     'feed.html',
+         info:       notif.target_url || notif.link || 'dashboard.html',
        };
        return map[type] || 'dashboard.html';
      },
@@ -454,7 +456,7 @@
                    <div class="notif-item-text">
                      <div class="notif-item-msg">${Utils.escapeHtml(n.message)}</div>
                      <div class="notif-item-time">${Utils.formatDateTime(n.created_at)}</div>
-                     <button class="notif-open-btn" type="button">Ver publicação</button>
+                     <button class="notif-open-btn" type="button">Abrir</button>
                    </div>
                  </div>`).join('')
              }
@@ -5290,22 +5292,18 @@
              <i class="fa-solid fa-hourglass-half" style="margin-top:4px"></i> ${timeLabel} na Ordem
            </div>
 
-           <div class="card profile-social-card" style="margin-top:16px;text-align:left">
-             <div class="card-title"><i class="fa-solid fa-rss"></i> Perfil Social</div>
-             ${socialReady ? `
-               <div class="profile-social-handle">@${Utils.escapeHtml(profile.username || 'sem-username')}</div>
-               <div class="profile-social-bio">${Utils.escapeHtml(profile.social_bio || profile.bio || 'Adicione uma bio social para aparecer no feed.')}</div>
-               <div class="profile-social-stats">
-                 <div class="profile-social-stat"><strong id="profileSocialPostsCount">${socialSummary.postsCount || 0}</strong><span>posts</span></div>
-                 <div class="profile-social-stat"><strong>${socialSummary.followersCount || 0}</strong><span>seguidores</span></div>
-                 <div class="profile-social-stat"><strong>${socialSummary.followingCount || 0}</strong><span>seguindo</span></div>
-               </div>
-               <a class="btn btn-outline" href="feed.html?profile=${profile.id}" style="width:100%;justify-content:center;margin-top:12px">
-                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir no Feed Social
-               </a>
-             ` : `
-               <div class="profile-social-empty">O módulo social ainda não está disponível neste ambiente. Aplique a migration social no Supabase para liberar seguidores, posts e menções.</div>
-             `}
+           <div class="card profile-social-card" id="perfil-social-card" style="margin-top:16px;text-align:left">
+             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+               <div class="card-title" style="margin-bottom:0"><i class="fa-solid fa-user-pen"></i> Perfil social</div>
+               <button class="btn btn-outline btn-sm" id="editUnifiedProfileBtn"><i class="fa-solid fa-pen"></i> Editar</button>
+             </div>
+             <div class="profile-social-handle">@${Utils.escapeHtml((profile.username || Utils.getInitials(profile.name).toLowerCase()).replace(/^@+/, ''))}</div>
+             <div class="profile-social-bio">${Utils.escapeHtml(profile.social_bio || profile.bio || 'Adicione uma bio para aparecer no portal e no feed.')}</div>
+             <div class="profile-social-stats">
+               <div class="profile-social-stat"><strong id="profileSocialPostsCount">${socialSummary.postsCount || 0}</strong><span>posts</span></div>
+               <div class="profile-social-stat"><strong>${socialSummary.followersCount || 0}</strong><span>seguidores</span></div>
+               <div class="profile-social-stat"><strong>${socialSummary.followingCount || 0}</strong><span>seguindo</span></div>
+             </div>
            </div>
 
            <!-- INSÍGNIAS -->
@@ -5547,6 +5545,26 @@
      renderICMBadgesSection(icmData, selectedBadges, profile.id);
 
      if (socialReady && socialService) {
+       document.getElementById('editUnifiedProfileBtn')?.addEventListener('click', async () => {
+         const username = prompt('Username social:', profile.username || Utils.getInitials(profile.name).toLowerCase());
+         if (username === null) return;
+         const socialBio = prompt('Bio social:', profile.social_bio || profile.bio || '');
+         if (socialBio === null) return;
+         const bannerUrl = prompt('Banner URL social:', profile.banner_url || '') ?? '';
+         try {
+           const cleanUsername = (username || '').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '').replace(/[^a-z0-9._-]/g, '').replace(/\.{2,}/g, '.');
+           const updated = await socialService.updateSocialProfile({ username: cleanUsername, social_bio: socialBio, banner_url: bannerUrl });
+           Object.assign(profile, updated);
+           const card = document.getElementById('perfil-social-card');
+           if (card) {
+             card.querySelector('.profile-social-handle').textContent = `@${(profile.username || '').replace(/^@+/, '')}`;
+             card.querySelector('.profile-social-bio').textContent = profile.social_bio || profile.bio || 'Adicione uma bio para aparecer no portal e no feed.';
+           }
+           Utils.showToast('Perfil social atualizado.');
+         } catch (err) {
+           Utils.showToast(err.message || 'Erro ao atualizar perfil social.', 'error');
+         }
+       });
        document.querySelectorAll('[data-delete-profile-post]').forEach((btn) => {
          btn.addEventListener('click', async () => {
            const postId = btn.dataset.deleteProfilePost;
