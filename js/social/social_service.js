@@ -21,6 +21,45 @@ export class SocialService {
     return { posts, stories, members, follows, messages: [] };
   }
 
+  async loadProfileSocialSummary(memberId) {
+    const [postsRes, followersRes, followingRes] = await Promise.all([
+      this.db.from('social_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('author_id', memberId)
+        .eq('is_deleted', false),
+      this.db.from('social_follows')
+        .select('follower_id', { count: 'exact', head: true })
+        .eq('following_id', memberId),
+      this.db.from('social_follows')
+        .select('following_id', { count: 'exact', head: true })
+        .eq('follower_id', memberId),
+    ]);
+
+    if (postsRes.error) throw postsRes.error;
+    if (followersRes.error) throw followersRes.error;
+    if (followingRes.error) throw followingRes.error;
+
+    const { data: followRow, error: followError } = await this.db
+      .from('social_follows')
+      .select('follower_id')
+      .eq('follower_id', this.profile.id)
+      .eq('following_id', memberId)
+      .maybeSingle();
+
+    if (followError) throw followError;
+
+    return {
+      postsCount: postsRes.count || 0,
+      followersCount: followersRes.count || 0,
+      followingCount: followingRes.count || 0,
+      isFollowing: Boolean(followRow),
+    };
+  }
+
+  async loadProfilePosts(memberId, { limit = 10 } = {}) {
+    return this.loadPosts({ authorId: memberId, limit });
+  }
+
   async loadPosts({ limit = this.pageSize, before = null, query = '', authorId = null } = {}) {
     let request = this.db
       .from('social_posts')
@@ -144,6 +183,7 @@ export class SocialService {
       if (mediaError) throw mediaError;
     }
 
+    await this.persistPostMentions(post.id, content || '');
     return post;
   }
 
@@ -262,6 +302,7 @@ export class SocialService {
       target_url: `feed.html?post=${post.id}&comment=${data.id}`,
       anchor: `comment-${data.id}`,
     });
+    await this.persistCommentMentions(data.id, post.id, clean);
     return data;
   }
 
@@ -382,6 +423,99 @@ export class SocialService {
       .order('name');
     if (error) throw error;
     return data || [];
+  }
+
+  async searchMembersForMention(query, { limit = 5 } = {}) {
+    const clean = (query || '').trim().replace(/^@+/, '');
+    if (!clean) return [];
+    const like = `%${clean}%`;
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('id,name,username,role,initials,color,avatar_url')
+      .eq('status', 'ativo')
+      .not('username', 'is', null)
+      .neq('username', '')
+      .or(`username.ilike.${like},name.ilike.${like}`)
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  }
+
+  extractMentions(text = '') {
+    return [...new Set(
+      ((text || '').match(/(^|\s)@([\p{L}\p{N}_.-]+)/gu) || [])
+        .map((raw) => raw.trim().slice(1).toLowerCase())
+        .filter(Boolean)
+    )];
+  }
+
+  async resolveMentionedMembers(text = '') {
+    const usernames = this.extractMentions(text);
+    if (!usernames.length) return [];
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('id,name,username')
+      .eq('status', 'ativo')
+      .in('username', usernames);
+    if (error) throw error;
+    return (data || []).filter((member) => member.id !== this.profile.id);
+  }
+
+  async persistPostMentions(postId, text = '') {
+    const mentionedMembers = await this.resolveMentionedMembers(text);
+    if (!mentionedMembers.length) return;
+
+    const rows = mentionedMembers.map((member) => ({
+      mentioned_user_id: member.id,
+      mentioned_by_user_id: this.profile.id,
+      post_id: postId,
+      mention_text: `@${member.username}`,
+    }));
+
+    const { error } = await this.db.from('social_mentions').upsert(rows, {
+      onConflict: 'mentioned_user_id,post_id',
+      ignoreDuplicates: true,
+    });
+    if (error) throw error;
+
+    await Promise.all(mentionedMembers.map((member) => this.notify(member.id, {
+      message: `${this.profile.name} mencionou voce em uma publicacao.`,
+      type: 'mention',
+      icon: '@',
+      target_type: 'post',
+      target_id: postId,
+      target_url: `feed.html?post=${postId}`,
+      metadata: { mention: member.username },
+    })));
+  }
+
+  async persistCommentMentions(commentId, postId, text = '') {
+    const mentionedMembers = await this.resolveMentionedMembers(text);
+    if (!mentionedMembers.length) return;
+
+    const rows = mentionedMembers.map((member) => ({
+      mentioned_user_id: member.id,
+      mentioned_by_user_id: this.profile.id,
+      comment_id: commentId,
+      mention_text: `@${member.username}`,
+    }));
+
+    const { error } = await this.db.from('social_mentions').upsert(rows, {
+      onConflict: 'mentioned_user_id,comment_id',
+      ignoreDuplicates: true,
+    });
+    if (error) throw error;
+
+    await Promise.all(mentionedMembers.map((member) => this.notify(member.id, {
+      message: `${this.profile.name} mencionou voce em um comentario.`,
+      type: 'mention',
+      icon: '@',
+      target_type: 'comment',
+      target_id: commentId,
+      target_url: `feed.html?post=${postId}&comment=${commentId}`,
+      anchor: `comment-${commentId}`,
+      metadata: { mention: member.username },
+    })));
   }
 
   async loadFollows() {

@@ -106,6 +106,33 @@ CREATE TABLE IF NOT EXISTS public.social_follows (
 
 CREATE INDEX IF NOT EXISTS idx_social_follows_following ON public.social_follows(following_id);
 
+-- ── MENTIONS ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.social_mentions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  mentioned_user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  mentioned_by_user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  post_id uuid REFERENCES public.social_posts(id) ON DELETE CASCADE,
+  comment_id uuid REFERENCES public.social_comments(id) ON DELETE CASCADE,
+  mention_text text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (
+    (post_id IS NOT NULL AND comment_id IS NULL)
+    OR
+    (post_id IS NULL AND comment_id IS NOT NULL)
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_mentions_post_unique
+  ON public.social_mentions(mentioned_user_id, post_id)
+  WHERE comment_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_mentions_comment_unique
+  ON public.social_mentions(mentioned_user_id, comment_id)
+  WHERE post_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_social_mentions_user
+  ON public.social_mentions(mentioned_user_id, created_at DESC);
+
 -- ── STORIES ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.social_stories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -274,6 +301,7 @@ ALTER TABLE public.social_stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.social_story_views ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.social_story_reactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.social_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.social_mentions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Membros leem posts sociais" ON public.social_posts;
 CREATE POLICY "Membros leem posts sociais"
@@ -416,4 +444,14 @@ CREATE POLICY "Membros atualizam mensagens recebidas"
   ON public.social_messages FOR UPDATE
   USING (auth.uid() = recipient_id OR public.is_diretoria())
   WITH CHECK (auth.uid() = recipient_id OR public.is_diretoria());
+
+DROP POLICY IF EXISTS "Usuarios leem mencoes recebidas" ON public.social_mentions;
+CREATE POLICY "Usuarios leem mencoes recebidas"
+  ON public.social_mentions FOR SELECT
+  USING (auth.uid() = mentioned_user_id OR public.is_diretoria());
+
+DROP POLICY IF EXISTS "Usuarios registram mencoes proprias" ON public.social_mentions;
+CREATE POLICY "Usuarios registram mencoes proprias"
+  ON public.social_mentions FOR INSERT
+  WITH CHECK (auth.uid() = mentioned_by_user_id);
 

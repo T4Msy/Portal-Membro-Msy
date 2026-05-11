@@ -55,6 +55,25 @@
 }
 
 /* ============================================================
+   PERFIL SOCIAL
+   ============================================================ */
+.profile-social-card{padding:16px}
+.profile-social-handle{color:var(--gold);font-weight:800;font-size:.88rem;margin-bottom:8px}
+.profile-social-bio{color:var(--text-2);font-size:.8rem;line-height:1.55}
+.profile-social-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.profile-social-stat{border:1px solid var(--border-faint);background:var(--black-4);border-radius:14px;padding:10px;text-align:center}
+.profile-social-stat strong{display:block;color:var(--text-1);font-size:1.05rem}
+.profile-social-stat span{color:var(--text-3);font-size:.7rem}
+.profile-social-posts-card{display:flex;flex-direction:column;gap:10px}
+.profile-social-post{border:1px solid var(--border-faint);background:var(--black-4);border-radius:16px;padding:12px}
+.profile-social-post-head{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--text-3);font-size:.72rem;margin-bottom:8px}
+.profile-social-post-body{color:var(--text-1);font-size:.84rem;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.profile-social-post-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;color:var(--text-3);font-size:.72rem}
+.profile-social-link{color:var(--gold);font-size:.72rem;font-weight:800}
+.profile-social-delete{width:30px;height:30px;border-radius:10px;border:1px solid var(--border-red);background:var(--red-subtle);color:var(--red-bright);cursor:pointer}
+.profile-social-empty{border:1px dashed var(--border-faint);border-radius:14px;padding:14px;color:var(--text-3);font-size:.8rem;line-height:1.5}
+
+/* ============================================================
    SUGESTÕES
    ============================================================ */
 .suggestions-shell {

@@ -21,6 +21,10 @@ const state = {
   modalScrollY: 0,
   hasSocialTables: true,
   loadingMore: false,
+  mentionDropdown: null,
+  mentionTarget: null,
+  mentionItems: [],
+  mentionActiveIndex: 0,
 };
 
 function avatar(person, size = 42) {
@@ -329,21 +333,25 @@ function bindPostEvents(root) {
   root.querySelectorAll('[data-edit-post]').forEach((btn) => btn.addEventListener('click', () => editPost(btn.dataset.editPost)));
   root.querySelectorAll('[data-pin-post]').forEach((btn) => btn.addEventListener('click', () => pinPost(btn.dataset.pinPost)));
   root.querySelectorAll('[data-copy-post]').forEach((btn) => btn.addEventListener('click', () => copyPost(btn.dataset.copyPost)));
-  root.querySelectorAll('[data-comment-form]').forEach((form) => form.addEventListener('submit', addComment));
+  root.querySelectorAll('[data-comment-form]').forEach((form) => {
+    form.addEventListener('submit', addComment);
+    bindMentionAutocomplete(form.elements.comment, { minChars: 1 });
+  });
 }
 
 function bindComposer() {
   const files = document.getElementById('composerFiles');
   const drop = document.getElementById('composerDrop');
+  const composerInput = document.getElementById('composerText');
   document.getElementById('mediaBtn').addEventListener('click', () => {
     drop.classList.toggle('visible');
     files.click();
   });
   document.getElementById('emojiBtn').addEventListener('click', () => {
-    const input = document.getElementById('composerText');
-    input.value += input.value.endsWith(' ') || !input.value ? '✨ ' : ' ✨ ';
-    input.focus();
+    composerInput.value += composerInput.value.endsWith(' ') || !composerInput.value ? '✨ ' : ' ✨ ';
+    composerInput.focus();
   });
+  bindMentionAutocomplete(composerInput, { minChars: 1 });
   document.getElementById('storyFiles').addEventListener('change', createStoryFromFile);
   document.getElementById('publishBtn').addEventListener('click', publishPost);
   files.addEventListener('change', () => addFiles([...files.files]));
@@ -533,6 +541,7 @@ async function addComment(e) {
     post.comments.push(comment);
     post.comments_count += 1;
     input.value = '';
+    closeMentionDropdown();
     renderPosts();
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
@@ -782,6 +791,122 @@ function bindModals() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeSocialModals();
   });
+}
+
+async function handleMentionInput(input, minChars = 1) {
+  if (!state.hasSocialTables || !input) return closeMentionDropdown();
+  const cursor = input.selectionStart ?? input.value.length;
+  const beforeCursor = input.value.slice(0, cursor);
+  const match = beforeCursor.match(/(^|\s)@([\p{L}\p{N}_.-]*)$/u);
+  if (!match) return closeMentionDropdown();
+  const query = match[2] || '';
+  if (query.length < minChars) return closeMentionDropdown();
+  try {
+    const members = await state.service.searchMembersForMention(query, { limit: 6 });
+    if (!members.length) return closeMentionDropdown();
+    openMentionDropdown(input, members, query);
+  } catch (err) {
+    console.warn('[MSY][feed-social] Erro no autocomplete de mencoes:', err);
+    closeMentionDropdown();
+  }
+}
+
+function bindMentionAutocomplete(input, { minChars = 1 } = {}) {
+  if (!input || input.dataset.mentionBound === 'true') return;
+  input.dataset.mentionBound = 'true';
+  input.addEventListener('input', () => { handleMentionInput(input, minChars); });
+  input.addEventListener('keydown', (e) => {
+    if (!state.mentionDropdown || state.mentionTarget !== input) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      state.mentionActiveIndex = (state.mentionActiveIndex + 1) % state.mentionItems.length;
+      syncMentionDropdownState();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      state.mentionActiveIndex = (state.mentionActiveIndex - 1 + state.mentionItems.length) % state.mentionItems.length;
+      syncMentionDropdownState();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      const member = state.mentionItems[state.mentionActiveIndex];
+      if (!member) return;
+      e.preventDefault();
+      applyMentionSelection(input, member);
+    } else if (e.key === 'Escape') {
+      closeMentionDropdown();
+    }
+  });
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement?.closest?.('.mention-dropdown')) return;
+      closeMentionDropdown();
+    }, 120);
+  });
+}
+
+function ensureMentionDropdown() {
+  if (state.mentionDropdown) return state.mentionDropdown;
+  const dropdown = document.createElement('div');
+  dropdown.className = 'mention-dropdown';
+  dropdown.style.display = 'none';
+  document.body.appendChild(dropdown);
+  state.mentionDropdown = dropdown;
+  return dropdown;
+}
+
+function openMentionDropdown(input, members, query) {
+  const dropdown = ensureMentionDropdown();
+  state.mentionTarget = input;
+  state.mentionItems = members;
+  state.mentionActiveIndex = 0;
+  const rect = input.getBoundingClientRect();
+  dropdown.style.display = 'block';
+  dropdown.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  dropdown.style.left = `${window.scrollX + rect.left}px`;
+  dropdown.style.width = `${Math.max(rect.width, 240)}px`;
+  dropdown.innerHTML = members.map((member, index) => `
+    <button type="button" class="mention-option${index === 0 ? ' active' : ''}" data-mention-index="${index}">
+      ${avatar(member, 30)}
+      <div class="mention-option-copy">
+        <strong>${Utils.escapeHtml(member.name || 'Membro')}</strong>
+        <span>@${Utils.escapeHtml(member.username || query)}</span>
+      </div>
+    </button>`).join('');
+  dropdown.querySelectorAll('[data-mention-index]').forEach((node) => node.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    applyMentionSelection(input, members[Number(node.dataset.mentionIndex)]);
+  }));
+}
+
+function syncMentionDropdownState() {
+  if (!state.mentionDropdown) return;
+  state.mentionDropdown.querySelectorAll('[data-mention-index]').forEach((node, index) => {
+    node.classList.toggle('active', index === state.mentionActiveIndex);
+  });
+}
+
+function applyMentionSelection(input, member) {
+  if (!input || !member?.username) return closeMentionDropdown();
+  const cursor = input.selectionStart ?? input.value.length;
+  const beforeCursor = input.value.slice(0, cursor);
+  const afterCursor = input.value.slice(cursor);
+  const match = beforeCursor.match(/(^|\s)@([\p{L}\p{N}_.-]*)$/u);
+  if (!match) return closeMentionDropdown();
+  const tokenStart = cursor - match[0].length + match[1].length;
+  const nextValue = `${input.value.slice(0, tokenStart)}@${member.username} ${afterCursor}`;
+  input.value = nextValue;
+  const nextCursor = tokenStart + member.username.length + 2;
+  input.focus();
+  input.setSelectionRange(nextCursor, nextCursor);
+  closeMentionDropdown();
+}
+
+function closeMentionDropdown() {
+  if (state.mentionDropdown) {
+    state.mentionDropdown.style.display = 'none';
+    state.mentionDropdown.innerHTML = '';
+  }
+  state.mentionTarget = null;
+  state.mentionItems = [];
+  state.mentionActiveIndex = 0;
 }
 
 function focusPost(postId) {

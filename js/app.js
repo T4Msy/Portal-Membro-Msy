@@ -5196,12 +5196,16 @@
      const profile = await renderSidebar('perfil');
      if (!profile) return;
      await renderTopBar('Meu Perfil', profile);
-   
+
      const content = document.getElementById('pageContent');
      Utils.showLoading(content);
-   
+
      const isDiretoria = profile.tier === 'diretoria';
-   
+     let socialService = null;
+     let socialSummary = { postsCount: 0, followersCount: 0, followingCount: 0, isFollowing: false };
+     let socialPosts = [];
+     let socialReady = true;
+
      // Fetch stats + dados ICM em paralelo
      const [statsRes, icmRes] = await Promise.all([
        db.rpc('get_member_stats', { p_user_id: profile.id }),
@@ -5210,6 +5214,18 @@
      const stats          = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
      const icmData        = icmRes.data?.icm            || null;
      const selectedBadges = icmRes.data?.selected_badges || [];
+
+     try {
+       const socialModule = await import('./social/social_service.js');
+       socialService = new socialModule.SocialService(db, profile, Utils);
+       [socialSummary, socialPosts] = await Promise.all([
+         socialService.loadProfileSocialSummary(profile.id),
+         socialService.loadProfilePosts(profile.id, { limit: 6 })
+       ]);
+     } catch (err) {
+       console.warn('[MSY][perfil-social] Modulo social indisponivel:', err);
+       socialReady = false;
+     }
    
      const joinDate = new Date(profile.join_date + 'T00:00:00');
      const diffDays = Math.floor((new Date() - joinDate) / (1000 * 60 * 60 * 24));
@@ -5273,7 +5289,25 @@
              <i class="fa-regular fa-calendar"></i> Membro desde ${Utils.formatDate(profile.join_date)}<br>
              <i class="fa-solid fa-hourglass-half" style="margin-top:4px"></i> ${timeLabel} na Ordem
            </div>
-   
+
+           <div class="card profile-social-card" style="margin-top:16px;text-align:left">
+             <div class="card-title"><i class="fa-solid fa-rss"></i> Perfil Social</div>
+             ${socialReady ? `
+               <div class="profile-social-handle">@${Utils.escapeHtml(profile.username || 'sem-username')}</div>
+               <div class="profile-social-bio">${Utils.escapeHtml(profile.social_bio || profile.bio || 'Adicione uma bio social para aparecer no feed.')}</div>
+               <div class="profile-social-stats">
+                 <div class="profile-social-stat"><strong id="profileSocialPostsCount">${socialSummary.postsCount || 0}</strong><span>posts</span></div>
+                 <div class="profile-social-stat"><strong>${socialSummary.followersCount || 0}</strong><span>seguidores</span></div>
+                 <div class="profile-social-stat"><strong>${socialSummary.followingCount || 0}</strong><span>seguindo</span></div>
+               </div>
+               <a class="btn btn-outline" href="feed.html?profile=${profile.id}" style="width:100%;justify-content:center;margin-top:12px">
+                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir no Feed Social
+               </a>
+             ` : `
+               <div class="profile-social-empty">O módulo social ainda não está disponível neste ambiente. Aplique a migration social no Supabase para liberar seguidores, posts e menções.</div>
+             `}
+           </div>
+
            <!-- INSÍGNIAS -->
            <div style="margin-top:16px;border-top:1px solid var(--border-faint);padding-top:16px">
              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -5430,6 +5464,34 @@
              </div>
            </div>
    
+           ${socialReady ? `
+             <div class="card profile-social-posts-card">
+               <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+                 <div class="card-title" style="margin-bottom:0"><i class="fa-solid fa-feather-pointed"></i> Minhas Publicações</div>
+                 <a href="feed.html?profile=${profile.id}" style="font-size:.74rem;color:var(--gold)">Ver no feed</a>
+               </div>
+               <div id="profileSocialPostsList">
+                 ${socialPosts.length ? socialPosts.map((post) => `
+                   <article class="profile-social-post" data-profile-social-post="${post.id}">
+                     <div class="profile-social-post-head">
+                       <span>${Utils.formatDateTime(post.created_at)}</span>
+                       <div style="display:flex;align-items:center;gap:8px">
+                         <a href="feed.html?post=${post.id}" class="profile-social-link">Abrir</a>
+                         <button class="profile-social-delete" data-delete-profile-post="${post.id}"><i class="fa-solid fa-trash"></i></button>
+                       </div>
+                     </div>
+                     <div class="profile-social-post-body">${Utils.escapeHtml((post.content || '').trim() || 'Publicação com mídia')}</div>
+                     <div class="profile-social-post-meta">
+                       <span>${post.likes_count || 0} curtidas</span>
+                       <span>${post.comments_count || 0} comentários</span>
+                       <span>${(post.media || []).length} mídias</span>
+                     </div>
+                   </article>
+                 `).join('') : '<div class="profile-social-empty">Você ainda não publicou no Feed Social.</div>'}
+               </div>
+             </div>
+           ` : ''}
+
            <!-- Info somente leitura (cargo, tier) -->
            <div class="card" style="border-color:var(--border-faint)">
              <div class="card-title"><i class="fa-solid fa-shield-halved"></i> Informações da Ordem</div>
@@ -5483,6 +5545,30 @@
 
      // ── ICM BADGES ──────────────────────────────────────────────
      renderICMBadgesSection(icmData, selectedBadges, profile.id);
+
+     if (socialReady && socialService) {
+       document.querySelectorAll('[data-delete-profile-post]').forEach((btn) => {
+         btn.addEventListener('click', async () => {
+           const postId = btn.dataset.deleteProfilePost;
+           if (!postId) return;
+           if (!await MSYConfirm.show('Excluir esta publicação? Esta ação remove o post do feed.', { title: 'Excluir publicação', type: 'danger', confirmText: 'Excluir' })) return;
+           try {
+             await socialService.deletePost(postId);
+             document.querySelector(`[data-profile-social-post="${postId}"]`)?.remove();
+             const countEl = document.getElementById('profileSocialPostsCount');
+             if (countEl) countEl.textContent = String(Math.max(0, Number(countEl.textContent || '0') - 1));
+             const listEl = document.getElementById('profileSocialPostsList');
+             if (listEl && !listEl.querySelector('[data-profile-social-post]')) {
+               listEl.innerHTML = '<div class="profile-social-empty">Você ainda não publicou no Feed Social.</div>';
+             }
+             Utils.showToast('Publicação excluída.');
+           } catch (err) {
+             console.error('[MSY][perfil-social] Erro ao excluir publicação:', err);
+             Utils.showToast(err.message || 'Erro ao excluir publicação.', 'error');
+           }
+         });
+       });
+     }
 
      /* ── Preferências de Aparência ───────────────────────────── */
      if (window.MSYTheme?.bindControls) {
