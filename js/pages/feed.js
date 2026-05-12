@@ -131,6 +131,7 @@ function showFeedRoute() {
 }
 
 function showProfileOnlyRoute() {
+  closeMobileActions();
   const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
   document.body.classList.add('social-profile-mode');
@@ -198,12 +199,14 @@ function unlockBodyScroll() {
 }
 
 function openModal(modal) {
+  closeMobileActions();
   lockBodyScroll();
   if (modal.parentElement !== document.body) document.body.appendChild(modal);
   modal.classList.add('open');
 }
 
 function closeSocialModals() {
+  closeMobileActions();
   const storyViewer = document.getElementById('storyViewer');
   if (storyViewer?.dataset.storyTimer) {
     clearTimeout(Number(storyViewer.dataset.storyTimer));
@@ -233,6 +236,7 @@ async function initFeed() {
   bindModals();
   bindFeedInteractions();
   bindSocialNotifications();
+  bindMobileActionDock();
   bindRouteNavigation();
   await loadInitial();
   subscribeSocialNotifications();
@@ -266,6 +270,10 @@ function layout() {
         </div>
 
         <div class="social-card social-member-search-card">
+          <div class="social-search-mobile-head">
+            <strong>Pesquisar</strong>
+            <button type="button" class="social-icon-btn" id="closeSocialSearchBtn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
           <div class="social-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input id="socialSearchInput" autocomplete="off" placeholder="Pesquisar @username">
@@ -318,7 +326,19 @@ function layout() {
     <div class="story-composer-modal" id="mobilePostComposerModal"></div>
     <div class="profile-viewer" id="socialNotificationsDrawer"></div>
     <div class="profile-viewer" id="profileViewer"></div>
-    <div class="profile-viewer" id="directViewer"></div>`;
+    <div class="profile-viewer" id="directViewer"></div>
+    <div class="mobile-action-dock" id="mobileActionDock">
+      <div class="mobile-action-scrim" data-mobile-action-close></div>
+      <div class="mobile-action-menu" aria-hidden="true">
+        <button type="button" data-mobile-action="post"><i class="fa-solid fa-plus"></i><span>Publicar</span></button>
+        <button type="button" data-mobile-action="story"><i class="fa-solid fa-circle-play"></i><span>Story</span></button>
+        <button type="button" data-mobile-action="search"><i class="fa-solid fa-magnifying-glass"></i><span>Buscar</span></button>
+        <button type="button" data-mobile-action="activity"><i class="fa-regular fa-heart"></i><span>Atividade</span></button>
+        <button type="button" data-mobile-action="direct"><i class="fa-regular fa-paper-plane"></i><span>Direct</span></button>
+        <button type="button" data-mobile-action="profile"><i class="fa-regular fa-user"></i><span>Perfil</span></button>
+      </div>
+      <button type="button" class="mobile-action-fab" id="mobileActionToggle" aria-label="Abrir ações do feed" aria-expanded="false"><i class="fa-solid fa-plus"></i></button>
+    </div>`;
 }
 
 async function loadInitial() {
@@ -561,6 +581,39 @@ function bindFeedInteractions() {
   });
   root.addEventListener('focusin', (e) => {
     if (e.target.matches('.comment-input')) bindMentionAutocomplete(e.target, { minChars: 1 });
+  });
+}
+
+function closeMobileActions() {
+  document.body.classList.remove('social-mobile-actions-open');
+  const toggle = document.getElementById('mobileActionToggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  document.querySelector('.mobile-action-menu')?.setAttribute('aria-hidden', 'true');
+}
+
+function toggleMobileActions() {
+  const willOpen = !document.body.classList.contains('social-mobile-actions-open');
+  document.body.classList.toggle('social-mobile-actions-open', willOpen);
+  const toggle = document.getElementById('mobileActionToggle');
+  if (toggle) toggle.setAttribute('aria-expanded', String(willOpen));
+  document.querySelector('.mobile-action-menu')?.setAttribute('aria-hidden', String(!willOpen));
+}
+
+function bindMobileActionDock() {
+  document.getElementById('mobileActionToggle')?.addEventListener('click', toggleMobileActions);
+  document.querySelectorAll('[data-mobile-action-close]').forEach((node) => node.addEventListener('click', closeMobileActions));
+  document.querySelectorAll('[data-mobile-action]').forEach((node) => node.addEventListener('click', () => {
+    const action = node.dataset.mobileAction;
+    closeMobileActions();
+    if (action === 'post') openMobilePostComposer();
+    if (action === 'story') document.getElementById('storyFiles')?.click();
+    if (action === 'search') openMemberSearch();
+    if (action === 'activity') openSocialNotificationsDrawer();
+    if (action === 'direct') openDirectInbox();
+    if (action === 'profile') openProfile(state.profile.id);
+  }));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileActions();
   });
 }
 
@@ -1613,13 +1666,14 @@ async function toggleFollow(memberId) {
 }
 
 function openMemberSearch() {
+  closeMobileActions();
   const card = document.querySelector('.social-member-search-card');
   const input = document.getElementById('socialSearchInput');
   const box = document.getElementById('socialSearchResults');
   if (!input || !box) return;
   document.body.classList.add('social-search-open');
   renderSocialSearchSuggestions(box);
-  card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!isMobileSocial()) card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   requestAnimationFrame(() => input.focus({ preventScroll: true }));
 }
 
@@ -1686,8 +1740,12 @@ function bindSearch() {
     input.focus();
     renderSocialSearchSuggestions(box);
   });
+  document.getElementById('closeSocialSearchBtn')?.addEventListener('click', () => {
+    close();
+    input.blur();
+  });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.social-member-search-card') && !e.target.closest('#openSearchBtn,#openSearchMobileBtn')) close();
+    if (!e.target.closest('.social-member-search-card') && !e.target.closest('#openSearchBtn,#openSearchMobileBtn,[data-mobile-action="search"]')) close();
   });
 }
 
