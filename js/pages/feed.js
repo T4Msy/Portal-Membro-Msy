@@ -287,7 +287,7 @@ function layout() {
         <div class="social-composer">
           <div class="composer-top">
             ${avatar(state.profile)}
-            <textarea class="composer-input" id="composerText" placeholder="Compartilhe uma atualizacao, foto, conquista ou ideia... Use @membro e #hashtags"></textarea>
+            <textarea class="composer-input" id="composerText" placeholder="Compartilhe uma atualizacao, foto, conquista ou ideia... Use @membro e #hashtags" data-mobile-placeholder="O que voce quer compartilhar?"></textarea>
           </div>
           <div class="composer-dropzone" id="composerDrop">
             <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -865,6 +865,15 @@ function bindComposer() {
   const files = document.getElementById('composerFiles');
   const drop = document.getElementById('composerDrop');
   const composerInput = document.getElementById('composerText');
+  const syncComposerPlaceholder = () => {
+    if (!composerInput) return;
+    if (!composerInput.dataset.desktopPlaceholder) composerInput.dataset.desktopPlaceholder = composerInput.getAttribute('placeholder') || '';
+    composerInput.setAttribute('placeholder', isMobileSocial()
+      ? (composerInput.dataset.mobilePlaceholder || composerInput.dataset.desktopPlaceholder)
+      : composerInput.dataset.desktopPlaceholder);
+  };
+  syncComposerPlaceholder();
+  window.addEventListener('resize', syncComposerPlaceholder);
   document.getElementById('mediaBtn').addEventListener('click', () => {
     if (isMobileSocial()) {
       openMobilePostComposer({ pickMedia: true });
