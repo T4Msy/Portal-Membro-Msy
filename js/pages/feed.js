@@ -21,6 +21,7 @@ const state = {
   notificationPanelOpen: false,
   socialNotificationChannel: null,
   directConversations: [],
+  directUnreadCount: 0,
   activeDirectConversationId: null,
   activeProfileId: null,
   activeProfilePosts: [],
@@ -44,6 +45,9 @@ const state = {
   mentionTarget: null,
   mentionItems: [],
   mentionActiveIndex: 0,
+  socialSearchItems: [],
+  socialSearchActiveIndex: 0,
+  feedScrollBeforeProfile: 0,
 };
 
 function avatar(person, size = 42) {
@@ -90,6 +94,22 @@ function canManageStory(story) {
 
 function displayUsername(member) {
   return state.service?.getDisplayUsername(member) || 'membro';
+}
+
+function setDirectConversations(conversations = []) {
+  state.directConversations = conversations;
+  state.directUnreadCount = state.service?.getDirectUnreadCount(conversations) || 0;
+  renderDirectUnreadBadges();
+}
+
+function renderDirectUnreadBadges() {
+  const count = Number(state.directUnreadCount || 0);
+  ['directUnreadBadge', 'directUnreadMobileBadge'].forEach((id) => {
+    const badge = document.getElementById(id);
+    if (!badge) return;
+    badge.toggleAttribute('hidden', count === 0);
+    badge.textContent = count > 9 ? '9+' : String(count);
+  });
 }
 
 function findMember(memberId) {
@@ -187,18 +207,27 @@ function layout() {
         <div class="social-hero">
           <div>
             <div class="social-title">Feed Social MSY</div>
-          <div class="social-subtitle">Posts, fotos, stories, comentarios e Direct da comunidade.</div>
+            <div class="social-subtitle">Posts, stories, perfis e interacoes da comunidade.</div>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="social-icon-btn" id="openActivityBtn" title="Abrir atividade"><i class="fa-solid fa-bell"></i><span class="social-notification-badge" id="socialNotificationBadge" hidden></span></button>
-            <button class="social-icon-btn" id="openDirectBtn" title="Abrir Direct"><i class="fa-solid fa-paper-plane"></i></button>
+          <div class="social-top-actions">
+            <button class="social-icon-btn social-top-icon" id="openActivityBtn" title="Atividade"><i class="fa-regular fa-heart"></i><span class="social-notification-badge" id="socialNotificationBadge" hidden></span></button>
+            <button class="social-icon-btn social-top-icon" id="openDirectBtn" title="Direct"><i class="fa-regular fa-paper-plane"></i><span class="social-notification-badge direct" id="directUnreadBadge" hidden></span></button>
             <div class="social-pill"><i class="fa-solid fa-sparkles"></i> Rede interna</div>
           </div>
         </div>
 
         <div class="social-mobile-bar">
-          <button class="social-mobile-action" id="openActivityMobileBtn"><i class="fa-solid fa-bell"></i><span>Atividade</span><span class="social-notification-badge mobile" id="socialNotificationMobileBadge" hidden></span></button>
-          <button class="social-mobile-action" id="openDirectMobileBtn"><i class="fa-regular fa-paper-plane"></i><span>Direct</span></button>
+          <button class="social-mobile-action" id="openActivityMobileBtn"><i class="fa-regular fa-heart"></i><span>Atividade</span><span class="social-notification-badge mobile" id="socialNotificationMobileBadge" hidden></span></button>
+          <button class="social-mobile-action" id="openDirectMobileBtn"><i class="fa-regular fa-paper-plane"></i><span>Direct</span><span class="social-notification-badge mobile direct" id="directUnreadMobileBadge" hidden></span></button>
+        </div>
+
+        <div class="social-card social-member-search-card">
+          <div class="social-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="socialSearchInput" autocomplete="off" placeholder="Pesquisar @username">
+            <button class="social-search-clear" type="button" id="socialSearchClear" hidden><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="social-search-results" id="socialSearchResults"></div>
         </div>
 
         <div class="stories-strip" id="storiesStrip"></div>
@@ -224,23 +253,14 @@ function layout() {
           </div>
         </div>
 
-        <div class="social-card">
-          <div class="social-search">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input id="socialSearchInput" placeholder="Buscar posts, pessoas e hashtags">
-          </div>
-          <div class="social-search-results" id="socialSearchResults"></div>
-        </div>
-
         <div class="social-feed-list" id="feedList">
           <div class="social-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando feed...</div>
         </div>
       </section>
 
       <aside class="social-rail">
-        <div class="social-card social-activity-card" id="socialActivityCard"></div>
         <div class="social-card">
-          <div class="side-title"><i class="fa-solid fa-user-plus"></i>Sugestoes para seguir</div>
+          <div class="side-title"><i class="fa-solid fa-user-plus"></i>Descobrir membros</div>
           <div id="suggestionsList"></div>
         </div>
       </aside>
@@ -260,6 +280,7 @@ async function loadInitial() {
   try {
     const data = await state.service.loadBootstrap();
     Object.assign(state, data, { hasSocialTables: true });
+    setDirectConversations(data.directConversations || []);
     syncPostPaginationState();
   } catch (err) {
     console.warn('[MSY][feed-social] Usando modo legado:', err);
@@ -270,6 +291,8 @@ async function loadInitial() {
     state.follows = [];
     state.messages = [];
     state.socialNotifications = [];
+    state.directConversations = [];
+    state.directUnreadCount = 0;
     syncPostPaginationState();
   }
   renderAll();
@@ -297,6 +320,7 @@ function renderAll() {
   renderStories();
   renderPosts();
   renderSocialNotifications();
+  renderDirectUnreadBadges();
   renderSuggestions();
 }
 
@@ -1178,7 +1202,7 @@ const notificationFilters = [
   { key: 'stories', label: 'Stories' },
   { key: 'comments', label: 'Comentarios' },
   { key: 'followers', label: 'Seguidores' },
-  { key: 'direct', label: 'Direct' },
+  { key: 'mentions', label: '@Mencoes' },
 ];
 
 function notificationIcon(category) {
@@ -1187,11 +1211,10 @@ function notificationIcon(category) {
     stories: 'fa-circle-play',
     comments: 'fa-comment',
     followers: 'fa-user-plus',
-    direct: 'fa-paper-plane',
     mentions: 'fa-at',
     important: 'fa-bolt',
   };
-  return map[category] || 'fa-bell';
+  return map[category] || 'fa-heart';
 }
 
 function notificationLabel(notification) {
@@ -1202,13 +1225,11 @@ function notificationLabel(notification) {
   if (notification.category === 'stories') return `${actorName} interagiu com seu story.`;
   if (notification.category === 'comments') return `${actorName} comentou em uma publicacao.`;
   if (notification.category === 'followers') return `${actorName} comecou a seguir voce.`;
-  if (notification.category === 'direct') return `${actorName} enviou uma mensagem.`;
   if (notification.category === 'mentions') return `${actorName} mencionou voce.`;
   return notification.message || 'Nova interacao social.';
 }
 
 function renderSocialNotifications() {
-  const card = document.getElementById('socialActivityCard');
   const unread = state.socialNotifications.filter((item) => !item.read).length;
   document.getElementById('socialNotificationBadge')?.toggleAttribute('hidden', unread === 0);
   const badge = document.getElementById('socialNotificationBadge');
@@ -1216,20 +1237,52 @@ function renderSocialNotifications() {
   document.getElementById('socialNotificationMobileBadge')?.toggleAttribute('hidden', unread === 0);
   const mobileBadge = document.getElementById('socialNotificationMobileBadge');
   if (mobileBadge) mobileBadge.textContent = unread > 9 ? '9+' : String(unread);
-  if (!card) return;
-  card.innerHTML = renderNotificationCenter({ compact: true });
-  bindNotificationCenter(card);
+  document.getElementById('openActivityBtn')?.classList.toggle('has-unread', unread > 0);
+  if (state.notificationPanelOpen) renderSocialNotificationsDrawer();
+}
+
+function notificationPeriod(createdAt) {
+  const date = new Date(createdAt);
+  const today = new Date();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startWeek = startToday - (6 * 86400000);
+  const time = date.getTime();
+  if (time >= startToday) return 'Hoje';
+  if (time >= startWeek) return 'Esta semana';
+  return 'Anterior';
+}
+
+function renderActivityThumbnail(notification) {
+  const postId = notification.target_type === 'post'
+    ? notification.target_id
+    : new URLSearchParams((notification.target_url || notification.link || '').split('?')[1] || '').get('post');
+  const post = postId ? state.posts.find((item) => item.id === postId) : null;
+  const media = post?.media?.[0];
+  if (media) {
+    return `<span class="activity-thumb">${media.media_type === 'video' ? `<video src="${Utils.escapeHtml(media.url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(media.url)}" alt="">`}</span>`;
+  }
+  if (notification.target_type === 'story') {
+    const story = findStoryById(notification.target_id);
+    if (story?.media_url) return `<span class="activity-thumb">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" alt="">`}</span>`;
+  }
+  return '';
 }
 
 function renderNotificationCenter({ compact = false } = {}) {
   const filtered = state.notificationFilter === 'all'
     ? state.socialNotifications
     : state.socialNotifications.filter((item) => item.category === state.notificationFilter);
-  const items = compact ? filtered.slice(0, 8) : filtered;
+  const items = compact ? filtered.slice(0, 10) : filtered;
+  const grouped = items.reduce((acc, item) => {
+    const period = notificationPeriod(item.created_at);
+    if (!acc[period]) acc[period] = [];
+    acc[period].push(item);
+    return acc;
+  }, {});
   return `
     <div class="activity-head">
       <div>
-        <div class="side-title"><i class="fa-solid fa-bell"></i>Atividade</div>
+        <div class="side-title"><i class="fa-regular fa-heart"></i>Atividade</div>
         <div class="activity-subtitle">${state.socialNotifications.filter((item) => !item.read).length} nova${state.socialNotifications.filter((item) => !item.read).length === 1 ? '' : 's'} interacao${state.socialNotifications.filter((item) => !item.read).length === 1 ? '' : 'es'}</div>
       </div>
       <button class="social-icon-btn" data-mark-social-read title="Marcar tudo como lido"><i class="fa-solid fa-check-double"></i></button>
@@ -1237,16 +1290,20 @@ function renderNotificationCenter({ compact = false } = {}) {
     <div class="activity-filters">
       ${notificationFilters.map((filter) => `<button type="button" class="${state.notificationFilter === filter.key ? 'active' : ''}" data-notification-filter="${filter.key}">${filter.label}</button>`).join('')}
     </div>
-    <div class="activity-list">
-      ${items.length ? items.map(renderNotificationItem).join('') : '<div class="social-empty activity-empty"><i class="fa-regular fa-bell"></i>Nenhuma interacao por aqui.</div>'}
-    </div>
-    ${compact ? '<button class="activity-expand" type="button" data-open-activity-drawer>Ver atividade completa</button>' : ''}`;
+    <div class="activity-list premium">
+      ${items.length ? ['Hoje', 'Esta semana', 'Anterior'].map((period) => grouped[period]?.length ? `
+        <section class="activity-period">
+          <div class="activity-period-title">${period}</div>
+          ${grouped[period].map(renderNotificationItem).join('')}
+        </section>` : '').join('') : '<div class="social-empty activity-empty"><i class="fa-regular fa-heart"></i>Nenhuma interacao por aqui.</div>'}
+    </div>`;
 }
 
 function renderNotificationItem(notification) {
   const actor = notification.actor || {};
   return `
     <button type="button" class="activity-item${notification.read ? '' : ' unread'}" data-open-notification="${notification.id}">
+      <span class="activity-unread-dot" aria-hidden="true"></span>
       <div class="activity-avatar-wrap">
         ${actor.id ? avatar(actor, 42) : `<span class="activity-fallback-icon"><i class="fa-solid ${notificationIcon(notification.category)}"></i></span>`}
         <span class="activity-kind"><i class="fa-solid ${notificationIcon(notification.category)}"></i></span>
@@ -1255,6 +1312,7 @@ function renderNotificationItem(notification) {
         <strong>${Utils.escapeHtml(notificationLabel(notification))}</strong>
         <span>${Utils.escapeHtml(notification.message || '')}</span>
       </div>
+      ${renderActivityThumbnail(notification)}
       <time>${timeAgo(notification.created_at)}</time>
     </button>`;
 }
@@ -1289,6 +1347,17 @@ async function reloadSocialNotifications() {
   }
 }
 
+async function refreshDirectUnreadCount() {
+  if (!state.hasSocialTables) return;
+  try {
+    const conversations = await state.service.loadDirectConversations();
+    setDirectConversations(conversations);
+    if (document.getElementById('directViewer')?.classList.contains('open')) renderDirectInbox();
+  } catch (err) {
+    console.warn('[MSY][feed-social] Contador do Direct indisponivel:', err);
+  }
+}
+
 async function markAllSocialNotificationsRead() {
   if (!state.hasSocialTables) return;
   try {
@@ -1313,8 +1382,9 @@ function renderSocialNotificationsDrawer() {
     <div class="activity-drawer-panel">
       <div class="activity-drawer-head">
         <div>
+          <div class="activity-drawer-kicker"><i class="fa-regular fa-heart"></i></div>
           <div class="social-title">Atividade</div>
-          <div class="social-subtitle">Curtidas, comentarios, seguidores e respostas.</div>
+          <div class="social-subtitle">Curtidas, comentarios, seguidores, mencoes e stories.</div>
         </div>
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -1378,7 +1448,11 @@ function subscribeSocialNotifications() {
         filter: `user_id=eq.${state.profile.id}`,
       }, (payload) => {
         const item = state.service.normalizeSocialNotification(payload.new);
-        if (!['post', 'comment', 'profile', 'story', 'direct_conversation'].includes(item.target_type) && !String(item.type || '').startsWith('social') && item.type !== 'mention' && item.type !== 'direct_message') return;
+        if (state.service.isDirectNotification(item)) {
+          refreshDirectUnreadCount();
+          return;
+        }
+        if (!state.service.isSocialActivityNotification(item)) return;
         state.socialNotifications = [item, ...state.socialNotifications.filter((current) => current.id !== item.id)].slice(0, 48);
         renderSocialNotifications();
         if (state.notificationPanelOpen) renderSocialNotificationsDrawer();
@@ -1392,11 +1466,15 @@ function subscribeSocialNotifications() {
 function renderSuggestions() {
   const el = document.getElementById('suggestionsList');
   if (!el) return;
-  const items = state.members.filter((m) => m.id !== state.profile.id).slice(0, 6);
+  const followedIds = new Set(state.follows.filter((f) => f.follower_id === state.profile.id).map((f) => f.following_id));
+  const items = state.members
+    .filter((m) => m.id !== state.profile.id)
+    .sort((a, b) => Number(followedIds.has(a.id)) - Number(followedIds.has(b.id)))
+    .slice(0, 6);
   el.innerHTML = items.length ? items.map((m) => `
     <div class="member-suggestion">
       <div data-open-member-profile="${m.id}" style="cursor:pointer">${avatar(m, 36)}</div>
-      <div class="member-copy"><div class="member-name">${Utils.escapeHtml(m.name)}</div><div class="member-role">${Utils.escapeHtml(m.role || 'Membro')}</div></div>
+      <div class="member-copy"><div class="member-name">${Utils.escapeHtml(m.name)}</div><div class="member-role">@${Utils.escapeHtml(displayUsername(m))} · ${Utils.escapeHtml(m.role || 'Membro')}</div></div>
       <button class="follow-btn ${isFollowing(m.id) ? 'following' : ''}" data-follow="${m.id}">${isFollowing(m.id) ? 'Seguindo' : 'Seguir'}</button>
     </div>`).join('') : '<div class="message-sub">Sugestoes aparecem depois da migration social.</div>';
   el.querySelectorAll('[data-follow]').forEach((btn) => btn.addEventListener('click', () => toggleFollow(btn.dataset.follow)));
@@ -1435,27 +1513,131 @@ async function toggleFollow(memberId) {
 function bindSearch() {
   const input = document.getElementById('socialSearchInput');
   const box = document.getElementById('socialSearchResults');
+  const clear = document.getElementById('socialSearchClear');
+  if (!input || !box) return;
   let timer;
-  input.addEventListener('input', () => {
+  const close = () => {
+    document.body.classList.remove('social-search-open');
+    box.classList.remove('open');
+    state.socialSearchItems = [];
+    state.socialSearchActiveIndex = 0;
+  };
+  const run = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const q = input.value.trim();
-      if (q.length < 2) { box.classList.remove('open'); box.innerHTML = ''; return; }
+      clear?.toggleAttribute('hidden', q.length === 0);
+      if (q.length < 1) {
+        renderSocialSearchSuggestions(box);
+        return;
+      }
       const res = state.hasSocialTables ? await state.service.search(q) : searchLocalMembers(q);
-      box.innerHTML = [
-        ...res.members.map((m) => `<div class="social-result-item" data-open-profile="${m.id}">${avatar(m, 32)}<div><strong>${Utils.escapeHtml(m.name)}</strong><div class="message-sub">@${Utils.escapeHtml(displayUsername(m))}</div></div></div>`),
-        ...res.posts.map((p) => `<div class="social-result-item" data-open-post="${p.id}"><i class="fa-regular fa-message"></i><div>${Utils.escapeHtml((p.content || '').slice(0, 90))}</div></div>`),
-        ...res.hashtags.map((h) => `<div class="social-result-item"><i class="fa-solid fa-hashtag"></i><strong>${Utils.escapeHtml(h)}</strong></div>`),
-      ].join('') || '<div class="message-sub">Nada encontrado.</div>';
-      box.classList.add('open');
-      box.querySelectorAll('[data-open-profile]').forEach((n) => n.addEventListener('click', () => openProfile(n.dataset.openProfile)));
-      box.querySelectorAll('[data-open-post]').forEach((n) => n.addEventListener('click', () => focusPost(n.dataset.openPost)));
-    }, 260);
+      renderMemberSearchResults(box, res.members, q);
+    }, 160);
+  };
+  input.addEventListener('focus', () => {
+    document.body.classList.add('social-search-open');
+    renderSocialSearchSuggestions(box);
+  });
+  input.addEventListener('input', run);
+  input.addEventListener('keydown', (e) => {
+    if (!state.socialSearchItems.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      state.socialSearchActiveIndex = (state.socialSearchActiveIndex + 1) % state.socialSearchItems.length;
+      syncSocialSearchActive(box);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      state.socialSearchActiveIndex = (state.socialSearchActiveIndex - 1 + state.socialSearchItems.length) % state.socialSearchItems.length;
+      syncSocialSearchActive(box);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const member = state.socialSearchItems[state.socialSearchActiveIndex];
+      if (member) {
+        close();
+        input.blur();
+        openProfile(member.id);
+      }
+    } else if (e.key === 'Escape') {
+      close();
+      input.blur();
+    }
+  });
+  clear?.addEventListener('click', () => {
+    input.value = '';
+    clear.hidden = true;
+    input.focus();
+    renderSocialSearchSuggestions(box);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.social-member-search-card')) close();
   });
 }
 
+function socialSearchSuggestionMembers() {
+  const following = new Set(state.follows.filter((f) => f.follower_id === state.profile.id).map((f) => f.following_id));
+  return state.members
+    .filter((member) => member.id !== state.profile.id)
+    .sort((a, b) => {
+      const scoreA = (a.tier === 'diretoria' ? 3 : 0) + (following.has(a.id) ? 2 : 0);
+      const scoreB = (b.tier === 'diretoria' ? 3 : 0) + (following.has(b.id) ? 2 : 0);
+      return scoreB - scoreA || String(a.name || '').localeCompare(String(b.name || ''));
+    })
+    .slice(0, 8);
+}
+
+function renderSocialSearchSuggestions(box) {
+  renderMemberSearchResults(box, socialSearchSuggestionMembers(), '', 'Sugestoes para descobrir');
+}
+
+function renderMemberSearchResults(box, members = [], query = '', title = 'Resultados') {
+  const cleanQuery = state.service?.normalizeUsername(query) || query.toLowerCase().replace(/^@+/, '');
+  const orderedMembers = [...members].sort((a, b) => memberSearchScore(b, cleanQuery) - memberSearchScore(a, cleanQuery));
+  state.socialSearchItems = orderedMembers;
+  state.socialSearchActiveIndex = 0;
+  box.innerHTML = `
+    <div class="social-search-panel-head">
+      <strong>${Utils.escapeHtml(title)}</strong>
+      <span>${query ? `@${Utils.escapeHtml(cleanQuery)}` : 'Encontre membros rapidamente'}</span>
+    </div>
+    ${orderedMembers.length ? orderedMembers.map((m, index) => `
+      <button type="button" class="social-result-item${index === 0 ? ' active' : ''}" data-open-profile="${m.id}" data-search-index="${index}">
+        ${avatar(m, 42)}
+        <span class="social-result-copy">
+          <strong>${Utils.escapeHtml(m.name || 'Membro')}</strong>
+          <span>@${Utils.escapeHtml(displayUsername(m))} · ${Utils.escapeHtml(m.role || 'Membro')}</span>
+        </span>
+        ${m.tier === 'diretoria' ? '<span class="verified-dot"><i class="fa-solid fa-check"></i></span>' : '<i class="fa-solid fa-chevron-right"></i>'}
+      </button>`).join('') : '<div class="social-empty activity-empty"><i class="fa-regular fa-user"></i>Nenhum membro encontrado.</div>'}`;
+  box.classList.add('open');
+  box.querySelectorAll('[data-open-profile]').forEach((node) => node.addEventListener('click', () => {
+    document.body.classList.remove('social-search-open');
+    box.classList.remove('open');
+    document.getElementById('socialSearchInput')?.blur();
+    openProfile(node.dataset.openProfile);
+  }));
+}
+
+function syncSocialSearchActive(box) {
+  box.querySelectorAll('[data-search-index]').forEach((node, index) => {
+    node.classList.toggle('active', index === state.socialSearchActiveIndex);
+  });
+}
+
+function memberSearchScore(member, query) {
+  if (!query) return 0;
+  const username = displayUsername(member);
+  const name = String(member.name || '').toLowerCase();
+  if (username === query) return 100;
+  if (username.startsWith(query)) return 80;
+  if (username.includes(query)) return 60;
+  if (name.startsWith(query)) return 40;
+  if (name.includes(query)) return 20;
+  return 0;
+}
+
 function searchLocalMembers(query) {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().replace(/^@+/, '');
   return {
     posts: [],
     hashtags: [],
@@ -1539,6 +1721,7 @@ async function openProfile(memberId, { replace = false } = {}) {
   if (!memberId) return;
   const member = findMember(memberId);
   if (!member) return;
+  if (!state.activeProfileId) state.feedScrollBeforeProfile = window.scrollY || document.documentElement.scrollTop || 0;
   state.activeProfileId = memberId;
   state.activeProfileTab = state.activeProfileTab || 'posts';
   showProfileRouteLoading(member);
@@ -1587,16 +1770,23 @@ function showProfileRouteLoading(member) {
   const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
   if (!feed || !route) return;
+  document.body.classList.add('social-profile-mode');
   feed.hidden = true;
   route.hidden = false;
   route.innerHTML = `
-    <div class="social-profile-shell">
-      <button class="social-profile-back" type="button" data-back-feed><i class="fa-solid fa-arrow-left"></i> Feed</button>
+    <div class="social-profile-page">
+      <header class="social-profile-topbar">
+        <button class="social-profile-back" type="button" data-back-feed><i class="fa-solid fa-arrow-left"></i></button>
+        <div>
+          <strong>${Utils.escapeHtml(member.name || 'Membro')}</strong>
+          <span>@${Utils.escapeHtml(displayUsername(member))}</span>
+        </div>
+      </header>
       <div class="social-profile-hero skeleton">
         <div class="social-profile-banner"></div>
         <div class="social-profile-main">
-          ${avatar(member, 96)}
-          <div>
+          ${avatar(member, 104)}
+          <div class="social-profile-copy">
             <div class="profile-modal-name">${Utils.escapeHtml(member.name || 'Membro')}</div>
             <div class="profile-modal-meta">@${Utils.escapeHtml(displayUsername(member))}</div>
           </div>
@@ -1612,6 +1802,7 @@ function renderProfileRoute() {
   const feed = document.getElementById('feedRouteView');
   const member = findMember(state.activeProfileId);
   if (!route || !feed || !member) return;
+  document.body.classList.add('social-profile-mode');
   feed.hidden = true;
   route.hidden = false;
   const summary = state.activeProfileSummary || {};
@@ -1620,10 +1811,19 @@ function renderProfileRoute() {
   const posts = state.activeProfilePosts || [];
   const mediaItems = posts.flatMap((post) => (post.media || []).map((media, index) => ({ post, media, index })));
   route.innerHTML = `
-    <div class="social-profile-shell">
-      <button class="social-profile-back" type="button" data-back-feed><i class="fa-solid fa-arrow-left"></i> Feed</button>
+    <div class="social-profile-page">
+      <header class="social-profile-topbar">
+        <button class="social-profile-back" type="button" data-back-feed><i class="fa-solid fa-arrow-left"></i></button>
+        <div>
+          <strong>${Utils.escapeHtml(member.name || 'Membro')}</strong>
+          <span>@${Utils.escapeHtml(displayUsername(member))}</span>
+        </div>
+        <div class="social-profile-top-actions">
+          ${!isMe ? `<button class="social-icon-btn" data-start-direct="${member.id}" title="Enviar Direct"><i class="fa-regular fa-paper-plane"></i></button>` : ''}
+        </div>
+      </header>
       <section class="social-profile-hero">
-        <div class="social-profile-banner">${member.banner_url ? `<img src="${Utils.escapeHtml(member.banner_url)}" alt="Banner">` : ''}</div>
+        <div class="social-profile-banner">${member.banner_url ? `<img src="${Utils.escapeHtml(member.banner_url)}" alt="Banner" onerror="this.remove()">` : ''}</div>
         <div class="social-profile-main">
           ${avatar(member, 104)}
           <div class="social-profile-copy">
@@ -1634,8 +1834,8 @@ function renderProfileRoute() {
             <div class="profile-modal-meta">@${Utils.escapeHtml(displayUsername(member))} · ${Utils.escapeHtml(member.role || 'Membro')}</div>
             <p>${Utils.escapeHtml(member.social_bio || member.bio || 'Sem bio social ainda.')}</p>
             <div class="social-profile-actions">
-              ${!isMe ? `<button class="follow-btn ${followingMember ? 'following' : ''}" data-profile-follow="${member.id}">${followingMember ? 'Seguindo' : 'Seguir'}</button>` : `<button class="follow-btn" data-edit-social-profile>Editar perfil</button>`}
-              ${!isMe ? `<button class="social-icon-btn" data-start-direct="${member.id}" title="Enviar Direct"><i class="fa-regular fa-paper-plane"></i></button>` : ''}
+              ${!isMe ? `<button class="follow-btn profile-primary-action ${followingMember ? 'following' : ''}" data-profile-follow="${member.id}">${followingMember ? 'Seguindo' : 'Seguir'}</button>` : `<button class="follow-btn profile-primary-action" data-edit-social-profile>Editar perfil</button>`}
+              ${!isMe ? `<button class="social-icon-btn profile-direct-action" data-start-direct="${member.id}" title="Enviar Direct"><i class="fa-regular fa-paper-plane"></i></button>` : ''}
             </div>
           </div>
         </div>
@@ -1647,9 +1847,9 @@ function renderProfileRoute() {
         </div>
       </section>
       <nav class="social-profile-tabs">
-        <button class="${state.activeProfileTab === 'posts' ? 'active' : ''}" data-profile-tab="posts"><i class="fa-solid fa-table-cells-large"></i> Posts</button>
-        <button class="${state.activeProfileTab === 'media' ? 'active' : ''}" data-profile-tab="media"><i class="fa-regular fa-image"></i> Midias</button>
-        <button class="${state.activeProfileTab === 'about' ? 'active' : ''}" data-profile-tab="about"><i class="fa-regular fa-user"></i> Sobre</button>
+        <button class="${state.activeProfileTab === 'posts' ? 'active' : ''}" data-profile-tab="posts"><i class="fa-solid fa-table-cells-large"></i><span>Posts</span></button>
+        <button class="${state.activeProfileTab === 'media' ? 'active' : ''}" data-profile-tab="media"><i class="fa-regular fa-image"></i><span>Midias</span></button>
+        <button class="${state.activeProfileTab === 'about' ? 'active' : ''}" data-profile-tab="about"><i class="fa-regular fa-user"></i><span>Sobre</span></button>
       </nav>
       <section class="social-profile-content">
         ${renderProfileTab(member, posts, mediaItems)}
@@ -1707,6 +1907,7 @@ function closeProfileRoute({ replace = false } = {}) {
   state.activeProfileId = null;
   state.activeProfilePosts = [];
   state.activeProfileSummary = null;
+  document.body.classList.remove('social-profile-mode');
   const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
   if (feed) feed.hidden = false;
@@ -1715,6 +1916,7 @@ function closeProfileRoute({ replace = false } = {}) {
     route.innerHTML = '';
   }
   if (!replace) history.pushState({}, '', location.pathname);
+  requestAnimationFrame(() => window.scrollTo({ top: state.feedScrollBeforeProfile || 0, behavior: 'auto' }));
 }
 
 function bindRouteNavigation() {
@@ -2429,7 +2631,7 @@ async function openDirectInbox(targetId = null) {
     : null;
 
   try {
-    state.directConversations = await state.service.loadDirectConversations();
+    setDirectConversations(await state.service.loadDirectConversations());
 
     if (maybeUuid) {
       const directConversation = state.directConversations.find((conversation) => conversation.id === maybeUuid);
@@ -2439,14 +2641,28 @@ async function openDirectInbox(targetId = null) {
           ? directConversation.messages
           : await state.service.loadDirectMessages(directConversation.id);
         await state.service.markDirectConversationRead(directConversation.id);
+        directConversation.unread_count = 0;
+        state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+        renderDirectUnreadBadges();
       } else if (maybeUuid !== state.profile.id) {
         state.activeDirectConversationId = await state.service.ensureDirectConversation(maybeUuid);
-        state.directConversations = await state.service.loadDirectConversations();
+        setDirectConversations(await state.service.loadDirectConversations());
       }
     }
 
     if (!state.activeDirectConversationId) {
       state.activeDirectConversationId = state.directConversations[0]?.id || null;
+    }
+
+    const activeConversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+    if (activeConversation?.unread_count) {
+      activeConversation.messages = activeConversation.messages?.length
+        ? activeConversation.messages
+        : await state.service.loadDirectMessages(activeConversation.id);
+      await state.service.markDirectConversationRead(activeConversation.id);
+      activeConversation.unread_count = 0;
+      state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+      renderDirectUnreadBadges();
     }
 
     renderDirectInbox();
@@ -2484,8 +2700,9 @@ function renderDirectInbox() {
             const person = conversation.otherParticipants[0]?.profile || {};
             const selected = conversation.id === state.activeDirectConversationId;
             const preview = conversation.lastMessage?.body || conversation.lastMessage?.attachment?.kind || 'Nova conversa';
+            const unread = Number(conversation.unread_count || 0) > 0;
             return `
-              <button type="button" class="direct-thread${selected ? ' active' : ''}" data-open-direct-conversation="${conversation.id}">
+              <button type="button" class="direct-thread${selected ? ' active' : ''}${unread ? ' unread' : ''}" data-open-direct-conversation="${conversation.id}">
                 ${avatar(person, 54)}
                 <div class="direct-thread-copy">
                   <div class="direct-thread-top">
@@ -2552,6 +2769,8 @@ function renderDirectInbox() {
       conversation.messages = await state.service.loadDirectMessages(conversation.id);
       await state.service.markDirectConversationRead(conversation.id);
       conversation.unread_count = 0;
+      state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+      renderDirectUnreadBadges();
       if (!conversation.streak || !conversation.streak.active) {
         conversation.streak = state.service.calculateDirectStreak(conversation.messages, conversation.otherParticipants.map((participant) => participant.user_id));
       }

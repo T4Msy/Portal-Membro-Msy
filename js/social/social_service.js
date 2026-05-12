@@ -30,22 +30,53 @@ export class SocialService {
   }
 
   async loadBootstrap() {
-    const [posts, stories, members, follows, socialNotifications] = await Promise.all([
+    const [posts, stories, members, follows, socialNotifications, directConversations] = await Promise.all([
       this.loadPosts({ limit: this.pageSize }),
       this.loadStories(),
       this.loadMembers(),
       this.loadFollows(),
       this.loadSocialNotifications({ limit: 18 }).catch(() => []),
+      this.loadDirectConversations().catch(() => []),
     ]);
-    return { posts, stories, members, follows, messages: [], socialNotifications };
+    return {
+      posts,
+      stories,
+      members,
+      follows,
+      messages: [],
+      socialNotifications,
+      directConversations,
+      directUnreadCount: this.getDirectUnreadCount(directConversations),
+    };
+  }
+
+  isStoryReplyNotification(notification = {}) {
+    return notification.metadata?.event === 'story_reply'
+      || notification.attachment?.kind === 'story_reply';
+  }
+
+  isDirectNotification(notification = {}) {
+    return (
+      notification.type === 'direct_message'
+      || notification.target_type === 'direct_conversation'
+    ) && !this.isStoryReplyNotification(notification);
+  }
+
+  isSocialActivityNotification(notification = {}) {
+    if (this.isDirectNotification(notification)) return false;
+    const socialTargets = new Set(['post', 'comment', 'profile', 'story']);
+    const socialTypes = new Set(['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'mention']);
+    return socialTargets.has(notification.target_type)
+      || socialTypes.has(notification.type)
+      || this.isStoryReplyNotification(notification);
   }
 
   socialNotificationCategory(notification = {}) {
     const event = notification.metadata?.event;
     const type = notification.type;
     const targetType = notification.target_type;
-    if (event === 'story_reply') return 'direct';
-    if (type === 'direct_message' || targetType === 'direct_conversation') return 'direct';
+    if (event === 'story_reply') return 'stories';
+    if (this.isDirectNotification(notification)) return 'direct';
     if (type === 'social_follow' || targetType === 'profile') return 'followers';
     if (type === 'social_story' || targetType === 'story') return 'stories';
     if (type === 'social_comment' || targetType === 'comment') return 'comments';
@@ -88,10 +119,9 @@ export class SocialService {
     const { data, error } = await request;
     if (error) throw error;
 
-    const socialTargets = new Set(['post', 'comment', 'profile', 'story', 'direct_conversation']);
     const items = (data || [])
       .map((item) => this.normalizeSocialNotification(item))
-      .filter((item) => socialTargets.has(item.target_type) || ['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'direct_message', 'mention'].includes(item.type));
+      .filter((item) => this.isSocialActivityNotification(item));
     return filter === 'all' ? items : items.filter((item) => item.category === filter);
   }
 
@@ -106,14 +136,30 @@ export class SocialService {
 
   async markAllSocialNotificationsRead() {
     const socialTypes = ['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'direct_message', 'mention', 'info'];
-    const { error } = await this.db
+    const { data, error: selectError } = await this.db
       .from('notifications')
-      .update({ read: true })
+      .select('id,type,target_type,metadata')
       .eq('user_id', this.profile.id)
       .eq('read', false)
       .is('deleted_at', null)
       .in('type', socialTypes);
+    if (selectError) throw selectError;
+
+    const ids = (data || [])
+      .filter((item) => this.isSocialActivityNotification(item))
+      .map((item) => item.id);
+    if (!ids.length) return;
+
+    const { error } = await this.db
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', this.profile.id)
+      .in('id', ids);
     if (error) throw error;
+  }
+
+  getDirectUnreadCount(conversations = []) {
+    return (conversations || []).reduce((total, conversation) => total + Number(conversation.unread_count || 0), 0);
   }
 
   async loadProfileSocialSummary(memberId) {
