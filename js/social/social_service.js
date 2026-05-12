@@ -30,13 +30,90 @@ export class SocialService {
   }
 
   async loadBootstrap() {
-    const [posts, stories, members, follows] = await Promise.all([
+    const [posts, stories, members, follows, socialNotifications] = await Promise.all([
       this.loadPosts({ limit: this.pageSize }),
       this.loadStories(),
       this.loadMembers(),
       this.loadFollows(),
+      this.loadSocialNotifications({ limit: 18 }).catch(() => []),
     ]);
-    return { posts, stories, members, follows, messages: [] };
+    return { posts, stories, members, follows, messages: [], socialNotifications };
+  }
+
+  socialNotificationCategory(notification = {}) {
+    const event = notification.metadata?.event;
+    const type = notification.type;
+    const targetType = notification.target_type;
+    if (event === 'story_reply') return 'direct';
+    if (type === 'direct_message' || targetType === 'direct_conversation') return 'direct';
+    if (type === 'social_follow' || targetType === 'profile') return 'followers';
+    if (type === 'social_story' || targetType === 'story') return 'stories';
+    if (type === 'social_comment' || targetType === 'comment') return 'comments';
+    if (event === 'social_like' || type === 'info' || targetType === 'post') return 'posts';
+    if (type === 'mention') return 'mentions';
+    return 'important';
+  }
+
+  normalizeSocialNotification(notification = {}) {
+    const actor = notification.actor ? {
+      ...notification.actor,
+      username: this.getDisplayUsername(notification.actor),
+    } : null;
+    return {
+      ...notification,
+      actor,
+      category: this.socialNotificationCategory(notification),
+      url: notification.target_url || notification.link || null,
+      unread: !notification.read,
+    };
+  }
+
+  async loadSocialNotifications({ filter = 'all', limit = 24, before = null } = {}) {
+    const socialTypes = ['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'direct_message', 'mention', 'info'];
+    let request = this.db
+      .from('notifications')
+      .select(`
+        id,user_id,actor_id,message,type,icon,link,read,created_at,deleted_at,
+        target_type,target_id,target_url,anchor,metadata,
+        actor:actor_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio)
+      `)
+      .eq('user_id', this.profile.id)
+      .is('deleted_at', null)
+      .in('type', socialTypes)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (before) request = request.lt('created_at', before);
+
+    const { data, error } = await request;
+    if (error) throw error;
+
+    const socialTargets = new Set(['post', 'comment', 'profile', 'story', 'direct_conversation']);
+    const items = (data || [])
+      .map((item) => this.normalizeSocialNotification(item))
+      .filter((item) => socialTargets.has(item.target_type) || ['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'direct_message', 'mention'].includes(item.type));
+    return filter === 'all' ? items : items.filter((item) => item.category === filter);
+  }
+
+  async markSocialNotificationRead(notificationId) {
+    const { error } = await this.db
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId)
+      .eq('user_id', this.profile.id);
+    if (error) throw error;
+  }
+
+  async markAllSocialNotificationsRead() {
+    const socialTypes = ['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'direct_message', 'mention', 'info'];
+    const { error } = await this.db
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', this.profile.id)
+      .eq('read', false)
+      .is('deleted_at', null)
+      .in('type', socialTypes);
+    if (error) throw error;
   }
 
   async loadProfileSocialSummary(memberId) {
@@ -891,6 +968,9 @@ export class SocialService {
         sender_id: this.profile.id,
         body: cleanBody || null,
         attachment: payloadAttachment || {},
+        metadata: payloadAttachment?.kind === 'story_reply'
+          ? { event: 'story_reply', story_id: payloadAttachment.story_id || null }
+          : {},
       })
       .select('id,conversation_id,sender_id,body,attachment,metadata,edited_at,deleted_at,created_at,sender:sender_id(id,name,username,initials,color,avatar_url)')
       .single();
@@ -903,11 +983,7 @@ export class SocialService {
     if (streakError) console.warn('[MSY][social] streak do direct indisponivel:', streakError);
     if (streakData && typeof streakData === 'object') data.metadata = { ...(data.metadata || {}), direct_streak: streakData };
 
-    const { data: participantRows } = await this.db
-      .from('direct_participants')
-      .select('user_id')
-      .eq('conversation_id', conversationId)
-      .neq('user_id', this.profile.id);
+    const participantRows = [];
 
     await Promise.all((participantRows || []).map((row) => this.notify(row.user_id, {
       message: `${this.profile.name} enviou uma mensagem no Direct.`,

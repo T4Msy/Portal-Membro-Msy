@@ -244,6 +244,9 @@ DECLARE
   v_preview text;
 BEGIN
   v_preview := LEFT(COALESCE(NULLIF(btrim(NEW.body), ''), 'Nova mensagem'), 120);
+  IF COALESCE(NEW.metadata->>'event', NEW.attachment->>'kind') = 'story_reply' THEN
+    v_preview := 'Respondeu seu story: ' || v_preview;
+  END IF;
 
   PERFORM public.notify_social(
     dp.user_id,
@@ -255,7 +258,12 @@ BEGIN
     NEW.conversation_id,
     'feed.html?direct=' || NEW.conversation_id,
     NULL,
-    jsonb_build_object('conversation_id', NEW.conversation_id, 'message_id', NEW.id, 'event', 'direct_message')
+    jsonb_build_object(
+      'conversation_id', NEW.conversation_id,
+      'message_id', NEW.id,
+      'event', COALESCE(NEW.metadata->>'event', 'direct_message'),
+      'story_id', COALESCE(NEW.metadata->>'story_id', NEW.attachment->>'story_id')
+    )
   )
   FROM public.direct_participants dp
   WHERE dp.conversation_id = NEW.conversation_id
