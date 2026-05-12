@@ -864,12 +864,12 @@ export class SocialService {
       .select('id,conversation_id,sender_id,body,attachment,metadata,edited_at,deleted_at,created_at,sender:sender_id(id,name,username,initials,color,avatar_url)')
       .eq('conversation_id', conversationId)
       .is('deleted_at', null)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
 
-    return (data || []).map((message) => ({
+    return [...(data || [])].reverse().map((message) => ({
       ...message,
       sender: message.sender ? {
         ...message.sender,

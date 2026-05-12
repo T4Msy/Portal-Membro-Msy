@@ -20,6 +20,9 @@ const state = {
   activeDirectConversationId: null,
   previews: [],
   storyPreviews: [],
+  storyCursor: null,
+  storyMediaCache: new Map(),
+  storyPreloadQueue: new Set(),
   modalScrollY: 0,
   bodyLockTop: '',
   hasSocialTables: true,
@@ -131,7 +134,7 @@ function closeSocialModals() {
     clearTimeout(Number(storyViewer.dataset.storyTimer));
     delete storyViewer.dataset.storyTimer;
   }
-  document.querySelectorAll('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer').forEach((m) => {
+  document.querySelectorAll('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal').forEach((m) => {
     m.querySelectorAll('video').forEach((video) => video.pause());
     m.classList.remove('open');
   });
@@ -215,6 +218,7 @@ function layout() {
 
     <div class="story-viewer" id="storyViewer"></div>
     <div class="media-viewer" id="mediaViewer"></div>
+    <div class="post-comments-modal" id="postCommentsModal"></div>
     <div class="story-composer-modal" id="storyComposerModal"></div>
     <div class="profile-viewer" id="profileViewer"></div>
     <div class="profile-viewer" id="directViewer"></div>`;
@@ -280,6 +284,10 @@ function renderStories() {
   el.querySelectorAll('[data-story-index]').forEach((node) => {
     node.addEventListener('click', () => openStory(Number(node.dataset.storyIndex), 0));
   });
+  if (state.stories.length) {
+    if (window.requestIdleCallback) window.requestIdleCallback(() => warmStoryWindow(0, 0), { timeout: 400 });
+    else window.setTimeout(() => warmStoryWindow(0, 0), 120);
+  }
 }
 
 function renderPosts() {
@@ -340,7 +348,7 @@ function renderPost(post) {
       <div class="post-actions">
         <div class="post-actions-left">
           <button class="social-action ${post.liked_by_me ? 'active' : ''}" data-like-post="${post.id}" title="Curtir"><i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-heart"></i></button>
-          <button class="social-action" data-focus-comment="${post.id}" title="Comentar"><i class="fa-regular fa-comment"></i></button>
+          <button class="social-action" data-open-comments="${post.id}" title="Comentar"><i class="fa-regular fa-comment"></i></button>
           <button class="social-action" data-message-post-author="${author.id || post.author_id}" title="Enviar direct"><i class="fa-regular fa-paper-plane"></i></button>
         </div>
         <button class="social-action ${post.saved_by_me ? 'active' : ''}" data-save-post="${post.id}" title="Salvar"><i class="fa-${post.saved_by_me ? 'solid' : 'regular'} fa-bookmark"></i></button>
@@ -350,6 +358,7 @@ function renderPost(post) {
         <span>${post.comments_count || 0} comentario${post.comments_count === 1 ? '' : 's'}</span>
       </div>
       <div class="post-comments">
+        ${(post.comments_count || 0) > 0 ? `<button class="post-comments-open" type="button" data-open-comments="${post.id}">Ver ${post.comments_count} comentario${post.comments_count === 1 ? '' : 's'}</button>` : ''}
         <div class="comments-list">${renderComments(post)}</div>
         ${state.hasSocialTables ? `
           <form class="comment-form" data-comment-form="${post.id}">
@@ -431,6 +440,10 @@ function handleFeedClick(e) {
     document.querySelector(`[data-comment-form="${commentBtn.dataset.focusComment}"] input`)?.focus();
     return;
   }
+  const openCommentsBtn = e.target.closest('[data-open-comments]');
+  if (openCommentsBtn) return openPostComments(openCommentsBtn.dataset.openComments);
+  const replyBtn = e.target.closest('[data-reply-comment]');
+  if (replyBtn) return openPostComments(replyBtn.dataset.postId, replyBtn.dataset.replyComment);
   const directBtn = e.target.closest('[data-message-post-author]');
   if (directBtn) return openDirectInbox(directBtn.dataset.messagePostAuthor);
   const profileNode = e.target.closest('[data-profile-id]');
@@ -520,6 +533,109 @@ function renderComments(post) {
         <div class="comment-meta"><span>${timeAgo(c.created_at)}</span><button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button></div>
       </div>
     </div>`).join('');
+}
+
+function renderCommentRows(post, { full = false } = {}) {
+  const comments = full ? (post.comments || []) : (post.comments || []).slice(-4);
+  return comments.map((c) => `
+    <div class="comment-item${c.parent_id ? ' reply' : ''}" id="comment-${c.id}" data-comment-row="${c.id}">
+      ${avatar(c.author || {}, 32)}
+      <div class="comment-body">
+        <div class="comment-name">${Utils.escapeHtml(c.author?.name || 'Membro')} <span class="message-sub">@${Utils.escapeHtml(displayUsername(c.author || {}))}</span></div>
+        <div class="comment-text">${richText(c.content)}</div>
+        <div class="comment-meta"><span>${timeAgo(c.created_at)}</span><button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button></div>
+      </div>
+    </div>`).join('');
+}
+
+function openPostComments(postId, replyToCommentId = null) {
+  const post = state.posts.find((p) => p.id === postId);
+  const modal = document.getElementById('postCommentsModal');
+  if (!post || !modal) return;
+  const replyTo = replyToCommentId ? post.comments.find((comment) => comment.id === replyToCommentId) : null;
+  modal.innerHTML = `
+    <div class="post-comments-panel">
+      <div class="post-comments-grabber"></div>
+      <div class="post-comments-head">
+        <div>
+          <strong>Comentarios</strong>
+          <span>${post.comments_count || 0} resposta${post.comments_count === 1 ? '' : 's'} na publicacao</span>
+        </div>
+        <button class="social-icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="post-comments-context">
+        ${avatar(post.author || {}, 34)}
+        <div><strong>${Utils.escapeHtml(post.author?.name || 'Membro MSY')}</strong><p>${Utils.escapeHtml((post.content || '').slice(0, 180))}</p></div>
+      </div>
+      <div class="post-comments-list" id="postCommentsSheetList">
+        ${(post.comments || []).length ? renderCommentRows(post, { full: true }) : '<div class="social-empty"><i class="fa-regular fa-comment"></i>Nenhum comentario ainda.</div>'}
+      </div>
+      <form class="post-comments-composer" id="postCommentsComposer">
+        ${avatar(state.profile, 34)}
+        <div class="post-comments-input-wrap">
+          <div class="post-comments-reply-target" id="postCommentsReplyTarget" style="${replyTo ? '' : 'display:none'}">
+            Respondendo ${replyTo ? Utils.escapeHtml(replyTo.author?.name || 'comentario') : ''}<button type="button" data-clear-comment-reply><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <input name="comment" class="comment-input" autocomplete="off" placeholder="Adicionar comentario...">
+        </div>
+        <button class="social-icon-btn" type="submit" title="Enviar"><i class="fa-solid fa-arrow-up"></i></button>
+      </form>
+    </div>`;
+  modal.dataset.postId = postId;
+  modal.dataset.replyTo = replyToCommentId || '';
+  openModal(modal);
+  const input = modal.querySelector('input[name="comment"]');
+  bindMentionAutocomplete(input, { minChars: 1 });
+  modal.querySelector('#postCommentsSheetList')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reply-comment]');
+    if (btn) setPostCommentReply(post, btn.dataset.replyComment);
+  });
+  modal.querySelector('[data-clear-comment-reply]')?.addEventListener('click', () => setPostCommentReply(post, null));
+  modal.querySelector('#postCommentsComposer')?.addEventListener('submit', submitPostCommentSheet);
+  requestAnimationFrame(() => input?.focus({ preventScroll: true }));
+}
+
+function setPostCommentReply(post, commentId) {
+  const modal = document.getElementById('postCommentsModal');
+  if (!modal || !post) return;
+  const target = commentId ? post.comments.find((comment) => comment.id === commentId) : null;
+  modal.dataset.replyTo = target?.id || '';
+  const label = modal.querySelector('#postCommentsReplyTarget');
+  if (label) {
+    label.style.display = target ? '' : 'none';
+    label.innerHTML = target
+      ? `Respondendo ${Utils.escapeHtml(target.author?.name || 'comentario')}<button type="button" data-clear-comment-reply><i class="fa-solid fa-xmark"></i></button>`
+      : '';
+    label.querySelector('[data-clear-comment-reply]')?.addEventListener('click', () => setPostCommentReply(post, null));
+  }
+  modal.querySelector('input[name="comment"]')?.focus();
+}
+
+async function submitPostCommentSheet(e) {
+  e.preventDefault();
+  const modal = document.getElementById('postCommentsModal');
+  const post = state.posts.find((p) => p.id === modal?.dataset.postId);
+  const input = e.currentTarget.elements.comment;
+  const body = input?.value.trim();
+  if (!post || !body) return;
+  const btn = e.currentTarget.querySelector('button[type="submit"]');
+  try {
+    if (btn) btn.disabled = true;
+    const comment = await state.service.addComment(post, body, modal.dataset.replyTo || null);
+    post.comments.push(comment);
+    post.comments_count += 1;
+    input.value = '';
+    setPostCommentReply(post, null);
+    const list = document.getElementById('postCommentsSheetList');
+    if (list) list.innerHTML = renderCommentRows(post, { full: true });
+    updatePostStatsNode(post);
+    updatePostNode(post.id);
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao comentar:', err);
+    Utils.showToast(err.message || 'Erro ao comentar.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function bindPostEvents(root) {
@@ -997,8 +1113,229 @@ function openProfile(memberId) {
   });
 }
 
+function getStoryPosition(groupIndex, storyIndex) {
+  let flatIndex = 0;
+  for (let g = 0; g < state.stories.length; g += 1) {
+    const items = state.stories[g]?.stories || [];
+    for (let s = 0; s < items.length; s += 1) {
+      if (g === groupIndex && s === storyIndex) return flatIndex;
+      flatIndex += 1;
+    }
+  }
+  return -1;
+}
+
+function getStoryByFlatIndex(targetIndex) {
+  let flatIndex = 0;
+  for (let groupIndex = 0; groupIndex < state.stories.length; groupIndex += 1) {
+    const group = state.stories[groupIndex];
+    const items = group?.stories || [];
+    for (let storyIndex = 0; storyIndex < items.length; storyIndex += 1) {
+      if (flatIndex === targetIndex) {
+        return { group, story: items[storyIndex], groupIndex, storyIndex, flatIndex };
+      }
+      flatIndex += 1;
+    }
+  }
+  return null;
+}
+
+function getNextStoryCursor(groupIndex, storyIndex, direction = 1) {
+  const flat = getStoryPosition(groupIndex, storyIndex);
+  if (flat < 0) return null;
+  return getStoryByFlatIndex(flat + direction);
+}
+
+function storyMediaKey(story) {
+  return story?.id || story?.media_url || '';
+}
+
+function shouldPreloadHeavyMedia() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData) return false;
+  return !/2g/.test(connection?.effectiveType || '');
+}
+
+function preloadStoryMedia(story, { priority = false } = {}) {
+  const key = storyMediaKey(story);
+  if (!story?.media_url || !key || state.storyMediaCache.has(key) || state.storyPreloadQueue.has(key)) {
+    return state.storyMediaCache.get(key)?.promise || Promise.resolve();
+  }
+  state.storyPreloadQueue.add(key);
+  const promise = new Promise((resolve) => {
+    if (story.media_type === 'video') {
+      if (!shouldPreloadHeavyMedia() && !priority) return resolve(null);
+      const video = document.createElement('video');
+      video.preload = priority ? 'auto' : 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.src = story.media_url;
+      const done = () => resolve(video);
+      video.addEventListener(priority ? 'loadeddata' : 'loadedmetadata', done, { once: true });
+      video.addEventListener('error', () => resolve(null), { once: true });
+      video.load();
+      return;
+    }
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      if (img.decode) img.decode().then(() => resolve(img)).catch(() => resolve(img));
+      else resolve(img);
+    };
+    img.onerror = () => resolve(null);
+    img.src = story.media_url;
+  }).finally(() => {
+    state.storyPreloadQueue.delete(key);
+    trimStoryMediaCache();
+  });
+  state.storyMediaCache.set(key, { storyId: story.id, mediaType: story.media_type, url: story.media_url, promise, touchedAt: Date.now() });
+  return promise;
+}
+
+function trimStoryMediaCache() {
+  const maxItems = shouldPreloadHeavyMedia() ? 14 : 7;
+  if (state.storyMediaCache.size <= maxItems) return;
+  [...state.storyMediaCache.entries()]
+    .sort((a, b) => (a[1].touchedAt || 0) - (b[1].touchedAt || 0))
+    .slice(0, state.storyMediaCache.size - maxItems)
+    .forEach(([key]) => state.storyMediaCache.delete(key));
+}
+
+function warmStoryWindow(groupIndex, storyIndex) {
+  const currentFlat = getStoryPosition(groupIndex, storyIndex);
+  if (currentFlat < 0) return;
+  [-1, 0, 1, 2, 3].forEach((offset) => {
+    const item = getStoryByFlatIndex(currentFlat + offset);
+    if (item?.story) preloadStoryMedia(item.story, { priority: offset === 0 || offset === 1 });
+  });
+}
+
+function renderStoryProgress(group, storyIndex) {
+  const items = group?.stories || [];
+  return `
+    <div class="story-progress-stack">
+      ${items.map((_, index) => `<span class="${index < storyIndex ? 'done' : index === storyIndex ? 'active' : ''}"><i></i></span>`).join('')}
+    </div>`;
+}
+
+async function openStoryPremium(groupIndex, storyIndex) {
+  const group = state.stories[groupIndex];
+  const story = group?.stories?.[storyIndex];
+  if (!story) return;
+  state.storyCursor = { groupIndex, storyIndex };
+  preloadStoryMedia(story, { priority: true });
+  warmStoryWindow(groupIndex, storyIndex);
+  state.service.markStoryViewed(story.id).catch((err) => console.warn('[MSY][feed-social] View do story indisponivel:', err));
+
+  const modal = document.getElementById('storyViewer');
+  const canViewReactions = canManageStory(story);
+  if (modal.dataset.storyTimer) clearTimeout(Number(modal.dataset.storyTimer));
+  modal.innerHTML = `
+    <div class="story-panel story-panel-instagram">
+      ${renderStoryProgress(group, storyIndex)}
+      <button type="button" class="story-tap-zone story-tap-prev" data-story-prev aria-label="Story anterior"></button>
+      <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
+      <div class="story-media story-media-premium">
+        ${story.media_type === 'video'
+          ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay playsinline preload="auto"></video>`
+          : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}
+      </div>
+      <div class="story-top story-top-instagram">
+        ${avatar(group.author, 38)}
+        <div class="story-author-copy">
+          <strong>${Utils.escapeHtml(displayUsername(group.author || {}))}</strong>
+          <span>${timeAgo(story.created_at)}</span>
+        </div>
+        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
+        <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      ${story.caption ? `<div class="story-caption story-caption-instagram">${richText(story.caption)}</div>` : ''}
+      <div class="story-bottom story-bottom-instagram">
+        <form class="story-inline-reply" id="storyInlineReply">
+          <input id="storyReplyInput" maxlength="180" autocomplete="off" placeholder="Enviar mensagem...">
+          <button type="submit" class="story-inline-send" aria-label="Enviar resposta"><i class="fa-regular fa-paper-plane"></i></button>
+        </form>
+        <button class="story-social-icon" data-story-reaction="heart" title="Curtir story"><i class="fa-regular fa-heart"></i><span></span></button>
+        <button class="story-social-icon" data-story-focus-reply title="Responder story"><i class="fa-regular fa-comment"></i></button>
+        <button class="story-social-icon" data-share-story title="Enviar"><i class="fa-regular fa-paper-plane"></i></button>
+        ${canViewReactions ? `<button class="story-social-icon" data-toggle-story-reactions title="Visualizacoes"><i class="fa-regular fa-eye"></i><span id="storyReactionsCount">...</span></button>` : ''}
+      </div>
+      ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel">
+        <div class="story-reactions-title">Atividade do story</div>
+        <div id="storyReactionsContent" class="message-sub">Carregando...</div>
+      </div>` : ''}
+    </div>`;
+
+  openModal(modal);
+  const mediaNode = modal.querySelector('.story-media video,.story-media img');
+  mediaNode?.addEventListener?.('load', () => modal.querySelector('.story-media')?.classList.add('ready'), { once: true });
+  mediaNode?.addEventListener?.('loadeddata', () => modal.querySelector('.story-media')?.classList.add('ready'), { once: true });
+
+  const go = (direction) => {
+    const next = getNextStoryCursor(groupIndex, storyIndex, direction);
+    if (next) openStoryPremium(next.groupIndex, next.storyIndex);
+  };
+  modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
+  modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
+  modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus());
+  modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus());
+  modal.querySelector('[data-story-reaction]')?.addEventListener('click', async (e) => {
+    e.currentTarget.classList.add('active');
+    await state.service.reactToStory(story, 'heart');
+    hydrateStoryMeta(story.id, canViewReactions);
+  });
+  modal.querySelector('#storyInlineReply')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = modal.querySelector('#storyReplyInput');
+    const text = input?.value.trim();
+    if (!text) return;
+    try {
+      const targetUserId = group?.author?.id;
+      if (!targetUserId) throw new Error('Nao foi possivel identificar o autor do story.');
+      const conversationId = await state.service.ensureDirectConversation(targetUserId);
+      await state.service.sendDirectMessage(conversationId, text, {
+        kind: 'story_reply',
+        story_id: story.id,
+        story_url: story.media_url,
+        media_type: story.media_type,
+      });
+      input.value = '';
+      Utils.showToast('Resposta enviada no Direct.');
+    } catch (err) {
+      console.error(err);
+      Utils.showToast(err.message || 'Erro ao responder story.', 'error');
+    }
+  });
+  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
+    document.getElementById('storyReactionsPanel')?.classList.toggle('open');
+  });
+  modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteStory(story.id);
+  });
+  bindStoryGestures(modal, go);
+  startStoryProgress(modal, groupIndex, storyIndex, story, go);
+  hydrateStoryMeta(story.id, canViewReactions);
+}
+
+function bindStoryGestures(modal, go) {
+  let startX = 0;
+  let startY = 0;
+  modal.querySelector('.story-panel')?.addEventListener('touchstart', (e) => {
+    const touch = e.touches?.[0];
+    startX = touch?.clientX || 0;
+    startY = touch?.clientY || 0;
+  }, { passive: true });
+  modal.querySelector('.story-panel')?.addEventListener('touchend', (e) => {
+    const touch = e.changedTouches?.[0];
+    const dx = (touch?.clientX || 0) - startX;
+    const dy = (touch?.clientY || 0) - startY;
+    if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+
 async function openStory(groupIndex, storyIndex) {
-  return openStoryFast(groupIndex, storyIndex);
+  return openStoryPremium(groupIndex, storyIndex);
 }
 
 async function openStoryFast(groupIndex, storyIndex) {
@@ -1103,19 +1440,26 @@ async function openStoryFast(groupIndex, storyIndex) {
   hydrateStoryMeta(story.id, canViewReactions);
 }
 
-function startStoryProgress(modal, groupIndex, storyIndex, story) {
-  const bar = modal.querySelector('.story-progress span');
+function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
+  const bar = modal.querySelector('.story-progress-stack .active i, .story-progress span');
   if (!bar || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   bar.style.animation = 'none';
   requestAnimationFrame(() => {
     bar.style.animation = story.media_type === 'video' ? '' : 'storyProgress 6s linear forwards';
   });
+  const video = modal.querySelector('.story-media video');
+  if (video) {
+    video.addEventListener('ended', () => {
+      if (!modal.classList.contains('open')) return;
+      if (go) go(1);
+    }, { once: true });
+  }
   if (story.media_type !== 'image') return;
   const timer = setTimeout(() => {
     if (!modal.classList.contains('open')) return;
-    const groupStories = state.stories[groupIndex]?.stories || [];
-    if (storyIndex < groupStories.length - 1) openStoryFast(groupIndex, storyIndex + 1);
-    else if (groupIndex < state.stories.length - 1) openStoryFast(groupIndex + 1, 0);
+    if (go) return go(1);
+    const next = getNextStoryCursor(groupIndex, storyIndex, 1);
+    if (next) openStoryPremium(next.groupIndex, next.storyIndex);
   }, 6000);
   modal.dataset.storyTimer = String(timer);
 }
@@ -1633,7 +1977,7 @@ function appendDirectMessageToDom(message) {
 
 function bindModals() {
   document.addEventListener('click', (e) => {
-    if (e.target.matches('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
+    if (e.target.matches('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
       closeSocialModals();
     }
   });
