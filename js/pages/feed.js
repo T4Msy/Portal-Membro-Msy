@@ -1159,7 +1159,9 @@ function shouldPreloadHeavyMedia() {
 function preloadStoryMedia(story, { priority = false } = {}) {
   const key = storyMediaKey(story);
   if (!story?.media_url || !key || state.storyMediaCache.has(key) || state.storyPreloadQueue.has(key)) {
-    return state.storyMediaCache.get(key)?.promise || Promise.resolve();
+    const cached = state.storyMediaCache.get(key);
+    if (cached) cached.touchedAt = Date.now();
+    return cached?.promise || Promise.resolve();
   }
   state.storyPreloadQueue.add(key);
   const promise = new Promise((resolve) => {
@@ -1192,6 +1194,14 @@ function preloadStoryMedia(story, { priority = false } = {}) {
   return promise;
 }
 
+function waitForStoryMedia(story, timeout = 900) {
+  const preload = preloadStoryMedia(story, { priority: true }).catch(() => null);
+  return Promise.race([
+    preload,
+    new Promise((resolve) => setTimeout(resolve, timeout)),
+  ]);
+}
+
 function trimStoryMediaCache() {
   const maxItems = shouldPreloadHeavyMedia() ? 14 : 7;
   if (state.storyMediaCache.size <= maxItems) return;
@@ -1218,12 +1228,36 @@ function renderStoryProgress(group, storyIndex) {
     </div>`;
 }
 
+function markStoryMediaReady(modal) {
+  const mediaWrap = modal.querySelector('.story-media');
+  const media = modal.querySelector('.story-media img,.story-media video');
+  if (!mediaWrap || !media) return;
+  const ready = () => mediaWrap.classList.add('ready');
+  const failed = () => mediaWrap.classList.add('failed');
+  if (media instanceof HTMLImageElement && media.complete && media.naturalWidth > 0) {
+    ready();
+    return;
+  }
+  if (media instanceof HTMLVideoElement && media.readyState >= 2) {
+    ready();
+    media.play?.().catch(() => {});
+    return;
+  }
+  media.addEventListener('load', ready, { once: true });
+  media.addEventListener('loadeddata', () => {
+    ready();
+    media.play?.().catch(() => {});
+  }, { once: true });
+  media.addEventListener('canplay', ready, { once: true });
+  media.addEventListener('error', failed, { once: true });
+}
+
 async function openStoryPremium(groupIndex, storyIndex) {
   const group = state.stories[groupIndex];
   const story = group?.stories?.[storyIndex];
   if (!story) return;
   state.storyCursor = { groupIndex, storyIndex };
-  preloadStoryMedia(story, { priority: true });
+  const mediaReady = waitForStoryMedia(story);
   warmStoryWindow(groupIndex, storyIndex);
   state.service.markStoryViewed(story.id).catch((err) => console.warn('[MSY][feed-social] View do story indisponivel:', err));
 
@@ -1235,9 +1269,10 @@ async function openStoryPremium(groupIndex, storyIndex) {
       ${renderStoryProgress(group, storyIndex)}
       <button type="button" class="story-tap-zone story-tap-prev" data-story-prev aria-label="Story anterior"></button>
       <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
-      <div class="story-media story-media-premium">
+      <div class="story-media story-media-premium is-loading">
+        <div class="story-media-loader"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
         ${story.media_type === 'video'
-          ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay playsinline preload="auto"></video>`
+          ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay muted playsinline webkit-playsinline preload="auto"></video>`
           : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}
       </div>
       <div class="story-top story-top-instagram">
@@ -1267,9 +1302,8 @@ async function openStoryPremium(groupIndex, storyIndex) {
     </div>`;
 
   openModal(modal);
-  const mediaNode = modal.querySelector('.story-media video,.story-media img');
-  mediaNode?.addEventListener?.('load', () => modal.querySelector('.story-media')?.classList.add('ready'), { once: true });
-  mediaNode?.addEventListener?.('loadeddata', () => modal.querySelector('.story-media')?.classList.add('ready'), { once: true });
+  mediaReady.finally(() => markStoryMediaReady(modal));
+  markStoryMediaReady(modal);
 
   const go = (direction) => {
     const next = getNextStoryCursor(groupIndex, storyIndex, direction);
@@ -1321,21 +1355,29 @@ async function openStoryPremium(groupIndex, storyIndex) {
 function bindStoryGestures(modal, go) {
   let startX = 0;
   let startY = 0;
+  let startAt = 0;
   modal.querySelector('.story-panel')?.addEventListener('touchstart', (e) => {
+    if (e.target.closest('input,textarea,button')) return;
     const touch = e.touches?.[0];
     startX = touch?.clientX || 0;
     startY = touch?.clientY || 0;
+    startAt = Date.now();
   }, { passive: true });
   modal.querySelector('.story-panel')?.addEventListener('touchend', (e) => {
+    if (e.target.closest('input,textarea,button')) return;
     const touch = e.changedTouches?.[0];
     const dx = (touch?.clientX || 0) - startX;
     const dy = (touch?.clientY || 0) - startY;
     if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
+    else if (dy > 76 && Math.abs(dy) > Math.abs(dx) * 1.2) closeSocialModals();
+    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && Date.now() - startAt < 260) {
+      go((touch?.clientX || 0) < window.innerWidth / 2 ? -1 : 1);
+    }
   }, { passive: true });
 }
 
 async function openStory(groupIndex, storyIndex) {
-  return openStoryFast(groupIndex, storyIndex);
+  return openStoryPremium(groupIndex, storyIndex);
 }
 
 async function openStoryFast(groupIndex, storyIndex) {
@@ -1455,6 +1497,14 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
   });
   const video = modal.querySelector('.story-media video');
   if (video) {
+    const syncVideoProgress = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        bar.style.animation = `storyProgress ${Math.max(3, Math.min(video.duration, 18))}s linear forwards`;
+      }
+      video.play?.().catch(() => {});
+    };
+    if (video.readyState >= 1) syncVideoProgress();
+    else video.addEventListener('loadedmetadata', syncVideoProgress, { once: true });
     video.addEventListener('ended', () => {
       if (!modal.classList.contains('open')) return;
       if (go) go(1);

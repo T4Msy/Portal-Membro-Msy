@@ -101,7 +101,7 @@ body[data-page="feed"] .page-content{animation:none}
   .social-shell{display:block;width:100%;max-width:100%}
   .social-main{gap:10px}
   .social-hero{display:none}
-  .stories-strip{border-left:0;border-right:0;border-radius:0;padding:10px 10px 9px;background:rgba(17,17,22,.94);box-shadow:none;position:sticky;top:var(--topbar-h);z-index:20}
+  .stories-strip{border-left:0;border-right:0;border-radius:0;padding:10px 10px 9px;background:rgba(17,17,22,.94);box-shadow:none;position:relative;top:auto;z-index:1}
   .social-composer{margin:0 10px;padding:10px 12px;border-radius:14px;box-shadow:none}
   .composer-top{align-items:center}.composer-input{min-height:44px;max-height:96px;resize:none;line-height:1.35}
   .composer-dropzone{padding:12px}.composer-previews{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -204,4 +204,58 @@ body[data-page="feed"] .page-content{animation:none}
   .story-panel-stable .story-top{top:calc(18px + env(safe-area-inset-top))}
   .story-panel-stable .story-bottom{grid-template-columns:minmax(0,1fr) auto;bottom:calc(12px + env(safe-area-inset-bottom))}
   .story-panel-stable .story-reactions-toggle{display:none}
+}
+
+/* Mobile social stabilization: final layer wins over legacy story rules. */
+body[data-page="feed"] .social-main{min-width:0}
+body[data-page="feed"] .stories-strip{touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-size:720px}
+.story-viewer{position:fixed;inset:0;z-index:980;display:none;align-items:center;justify-content:center;padding:12px;background:#000;opacity:0;overflow:hidden;overscroll-behavior:contain;touch-action:none;transition:opacity .16s var(--ease)}
+.story-viewer.open{display:flex;opacity:1}
+.story-viewer.open .story-panel-instagram{position:relative;width:min(430px,calc(100vw - 24px));height:min(780px,calc(100dvh - 24px));max-height:calc(100dvh - 24px);overflow:hidden;border-radius:14px;background:#030406;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 90px rgba(0,0,0,.78);animation:socialModalIn .18s var(--ease) both;isolation:isolate}
+.story-viewer.open .story-panel-instagram::before,.story-viewer.open .story-panel-instagram::after{content:"";position:absolute;left:0;right:0;z-index:2;pointer-events:none}
+.story-viewer.open .story-panel-instagram::before{top:0;height:154px;background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.34),transparent)}
+.story-viewer.open .story-panel-instagram::after{bottom:0;height:210px;background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,.34),transparent)}
+.story-viewer.open .story-media-premium{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#050608,#11131a);overflow:hidden}
+.story-viewer.open .story-media-premium img,.story-viewer.open .story-media-premium video{width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;display:block;margin:0;opacity:0;transition:opacity .16s var(--ease)}
+.story-viewer.open .story-media-premium.ready img,.story-viewer.open .story-media-premium.ready video{opacity:1}
+.story-media-loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.72);font-size:1.4rem;background:radial-gradient(circle at center,rgba(255,255,255,.08),transparent 42%)}
+.story-media-premium.ready .story-media-loader{display:none}
+.story-media-premium.failed::after{content:"Nao foi possivel carregar este story";position:absolute;left:20px;right:20px;top:50%;transform:translateY(-50%);z-index:2;color:#fff;text-align:center;font-weight:800}
+.story-viewer.open .story-progress-stack{left:10px;right:10px;top:10px;z-index:12}
+.story-viewer.open .story-top-instagram{top:22px;left:16px;right:12px;z-index:13;display:flex;align-items:center;gap:10px}
+.story-viewer.open .story-bottom-instagram{left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:13;display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;align-items:center;gap:10px}
+.story-viewer.open .story-caption-instagram{z-index:13;left:18px;right:18px;bottom:92px;max-height:24dvh;overflow:auto}
+.story-viewer.open .story-tap-zone{top:68px;bottom:92px;width:42%;z-index:5}
+.story-inline-reply{height:52px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(255,255,255,.56);border-radius:999px;background:rgba(4,6,8,.34);backdrop-filter:blur(8px);overflow:hidden}
+.story-inline-reply input{min-width:0;width:100%;height:100%;border:0;background:transparent;color:#fff;outline:none;padding:0 0 0 18px;font-size:.98rem;font-weight:800}
+.story-inline-reply input::placeholder{color:#fff;opacity:1}
+.story-inline-send{width:42px;height:42px;margin-right:5px;border:0;border-radius:50%;background:transparent;color:#fff;font-size:1.08rem;display:inline-flex;align-items:center;justify-content:center}
+.story-social-icon{width:42px;height:46px;border:0;background:transparent;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:1.72rem;cursor:pointer;text-shadow:0 2px 12px rgba(0,0,0,.72)}
+.story-social-icon span{font-size:.68rem;font-weight:900}
+.story-social-icon.active{color:#ff3040;animation:likePop .34s var(--ease)}
+.story-viewer.open .story-reactions-panel{left:12px;right:12px;bottom:86px;z-index:14;max-height:48%;border-radius:18px;background:rgba(6,7,10,.96)}
+@media(max-width:640px){
+  body[data-page="feed"] .page-content{padding:0 0 calc(78px + env(safe-area-inset-bottom));overflow-x:hidden}
+  body[data-page="feed"] .social-shell{display:block;width:100%;max-width:100%;overflow:visible}
+  body[data-page="feed"] .social-main{gap:0}
+  body[data-page="feed"] .social-hero{display:none}
+  body[data-page="feed"] .stories-strip{position:relative;top:auto;z-index:1;margin:0;padding:14px 10px 12px;border:0;border-radius:0;background:rgba(12,12,16,.96);box-shadow:none;border-bottom:1px solid rgba(255,255,255,.07)}
+  body[data-page="feed"] .social-composer{margin:10px 10px 12px;padding:11px 12px;border-radius:16px;box-shadow:none}
+  body[data-page="feed"] .social-card{margin:0 10px 12px;padding:0;border-radius:16px;box-shadow:none}
+  body[data-page="feed"] .social-feed-list{gap:10px}
+  body[data-page="feed"] .social-post{border-left:0;border-right:0;border-radius:0;box-shadow:none;contain-intrinsic-size:660px}
+  body[data-page="feed"] .composer-actions{padding-top:10px;margin-top:10px}
+  body[data-page="feed"] .social-submit{width:auto;min-width:132px;padding-inline:18px}
+  .story-viewer{padding:0;background:#000}
+  .story-viewer.open .story-panel-instagram{width:100vw;height:100dvh;min-height:100svh;max-height:none;border-radius:0;border:0;box-shadow:none}
+  .story-viewer.open .story-progress-stack{top:calc(7px + env(safe-area-inset-top));left:8px;right:8px}
+  .story-viewer.open .story-top-instagram{top:calc(17px + env(safe-area-inset-top));left:12px;right:8px}
+  .story-viewer.open .story-bottom-instagram{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px}
+  .story-viewer.open .story-bottom-instagram [data-toggle-story-reactions]{display:none}
+  .story-viewer.open .story-caption-instagram{left:14px;right:14px;bottom:88px;max-height:24dvh}
+  .story-viewer.open .story-tap-zone{top:calc(64px + env(safe-area-inset-top));bottom:calc(82px + env(safe-area-inset-bottom));width:44%}
+  .story-inline-reply{height:50px}
+  .story-inline-reply input{font-size:.96rem}
+  .story-social-icon{width:38px;height:46px;font-size:1.6rem}
 }
