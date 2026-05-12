@@ -1335,7 +1335,7 @@ function bindStoryGestures(modal, go) {
 }
 
 async function openStory(groupIndex, storyIndex) {
-  return openStoryPremium(groupIndex, storyIndex);
+  return openStoryFast(groupIndex, storyIndex);
 }
 
 async function openStoryFast(groupIndex, storyIndex) {
@@ -1343,16 +1343,18 @@ async function openStoryFast(groupIndex, storyIndex) {
   const story = group?.stories?.[storyIndex];
   if (!story) return;
   state.storyCursor = { groupIndex, storyIndex };
+  preloadStoryMedia(story, { priority: true });
+  warmStoryWindow(groupIndex, storyIndex);
   state.service.markStoryViewed(story.id).catch((err) => console.warn('[MSY][feed-social] View do story indisponivel:', err));
   const canViewReactions = canManageStory(story);
   const modal = document.getElementById('storyViewer');
   if (modal.dataset.storyTimer) clearTimeout(Number(modal.dataset.storyTimer));
   modal.innerHTML = `
-    <div class="story-panel">
+    <div class="story-panel story-panel-stable">
       <div class="story-progress"><span></span></div>
       <button type="button" class="story-tap-zone story-tap-prev" data-story-prev aria-label="Story anterior"></button>
       <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
-      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay controls playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async">`}</div>
+      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay playsinline preload="auto"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}</div>
       <div class="story-top">
         ${avatar(group.author, 34)}
         <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
@@ -1436,6 +1438,10 @@ async function openStoryFast(groupIndex, storyIndex) {
     e.stopPropagation();
     deleteStory(story.id);
   });
+  bindStoryGestures(modal, (direction) => {
+    const next = getNextStoryCursor(groupIndex, storyIndex, direction);
+    if (next) openStoryFast(next.groupIndex, next.storyIndex);
+  });
   startStoryProgress(modal, groupIndex, storyIndex, story);
   hydrateStoryMeta(story.id, canViewReactions);
 }
@@ -1459,7 +1465,7 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
     if (!modal.classList.contains('open')) return;
     if (go) return go(1);
     const next = getNextStoryCursor(groupIndex, storyIndex, 1);
-    if (next) openStoryPremium(next.groupIndex, next.storyIndex);
+    if (next) openStoryFast(next.groupIndex, next.storyIndex);
   }, 6000);
   modal.dataset.storyTimer = String(timer);
 }
