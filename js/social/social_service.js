@@ -461,6 +461,7 @@ export class SocialService {
       initials: this.profile.initials,
       color: this.profile.color,
       avatar_url: this.profile.avatar_url,
+      social_avatar_url: this.profile.social_avatar_url,
       role: this.profile.role,
       tier: this.profile.tier,
     };
@@ -754,9 +755,12 @@ export class SocialService {
       return false;
     }
 
-    const { error } = await this.db.from('social_follows').insert({
+    const { error } = await this.db.from('social_follows').upsert({
       follower_id: this.profile.id,
       following_id: memberId,
+    }, {
+      onConflict: 'follower_id,following_id',
+      ignoreDuplicates: true,
     });
     if (error) throw error;
     await this.notify(memberId, {
@@ -766,7 +770,7 @@ export class SocialService {
       target_type: 'profile',
       target_id: this.profile.id,
       target_url: `feed.html?profile=${this.profile.id}`,
-    });
+    }).catch((err) => console.warn('[MSY][social] Follow salvo, mas notificacao falhou:', err));
     return true;
   }
 
@@ -1061,21 +1065,33 @@ export class SocialService {
   }
 
   async updateSocialProfile(payload = {}) {
-    const { data, error } = await this.db.rpc('update_social_profile', {
+    const params = {
       p_username: payload.username ?? null,
       p_social_bio: payload.social_bio ?? null,
       p_banner_url: payload.banner_url ?? null,
+      p_social_avatar_url: payload.social_avatar_url ?? null,
       p_social_links: payload.social_links ?? null,
       p_profile_highlights: payload.profile_highlights ?? null,
-    });
+    };
 
-    if (error) throw error;
+    let { data, error } = await this.db.rpc('update_social_profile', params);
+    let socialAvatarPendingMigration = false;
+
+    if (error) {
+      const legacyParams = { ...params };
+      delete legacyParams.p_social_avatar_url;
+      const legacy = await this.db.rpc('update_social_profile', legacyParams);
+      if (legacy.error) throw legacy.error;
+      data = legacy.data;
+      socialAvatarPendingMigration = Boolean(payload.social_avatar_url);
+    }
 
     const nextProfile = {
       ...this.profile,
       ...data,
       username: this.getDisplayUsername(data || this.profile),
     };
+    if (socialAvatarPendingMigration) nextProfile._socialAvatarPendingMigration = true;
 
     this.profile = nextProfile;
     return nextProfile;

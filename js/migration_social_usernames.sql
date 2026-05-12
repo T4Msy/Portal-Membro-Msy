@@ -4,6 +4,9 @@
 -- Execute no Supabase Dashboard > SQL Editor.
 -- ============================================================
 
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS social_avatar_url text;
+
 CREATE OR REPLACE FUNCTION public.normalize_social_username(raw_username text)
 RETURNS text
 LANGUAGE plpgsql
@@ -119,6 +122,7 @@ CREATE OR REPLACE FUNCTION public.update_social_profile(
   p_username text DEFAULT NULL,
   p_social_bio text DEFAULT NULL,
   p_banner_url text DEFAULT NULL,
+  p_social_avatar_url text DEFAULT NULL,
   p_social_links jsonb DEFAULT NULL,
   p_profile_highlights jsonb DEFAULT NULL
 ) RETURNS public.profiles
@@ -140,6 +144,7 @@ BEGIN
   SET username = COALESCE(p_username, username),
       social_bio = COALESCE(p_social_bio, social_bio),
       banner_url = COALESCE(p_banner_url, banner_url),
+      social_avatar_url = COALESCE(p_social_avatar_url, social_avatar_url),
       social_links = COALESCE(p_social_links, social_links),
       profile_highlights = COALESCE(p_profile_highlights, profile_highlights)
   WHERE id = v_user_id
@@ -156,4 +161,4 @@ EXCEPTION
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.update_social_profile(text, text, text, jsonb, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_social_profile(text, text, text, text, jsonb, jsonb) TO authenticated;

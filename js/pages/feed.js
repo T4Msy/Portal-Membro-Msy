@@ -48,13 +48,15 @@ const state = {
   socialSearchItems: [],
   socialSearchActiveIndex: 0,
   feedScrollBeforeProfile: 0,
+  pendingFollows: new Set(),
 };
 
 function avatar(person, size = 42) {
   const initials = person?.initials || Utils.getInitials(person?.name || 'MSY');
   const color = person?.color || '#7f1d1d';
-  const img = person?.avatar_url
-    ? `<img src="${Utils.escapeHtml(person.avatar_url)}" alt="${Utils.escapeHtml(person.name || 'Avatar')}">`
+  const picture = person?.social_avatar_url || person?.avatar_url;
+  const img = picture
+    ? `<img src="${Utils.escapeHtml(picture)}" alt="${Utils.escapeHtml(person.name || 'Avatar')}">`
     : Utils.escapeHtml(initials);
   return `<div class="social-avatar" style="width:${size}px;height:${size}px;background:linear-gradient(135deg,${color},#111)">${img}</div>`;
 }
@@ -110,6 +112,41 @@ function renderDirectUnreadBadges() {
     badge.toggleAttribute('hidden', count === 0);
     badge.textContent = count > 9 ? '9+' : String(count);
   });
+}
+
+function showFeedRoute() {
+  const feed = document.getElementById('feedRouteView');
+  const route = document.getElementById('socialProfileRoute');
+  document.body.classList.remove('social-profile-mode');
+  if (feed) {
+    feed.hidden = false;
+    feed.style.display = '';
+    feed.setAttribute('aria-hidden', 'false');
+  }
+  if (route) {
+    route.hidden = true;
+    route.style.display = 'none';
+    route.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function showProfileOnlyRoute() {
+  const feed = document.getElementById('feedRouteView');
+  const route = document.getElementById('socialProfileRoute');
+  document.body.classList.add('social-profile-mode');
+  if (feed) {
+    feed.hidden = true;
+    feed.style.display = 'none';
+    feed.setAttribute('aria-hidden', 'true');
+  }
+  if (route) {
+    route.hidden = false;
+    route.style.display = '';
+    route.setAttribute('aria-hidden', 'false');
+  }
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  document.getElementById('pageContent')?.scrollTo?.({ top: 0, behavior: 'auto' });
+  route?.scrollTo?.({ top: 0, behavior: 'auto' });
 }
 
 function findMember(memberId) {
@@ -175,6 +212,9 @@ function closeSocialModals() {
   document.querySelectorAll('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal').forEach((m) => {
     m.querySelectorAll('video').forEach((video) => video.pause());
     m.classList.remove('open');
+    m.classList.remove('follow-list-viewer');
+    m.classList.remove('social-profile-editor-viewer');
+    ['align-items', 'justify-content', 'padding', 'background'].forEach((prop) => m.style.removeProperty(prop));
   });
   state.notificationPanelOpen = false;
   unlockBodyScroll();
@@ -210,15 +250,19 @@ function layout() {
             <div class="social-subtitle">Posts, stories, perfis e interacoes da comunidade.</div>
           </div>
           <div class="social-top-actions">
+            <button class="social-icon-btn social-top-icon" id="openSearchBtn" title="Pesquisar membros"><i class="fa-solid fa-magnifying-glass"></i></button>
             <button class="social-icon-btn social-top-icon" id="openActivityBtn" title="Atividade"><i class="fa-regular fa-heart"></i><span class="social-notification-badge" id="socialNotificationBadge" hidden></span></button>
             <button class="social-icon-btn social-top-icon" id="openDirectBtn" title="Direct"><i class="fa-regular fa-paper-plane"></i><span class="social-notification-badge direct" id="directUnreadBadge" hidden></span></button>
+            <button class="social-profile-chip" id="openMyProfileBtn" type="button" title="Meu perfil">${avatar(state.profile, 34)}<span>Meu perfil</span></button>
             <div class="social-pill"><i class="fa-solid fa-sparkles"></i> Rede interna</div>
           </div>
         </div>
 
         <div class="social-mobile-bar">
+          <button class="social-mobile-action" id="openSearchMobileBtn"><i class="fa-solid fa-magnifying-glass"></i><span>Pesquisar</span></button>
           <button class="social-mobile-action" id="openActivityMobileBtn"><i class="fa-regular fa-heart"></i><span>Atividade</span><span class="social-notification-badge mobile" id="socialNotificationMobileBadge" hidden></span></button>
           <button class="social-mobile-action" id="openDirectMobileBtn"><i class="fa-regular fa-paper-plane"></i><span>Direct</span><span class="social-notification-badge mobile direct" id="directUnreadMobileBadge" hidden></span></button>
+          <button class="social-mobile-action" id="openMyProfileMobileBtn"><i class="fa-regular fa-user"></i><span>Perfil</span></button>
         </div>
 
         <div class="social-card social-member-search-card">
@@ -259,6 +303,7 @@ function layout() {
       </section>
 
       <aside class="social-rail">
+        <div class="social-card my-social-card" id="mySocialProfileCard"></div>
         <div class="social-card">
           <div class="side-title"><i class="fa-solid fa-user-plus"></i>Descobrir membros</div>
           <div id="suggestionsList"></div>
@@ -317,11 +362,56 @@ async function loadBasicMembers() {
 }
 
 function renderAll() {
+  renderTopProfileChip();
   renderStories();
   renderPosts();
   renderSocialNotifications();
   renderDirectUnreadBadges();
+  renderMyProfileCard();
   renderSuggestions();
+}
+
+function renderTopProfileChip() {
+  const btn = document.getElementById('openMyProfileBtn');
+  if (!btn || !state.profile) return;
+  btn.innerHTML = `${avatar(state.profile, 34)}<span>Meu perfil</span>`;
+}
+
+function socialProfileStats(memberId = state.profile?.id) {
+  return {
+    posts: state.posts.filter((post) => post.author_id === memberId).length,
+    followers: state.follows.filter((follow) => follow.following_id === memberId).length,
+    following: state.follows.filter((follow) => follow.follower_id === memberId).length,
+  };
+}
+
+function renderMyProfileCard() {
+  const el = document.getElementById('mySocialProfileCard');
+  if (!el || !state.profile) return;
+  const stats = socialProfileStats(state.profile.id);
+  el.innerHTML = `
+    <div class="my-profile-cover">${state.profile.banner_url ? `<img src="${Utils.escapeHtml(state.profile.banner_url)}" alt="">` : ''}</div>
+    <div class="my-profile-card-main">
+      ${avatar(state.profile, 66)}
+      <div class="my-profile-copy">
+        <strong>${Utils.escapeHtml(state.profile.name || 'Meu perfil')}</strong>
+        <span>@${Utils.escapeHtml(displayUsername(state.profile))}</span>
+      </div>
+    </div>
+    <p>${Utils.escapeHtml(state.profile.social_bio || state.profile.bio || 'Configure sua bio social para aparecer aqui.')}</p>
+    <div class="my-profile-stats">
+      <button type="button" data-open-my-profile><strong>${stats.posts}</strong><span>posts</span></button>
+      <button type="button" data-open-followers="${state.profile.id}"><strong>${stats.followers}</strong><span>seguidores</span></button>
+      <button type="button" data-open-following="${state.profile.id}"><strong>${stats.following}</strong><span>seguindo</span></button>
+    </div>
+    <div class="my-profile-actions">
+      <button type="button" class="follow-btn" data-open-my-profile><i class="fa-regular fa-user"></i> Ver perfil</button>
+      <button type="button" class="follow-btn profile-primary-action" data-edit-social-profile><i class="fa-solid fa-pen"></i> Editar</button>
+    </div>`;
+  el.querySelectorAll('[data-open-my-profile]').forEach((btn) => btn.addEventListener('click', () => openProfile(state.profile.id)));
+  el.querySelector('[data-edit-social-profile]')?.addEventListener('click', openSocialProfileEditor);
+  el.querySelectorAll('[data-open-followers]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowers, 'followers')));
+  el.querySelectorAll('[data-open-following]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowing, 'following')));
 }
 
 function renderStories() {
@@ -334,7 +424,7 @@ function renderStories() {
     </div>`;
   const stories = state.stories.map((group, idx) => `
     <div class="story-bubble" data-story-index="${idx}">
-      <div class="story-avatar"><div class="story-avatar-inner">${group.author?.avatar_url ? `<img src="${Utils.escapeHtml(group.author.avatar_url)}">` : Utils.escapeHtml(group.author?.initials || Utils.getInitials(group.author?.name || 'MS'))}</div></div>
+      <div class="story-avatar"><div class="story-avatar-inner">${group.author?.social_avatar_url || group.author?.avatar_url ? `<img src="${Utils.escapeHtml(group.author.social_avatar_url || group.author.avatar_url)}">` : Utils.escapeHtml(group.author?.initials || Utils.getInitials(group.author?.name || 'MS'))}</div></div>
       <div class="story-label">${Utils.escapeHtml(group.author?.name || 'Membro')}</div>
     </div>`).join('');
   el.innerHTML = create + stories;
@@ -1486,28 +1576,51 @@ async function toggleFollow(memberId) {
     Utils.showToast('Para seguir membros, aplique a migration social no Supabase.', 'error');
     return;
   }
+  if (!memberId || state.pendingFollows.has(memberId)) return;
+  state.pendingFollows.add(memberId);
+  const buttons = document.querySelectorAll(`[data-follow="${memberId}"],[data-profile-follow="${memberId}"]`);
+  buttons.forEach((btn) => { btn.disabled = true; btn.classList.add('is-loading'); });
+  const wasFollowing = isFollowing(memberId);
   try {
-    const following = isFollowing(memberId);
-    const nowFollowing = await state.service.toggleFollow(memberId, following);
-    if (nowFollowing) state.follows.push({ follower_id: state.profile.id, following_id: memberId });
-    else state.follows = state.follows.filter((f) => !(f.follower_id === state.profile.id && f.following_id === memberId));
+    const nowFollowing = await state.service.toggleFollow(memberId, wasFollowing);
+    state.follows = await state.service.loadFollows();
+    const syncedFollowing = isFollowing(memberId) || nowFollowing;
     renderSuggestions();
+    renderMyProfileCard();
     const btn = document.querySelector(`[data-profile-follow="${memberId}"]`);
     if (btn) {
-      btn.classList.toggle('following', nowFollowing);
-      btn.textContent = nowFollowing ? 'Seguindo' : 'Seguir';
+      btn.classList.toggle('following', syncedFollowing);
+      btn.textContent = syncedFollowing ? 'Seguindo' : 'Seguir';
     }
     if (state.activeProfileId === memberId) {
       state.activeProfileSummary = {
         ...(state.activeProfileSummary || {}),
-        isFollowing: nowFollowing,
-        followersCount: Math.max(0, Number(state.activeProfileSummary?.followersCount || 0) + (nowFollowing ? 1 : -1)),
+        isFollowing: syncedFollowing,
+        followersCount: Math.max(0, Number(state.activeProfileSummary?.followersCount || 0) + (syncedFollowing === wasFollowing ? 0 : (syncedFollowing ? 1 : -1))),
       };
       renderProfileRoute();
     }
-  } catch {
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao seguir membro:', err);
     Utils.showToast('Erro ao seguir membro.', 'error');
+  } finally {
+    state.pendingFollows.delete(memberId);
+    document.querySelectorAll(`[data-follow="${memberId}"],[data-profile-follow="${memberId}"]`).forEach((btn) => {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+    });
   }
+}
+
+function openMemberSearch() {
+  const card = document.querySelector('.social-member-search-card');
+  const input = document.getElementById('socialSearchInput');
+  const box = document.getElementById('socialSearchResults');
+  if (!input || !box) return;
+  document.body.classList.add('social-search-open');
+  renderSocialSearchSuggestions(box);
+  card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  requestAnimationFrame(() => input.focus({ preventScroll: true }));
 }
 
 function bindSearch() {
@@ -1516,6 +1629,10 @@ function bindSearch() {
   const clear = document.getElementById('socialSearchClear');
   if (!input || !box) return;
   let timer;
+  document.getElementById('openSearchBtn')?.addEventListener('click', openMemberSearch);
+  document.getElementById('openSearchMobileBtn')?.addEventListener('click', openMemberSearch);
+  document.getElementById('openMyProfileBtn')?.addEventListener('click', () => openProfile(state.profile.id));
+  document.getElementById('openMyProfileMobileBtn')?.addEventListener('click', () => openProfile(state.profile.id));
   const close = () => {
     document.body.classList.remove('social-search-open');
     box.classList.remove('open');
@@ -1570,7 +1687,7 @@ function bindSearch() {
     renderSocialSearchSuggestions(box);
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.social-member-search-card')) close();
+    if (!e.target.closest('.social-member-search-card') && !e.target.closest('#openSearchBtn,#openSearchMobileBtn')) close();
   });
 }
 
@@ -1770,9 +1887,7 @@ function showProfileRouteLoading(member) {
   const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
   if (!feed || !route) return;
-  document.body.classList.add('social-profile-mode');
-  feed.hidden = true;
-  route.hidden = false;
+  showProfileOnlyRoute();
   route.innerHTML = `
     <div class="social-profile-page">
       <header class="social-profile-topbar">
@@ -1795,6 +1910,10 @@ function showProfileRouteLoading(member) {
       <div class="social-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando perfil social...</div>
     </div>`;
   route.querySelector('[data-back-feed]')?.addEventListener('click', closeProfileRoute);
+  requestAnimationFrame(() => {
+    route.scrollTo?.({ top: 0, behavior: 'auto' });
+    document.getElementById('pageContent')?.scrollTo?.({ top: 0, behavior: 'auto' });
+  });
 }
 
 function renderProfileRoute() {
@@ -1802,9 +1921,7 @@ function renderProfileRoute() {
   const feed = document.getElementById('feedRouteView');
   const member = findMember(state.activeProfileId);
   if (!route || !feed || !member) return;
-  document.body.classList.add('social-profile-mode');
-  feed.hidden = true;
-  route.hidden = false;
+  showProfileOnlyRoute();
   const summary = state.activeProfileSummary || {};
   const isMe = member.id === state.profile.id;
   const followingMember = isFollowing(member.id) || summary.isFollowing;
@@ -1857,6 +1974,10 @@ function renderProfileRoute() {
     </div>`;
   bindProfileRoute(route);
   hydrateFeedEnhancements(route);
+  requestAnimationFrame(() => {
+    route.scrollTo?.({ top: 0, behavior: 'auto' });
+    document.getElementById('pageContent')?.scrollTo?.({ top: 0, behavior: 'auto' });
+  });
 }
 
 function renderProfileTab(member, posts, mediaItems) {
@@ -1907,14 +2028,11 @@ function closeProfileRoute({ replace = false } = {}) {
   state.activeProfileId = null;
   state.activeProfilePosts = [];
   state.activeProfileSummary = null;
-  document.body.classList.remove('social-profile-mode');
-  const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
-  if (feed) feed.hidden = false;
   if (route) {
-    route.hidden = true;
     route.innerHTML = '';
   }
+  showFeedRoute();
   if (!replace) history.pushState({}, '', location.pathname);
   requestAnimationFrame(() => window.scrollTo({ top: state.feedScrollBeforeProfile || 0, behavior: 'auto' }));
 }
@@ -2541,8 +2659,14 @@ function openFollowList(memberId, type = 'followers') {
   const member = state.members.find((item) => item.id === memberId) || state.profile;
   const list = getFollowMembers(memberId, type);
   const modal = document.getElementById('profileViewer');
+  modal.classList.remove('social-profile-editor-viewer');
+  modal.classList.add('follow-list-viewer');
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.padding = window.matchMedia('(max-width: 640px)').matches ? '14px' : '18px';
+  modal.style.background = 'rgba(0,0,0,.74)';
   modal.innerHTML = `
-    <div class="profile-panel">
+    <div class="profile-panel follow-list-panel" style="width:min(430px,calc(100vw - 28px));height:auto;max-height:min(600px,72dvh);border-radius:24px;overflow:hidden">
       <div class="profile-modal-body">
         <div class="profile-modal-head">
           <div>
@@ -2551,7 +2675,7 @@ function openFollowList(memberId, type = 'followers') {
           </div>
           <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="social-search-results open" style="position:static;display:flex;flex-direction:column;gap:10px;box-shadow:none;border:none;background:transparent;padding:0">
+        <div class="social-search-results follow-list-results open" style="position:static;display:flex;flex-direction:column;gap:10px;box-shadow:none;border:none;background:transparent;padding:0">
           ${list.length ? list.map((person) => `
             <div class="social-result-item" data-open-profile="${person.id}">
               ${avatar(person, 36)}
@@ -2564,59 +2688,168 @@ function openFollowList(memberId, type = 'followers') {
       </div>
     </div>`;
   openModal(modal);
-  modal.querySelectorAll('[data-open-profile]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.openProfile)));
+  modal.querySelectorAll('[data-open-profile]').forEach((node) => node.addEventListener('click', () => {
+    closeSocialModals();
+    openProfile(node.dataset.openProfile);
+  }));
 }
 
 function openSocialProfileEditor() {
   const modal = document.getElementById('profileViewer');
+  const stats = socialProfileStats(state.profile.id);
+  const socialAvatar = state.profile.social_avatar_url || state.profile.avatar_url || '';
+  modal.classList.remove('follow-list-viewer');
+  ['align-items', 'justify-content', 'padding', 'background'].forEach((prop) => modal.style.removeProperty(prop));
+  modal.classList.add('social-profile-editor-viewer');
   modal.innerHTML = `
-    <div class="profile-panel">
-      <div class="profile-modal-body">
-        <div class="profile-modal-head">
-          <div>
-            <div class="profile-modal-name">Editar perfil</div>
-            <div class="profile-modal-meta">Dados públicos, bio e banner</div>
+    <div class="profile-panel social-editor-panel">
+      <div class="social-editor-banner" id="socialEditorBannerPreview" style="${state.profile.banner_url ? `background-image:url('${Utils.escapeHtml(state.profile.banner_url)}')` : ''}">
+        <button type="button" class="social-editor-media-btn" data-pick-social-banner><i class="fa-solid fa-image"></i> Trocar banner</button>
+      </div>
+      <div class="social-editor-body">
+        <div class="social-editor-head">
+          <div class="social-editor-avatar-wrap">
+            <div class="social-editor-avatar-preview" id="socialEditorAvatarPreview">
+              ${socialAvatar ? `<img src="${Utils.escapeHtml(socialAvatar)}" alt="Avatar social">` : avatar(state.profile, 86)}
+            </div>
+            <button type="button" class="social-editor-avatar-btn" data-pick-social-avatar><i class="fa-solid fa-camera"></i></button>
+          </div>
+          <div class="social-editor-title">
+            <span>Meu perfil social</span>
+            <strong>${Utils.escapeHtml(state.profile.name || 'Membro MSY')}</strong>
+            <em>@${Utils.escapeHtml(displayUsername(state.profile))}</em>
           </div>
           <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <label class="message-sub">Username</label>
-        <input id="socialUsernameInput" class="comment-input" maxlength="24" value="${Utils.escapeHtml(displayUsername(state.profile))}" placeholder="username">
-        <label class="message-sub" style="margin-top:12px">Bio</label>
-        <textarea id="socialBioInput" class="story-caption-input" maxlength="180" placeholder="Conte um pouco sobre voce.">${Utils.escapeHtml(state.profile.social_bio || state.profile.bio || '')}</textarea>
-        <label class="message-sub" style="margin-top:12px">Banner</label>
-        <input id="socialBannerInput" class="comment-input" value="${Utils.escapeHtml(state.profile.banner_url || '')}" placeholder="https://...">
-        <div style="display:flex;justify-content:flex-end;margin-top:16px">
-          <button class="btn btn-primary social-submit" id="saveSocialProfileBtn"><i class="fa-solid fa-floppy-disk"></i> Salvar perfil</button>
+
+        <div class="social-editor-stats">
+          <button type="button" data-open-my-profile><strong>${stats.posts}</strong><span>posts</span></button>
+          <button type="button" data-open-followers="${state.profile.id}"><strong>${stats.followers}</strong><span>seguidores</span></button>
+          <button type="button" data-open-following="${state.profile.id}"><strong>${stats.following}</strong><span>seguindo</span></button>
+        </div>
+
+        <input type="file" id="socialAvatarFile" accept="image/*" hidden>
+        <input type="file" id="socialBannerFile" accept="image/*" hidden>
+
+        <div class="social-editor-grid">
+          <label class="social-editor-field">
+            <span>Username</span>
+            <input id="socialUsernameInput" class="comment-input" maxlength="24" value="${Utils.escapeHtml(displayUsername(state.profile))}" placeholder="username">
+          </label>
+          <label class="social-editor-field">
+            <span>Foto social por URL</span>
+            <input id="socialAvatarInput" class="comment-input" value="${Utils.escapeHtml(state.profile.social_avatar_url || '')}" placeholder="https://...">
+          </label>
+          <label class="social-editor-field social-editor-field-wide">
+            <span>Bio social</span>
+            <textarea id="socialBioInput" class="story-caption-input" maxlength="180" placeholder="Conte um pouco sobre voce.">${Utils.escapeHtml(state.profile.social_bio || state.profile.bio || '')}</textarea>
+          </label>
+          <label class="social-editor-field social-editor-field-wide">
+            <span>Banner por URL</span>
+            <input id="socialBannerInput" class="comment-input" value="${Utils.escapeHtml(state.profile.banner_url || '')}" placeholder="https://...">
+          </label>
+        </div>
+
+        <div class="social-editor-actions">
+          <button type="button" class="follow-btn" data-open-my-profile><i class="fa-regular fa-user"></i> Ver perfil</button>
+          <button class="btn btn-primary social-submit" id="saveSocialProfileBtn"><i class="fa-solid fa-floppy-disk"></i> Salvar perfil social</button>
         </div>
       </div>
     </div>`;
   openModal(modal);
+  modal.querySelector('[data-pick-social-avatar]')?.addEventListener('click', () => modal.querySelector('#socialAvatarFile')?.click());
+  modal.querySelector('[data-pick-social-banner]')?.addEventListener('click', () => modal.querySelector('#socialBannerFile')?.click());
+  modal.querySelectorAll('[data-open-my-profile]').forEach((btn) => btn.addEventListener('click', () => {
+    closeSocialModals();
+    openProfile(state.profile.id);
+  }));
+  modal.querySelectorAll('[data-open-followers]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowers, 'followers')));
+  modal.querySelectorAll('[data-open-following]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowing, 'following')));
+  modal.querySelector('#socialAvatarFile')?.addEventListener('change', () => previewSocialProfileImage(modal, 'avatar'));
+  modal.querySelector('#socialBannerFile')?.addEventListener('change', () => previewSocialProfileImage(modal, 'banner'));
+  modal.querySelector('#socialAvatarInput')?.addEventListener('input', (e) => updateSocialAvatarPreview(e.target.value));
+  modal.querySelector('#socialBannerInput')?.addEventListener('input', (e) => updateSocialBannerPreview(e.target.value));
   modal.querySelector('#saveSocialProfileBtn')?.addEventListener('click', saveSocialProfile);
+}
+
+function updateSocialAvatarPreview(url) {
+  const preview = document.getElementById('socialEditorAvatarPreview');
+  if (!preview) return;
+  const value = String(url || '').trim();
+  preview.innerHTML = value
+    ? `<img src="${Utils.escapeHtml(value)}" alt="Avatar social">`
+    : avatar(state.profile, 86);
+}
+
+function updateSocialBannerPreview(url) {
+  const preview = document.getElementById('socialEditorBannerPreview');
+  if (!preview) return;
+  const value = String(url || '').trim();
+  preview.style.backgroundImage = value ? `url("${value.replace(/"/g, '%22')}")` : '';
+}
+
+function previewSocialProfileImage(modal, kind) {
+  const input = modal.querySelector(kind === 'avatar' ? '#socialAvatarFile' : '#socialBannerFile');
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    Utils.showToast('Use apenas imagem para o perfil social.', 'error');
+    input.value = '';
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  if (kind === 'avatar') {
+    updateSocialAvatarPreview(url);
+  } else {
+    updateSocialBannerPreview(url);
+  }
 }
 
 async function saveSocialProfile() {
   const username = document.getElementById('socialUsernameInput')?.value || '';
   const social_bio = document.getElementById('socialBioInput')?.value || '';
-  const banner_url = document.getElementById('socialBannerInput')?.value || '';
+  let social_avatar_url = document.getElementById('socialAvatarInput')?.value.trim() || '';
+  let banner_url = document.getElementById('socialBannerInput')?.value.trim() || '';
+  const avatarFile = document.getElementById('socialAvatarFile')?.files?.[0] || null;
+  const bannerFile = document.getElementById('socialBannerFile')?.files?.[0] || null;
+  const saveBtn = document.getElementById('saveSocialProfileBtn');
   try {
-    const profile = await state.service.updateSocialProfile({ username, social_bio, banner_url });
+    if (saveBtn) saveBtn.disabled = true;
+    if (avatarFile) {
+      if (!avatarFile.type.startsWith('image/')) throw new Error('A foto do perfil precisa ser uma imagem.');
+      validateMediaFile(avatarFile, { maxImageMB: 8, maxVideoMB: 0 });
+      social_avatar_url = (await uploadSocialMedia(db, state.profile.id, avatarFile, 'profile/avatar')).url;
+    }
+    if (bannerFile) {
+      if (!bannerFile.type.startsWith('image/')) throw new Error('O banner precisa ser uma imagem.');
+      validateMediaFile(bannerFile, { maxImageMB: 12, maxVideoMB: 0 });
+      banner_url = (await uploadSocialMedia(db, state.profile.id, bannerFile, 'profile/banner')).url;
+    }
+    const profile = await state.service.updateSocialProfile({ username, social_bio, banner_url, social_avatar_url });
     state.profile = profile;
     state.members = state.members.map((member) => member.id === profile.id ? { ...member, ...profile } : member);
     state.posts = state.posts.map((post) => post.author_id === profile.id
-      ? { ...post, author: { ...post.author, ...profile, username: displayUsername(profile), social_bio: profile.social_bio, banner_url: profile.banner_url } }
+      ? { ...post, author: { ...post.author, ...profile, username: displayUsername(profile), social_bio: profile.social_bio, banner_url: profile.banner_url, social_avatar_url: profile.social_avatar_url } }
       : post);
+    renderStories();
     renderPosts();
     renderSuggestions();
+    renderMyProfileCard();
+    renderTopProfileChip();
     if (state.activeProfileId === profile.id) {
       state.activeProfilePosts = state.posts.filter((post) => post.author_id === profile.id);
       renderProfileRoute();
     }
-    Utils.showToast('Perfil social atualizado.');
+    Utils.showToast(profile._socialAvatarPendingMigration
+      ? 'Perfil atualizado. Rode a migration social para salvar a foto social separada.'
+      : 'Perfil social atualizado.');
     closeSocialModals();
     openProfile(profile.id);
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao atualizar perfil social:', err);
     Utils.showToast(err.message || 'Erro ao salvar perfil social.', 'error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 

@@ -8,6 +8,7 @@
 -- ── PERFIL SOCIAL ─────────────────────────────────────────
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS username text,
+  ADD COLUMN IF NOT EXISTS social_avatar_url text,
   ADD COLUMN IF NOT EXISTS banner_url text,
   ADD COLUMN IF NOT EXISTS social_bio text,
   ADD COLUMN IF NOT EXISTS social_links jsonb NOT NULL DEFAULT '[]'::jsonb,
