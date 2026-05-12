@@ -672,11 +672,16 @@ function bindComposer() {
   document.getElementById('emojiBtn').addEventListener('click', () => {
     composerInput.value += composerInput.value.endsWith(' ') || !composerInput.value ? '✨ ' : ' ✨ ';
     composerInput.focus();
+    syncComposerState();
   });
+  composerInput.addEventListener('input', syncComposerState);
   bindMentionAutocomplete(composerInput, { minChars: 1 });
   document.getElementById('storyFiles').addEventListener('change', createStoryFromFile);
   document.getElementById('publishBtn').addEventListener('click', publishPost);
-  files.addEventListener('change', () => addFiles([...files.files]));
+  files.addEventListener('change', () => {
+    addFiles([...files.files]);
+    files.value = '';
+  });
   drop.addEventListener('click', () => files.click());
   ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('dragging'); }));
   ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('dragging'); }));
@@ -698,18 +703,61 @@ function addFiles(files) {
 
 function renderPreviews() {
   const el = document.getElementById('composerPreviews');
-  el.innerHTML = state.previews.map((item) => `
-    <div class="composer-preview" data-preview-id="${item.id}">
-      ${item.media_type === 'video' ? `<video src="${item.url}" muted></video>` : `<img src="${item.url}">`}
-      <button class="composer-preview-remove" title="Remover"><i class="fa-solid fa-xmark"></i></button>
-    </div>`).join('');
+  if (!el) return;
+  if (!state.previews.length) {
+    el.innerHTML = '';
+    syncComposerState();
+    return;
+  }
+  const main = state.previews[0];
+  const mediaNode = (item, attrs = '') => item.media_type === 'video'
+    ? `<video src="${item.url}" muted playsinline ${attrs}></video>`
+    : `<img src="${item.url}" alt="Preview da publicacao" ${attrs}>`;
+  el.innerHTML = `
+    <div class="composer-preview-stage">
+      <div class="composer-preview-main" data-preview-id="${main.id}">
+        ${mediaNode(main)}
+        <button class="composer-preview-remove" title="Remover midia" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
+        <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
+      </div>
+      <div class="composer-preview-info">
+        <strong>Pronto para publicar</strong>
+        <span>${state.previews.length === 1 ? '1 midia selecionada' : `${state.previews.length} midias selecionadas`}</span>
+      </div>
+    </div>
+    ${state.previews.length > 1 ? `
+      <div class="composer-preview-strip" aria-label="Midias selecionadas">
+        ${state.previews.map((item, index) => `
+          <button type="button" class="composer-preview-thumb${index === 0 ? ' active' : ''}" data-preview-focus="${item.id}" aria-label="Midia ${index + 1}">
+            ${mediaNode(item)}
+          </button>`).join('')}
+      </div>` : ''}`;
   el.querySelectorAll('.composer-preview-remove').forEach((btn) => btn.addEventListener('click', () => {
-    const id = btn.closest('.composer-preview').dataset.previewId;
+    const id = btn.closest('[data-preview-id]')?.dataset.previewId;
     const item = state.previews.find((p) => p.id === id);
-    revokePreviews([item]);
+    if (item) revokePreviews([item]);
     state.previews = state.previews.filter((p) => p.id !== id);
     renderPreviews();
   }));
+  el.querySelectorAll('[data-preview-focus]').forEach((btn) => btn.addEventListener('click', () => {
+    const index = state.previews.findIndex((item) => item.id === btn.dataset.previewFocus);
+    if (index <= 0) return;
+    state.previews = [state.previews[index], ...state.previews.filter((_, itemIndex) => itemIndex !== index)];
+    renderPreviews();
+  }));
+  syncComposerState();
+}
+
+function syncComposerState() {
+  const composer = document.querySelector('.social-composer');
+  const hasMedia = state.previews.length > 0;
+  composer?.classList.toggle('composer-has-media', hasMedia);
+  const drop = document.getElementById('composerDrop');
+  if (hasMedia) drop?.classList.remove('visible');
+  const publishBtn = document.getElementById('publishBtn');
+  if (publishBtn) {
+    publishBtn.classList.toggle('composer-primary-ready', hasMedia || Boolean(document.getElementById('composerText')?.value.trim()));
+  }
 }
 
 async function publishPost() {
