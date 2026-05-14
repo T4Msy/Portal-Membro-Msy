@@ -643,16 +643,17 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
   body[data-page="feed"] .mobile-action-scrim{position:fixed;inset:0;background:rgba(0,0,0,.22);opacity:0;transition:opacity .18s var(--ease);pointer-events:none}
   body.social-mobile-actions-open[data-page="feed"] .mobile-action-scrim{opacity:1;pointer-events:auto}
   body[data-page="feed"] .mobile-action-menu{position:absolute;right:0;bottom:72px;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none}
-  body[data-page="feed"] .mobile-action-menu button{min-width:152px;height:46px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(17,17,22,.96);backdrop-filter:blur(18px);color:#fff;display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:0 14px;font-weight:950;box-shadow:0 16px 42px rgba(0,0,0,.35);opacity:0;transform:translateY(12px) scale(.96);transition:opacity .18s var(--ease),transform .18s var(--ease)}
-  body[data-page="feed"] .mobile-action-menu button i{width:22px;color:#ff5360}
+  body[data-page="feed"] .mobile-action-menu button,body[data-page="feed"] .mobile-action-menu .mobile-action-picker{position:relative;min-width:152px;height:46px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(17,17,22,.96);backdrop-filter:blur(18px);color:#fff;display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:0 14px;font-weight:950;box-shadow:0 16px 42px rgba(0,0,0,.35);opacity:0;transform:translateY(12px) scale(.96);transition:opacity .18s var(--ease),transform .18s var(--ease);overflow:hidden}
+  body[data-page="feed"] .mobile-action-menu button i,body[data-page="feed"] .mobile-action-menu .mobile-action-picker i{width:22px;color:#ff5360}
+  body[data-page="feed"] .mobile-action-picker input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px}
   body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu{pointer-events:auto}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button{opacity:1;transform:translateY(0) scale(1)}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(1){transition-delay:.02s}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(2){transition-delay:.04s}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(3){transition-delay:.06s}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(4){transition-delay:.08s}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(5){transition-delay:.1s}
-  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button:nth-child(6){transition-delay:.12s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu button,body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu .mobile-action-picker{opacity:1;transform:translateY(0) scale(1)}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(1){transition-delay:.02s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(2){transition-delay:.04s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(3){transition-delay:.06s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(4){transition-delay:.08s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(5){transition-delay:.1s}
+  body.social-mobile-actions-open[data-page="feed"] .mobile-action-menu > :nth-child(6){transition-delay:.12s}
 
   body[data-page="feed"] .activity-drawer-panel{border-radius:26px 26px 0 0!important;height:88dvh!important;max-height:88dvh!important;margin-top:auto!important;padding:16px 13px calc(18px + env(safe-area-inset-bottom))!important;animation:mobileSheetIn .22s var(--ease) both}
   body[data-page="feed"] .profile-viewer:has(.activity-drawer-panel){align-items:flex-end!important}

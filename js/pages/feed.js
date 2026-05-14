@@ -339,8 +339,14 @@ function layout() {
     <div class="mobile-action-dock" id="mobileActionDock">
       <div class="mobile-action-scrim" data-mobile-action-close></div>
       <div class="mobile-action-menu" aria-hidden="true">
-        <button type="button" data-mobile-action="post"><i class="fa-solid fa-plus"></i><span>Publicar</span></button>
-        <button type="button" data-mobile-action="story"><i class="fa-solid fa-circle-play"></i><span>Story</span></button>
+        <label class="mobile-action-picker">
+          <input type="file" id="mobileComposerFiles" accept="image/*,video/*" multiple>
+          <i class="fa-solid fa-plus"></i><span>Publicar</span>
+        </label>
+        <label class="mobile-action-picker">
+          <input type="file" id="mobileStoryFiles" accept="image/*,video/*" multiple>
+          <i class="fa-solid fa-circle-play"></i><span>Story</span>
+        </label>
         <button type="button" data-mobile-action="search"><i class="fa-solid fa-magnifying-glass"></i><span>Buscar</span></button>
         <button type="button" data-mobile-action="activity"><i class="fa-regular fa-heart"></i><span>Atividade</span></button>
         <button type="button" data-mobile-action="direct"><i class="fa-regular fa-paper-plane"></i><span>Direct</span></button>
@@ -611,11 +617,18 @@ function toggleMobileActions() {
 function bindMobileActionDock() {
   document.getElementById('mobileActionToggle')?.addEventListener('click', toggleMobileActions);
   document.querySelectorAll('[data-mobile-action-close]').forEach((node) => node.addEventListener('click', closeMobileActions));
+  document.getElementById('mobileComposerFiles')?.addEventListener('change', (e) => {
+    addFiles([...e.currentTarget.files]);
+    e.currentTarget.value = '';
+    closeMobileActions();
+  });
+  document.getElementById('mobileStoryFiles')?.addEventListener('change', (e) => {
+    createStoryFromFile(e);
+    closeMobileActions();
+  });
   document.querySelectorAll('[data-mobile-action]').forEach((node) => node.addEventListener('click', () => {
     const action = node.dataset.mobileAction;
     closeMobileActions();
-    if (action === 'post') openPostMediaPicker();
-    if (action === 'story') openStoryMediaPicker();
     if (action === 'search') openMemberSearch();
     if (action === 'activity') openSocialNotificationsDrawer();
     if (action === 'direct') openDirectInbox();
@@ -1124,12 +1137,12 @@ async function publishPost() {
   }
 }
 
-async function createStoryFromFile() {
+async function createStoryFromFile(e = null) {
   if (!state.hasSocialTables) {
     Utils.showToast('Aplique a migration social no Supabase antes de criar stories.', 'error');
     return;
   }
-  const input = document.getElementById('storyFiles');
+  const input = e?.currentTarget || e?.target || document.getElementById('storyFiles');
   const files = [...(input.files || [])];
   if (!files.length) return;
   try {
