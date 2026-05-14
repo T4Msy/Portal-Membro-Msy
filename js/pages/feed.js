@@ -32,6 +32,7 @@ const state = {
   storyCursor: null,
   storyMediaCache: new Map(),
   storyPreloadQueue: new Set(),
+  storySoundMuted: false,
   modalScrollY: 0,
   bodyLockTop: '',
   hasSocialTables: true,
@@ -158,6 +159,14 @@ function findMember(memberId) {
 
 function isMobileSocial() {
   return window.matchMedia('(max-width: 640px)').matches;
+}
+
+function openPostMediaPicker() {
+  document.getElementById('composerFiles')?.click();
+}
+
+function openStoryMediaPicker() {
+  document.getElementById('storyFiles')?.click();
 }
 
 function directStreakMeta(streak = {}) {
@@ -293,8 +302,8 @@ function layout() {
             <i class="fa-solid fa-cloud-arrow-up"></i>
             Arraste imagens ou videos aqui, ou clique para escolher.
           </div>
-          <input type="file" id="composerFiles" accept="image/*,video/mp4,video/webm,video/quicktime" multiple hidden>
-          <input type="file" id="storyFiles" accept="image/*,video/mp4,video/webm,video/quicktime" multiple hidden>
+          <input type="file" id="composerFiles" accept="image/*,video/*" multiple hidden>
+          <input type="file" id="storyFiles" accept="image/*,video/*" multiple hidden>
           <div class="composer-previews" id="composerPreviews"></div>
           <div class="composer-actions">
             <div class="composer-tools">
@@ -448,7 +457,7 @@ function renderStories() {
       <div class="story-label">${Utils.escapeHtml(group.author?.name || 'Membro')}</div>
     </div>`).join('');
   el.innerHTML = create + stories;
-  document.getElementById('createStoryBubble')?.addEventListener('click', () => document.getElementById('storyFiles').click());
+  document.getElementById('createStoryBubble')?.addEventListener('click', openStoryMediaPicker);
   el.querySelectorAll('[data-story-index]').forEach((node) => {
     node.addEventListener('click', () => openStory(Number(node.dataset.storyIndex), 0));
   });
@@ -605,8 +614,8 @@ function bindMobileActionDock() {
   document.querySelectorAll('[data-mobile-action]').forEach((node) => node.addEventListener('click', () => {
     const action = node.dataset.mobileAction;
     closeMobileActions();
-    if (action === 'post') openMobilePostComposer();
-    if (action === 'story') document.getElementById('storyFiles')?.click();
+    if (action === 'post') openPostMediaPicker();
+    if (action === 'story') openStoryMediaPicker();
     if (action === 'search') openMemberSearch();
     if (action === 'activity') openSocialNotificationsDrawer();
     if (action === 'direct') openDirectInbox();
@@ -876,11 +885,11 @@ function bindComposer() {
   window.addEventListener('resize', syncComposerPlaceholder);
   document.getElementById('mediaBtn').addEventListener('click', () => {
     if (isMobileSocial()) {
-      openMobilePostComposer({ pickMedia: true });
+      openPostMediaPicker();
       return;
     }
     drop.classList.toggle('visible');
-    files.click();
+    openPostMediaPicker();
   });
   document.getElementById('openDirectBtn')?.addEventListener('click', () => openDirectInbox());
   document.getElementById('emojiBtn').addEventListener('click', () => {
@@ -899,7 +908,7 @@ function bindComposer() {
     addFiles([...files.files]);
     files.value = '';
   });
-  drop.addEventListener('click', () => files.click());
+  drop.addEventListener('click', openPostMediaPicker);
   ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('dragging'); }));
   ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('dragging'); }));
   drop.addEventListener('drop', (e) => addFiles([...e.dataTransfer.files]));
@@ -979,14 +988,13 @@ function syncComposerState() {
   }
 }
 
-function openMobilePostComposer({ pickMedia = false } = {}) {
+function openMobilePostComposer() {
   const modal = document.getElementById('mobilePostComposerModal');
   if (!modal) return;
   renderMobilePostComposer();
   openModal(modal);
   const input = modal.querySelector('#mobileComposerText');
   requestAnimationFrame(() => input?.focus({ preventScroll: true }));
-  if (pickMedia) setTimeout(() => document.getElementById('composerFiles')?.click(), 120);
 }
 
 function renderMobilePostComposer() {
@@ -1024,7 +1032,7 @@ function renderMobilePostComposer() {
     modal.querySelector('[data-mobile-publish]')?.toggleAttribute('disabled', !Boolean(mobileText.value.trim() || state.previews.length));
   });
   bindMentionAutocomplete(mobileText, { minChars: 1 });
-  modal.querySelectorAll('[data-mobile-pick-media]').forEach((btn) => btn.addEventListener('click', () => document.getElementById('composerFiles')?.click()));
+  modal.querySelectorAll('[data-mobile-pick-media]').forEach((btn) => btn.addEventListener('click', openPostMediaPicker));
   modal.querySelector('[data-mobile-emoji]')?.addEventListener('click', () => {
     if (!mobileText) return;
     mobileText.value += mobileText.value.endsWith(' ') || !mobileText.value ? '✨ ' : ' ✨ ';
@@ -2227,6 +2235,68 @@ function renderStoryProgress(group, storyIndex) {
     </div>`;
 }
 
+function updateStorySoundControl(modal, video = null) {
+  const btn = modal.querySelector('[data-story-sound-toggle]');
+  const storyVideo = video || modal.querySelector('.story-media video');
+  if (!btn || !(storyVideo instanceof HTMLVideoElement)) return;
+  const muted = storyVideo.muted || storyVideo.volume === 0;
+  btn.classList.toggle('muted', muted);
+  btn.setAttribute('aria-label', muted ? 'Ativar som do story' : 'Silenciar story');
+  btn.setAttribute('title', muted ? 'Ativar som' : 'Silenciar');
+  btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  btn.innerHTML = `<i class="fa-solid fa-${muted ? 'volume-xmark' : 'volume-high'}"></i>`;
+}
+
+function applyStorySoundPreference(video) {
+  if (!(video instanceof HTMLVideoElement)) return;
+  if (video.dataset.storyAudioFallback === 'true' && !state.storySoundMuted) return;
+  video.defaultMuted = false;
+  video.muted = Boolean(state.storySoundMuted);
+  if (!video.muted && video.volume === 0) video.volume = 1;
+}
+
+function playStoryVideo(video, modal, { allowMutedFallback = true } = {}) {
+  if (!(video instanceof HTMLVideoElement)) return Promise.resolve();
+  applyStorySoundPreference(video);
+  updateStorySoundControl(modal, video);
+  const playPromise = video.play?.();
+  if (!playPromise?.catch) return Promise.resolve();
+  return playPromise.catch((err) => {
+    if (!video.muted && allowMutedFallback) {
+      video.muted = true;
+      video.dataset.storyAudioFallback = 'true';
+      updateStorySoundControl(modal, video);
+      const mutedPlay = video.play?.();
+      if (mutedPlay?.catch) {
+        mutedPlay.catch((mutedErr) => {
+          console.warn('[MSY][feed-social] Video do story nao iniciou mudo:', mutedErr);
+        });
+      }
+      return;
+    }
+    console.warn('[MSY][feed-social] Video do story nao iniciou:', err);
+  });
+}
+
+function bindStorySoundControl(modal) {
+  const video = modal.querySelector('.story-media video');
+  const btn = modal.querySelector('[data-story-sound-toggle]');
+  if (!(video instanceof HTMLVideoElement) || !btn) return;
+  applyStorySoundPreference(video);
+  updateStorySoundControl(modal, video);
+  video.addEventListener('volumechange', () => updateStorySoundControl(modal, video));
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    delete video.dataset.storyAudioFallback;
+    state.storySoundMuted = !video.muted;
+    video.muted = state.storySoundMuted;
+    if (!video.muted && video.volume === 0) video.volume = 1;
+    updateStorySoundControl(modal, video);
+    playStoryVideo(video, modal, { allowMutedFallback: false });
+  });
+}
+
 function markStoryMediaReady(modal) {
   const mediaWrap = modal.querySelector('.story-media');
   const media = modal.querySelector('.story-media img,.story-media video');
@@ -2239,13 +2309,13 @@ function markStoryMediaReady(modal) {
   }
   if (media instanceof HTMLVideoElement && media.readyState >= 2) {
     ready();
-    media.play?.().catch(() => {});
+    playStoryVideo(media, modal);
     return;
   }
   media.addEventListener('load', ready, { once: true });
   media.addEventListener('loadeddata', () => {
     ready();
-    media.play?.().catch(() => {});
+    playStoryVideo(media, modal);
   }, { once: true });
   media.addEventListener('canplay', ready, { once: true });
   media.addEventListener('error', failed, { once: true });
@@ -2271,7 +2341,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
       <div class="story-media story-media-premium is-loading">
         <div class="story-media-loader"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
         ${story.media_type === 'video'
-          ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay muted playsinline webkit-playsinline preload="auto"></video>`
+          ? `<video src="${Utils.escapeHtml(story.media_url)}" playsinline webkit-playsinline preload="auto"></video>`
           : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}
       </div>
       <div class="story-top story-top-instagram">
@@ -2280,6 +2350,8 @@ async function openStoryPremium(groupIndex, storyIndex) {
           <strong>${Utils.escapeHtml(displayUsername(group.author || {}))}</strong>
           <span>${timeAgo(story.created_at)}</span>
         </div>
+        ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
+        ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Visualizacoes" aria-label="Visualizacoes do story"><i class="fa-regular fa-eye"></i></button>' : ''}
         ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -2290,9 +2362,6 @@ async function openStoryPremium(groupIndex, storyIndex) {
           <button type="submit" class="story-inline-send" aria-label="Enviar resposta"><i class="fa-regular fa-paper-plane"></i></button>
         </form>
         <button class="story-social-icon" data-story-reaction="heart" title="Curtir story"><i class="fa-regular fa-heart"></i><span></span></button>
-        <button class="story-social-icon" data-story-focus-reply title="Responder story"><i class="fa-regular fa-comment"></i></button>
-        <button class="story-social-icon" data-share-story title="Enviar"><i class="fa-regular fa-paper-plane"></i></button>
-        ${canViewReactions ? `<button class="story-social-icon" data-toggle-story-reactions title="Visualizacoes"><i class="fa-regular fa-eye"></i><span id="storyReactionsCount">...</span></button>` : ''}
       </div>
       ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel">
         <div class="story-reactions-title">Atividade do story</div>
@@ -2301,6 +2370,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
     </div>`;
 
   openModal(modal);
+  bindStorySoundControl(modal);
   mediaReady.finally(() => markStoryMediaReady(modal));
   markStoryMediaReady(modal);
 
@@ -2395,7 +2465,7 @@ async function openStoryFast(groupIndex, storyIndex) {
       <div class="story-progress"><span></span></div>
       <button type="button" class="story-tap-zone story-tap-prev" data-story-prev aria-label="Story anterior"></button>
       <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
-      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay playsinline preload="auto"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}</div>
+      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" controls playsinline webkit-playsinline preload="auto"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}</div>
       <div class="story-top">
         ${avatar(group.author, 34)}
         <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
@@ -2500,7 +2570,7 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
       if (Number.isFinite(video.duration) && video.duration > 0) {
         bar.style.animation = `storyProgress ${Math.max(3, Math.min(video.duration, 18))}s linear forwards`;
       }
-      video.play?.().catch(() => {});
+      playStoryVideo(video, modal);
     };
     if (video.readyState >= 1) syncVideoProgress();
     else video.addEventListener('loadedmetadata', syncVideoProgress, { once: true });

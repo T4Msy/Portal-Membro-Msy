@@ -227,7 +227,10 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
 .story-media-premium.failed::after{content:"Nao foi possivel carregar este story";position:absolute;left:20px;right:20px;top:50%;transform:translateY(-50%);z-index:2;color:#fff;text-align:center;font-weight:800}
 .story-viewer.open .story-progress-stack{left:10px;right:10px;top:10px;z-index:12}
 .story-viewer.open .story-top-instagram{top:22px;left:16px;right:12px;z-index:13;display:flex;align-items:center;gap:10px}
-.story-viewer.open .story-bottom-instagram{left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:13;display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;align-items:center;gap:10px}
+.story-viewer.open .story-top-instagram .story-author-copy{flex:1;min-width:0}
+.story-sound-toggle{width:42px;height:42px;flex:0 0 42px;border-radius:50%;border:1px solid rgba(255,255,255,.26);background:rgba(0,0,0,.28);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;text-shadow:0 2px 12px rgba(0,0,0,.72);backdrop-filter:blur(8px)}
+.story-sound-toggle.muted{color:rgba(255,255,255,.72);background:rgba(0,0,0,.42)}
+.story-viewer.open .story-bottom-instagram{left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:13;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
 .story-viewer.open .story-caption-instagram{z-index:13;left:18px;right:18px;bottom:92px;max-height:24dvh;overflow:auto}
 .story-viewer.open .story-tap-zone{top:68px;bottom:92px;width:42%;z-index:5}
 .story-inline-reply{height:52px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(255,255,255,.56);border-radius:999px;background:rgba(4,6,8,.34);backdrop-filter:blur(8px);overflow:hidden}
@@ -237,6 +240,7 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
 .story-social-icon{width:42px;height:46px;border:0;background:transparent;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:1.72rem;cursor:pointer;text-shadow:0 2px 12px rgba(0,0,0,.72)}
 .story-social-icon span{font-size:.68rem;font-weight:900}
 .story-social-icon.active{color:#ff3040;animation:likePop .34s var(--ease)}
+.story-activity-icon{width:42px;height:42px;flex:0 0 42px;border-radius:50%;border:1px solid rgba(255,255,255,.26);background:rgba(0,0,0,.28);font-size:1rem;backdrop-filter:blur(8px)}
 .story-viewer.open .story-reactions-panel{left:12px;right:12px;bottom:86px;z-index:14;max-height:48%;border-radius:18px;background:rgba(6,7,10,.96)}
 @media(max-width:640px){
   body[data-page="feed"] .page-content{padding:0 0 calc(78px + env(safe-area-inset-bottom));overflow-x:hidden}
@@ -254,8 +258,8 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
   .story-viewer.open .story-panel-instagram{width:100vw;height:100dvh;min-height:100svh;max-height:none;border-radius:0;border:0;box-shadow:none}
   .story-viewer.open .story-progress-stack{top:calc(7px + env(safe-area-inset-top));left:8px;right:8px}
   .story-viewer.open .story-top-instagram{top:calc(17px + env(safe-area-inset-top));left:12px;right:8px}
-  .story-viewer.open .story-bottom-instagram{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px}
-  .story-viewer.open .story-bottom-instagram [data-toggle-story-reactions]{display:none}
+  .story-sound-toggle{width:40px;height:40px;flex-basis:40px}
+  .story-viewer.open .story-bottom-instagram{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) auto;gap:8px}
   .story-viewer.open .story-caption-instagram{left:14px;right:14px;bottom:88px;max-height:24dvh}
   .story-viewer.open .story-tap-zone{top:calc(64px + env(safe-area-inset-top));bottom:calc(82px + env(safe-area-inset-bottom));width:44%}
   .story-inline-reply{height:50px}
