@@ -1311,7 +1311,7 @@ function renderStoryComposerControls(item) {
   if (item.media_type === 'video') {
     const duration = Number(item.editState?.duration || 0);
     const trimStart = Number(item.editState?.trimStart || 0);
-    const trimEnd = Number(item.editState?.trimEnd ?? duration || 0);
+    const trimEnd = Number(item.editState?.trimEnd ?? duration ?? 0);
     return `
       <div class="story-compose-tools">
         <div class="form-group" style="margin:0">
@@ -1440,7 +1440,7 @@ function renderStoryComposerBody() {
     if (!file) return;
     try {
       validateMediaFile(file);
-      const nextPreview = filePreview(file);
+      const nextPreview = { ...filePreview(file), isNew: true };
       nextPreview.editState = createStoryMediaEditState(file);
       nextPreview.caption = activeStoryComposerItem()?.caption || '';
       nextPreview.elementsText = activeStoryComposerItem()?.elementsText || '';
@@ -2966,7 +2966,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
       input.value = '';
       Utils.showToast('Resposta enviada no Direct.');
     } catch (err) {
-      console.error(err);
+      console.error('[MSY Feed Error]', err);
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
@@ -3129,7 +3129,7 @@ async function openStoryFast(groupIndex, storyIndex) {
       if (composer) composer.style.display = 'none';
       Utils.showToast('Resposta enviada no Direct.');
     } catch (err) {
-      console.error(err);
+      console.error('[MSY Feed Error]', err);
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
@@ -3362,7 +3362,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
       if (composer) composer.style.display = 'none';
       Utils.showToast('Resposta enviada no Direct.');
     } catch (err) {
-      console.error(err);
+      console.error('[MSY Feed Error]', err);
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
@@ -3572,7 +3572,6 @@ async function openStoryEditor(storyId) {
         ...createStoryMediaEditState(new File([], 'story.mp4', { type: 'video/mp4' })),
         ...story.media_meta,
         exportSupported: supportsVideoEditing(),
-        duration: Number(story.media_meta?.trimEnd || story.media_meta?.duration || 0),
       }
       : {
         ...createStoryMediaEditState(new File([], 'story.webp', { type: 'image/webp' })),

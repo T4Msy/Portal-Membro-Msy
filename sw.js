@@ -2,7 +2,7 @@
    Cache-first para assets estaticos | Network-first para paginas
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v12-mobile-composer-copy';
+const CACHE_VERSION  = 'msy-v13-feed-runtime-fixes';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
@@ -161,17 +161,44 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
 async function networkFirstWithCache(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    const response = await fetchWithTimeout(request, { timeoutMs: 8000 });
+    if (!response || !response.ok) {
+      console.warn('[MSY SW] Resposta de rede inválida para página:', request.url, response?.status);
+      const cachedOnBadResponse = await cache.match(request);
+      if (cachedOnBadResponse) return cachedOnBadResponse;
+      return await offlinePageFallback(cache, response?.status || 503);
+    }
+    cache.put(request, response.clone()).catch((error) => {
+      console.warn('[MSY SW] Falha ao salvar página no cache:', error);
+    });
     return response;
-  } catch (err) {
-    console.warn('[MSY SW] Pagina indisponivel na rede:', err);
+  } catch (error) {
+    console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
     const cached = await cache.match(request);
     if (cached) return cached;
-    const fallback = await cache.match('/offline.html') || await cache.match('/dashboard.html');
-    return fallback || new Response('<h1>Offline</h1><p>Conecte à internet para usar o MSY Portal.</p>', {
-      headers: { 'Content-Type': 'text/html' },
-      status: 503,
-    });
+    return offlinePageFallback(cache, 503);
   }
+}
+
+async function fetchWithTimeout(request, { timeoutMs = 8000 } = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function offlinePageFallback(cache, status = 503) {
+  const cachedOffline = await cache.match('/offline.html')
+    || await caches.match('/offline.html')
+    || await cache.match('/dashboard.html')
+    || await caches.match('/dashboard.html');
+  if (cachedOffline) return cachedOffline;
+  console.warn('[MSY SW] Usando fallback HTML embutido.');
+  return new Response('<h1>Offline</h1><p>Conecte à internet para usar o MSY Portal.</p>', {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status,
+  });
 }
