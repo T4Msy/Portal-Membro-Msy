@@ -4,7 +4,7 @@
    ============================================================ */
 
 import { SocialService } from '../social/social_service.js';
-import { filePreview, revokePreviews, uploadSocialMedia, validateMediaFile } from '../social/social_media.js';
+import { filePreview, removeSocialMedia, revokePreviews, uploadSocialMedia, validateMediaFile } from '../social/social_media.js';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -23,12 +23,19 @@ const state = {
   directConversations: [],
   directUnreadCount: 0,
   activeDirectConversationId: null,
+  directViewportCleanup: null,
   activeProfileId: null,
   activeProfilePosts: [],
+  activeProfileLikedPosts: [],
+  activeProfileSavedPosts: [],
   activeProfileSummary: null,
   activeProfileTab: 'posts',
   previews: [],
+  postEditPreviews: [],
+  activePostEditId: null,
   storyPreviews: [],
+  storyEditPreview: null,
+  activeStoryEditId: null,
   storyCursor: null,
   storyMediaCache: new Map(),
   storyPreloadQueue: new Set(),
@@ -88,7 +95,7 @@ function canManage(post) {
 }
 
 function canEditPost(post) {
-  return post.author_id === state.profile.id;
+  return state.profile.tier === 'diretoria' || post.author_id === state.profile.id;
 }
 
 function canManageStory(story) {
@@ -229,6 +236,16 @@ function closeSocialModals() {
     ['align-items', 'justify-content', 'padding', 'background'].forEach((prop) => m.style.removeProperty(prop));
   });
   state.notificationPanelOpen = false;
+  if (typeof state.directViewportCleanup === 'function') {
+    state.directViewportCleanup();
+    state.directViewportCleanup = null;
+  }
+  if (state.postEditPreviews?.length) revokePreviews(state.postEditPreviews.filter((item) => item.isNew));
+  state.postEditPreviews = [];
+  state.activePostEditId = null;
+  if (state.storyEditPreview?.isNew) revokePreviews([state.storyEditPreview]);
+  state.storyEditPreview = null;
+  state.activeStoryEditId = null;
   unlockBodyScroll();
 }
 
@@ -331,6 +348,7 @@ function layout() {
     <div class="story-viewer" id="storyViewer"></div>
     <div class="media-viewer" id="mediaViewer"></div>
     <div class="post-comments-modal" id="postCommentsModal"></div>
+    <div class="story-composer-modal" id="postEditorModal"></div>
     <div class="story-composer-modal" id="storyComposerModal"></div>
     <div class="story-composer-modal" id="mobilePostComposerModal"></div>
     <div class="profile-viewer" id="socialNotificationsDrawer"></div>
@@ -1290,10 +1308,14 @@ async function addComment(e) {
 async function deletePost(postId) {
   const post = state.posts.find((p) => p.id === postId);
   if (!post || !canManage(post)) return Utils.showToast('Sem permissao para excluir esta publicacao.', 'error');
-  if (!await MSYConfirm.show('Excluir esta publicacao? Esta acao remove o post do feed.', { title: 'Excluir publicacao', type: 'danger', confirmText: 'Excluir' })) return;
+  if (!await MSYConfirm.show('Excluir esta publicacao? Esta acao remove o post do feed e as midias do storage.', { title: 'Excluir publicacao', type: 'danger', confirmText: 'Excluir' })) return;
   try {
-    await state.service.deletePost(postId);
+    const paths = await state.service.deletePost(postId);
+    await removeSocialMedia(db, paths).catch((err) => console.warn('[MSY][feed-social] Post excluido, mas storage manteve midias:', err));
     state.posts = state.posts.filter((p) => p.id !== postId);
+    state.activeProfilePosts = state.activeProfilePosts.filter((p) => p.id !== postId);
+    state.activeProfileLikedPosts = state.activeProfileLikedPosts.filter((p) => p.id !== postId);
+    state.activeProfileSavedPosts = state.activeProfileSavedPosts.filter((p) => p.id !== postId);
     document.getElementById(`post-${postId}`)?.remove();
     Utils.showToast('Publicacao excluida.');
   } catch (err) {
@@ -1304,18 +1326,155 @@ async function deletePost(postId) {
 
 async function editPost(postId) {
   const post = state.posts.find((p) => p.id === postId);
-  if (!post || !canEditPost(post)) return Utils.showToast('Apenas o autor pode editar esta publicacao.', 'error');
-  const next = prompt('Editar publicacao:', post?.content || '');
-  if (next === null) return;
+  if (!post || !canEditPost(post)) return Utils.showToast('Sem permissao para editar esta publicacao.', 'error');
+  openPostEditor(post);
+}
+
+function editorMediaNode(item) {
+  return item.media_type === 'video'
+    ? `<video src="${Utils.escapeHtml(item.url)}" muted playsinline controls></video>`
+    : `<img src="${Utils.escapeHtml(item.url)}" alt="Midia da publicacao">`;
+}
+
+function openPostEditor(post) {
+  const modal = document.getElementById('postEditorModal');
+  if (!modal) return;
+  state.activePostEditId = post.id;
+  state.postEditPreviews = (post.media || []).map((item) => ({ ...item, isNew: false }));
+  modal.innerHTML = `
+    <div class="social-edit-post-panel">
+      <div class="social-edit-post-head">
+        <div>
+          <strong>Editar publicacao</strong>
+          <span>Atualize legenda, hashtags, mencoes e carrossel.</span>
+        </div>
+        <button class="social-icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="social-edit-post-body">
+        <textarea id="postEditContent" class="story-caption-input" maxlength="1600" placeholder="Escreva uma legenda...">${Utils.escapeHtml(post.content || '')}</textarea>
+        <input id="postEditFiles" type="file" accept="image/*,video/*" multiple hidden>
+        <div class="social-edit-media-toolbar">
+          <button type="button" class="follow-btn" data-post-edit-add-media><i class="fa-solid fa-image"></i> Adicionar midias</button>
+          <span id="postEditMediaCount">${state.postEditPreviews.length}/10 midias</span>
+        </div>
+        <div class="social-edit-media-list" id="postEditMediaList"></div>
+      </div>
+      <div class="social-edit-post-actions">
+        <button type="button" class="follow-btn" data-close-modal>Cancelar</button>
+        <button type="button" class="btn btn-primary social-submit" id="postEditSave"><i class="fa-solid fa-check"></i> Salvar alteracoes</button>
+      </div>
+    </div>`;
+  openModal(modal);
+  bindMentionAutocomplete(modal.querySelector('#postEditContent'), { minChars: 1 });
+  renderPostEditMediaList();
+  modal.querySelector('[data-post-edit-add-media]')?.addEventListener('click', () => modal.querySelector('#postEditFiles')?.click());
+  modal.querySelector('#postEditFiles')?.addEventListener('change', (e) => {
+    try {
+      [...(e.currentTarget.files || [])].forEach((file) => {
+        validateMediaFile(file);
+        if (state.postEditPreviews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
+        state.postEditPreviews.push({ ...filePreview(file), isNew: true });
+      });
+      renderPostEditMediaList();
+    } catch (err) {
+      Utils.showToast(err.message || 'Erro ao adicionar midia.', 'error');
+    } finally {
+      e.currentTarget.value = '';
+    }
+  });
+  modal.querySelector('#postEditSave')?.addEventListener('click', savePostEditor);
+}
+
+function renderPostEditMediaList() {
+  const list = document.getElementById('postEditMediaList');
+  const count = document.getElementById('postEditMediaCount');
+  if (count) count.textContent = `${state.postEditPreviews.length}/10 midias`;
+  if (!list) return;
+  if (!state.postEditPreviews.length) {
+    list.innerHTML = '<button type="button" class="social-edit-empty-media" data-post-edit-add-media><i class="fa-regular fa-image"></i><span>Adicionar fotos ou videos</span></button>';
+    list.querySelector('[data-post-edit-add-media]')?.addEventListener('click', () => document.getElementById('postEditFiles')?.click());
+    return;
+  }
+  list.innerHTML = state.postEditPreviews.map((item, index) => `
+    <div class="social-edit-media-item" data-edit-media-id="${item.id}">
+      <div class="social-edit-media-preview">${editorMediaNode(item)}</div>
+      <div class="social-edit-media-actions">
+        <span>${index + 1}</span>
+        <button type="button" class="social-icon-btn" data-edit-media-move="-1" ${index === 0 ? 'disabled' : ''} title="Mover para esquerda"><i class="fa-solid fa-arrow-left"></i></button>
+        <button type="button" class="social-icon-btn" data-edit-media-move="1" ${index === state.postEditPreviews.length - 1 ? 'disabled' : ''} title="Mover para direita"><i class="fa-solid fa-arrow-right"></i></button>
+        <button type="button" class="social-icon-btn danger" data-edit-media-remove title="Remover"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('[data-edit-media-remove]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.closest('[data-edit-media-id]')?.dataset.editMediaId;
+    const item = state.postEditPreviews.find((media) => media.id === id);
+    if (item?.isNew) revokePreviews([item]);
+    state.postEditPreviews = state.postEditPreviews.filter((media) => media.id !== id);
+    renderPostEditMediaList();
+  }));
+  list.querySelectorAll('[data-edit-media-move]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.closest('[data-edit-media-id]')?.dataset.editMediaId;
+    const from = state.postEditPreviews.findIndex((media) => media.id === id);
+    const to = from + Number(btn.dataset.editMediaMove);
+    if (from < 0 || to < 0 || to >= state.postEditPreviews.length) return;
+    const [item] = state.postEditPreviews.splice(from, 1);
+    state.postEditPreviews.splice(to, 0, item);
+    renderPostEditMediaList();
+  }));
+}
+
+async function savePostEditor() {
+  const postId = state.activePostEditId;
+  const post = state.posts.find((p) => p.id === postId);
+  if (!post) return;
+  const btn = document.getElementById('postEditSave');
+  const content = document.getElementById('postEditContent')?.value.trim() || '';
+  if (!content && !state.postEditPreviews.length) return Utils.showToast('Mantenha uma legenda ou ao menos uma midia.', 'error');
   try {
-    await state.service.updatePost(postId, next.trim());
-    post.content = next.trim();
-    post.edited_at = new Date().toISOString();
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+    }
+    const media = [];
+    for (const item of state.postEditPreviews) {
+      media.push(item.isNew ? await uploadSocialMedia(db, state.profile.id, item.file, 'posts') : item);
+    }
+    const { removedStoragePaths } = await state.service.updatePost(postId, { content, media });
+    await removeSocialMedia(db, removedStoragePaths).catch((err) => console.warn('[MSY][feed-social] Post atualizado, mas storage manteve midias antigas:', err));
+    revokePreviews(state.postEditPreviews.filter((item) => item.isNew));
+    const fresh = await state.service.loadPostById(postId);
+    if (fresh) {
+      replacePostEverywhere(fresh);
+    } else {
+      post.content = content;
+      post.edited_at = new Date().toISOString();
+      post.media = media;
+    }
+    closeSocialModals();
     updatePostNode(postId);
+    if (state.activeProfileId) renderProfileRoute();
     Utils.showToast('Publicacao atualizada.');
   } catch (err) {
+    console.error('[MSY][feed-social] Erro ao editar publicacao:', err);
     Utils.showToast(err.message || 'Erro ao editar publicacao.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar alteracoes';
+    }
   }
+}
+
+function replacePostEverywhere(post) {
+  [
+    state.posts,
+    state.activeProfilePosts,
+    state.activeProfileLikedPosts,
+    state.activeProfileSavedPosts,
+  ].forEach((collection) => {
+    const index = collection.findIndex((item) => item.id === post.id);
+    if (index >= 0) collection[index] = post;
+  });
 }
 
 async function pinPost(postId) {
@@ -1929,6 +2088,8 @@ async function openProfile(memberId, { replace = false } = {}) {
   if (!state.activeProfileId) state.feedScrollBeforeProfile = window.scrollY || document.documentElement.scrollTop || 0;
   state.activeProfileId = memberId;
   state.activeProfileTab = state.activeProfileTab || 'posts';
+  state.activeProfileLikedPosts = [];
+  state.activeProfileSavedPosts = [];
   showProfileRouteLoading(member);
   if (!replace) {
     const url = new URL(location.href);
@@ -2012,6 +2173,7 @@ function renderProfileRoute() {
   showProfileOnlyRoute();
   const summary = state.activeProfileSummary || {};
   const isMe = member.id === state.profile.id;
+  const canViewPrivateTabs = isMe || state.profile.tier === 'diretoria';
   const followingMember = isFollowing(member.id) || summary.isFollowing;
   const posts = state.activeProfilePosts || [];
   const mediaItems = posts.flatMap((post) => (post.media || []).map((media, index) => ({ post, media, index })));
@@ -2054,10 +2216,12 @@ function renderProfileRoute() {
       <nav class="social-profile-tabs">
         <button class="${state.activeProfileTab === 'posts' ? 'active' : ''}" data-profile-tab="posts"><i class="fa-solid fa-table-cells-large"></i><span>Posts</span></button>
         <button class="${state.activeProfileTab === 'media' ? 'active' : ''}" data-profile-tab="media"><i class="fa-regular fa-image"></i><span>Midias</span></button>
+        ${canViewPrivateTabs ? `<button class="${state.activeProfileTab === 'liked' ? 'active' : ''}" data-profile-tab="liked"><i class="fa-regular fa-heart"></i><span>Curtidos</span></button>
+        <button class="${state.activeProfileTab === 'saved' ? 'active' : ''}" data-profile-tab="saved"><i class="fa-regular fa-bookmark"></i><span>Salvos</span></button>` : ''}
         <button class="${state.activeProfileTab === 'about' ? 'active' : ''}" data-profile-tab="about"><i class="fa-regular fa-user"></i><span>Sobre</span></button>
       </nav>
       <section class="social-profile-content">
-        ${renderProfileTab(member, posts, mediaItems)}
+        ${renderProfileTab(member, posts, mediaItems, canViewPrivateTabs)}
       </section>
     </div>`;
   bindProfileRoute(route);
@@ -2068,7 +2232,7 @@ function renderProfileRoute() {
   });
 }
 
-function renderProfileTab(member, posts, mediaItems) {
+function renderProfileTab(member, posts, mediaItems, canViewPrivateTabs = false) {
   if (state.activeProfileTab === 'media') {
     return mediaItems.length ? `
       <div class="profile-media-grid">
@@ -2085,6 +2249,15 @@ function renderProfileTab(member, posts, mediaItems) {
         <div class="social-card"><div class="side-title"><i class="fa-solid fa-user-shield"></i>Perfil</div><p>@${Utils.escapeHtml(displayUsername(member))}<br>${Utils.escapeHtml(member.role || 'Membro')}<br>${member.tier === 'diretoria' ? 'Perfil verificado' : 'Membro da rede MSY'}</p></div>
       </div>`;
   }
+  if (state.activeProfileTab === 'liked' || state.activeProfileTab === 'saved') {
+    if (!canViewPrivateTabs) return '<div class="social-empty"><i class="fa-solid fa-lock"></i>Esta aba e privada.</div>';
+    const items = state.activeProfileTab === 'liked' ? state.activeProfileLikedPosts : state.activeProfileSavedPosts;
+    const label = state.activeProfileTab === 'liked' ? 'curtidos' : 'salvos';
+    if (!items) return '<div class="social-empty"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando posts...</div>';
+    return items.length
+      ? `<div class="social-feed-list profile-post-list">${items.map(renderPost).join('')}</div>`
+      : `<div class="social-empty"><i class="fa-regular fa-bookmark"></i>Nenhum post ${label} ainda.</div>`;
+  }
   return posts.length ? `<div class="social-feed-list profile-post-list">${posts.map(renderPost).join('')}</div>` : '<div class="social-empty"><i class="fa-regular fa-images"></i>Nenhuma publicacao ainda.</div>';
 }
 
@@ -2100,10 +2273,7 @@ function bindProfileRoute(route) {
   route.querySelector('[data-profile-follow]')?.addEventListener('click', () => toggleFollow(state.activeProfileId));
   route.querySelector('[data-start-direct]')?.addEventListener('click', (e) => openDirectInbox(e.currentTarget.dataset.startDirect));
   route.querySelector('[data-edit-social-profile]')?.addEventListener('click', openSocialProfileEditor);
-  route.querySelectorAll('[data-profile-tab]').forEach((btn) => btn.addEventListener('click', () => {
-    state.activeProfileTab = btn.dataset.profileTab;
-    renderProfileRoute();
-  }));
+  route.querySelectorAll('[data-profile-tab]').forEach((btn) => btn.addEventListener('click', () => switchProfileTab(btn.dataset.profileTab)));
   route.querySelectorAll('[data-open-followers]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowers, 'followers')));
   route.querySelectorAll('[data-open-following]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowing, 'following')));
   route.querySelectorAll('[data-open-profile-media]').forEach((btn) => btn.addEventListener('click', () => {
@@ -2112,9 +2282,42 @@ function bindProfileRoute(route) {
   }));
 }
 
+async function switchProfileTab(tab) {
+  const memberId = state.activeProfileId;
+  const canViewPrivateTabs = memberId === state.profile.id || state.profile.tier === 'diretoria';
+  if ((tab === 'liked' || tab === 'saved') && !canViewPrivateTabs) {
+    Utils.showToast('Esta aba e privada.', 'error');
+    return;
+  }
+  state.activeProfileTab = tab;
+  if (tab === 'liked' && !state.activeProfileLikedPosts.length) {
+    renderProfileRoute();
+    try {
+      state.activeProfileLikedPosts = await state.service.loadProfileLikedPosts(memberId, { limit: 24 });
+      mergeProfilePosts(state.activeProfileLikedPosts);
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao carregar curtidos:', err);
+      Utils.showToast(err.message || 'Erro ao carregar curtidos.', 'error');
+    }
+  }
+  if (tab === 'saved' && !state.activeProfileSavedPosts.length) {
+    renderProfileRoute();
+    try {
+      state.activeProfileSavedPosts = await state.service.loadProfileSavedPosts(memberId, { limit: 24 });
+      mergeProfilePosts(state.activeProfileSavedPosts);
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao carregar salvos:', err);
+      Utils.showToast(err.message || 'Erro ao carregar salvos.', 'error');
+    }
+  }
+  renderProfileRoute();
+}
+
 function closeProfileRoute({ replace = false } = {}) {
   state.activeProfileId = null;
   state.activeProfilePosts = [];
+  state.activeProfileLikedPosts = [];
+  state.activeProfileSavedPosts = [];
   state.activeProfileSummary = null;
   const route = document.getElementById('socialProfileRoute');
   if (route) {
@@ -2365,7 +2568,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
         </div>
         ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
         ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Visualizacoes" aria-label="Visualizacoes do story"><i class="fa-regular fa-eye"></i></button>' : ''}
-        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
+        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
       ${story.caption ? `<div class="story-caption story-caption-instagram">${richText(story.caption)}</div>` : ''}
@@ -2429,6 +2632,10 @@ async function openStoryPremium(groupIndex, storyIndex) {
     e.stopPropagation();
     deleteStory(story.id);
   });
+  modal.querySelector('[data-edit-story]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openStoryEditor(story.id);
+  });
   bindStoryGestures(modal, go);
   startStoryProgress(modal, groupIndex, storyIndex, story, go);
   hydrateStoryMeta(story.id, canViewReactions);
@@ -2452,9 +2659,6 @@ function bindStoryGestures(modal, go) {
     const dy = (touch?.clientY || 0) - startY;
     if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
     else if (dy > 76 && Math.abs(dy) > Math.abs(dx) * 1.2) closeSocialModals();
-    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && Date.now() - startAt < 260) {
-      go((touch?.clientX || 0) < window.innerWidth / 2 ? -1 : 1);
-    }
   }, { passive: true });
 }
 
@@ -2482,7 +2686,7 @@ async function openStoryFast(groupIndex, storyIndex) {
       <div class="story-top">
         ${avatar(group.author, 34)}
         <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
-        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
+        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
       ${story.caption ? `<div class="story-caption">${richText(story.caption)}</div>` : ''}
@@ -2561,6 +2765,10 @@ async function openStoryFast(groupIndex, storyIndex) {
   modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
     e.stopPropagation();
     deleteStory(story.id);
+  });
+  modal.querySelector('[data-edit-story]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openStoryEditor(story.id);
   });
   bindStoryGestures(modal, (direction) => {
     const next = getNextStoryCursor(groupIndex, storyIndex, direction);
@@ -2955,6 +3163,117 @@ function previewSocialProfileImage(modal, kind) {
   }
 }
 
+function openStoryEditor(storyId) {
+  const story = findStoryById(storyId);
+  if (!story || !canManageStory(story)) return Utils.showToast('Sem permissao para editar este story.', 'error');
+  const modal = document.getElementById('storyComposerModal');
+  if (!modal) return;
+  state.activeStoryEditId = storyId;
+  state.storyEditPreview = {
+    id: story.id,
+    url: story.media_url,
+    storage_path: story.storage_path,
+    media_type: story.media_type,
+    isNew: false,
+  };
+  modal.innerHTML = `
+    <div class="story-compose-panel social-story-edit-panel">
+      <div class="story-compose-preview">
+        <div class="story-compose-slide-preview active" id="storyEditPreview">
+          ${editorMediaNode(state.storyEditPreview)}
+        </div>
+      </div>
+      <div class="story-compose-side">
+        <div class="story-compose-head">
+          <div>
+            <div class="story-compose-title">Editar story</div>
+            <div class="story-compose-subtitle">Substitua a midia sem alterar a posicao na sequencia.</div>
+          </div>
+          <button class="social-icon-btn story-compose-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <input id="storyEditFile" type="file" accept="image/*,video/*" hidden>
+        <button type="button" class="follow-btn" data-story-edit-media><i class="fa-solid fa-image"></i> Substituir midia</button>
+        <textarea id="storyEditCaption" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(story.caption || '')}</textarea>
+        <div class="story-caption-count"><span id="storyEditCaptionCount">${(story.caption || '').length}</span>/160</div>
+        <textarea id="storyEditElements" class="story-caption-input social-story-elements-input" maxlength="500" placeholder="Elementos extras, stickers ou observacoes">${Utils.escapeHtml((story.elements || []).join('\n'))}</textarea>
+        <div class="story-compose-actions">
+          <button class="btn btn-primary social-submit story-publish-btn" id="saveStoryEditBtn"><i class="fa-solid fa-check"></i> Salvar story</button>
+        </div>
+      </div>
+    </div>`;
+  openModal(modal);
+  modal.querySelector('[data-story-edit-media]')?.addEventListener('click', () => modal.querySelector('#storyEditFile')?.click());
+  modal.querySelector('#storyEditCaption')?.addEventListener('input', (e) => {
+    const counter = modal.querySelector('#storyEditCaptionCount');
+    if (counter) counter.textContent = String(e.currentTarget.value.length);
+  });
+  modal.querySelector('#storyEditFile')?.addEventListener('change', (e) => {
+    const file = e.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      validateMediaFile(file);
+      if (state.storyEditPreview?.isNew) revokePreviews([state.storyEditPreview]);
+      state.storyEditPreview = { ...filePreview(file), isNew: true };
+      const preview = modal.querySelector('#storyEditPreview');
+      if (preview) preview.innerHTML = editorMediaNode(state.storyEditPreview);
+    } catch (err) {
+      Utils.showToast(err.message || 'Erro ao preparar midia.', 'error');
+    } finally {
+      e.currentTarget.value = '';
+    }
+  });
+  modal.querySelector('#saveStoryEditBtn')?.addEventListener('click', saveStoryEditor);
+}
+
+async function saveStoryEditor() {
+  const story = findStoryById(state.activeStoryEditId);
+  if (!story || !state.storyEditPreview) return;
+  const btn = document.getElementById('saveStoryEditBtn');
+  const caption = document.getElementById('storyEditCaption')?.value.trim() || '';
+  const elements = (document.getElementById('storyEditElements')?.value || '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+    }
+    const oldStoragePath = story.storage_path;
+    const media = state.storyEditPreview.isNew
+      ? await uploadSocialMedia(db, state.profile.id, state.storyEditPreview.file, 'stories')
+      : null;
+    const updated = await state.service.updateStory(story.id, { caption, elements, media });
+    if (media && oldStoragePath && oldStoragePath !== media.storage_path) {
+      await removeSocialMedia(db, [oldStoragePath]).catch((err) => console.warn('[MSY][feed-social] Story atualizado, mas storage manteve midia antiga:', err));
+    }
+    Object.assign(story, {
+      caption: updated.caption,
+      elements: updated.elements || elements,
+      media_url: updated.media_url,
+      media_type: updated.media_type,
+      storage_path: updated.storage_path,
+      edited_at: updated.edited_at,
+      updated_at: updated.updated_at,
+    });
+    if (state.storyEditPreview?.isNew) revokePreviews([state.storyEditPreview]);
+    closeSocialModals();
+    renderStories();
+    const cursor = state.storyCursor;
+    if (cursor) openStory(cursor.groupIndex, cursor.storyIndex);
+    Utils.showToast('Story atualizado.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao editar story:', err);
+    Utils.showToast(err.message || 'Erro ao editar story.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar story';
+    }
+  }
+}
+
 async function saveSocialProfile() {
   const username = document.getElementById('socialUsernameInput')?.value || '';
   const social_bio = document.getElementById('socialBioInput')?.value || '';
@@ -3015,6 +3334,7 @@ async function openDirectInbox(targetId = null) {
 
   try {
     setDirectConversations(await state.service.loadDirectConversations());
+    if (!maybeUuid) state.activeDirectConversationId = null;
 
     if (maybeUuid) {
       const directConversation = state.directConversations.find((conversation) => conversation.id === maybeUuid);
@@ -3031,10 +3351,6 @@ async function openDirectInbox(targetId = null) {
         state.activeDirectConversationId = await state.service.ensureDirectConversation(maybeUuid);
         setDirectConversations(await state.service.loadDirectConversations());
       }
-    }
-
-    if (!state.activeDirectConversationId) {
-      state.activeDirectConversationId = state.directConversations[0]?.id || null;
     }
 
     const activeConversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
@@ -3145,6 +3461,7 @@ function renderDirectInbox() {
     </div>`;
 
   openModal(modal);
+  bindDirectViewport(modal);
   modal.querySelectorAll('[data-open-direct-conversation]').forEach((node) => node.addEventListener('click', async () => {
     state.activeDirectConversationId = node.dataset.openDirectConversation;
     const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
@@ -3206,6 +3523,29 @@ function renderDirectInbox() {
     const list = modal.querySelector('#directMessagesList');
     if (list) list.scrollTop = list.scrollHeight;
   });
+}
+
+function bindDirectViewport(modal) {
+  const shell = modal.querySelector('.direct-shell');
+  if (!shell || shell.dataset.viewportBound === 'true') return;
+  if (typeof state.directViewportCleanup === 'function') state.directViewportCleanup();
+  shell.dataset.viewportBound = 'true';
+  const sync = () => {
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight;
+    shell.style.setProperty('--direct-vh', `${Math.round(height)}px`);
+    const keyboard = Math.max(0, window.innerHeight - height - (viewport?.offsetTop || 0));
+    shell.style.setProperty('--direct-keyboard', `${Math.round(keyboard)}px`);
+  };
+  sync();
+  window.visualViewport?.addEventListener('resize', sync, { passive: true });
+  window.visualViewport?.addEventListener('scroll', sync, { passive: true });
+  window.addEventListener('resize', sync, { passive: true });
+  state.directViewportCleanup = () => {
+    window.visualViewport?.removeEventListener('resize', sync);
+    window.visualViewport?.removeEventListener('scroll', sync);
+    window.removeEventListener('resize', sync);
+  };
 }
 
 async function sendDirectMessage(e) {

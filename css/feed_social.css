@@ -42,6 +42,10 @@ body[data-page="feed"] [hidden]{display:none!important}
 .direct-mobile-close{display:none}
 .direct-shell .social-empty{margin:18px}
 .direct-shell .social-empty i{margin-bottom:8px}
+.direct-shell{height:min(92vh,var(--direct-vh,920px));max-height:var(--direct-vh,92vh)}
+.direct-chat,.direct-sidebar{min-height:0}
+.direct-chat-header{position:sticky;top:0;z-index:3}
+.direct-composer{position:sticky;bottom:0;z-index:4;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
 .social-main,.social-rail{display:flex;flex-direction:column;gap:16px}.social-rail{position:sticky;top:calc(var(--topbar-h) + 18px)}
 .social-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}.social-title{font-family:'Cinzel',serif;font-size:clamp(1.35rem,3vw,2rem);color:var(--text-1);font-weight:800}.social-subtitle{color:var(--text-3);font-size:.84rem;margin-top:3px}
 .social-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-red);background:var(--red-subtle);color:var(--red-bright);border-radius:999px;padding:8px 12px;font-size:.78rem;font-weight:800;white-space:nowrap}
@@ -122,6 +126,18 @@ body[data-page="feed"] .page-content{animation:none}
   .media-viewer-nav{width:40px;height:40px}.media-viewer-nav.prev{left:8px}.media-viewer-nav.next{right:8px}
   .direct-composer{padding-bottom:calc(12px + env(safe-area-inset-bottom));grid-template-columns:auto minmax(0,1fr) auto}
   .direct-composer-icon[aria-label="Emoji"]{display:none}
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] #directViewer.profile-viewer{padding:0;align-items:stretch;justify-content:stretch;background:#050507}
+  body[data-page="feed"] .direct-shell{width:100%;height:var(--direct-vh,100dvh);max-height:var(--direct-vh,100dvh);border:0;border-radius:0}
+  body[data-page="feed"] .direct-sidebar{height:var(--direct-vh,100dvh);padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+  body[data-page="feed"] .direct-chat{height:var(--direct-vh,100dvh);grid-template-rows:auto minmax(0,1fr) auto}
+  body[data-page="feed"] .direct-chat-header{padding:calc(10px + env(safe-area-inset-top)) 12px 10px}
+  body[data-page="feed"] .direct-chat-body{min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:16px}
+  body[data-page="feed"] .direct-composer{padding:10px 10px calc(10px + env(safe-area-inset-bottom));grid-template-columns:auto auto minmax(0,1fr) auto}
+  body[data-page="feed"] .direct-composer-input{font-size:16px}
+  body[data-page="feed"] .direct-streak{display:none}
 }
 @media(hover:none){.social-post:hover,.direct-thread:hover{box-shadow:var(--shadow-card);transform:none}.story-tap-zone{cursor:default}}
 @media(prefers-reduced-motion:reduce){.story-progress span{animation:none!important;transform:scaleX(1)}.media-viewer,.story-viewer,.profile-viewer,.story-composer-modal{transition:none}}
@@ -572,6 +588,18 @@ body[data-page="feed"] .social-editor-field span{color:var(--text-3);font-size:.
 body[data-page="feed"] .social-editor-field .story-caption-input{min-height:112px}
 body[data-page="feed"] .social-editor-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:16px}
 body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;align-items:center;gap:8px}
+.social-edit-post-panel{width:min(820px,calc(100vw - 28px));max-height:min(820px,92dvh);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border-radius:28px;background:rgba(12,12,17,.98);border:1px solid rgba(255,255,255,.11);box-shadow:0 34px 96px rgba(0,0,0,.62)}
+.social-edit-post-head,.social-edit-post-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
+.social-edit-post-head strong,.social-edit-post-head span{display:block}.social-edit-post-head strong{color:var(--text-1);font-size:1.05rem}.social-edit-post-head span{color:var(--text-3);font-size:.75rem;margin-top:3px}
+.social-edit-post-body{min-height:0;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:13px}
+.social-edit-media-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--text-3);font-size:.78rem;font-weight:900}
+.social-edit-media-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.social-edit-media-item{min-width:0;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:16px;overflow:hidden}
+.social-edit-media-preview{aspect-ratio:4/5;background:#030303}.social-edit-media-preview img,.social-edit-media-preview video{width:100%;height:100%;object-fit:cover;display:block}
+.social-edit-media-actions{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:8px}.social-edit-media-actions span{color:var(--text-3);font-size:.72rem;font-weight:950}
+.social-icon-btn.danger{color:var(--red-bright)}
+.social-edit-empty-media{min-height:190px;border:1px dashed var(--border-faint);background:var(--social-soft);border-radius:18px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-weight:950;cursor:pointer}
+.social-story-elements-input{min-height:80px!important}
 @media(max-width:640px){
   body[data-page="feed"] #profileViewer.profile-viewer.social-profile-editor-viewer{padding:0;align-items:stretch;justify-content:stretch}
   body[data-page="feed"] #profileViewer .social-editor-panel{width:100%;height:100dvh;max-height:100dvh;border-radius:0;border:0}
@@ -583,6 +611,9 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
   body[data-page="feed"] .social-editor-grid{grid-template-columns:1fr}
   body[data-page="feed"] .social-editor-actions{position:sticky;bottom:0;background:rgba(12,12,17,.96);padding-top:12px;flex-direction:column;align-items:stretch}
   body[data-page="feed"] .social-editor-actions .social-submit,body[data-page="feed"] .social-editor-actions .follow-btn{width:100%;justify-content:center}
+  .social-edit-post-panel{width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0}
+  .social-edit-post-actions{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  .social-edit-media-list{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 /* Mobile-only Instagram-like feed pass */

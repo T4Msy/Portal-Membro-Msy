@@ -201,6 +201,30 @@ export class SocialService {
     return this.loadPosts({ authorId: memberId, limit });
   }
 
+  canViewPrivateProfileTabs(memberId) {
+    return memberId === this.profile.id || this.profile.tier === 'diretoria';
+  }
+
+  async loadProfileLikedPosts(memberId, { limit = 24 } = {}) {
+    if (!this.canViewPrivateProfileTabs(memberId)) throw new Error('Sem permissao para ver posts curtidos.');
+    const { data, error } = await this.db.rpc('get_social_liked_post_ids', {
+      p_profile_id: memberId,
+      p_limit: limit,
+    });
+    if (error) throw error;
+    return this.loadPostsByIds((data || []).map((row) => row.post_id || row));
+  }
+
+  async loadProfileSavedPosts(memberId, { limit = 24 } = {}) {
+    if (!this.canViewPrivateProfileTabs(memberId)) throw new Error('Sem permissao para ver posts salvos.');
+    const { data, error } = await this.db.rpc('get_social_saved_post_ids', {
+      p_profile_id: memberId,
+      p_limit: limit,
+    });
+    if (error) throw error;
+    return this.loadPostsByIds((data || []).map((row) => row.post_id || row));
+  }
+
   async loadPosts({ limit = this.pageSize, before = null, query = '', authorId = null } = {}) {
     let request = this.db
       .from('social_posts')
@@ -223,6 +247,27 @@ export class SocialService {
     if (error) throw error;
 
     const posts = (data || []).map((post) => this.normalizePost(post));
+    await this.hydratePostStats(posts);
+    return posts;
+  }
+
+  async loadPostsByIds(ids = []) {
+    const cleanIds = [...new Set(ids.filter(Boolean))];
+    if (!cleanIds.length) return [];
+    const { data, error } = await this.db
+      .from('social_posts')
+      .select(`
+        *,
+        author:author_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio),
+        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text),
+        comments:social_comments(id,parent_id,author_id,content,created_at,edited_at,author:author_id(id,name,username,initials,color,avatar_url,role,tier))
+      `)
+      .eq('is_deleted', false)
+      .in('id', cleanIds);
+    if (error) throw error;
+    const order = new Map(cleanIds.map((id, index) => [id, index]));
+    const posts = (data || []).map((post) => this.normalizePost(post))
+      .sort((a, b) => (order.get(a.id) || 0) - (order.get(b.id) || 0));
     await this.hydratePostStats(posts);
     return posts;
   }
@@ -364,21 +409,89 @@ export class SocialService {
     return post;
   }
 
-  async updatePost(postId, content) {
+  async loadPostById(postId) {
     const { data, error } = await this.db
       .from('social_posts')
-      .update({ content, edited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .select(`
+        *,
+        author:author_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio),
+        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text),
+        comments:social_comments(id,parent_id,author_id,content,created_at,edited_at,author:author_id(id,name,username,initials,color,avatar_url,role,tier))
+      `)
       .eq('id', postId)
-      .eq('author_id', this.profile.id)
-      .select('id')
+      .eq('is_deleted', false)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const post = this.normalizePost(data);
+    await this.hydratePostStats([post]);
+    return post;
+  }
+
+  async updatePost(postId, { content, media = [] }) {
+    const nextMedia = media.map((item, index) => ({
+      id: item.id || null,
+      post_id: postId,
+      author_id: item.author_id || this.profile.id,
+      url: item.url,
+      storage_path: item.storage_path || null,
+      media_type: item.media_type,
+      width: item.width || null,
+      height: item.height || null,
+      position: index,
+      alt_text: item.alt_text || null,
+    }));
+
+    const { data, error } = await this.db
+      .from('social_posts')
+      .update({ content: content || null, edited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', postId)
+      .select('id,author_id')
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new Error('Sem permissao para editar esta publicacao.');
+
+    const { data: currentMedia, error: currentError } = await this.db
+      .from('social_post_media')
+      .select('id,storage_path')
+      .eq('post_id', postId);
+    if (currentError) throw currentError;
+
+    const keepIds = nextMedia.filter((item) => item.id).map((item) => item.id);
+    const removeRows = (currentMedia || []).filter((item) => !keepIds.includes(item.id));
+    if (removeRows.length) {
+      const { error: removeError } = await this.db
+        .from('social_post_media')
+        .delete()
+        .eq('post_id', postId)
+        .in('id', removeRows.map((item) => item.id));
+      if (removeError) throw removeError;
+    }
+
+    const existingRows = nextMedia.filter((item) => item.id);
+    const reorderResults = await Promise.all(existingRows.map((item) => this.db
+      .from('social_post_media')
+      .update({ position: item.position, alt_text: item.alt_text })
+      .eq('id', item.id)
+      .eq('post_id', postId)
+    ));
+    const reorderError = reorderResults.find((result) => result.error)?.error;
+    if (reorderError) throw reorderError;
+
+    const newRows = nextMedia.filter((item) => !item.id).map(({ id, ...item }) => item);
+    if (newRows.length) {
+      const { error: insertError } = await this.db.from('social_post_media').insert(newRows);
+      if (insertError) throw insertError;
+    }
+
+    await this.persistPostMentions(postId, content || '');
+    return { removedStoragePaths: removeRows.map((item) => item.storage_path).filter(Boolean) };
   }
 
   async deletePost(postId) {
-    const { error } = await this.db.rpc('delete_social_post', { p_post_id: postId });
+    const { data, error } = await this.db.rpc('delete_social_post', { p_post_id: postId });
     if (error) throw error;
+    return Array.isArray(data) ? data : [];
   }
 
   async togglePin(postId, pinned) {
@@ -515,7 +628,7 @@ export class SocialService {
       .select('*, author:author_id(id,name,username,role,tier,initials,color,avatar_url)')
       .is('deleted_at', null)
       .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
       .limit(80);
     if (error) throw error;
 
@@ -523,9 +636,14 @@ export class SocialService {
     (data || []).forEach((story) => {
       const key = story.author_id;
       if (!grouped.has(key)) grouped.set(key, { author: story.author, stories: [] });
-      grouped.get(key).stories.push(story);
+      grouped.get(key).stories.push({ ...story, elements: story.elements || [] });
     });
-    return Array.from(grouped.values());
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        stories: group.stories.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+      }))
+      .sort((a, b) => new Date(b.stories.at(-1)?.created_at || 0) - new Date(a.stories.at(-1)?.created_at || 0));
   }
 
   async createStory(media, caption = '') {
@@ -541,6 +659,29 @@ export class SocialService {
       .select('*')
       .single();
     if (error) throw error;
+    return data;
+  }
+
+  async updateStory(storyId, { caption = '', media = null, elements = [] } = {}) {
+    const payload = {
+      caption: caption || null,
+      elements: elements || [],
+      edited_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (media) {
+      payload.media_url = media.url;
+      payload.storage_path = media.storage_path || null;
+      payload.media_type = media.media_type;
+    }
+    const { data, error } = await this.db
+      .from('social_stories')
+      .update(payload)
+      .eq('id', storyId)
+      .select('id,storage_path,media_url,media_type,caption,elements,edited_at,updated_at')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Sem permissao para editar este story.');
     return data;
   }
 
@@ -852,7 +993,8 @@ export class SocialService {
 
     return (data || [])
       .map((row) => this.normalizeDirectConversation(row.conversation, row))
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.last_message_at || b.updated_at || b.created_at) - new Date(a.last_message_at || a.updated_at || a.created_at));
   }
 
   normalizeDirectConversation(conversation, participantRow = null) {

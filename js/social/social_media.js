@@ -93,6 +93,13 @@ export async function uploadSocialMedia(db, userId, file, folder = 'posts') {
   };
 }
 
+export async function removeSocialMedia(db, paths = []) {
+  const cleanPaths = [...new Set((paths || []).filter(Boolean))];
+  if (!cleanPaths.length) return;
+  const { error } = await db.storage.from(SOCIAL_BUCKET).remove(cleanPaths);
+  if (error) throw error;
+}
+
 export function filePreview(file) {
   return {
     id: crypto.randomUUID(),
