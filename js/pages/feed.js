@@ -4,7 +4,18 @@
    ============================================================ */
 
 import { SocialService } from '../social/social_service.js';
-import { filePreview, removeSocialMedia, revokePreviews, uploadSocialMedia, validateMediaFile } from '../social/social_media.js';
+import {
+  captureStoryVideoThumbnail,
+  createStoryMediaEditState,
+  exportStoryImageFile,
+  exportStoryVideoFile,
+  filePreview,
+  removeSocialMedia,
+  revokePreviews,
+  supportsVideoEditing,
+  uploadSocialMedia,
+  validateMediaFile,
+} from '../social/social_media.js';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -20,10 +31,15 @@ const state = {
   notificationFilter: 'all',
   notificationPanelOpen: false,
   socialNotificationChannel: null,
+  socialStoriesChannel: null,
+  directMessagesChannel: null,
   directConversations: [],
   directUnreadCount: 0,
   activeDirectConversationId: null,
   directViewportCleanup: null,
+  directContextMessageId: null,
+  directEditingMessageId: null,
+  directActivityRefreshTimer: null,
   activeProfileId: null,
   activeProfilePosts: [],
   activeProfileLikedPosts: [],
@@ -34,6 +50,7 @@ const state = {
   postEditPreviews: [],
   activePostEditId: null,
   storyPreviews: [],
+  activeStoryComposerIndex: 0,
   storyEditPreview: null,
   activeStoryEditId: null,
   storyCursor: null,
@@ -197,6 +214,62 @@ function findStoryById(storyId) {
   return null;
 }
 
+function getActiveDirectConversation() {
+  return state.directConversations.find((conversation) => conversation.id === state.activeDirectConversationId) || null;
+}
+
+function findDirectMessage(conversationId, messageId) {
+  const conversation = state.directConversations.find((item) => item.id === conversationId);
+  const message = conversation?.messages?.find((item) => item.id === messageId) || null;
+  return { conversation, message };
+}
+
+function upsertDirectMessage(conversationId, nextMessage) {
+  const conversation = state.directConversations.find((item) => item.id === conversationId);
+  if (!conversation) return null;
+  const messages = [...(conversation.messages || [])];
+  const index = messages.findIndex((item) => item.id === nextMessage.id);
+  if (index >= 0) messages[index] = { ...messages[index], ...nextMessage };
+  else messages.push(nextMessage);
+  messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || String(a.id).localeCompare(String(b.id)));
+  conversation.messages = messages;
+  conversation.lastMessage = messages.at(-1) || null;
+  conversation.last_message_at = conversation.lastMessage?.created_at || conversation.last_message_at;
+  return conversation;
+}
+
+function removeDirectMessageForViewer(conversationId, messageId) {
+  const conversation = state.directConversations.find((item) => item.id === conversationId);
+  if (!conversation?.messages) return;
+  conversation.messages = conversation.messages.filter((item) => item.id !== messageId);
+  conversation.lastMessage = conversation.messages.at(-1) || null;
+  conversation.last_message_at = conversation.lastMessage?.created_at || conversation.last_message_at;
+}
+
+function patchStoryInState(storyId, patch = {}) {
+  for (const group of state.stories) {
+    const story = group.stories?.find((item) => item.id === storyId);
+    if (story) {
+      Object.assign(story, patch);
+      return story;
+    }
+  }
+  return null;
+}
+
+function getStoryFallbackAttachment(story = {}, group = {}) {
+  return {
+    id: story.id,
+    author_id: story.author_id || group.author?.id || null,
+    author_name: group.author?.name || story.author?.name || 'Story',
+    media_type: story.media_type,
+    media_url: story.media_url,
+    story_url: story.media_url,
+    thumbnail_url: story.thumbnail_url || story.media_url,
+    caption: story.caption || '',
+  };
+}
+
 function lockBodyScroll() {
   if (document.body.classList.contains('social-modal-locked')) return;
   state.modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
@@ -240,6 +313,11 @@ function closeSocialModals() {
     state.directViewportCleanup();
     state.directViewportCleanup = null;
   }
+  if (state.directMessagesChannel) {
+    try { db.removeChannel(state.directMessagesChannel); } catch {}
+    state.directMessagesChannel = null;
+  }
+  state.directEditingMessageId = null;
   if (state.postEditPreviews?.length) revokePreviews(state.postEditPreviews.filter((item) => item.isNew));
   state.postEditPreviews = [];
   state.activePostEditId = null;
@@ -266,6 +344,7 @@ async function initFeed() {
   bindRouteNavigation();
   await loadInitial();
   subscribeSocialNotifications();
+  subscribeStoriesRealtime();
   handleDeepLink();
 }
 
@@ -381,6 +460,15 @@ async function loadInitial() {
     setDirectConversations(data.directConversations || []);
     syncPostPaginationState();
   } catch (err) {
+    const message = String(err?.message || '').toLowerCase();
+    const legacyCompatible = message.includes('relation')
+      || message.includes('does not exist')
+      || message.includes('schema cache')
+      || message.includes('could not find');
+    if (!legacyCompatible) {
+      console.error('[MSY][feed-social] Falha ao carregar modulo social:', err);
+      throw err;
+    }
     console.warn('[MSY][feed-social] Usando modo legado:', err);
     state.hasSocialTables = false;
     state.posts = await state.service.loadLegacyFeed();
@@ -702,6 +790,9 @@ function handleFeedClick(e) {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.post-menu-wrap')) {
     document.querySelectorAll('.post-menu.open').forEach((m) => m.classList.remove('open'));
+  }
+  if (!e.target.closest('[data-direct-message-bubble]')) {
+    document.querySelectorAll('.direct-message-menu.open').forEach((menu) => menu.classList.remove('open'));
   }
 });
 
@@ -1134,9 +1225,14 @@ async function publishPost() {
   if (!content && !state.previews.length) return Utils.showToast('Escreva algo ou adicione uma midia.', 'error');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
+  const uploadedPaths = [];
   try {
     const media = [];
-    for (const item of state.previews) media.push(await uploadSocialMedia(db, state.profile.id, item.file, 'posts'));
+    for (const item of state.previews) {
+      const uploaded = await uploadSocialMedia(db, state.profile.id, item.file, 'posts');
+      media.push(uploaded);
+      if (uploaded.storage_path) uploadedPaths.push(uploaded.storage_path);
+    }
     await state.service.createPost({ content, media });
     revokePreviews(state.previews);
     state.previews = [];
@@ -1147,8 +1243,13 @@ async function publishPost() {
     renderPosts();
     Utils.showToast('Publicado no Feed!');
   } catch (err) {
-    console.error(err);
-    Utils.showToast('Erro ao publicar. Confira a migration e o bucket social-media.', 'error');
+    console.error('[MSY][feed-social] Erro ao publicar post:', err);
+    if (uploadedPaths.length) {
+      await removeSocialMedia(db, uploadedPaths).catch((cleanupErr) => {
+        console.warn('[MSY][feed-social] Rollback parcial do upload do post falhou:', cleanupErr);
+      });
+    }
+    Utils.showToast(err.message || 'Erro ao publicar no feed.', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Publicar';
@@ -1164,82 +1265,302 @@ async function createStoryFromFile(e = null) {
   const files = [...(input.files || [])];
   if (!files.length) return;
   try {
-    files.forEach((file) => validateMediaFile(file));
-    state.storyPreviews = files.map((file) => filePreview(file));
+    const prepared = [];
+    for (const file of files) {
+      validateMediaFile(file);
+      const preview = filePreview(file);
+      preview.caption = '';
+      preview.elementsText = '';
+      preview.editState = createStoryMediaEditState(file);
+      if (preview.media_type === 'video') {
+        preview.editState.exportSupported = supportsVideoEditing();
+        try {
+          const thumb = await captureStoryVideoThumbnail(file, 0, 0);
+          preview.thumbnail_url = thumb.url;
+          preview.editState.thumbnailTime = thumb.time;
+        } catch (thumbErr) {
+          console.warn('[MSY][feed-social] Miniatura inicial do story em video indisponivel:', thumbErr);
+        }
+      }
+      prepared.push(preview);
+    }
+    state.storyPreviews = prepared;
     openStoryComposer();
   } catch (err) {
-    console.error(err);
+    console.error('[MSY][feed-social] Erro ao preparar story:', err);
     Utils.showToast(err.message || 'Erro ao preparar story.', 'error');
   } finally {
     input.value = '';
   }
 }
 
-function openStoryComposer() {
-  const items = state.storyPreviews;
-  if (!items.length) return;
+function activeStoryComposerItem() {
+  return state.storyPreviews[state.activeStoryComposerIndex] || null;
+}
+
+function renderStoryComposerMedia(item) {
+  if (!item) return '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma mídia.</div>';
+  if (item.media_type === 'video') {
+    return `<video src="${Utils.escapeHtml(item.url)}" controls playsinline></video>`;
+  }
+  return `<img src="${Utils.escapeHtml(item.url)}" alt="Preview do story">`;
+}
+
+function renderStoryComposerControls(item) {
+  if (!item) return '';
+  if (item.media_type === 'video') {
+    const duration = Number(item.editState?.duration || 0);
+    const trimStart = Number(item.editState?.trimStart || 0);
+    const trimEnd = Number(item.editState?.trimEnd ?? duration || 0);
+    return `
+      <div class="story-compose-tools">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Rotação</label>
+          <input type="range" min="0" max="270" step="90" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Início do vídeo</label>
+          <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${trimStart}" data-story-edit-field="trimStart">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Fim do vídeo</label>
+          <input type="range" min="0.1" max="${Math.max(duration || 0.1, 0.1)}" step="0.1" value="${trimEnd || duration || 0.1}" data-story-edit-field="trimEnd">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Thumbnail</label>
+          <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${Number(item.editState?.thumbnailTime || 0)}" data-story-edit-field="thumbnailTime">
+        </div>
+        <div class="message-sub">${item.editState?.exportSupported ? 'Exportação local ativa.' : 'Seu navegador não suporta exportação local segura de vídeo.'}</div>
+      </div>`;
+  }
+  return `
+    <div class="story-compose-tools">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Proporção</label>
+        <select class="form-input form-select" data-story-edit-field="aspect">
+          ${[['9:16', 'Story'], ['1:1', 'Quadrado'], ['4:5', 'Retrato'], ['16:9', 'Paisagem']].map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Zoom</label>
+        <input type="range" min="1" max="4" step="0.05" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Rotação</label>
+        <input type="range" min="0" max="270" step="90" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
+      </div>
+    </div>`;
+}
+
+function renderStoryComposerThumb(item, index) {
+  const active = index === state.activeStoryComposerIndex ? ' active' : '';
+  const thumb = item.media_type === 'video'
+    ? (item.thumbnail_url ? `<img src="${Utils.escapeHtml(item.thumbnail_url)}" alt="Thumb do vídeo">` : '<i class="fa-solid fa-play"></i>')
+    : `<img src="${Utils.escapeHtml(item.url)}" alt="Thumb">`;
+  return `<button type="button" class="story-compose-thumb${active}" data-story-thumb="${index}">${thumb}</button>`;
+}
+
+function syncStoryComposerCaption() {
+  const input = document.getElementById('storyCaptionInput');
+  const counter = document.getElementById('storyCaptionCount');
+  const item = activeStoryComposerItem();
+  if (!input || !item) return;
+  item.caption = input.value;
+  if (counter) counter.textContent = String(input.value.length);
+}
+
+function renderStoryComposerBody() {
   const modal = document.getElementById('storyComposerModal');
+  const item = activeStoryComposerItem();
+  if (!modal || !item) return;
   modal.innerHTML = `
-    <div class="story-compose-panel">
+    <div class="story-compose-panel social-story-editor-panel">
       <div class="story-compose-preview" id="storyComposePreview">
-        ${items.map((item, index) => `<div class="story-compose-slide-preview${index === 0 ? ' active' : ''}" data-story-preview-slide="${index}">${item.media_type === 'video' ? `<video src="${item.url}" controls playsinline></video>` : `<img src="${item.url}" alt="Preview do story">`}</div>`).join('')}
+        <div class="story-compose-slide-preview active" data-story-preview-slide="${state.activeStoryComposerIndex}">
+          ${renderStoryComposerMedia(item)}
+        </div>
       </div>
       <div class="story-compose-side">
         <div class="story-compose-head">
           <div>
-            <div class="social-title" style="font-size:1.05rem">Novo story</div>
-            <div class="social-subtitle">Adicione legenda e publique todos os itens em sequência.</div>
+            <div class="social-title" style="font-size:1.05rem">${state.activeStoryEditId ? 'Editar story' : 'Novo story'}</div>
+            <div class="social-subtitle">Edite mídia, legenda e publique mantendo a experiência atual.</div>
           </div>
           <button class="social-icon-btn" data-close-story-composer><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="story-compose-strip">
-          ${items.map((item, index) => `<button type="button" class="story-compose-thumb${index === 0 ? ' active' : ''}" data-story-thumb="${index}">${item.media_type === 'video' ? '<i class="fa-solid fa-play"></i>' : `<img src="${item.url}" alt="Thumb">`}</button>`).join('')}
+          ${state.storyPreviews.map((preview, index) => renderStoryComposerThumb(preview, index)).join('')}
         </div>
-        <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda..."></textarea>
-        <div class="story-caption-count"><span id="storyCaptionCount">0</span>/160</div>
-        <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> Publicar stories</button>
+        ${renderStoryComposerControls(item)}
+        <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
+        <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
+        <textarea id="storyElementsInput" class="story-caption-input social-story-elements-input" maxlength="500" placeholder="Elementos extras, stickers ou observações">${Utils.escapeHtml(item.elementsText || '')}</textarea>
+        <div class="message-sub">${item.media_type === 'video' ? 'Vídeos serão exportados localmente antes do upload quando suportado.' : 'Imagens mantêm qualidade alta com compressão apenas quando necessária.'}</div>
+        <div class="story-compose-actions">
+          <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir mídia</button>
+          <input id="storyComposerFile" type="file" accept="image/*,video/*" hidden>
+          <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Publicar stories'}</button>
+        </div>
       </div>
     </div>`;
   openModal(modal);
-  const input = document.getElementById('storyCaptionInput');
-  input.addEventListener('input', () => {
-    document.getElementById('storyCaptionCount').textContent = String(input.value.length);
-  });
-  modal.querySelector('[data-close-story-composer]').addEventListener('click', closeStoryComposer);
+  modal.querySelector('[data-close-story-composer]')?.addEventListener('click', closeStoryComposer);
   modal.querySelectorAll('[data-story-thumb]').forEach((btn) => btn.addEventListener('click', () => {
-    const idx = Number(btn.dataset.storyThumb);
-    modal.querySelectorAll('[data-story-preview-slide]').forEach((slide) => slide.classList.toggle('active', Number(slide.dataset.storyPreviewSlide) === idx));
-    modal.querySelectorAll('[data-story-thumb]').forEach((thumb) => thumb.classList.toggle('active', Number(thumb.dataset.storyThumb) === idx));
+    state.activeStoryComposerIndex = Number(btn.dataset.storyThumb);
+    renderStoryComposerBody();
   }));
-  document.getElementById('publishStoryBtn').addEventListener('click', publishStoryFromPreview);
+  modal.querySelector('#storyCaptionInput')?.addEventListener('input', syncStoryComposerCaption);
+  modal.querySelector('#storyElementsInput')?.addEventListener('input', (event) => {
+    const current = activeStoryComposerItem();
+    if (current) current.elementsText = event.currentTarget.value;
+  });
+  modal.querySelectorAll('[data-story-edit-field]').forEach((field) => field.addEventListener('input', async (event) => {
+    const current = activeStoryComposerItem();
+    if (!current) return;
+    const key = event.currentTarget.dataset.storyEditField;
+    const value = event.currentTarget.value;
+    if (key === 'zoom' || key === 'rotation' || key === 'trimStart' || key === 'trimEnd' || key === 'thumbnailTime') current.editState[key] = Number(value);
+    else current.editState[key] = value;
+    if (key === 'thumbnailTime' && current.media_type === 'video') {
+      try {
+        const thumb = await captureStoryVideoThumbnail(current.file || current.url, current.editState.thumbnailTime, current.editState.rotation || 0);
+        if (current.thumbnail_url?.startsWith('blob:')) URL.revokeObjectURL(current.thumbnail_url);
+        current.thumbnail_url = thumb.url;
+        renderStoryComposerBody();
+      } catch (err) {
+        console.warn('[MSY][feed-social] Falha ao atualizar thumbnail do story:', err);
+      }
+      return;
+    }
+    if (current.media_type === 'image') renderStoryComposerBody();
+  }));
+  modal.querySelector('[data-story-replace-media]')?.addEventListener('click', () => modal.querySelector('#storyComposerFile')?.click());
+  modal.querySelector('#storyComposerFile')?.addEventListener('change', async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      validateMediaFile(file);
+      const nextPreview = filePreview(file);
+      nextPreview.editState = createStoryMediaEditState(file);
+      nextPreview.caption = activeStoryComposerItem()?.caption || '';
+      nextPreview.elementsText = activeStoryComposerItem()?.elementsText || '';
+      if (nextPreview.media_type === 'video') {
+        nextPreview.editState.exportSupported = supportsVideoEditing();
+        const thumb = await captureStoryVideoThumbnail(file, 0, 0);
+        nextPreview.thumbnail_url = thumb.url;
+      }
+      const current = activeStoryComposerItem();
+      if (current) revokePreviews([current]);
+      state.storyPreviews[state.activeStoryComposerIndex] = nextPreview;
+      renderStoryComposerBody();
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao substituir mídia do story:', err);
+      Utils.showToast(err.message || 'Erro ao substituir mídia do story.', 'error');
+    } finally {
+      event.currentTarget.value = '';
+    }
+  });
+  modal.querySelector('#publishStoryBtn')?.addEventListener('click', state.activeStoryEditId ? saveStoryEditor : publishStoryFromPreview);
+}
+
+async function hydrateStoryComposerVideoMetadata() {
+  await Promise.all(state.storyPreviews.map(async (item) => {
+    if (item.media_type !== 'video' || item.editState?.duration) return;
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.src = item.url;
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => {
+        item.editState.duration = Number.isFinite(video.duration) ? video.duration : 0;
+        item.editState.trimEnd = item.editState.trimEnd ?? item.editState.duration;
+        resolve();
+      };
+      video.onerror = () => resolve();
+    });
+  }));
+}
+
+async function openStoryComposer() {
+  if (!state.storyPreviews.length) return;
+  if (!state.storyPreviews.every((item) => typeof item.caption === 'string')) {
+    state.storyPreviews = state.storyPreviews.map((item) => ({ ...item, caption: item.caption || '' }));
+  }
+  state.activeStoryComposerIndex = 0;
+  await hydrateStoryComposerVideoMetadata();
+  renderStoryComposerBody();
 }
 
 function closeStoryComposer() {
   if (state.storyPreviews?.length) revokePreviews(state.storyPreviews);
   state.storyPreviews = [];
+  state.activeStoryComposerIndex = 0;
   closeSocialModals();
+}
+
+async function buildStoryUploadPayload(item) {
+  if (item.media_type === 'video') {
+    if (!item.editState?.exportSupported) {
+      throw new Error('Seu navegador não suporta exportação local segura de vídeo para stories editados.');
+    }
+    const editedFile = await exportStoryVideoFile(item.file, item.editState);
+    const media = await uploadSocialMedia(db, state.profile.id, editedFile, 'stories', { skipCompression: true });
+    return {
+      media,
+      options: {
+        media_meta: {
+          kind: 'video',
+          trimStart: Number(item.editState?.trimStart || 0),
+          trimEnd: Number(item.editState?.trimEnd || item.editState?.duration || 0),
+          rotation: Number(item.editState?.rotation || 0),
+          thumbnailTime: Number(item.editState?.thumbnailTime || 0),
+        },
+        thumbnail_url: item.thumbnail_url || media.url,
+      },
+    };
+  }
+
+  const editedFile = await exportStoryImageFile(item.file, item.editState);
+  const media = await uploadSocialMedia(db, state.profile.id, editedFile, 'stories', { skipCompression: true });
+  return {
+    media,
+    options: {
+      media_meta: {
+        kind: 'image',
+        aspect: item.editState?.aspect || '9:16',
+        zoom: Number(item.editState?.zoom || 1),
+        rotation: Number(item.editState?.rotation || 0),
+      },
+    },
+  };
 }
 
 async function publishStoryFromPreview() {
   if (!state.storyPreviews?.length) return;
   const btn = document.getElementById('publishStoryBtn');
-  const caption = document.getElementById('storyCaptionInput')?.value.trim() || '';
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
+  const uploadedPaths = [];
   try {
     for (const item of state.storyPreviews) {
-      const media = await uploadSocialMedia(db, state.profile.id, item.file, 'stories');
-      await state.service.createStory(media, caption);
+      const { media, options } = await buildStoryUploadPayload(item);
+      if (media.storage_path) uploadedPaths.push(media.storage_path);
+      await state.service.createStory(media, item.caption || '', options);
     }
     revokePreviews(state.storyPreviews);
     state.storyPreviews = [];
+    state.activeStoryComposerIndex = 0;
     closeSocialModals();
     state.stories = await state.service.loadStories();
     renderStories();
     Utils.showToast('Stories publicados por 24 horas!');
   } catch (err) {
-    console.error(err);
-    Utils.showToast('Erro ao publicar story.', 'error');
+    console.error('[MSY][feed-social] Erro ao publicar story:', err);
+    if (uploadedPaths.length) {
+      await removeSocialMedia(db, uploadedPaths).catch((cleanupErr) => {
+        console.warn('[MSY][feed-social] Rollback parcial do upload do story falhou:', cleanupErr);
+      });
+    }
+    Utils.showToast(err.message || 'Erro ao publicar story.', 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Publicar stories';
   }
@@ -1792,6 +2113,32 @@ function subscribeSocialNotifications() {
       .subscribe();
   } catch (err) {
     console.warn('[MSY][feed-social] Realtime de atividade indisponivel:', err);
+  }
+}
+
+function subscribeStoriesRealtime() {
+  if (!state.hasSocialTables || state.socialStoriesChannel) return;
+  try {
+    state.socialStoriesChannel = db
+      .channel('feed-social-stories')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'social_stories',
+      }, () => {
+        clearTimeout(state.directActivityRefreshTimer);
+        state.directActivityRefreshTimer = setTimeout(async () => {
+          try {
+            state.stories = await state.service.loadStories();
+            renderStories();
+          } catch (err) {
+            console.warn('[MSY][feed-social] Realtime de stories indisponível:', err);
+          }
+        }, 180);
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[MSY][feed-social] Assinatura realtime de stories falhou:', err);
   }
 }
 
@@ -2612,12 +2959,10 @@ async function openStoryPremium(groupIndex, storyIndex) {
       const targetUserId = group?.author?.id;
       if (!targetUserId) throw new Error('Nao foi possivel identificar o autor do story.');
       const conversationId = await state.service.ensureDirectConversation(targetUserId);
-      await state.service.sendDirectMessage(conversationId, text, {
-        kind: 'story_reply',
-        story_id: story.id,
-        story_url: story.media_url,
-        media_type: story.media_type,
-      });
+      await state.service.sendStoryReplyDirect(conversationId, {
+        ...story,
+        author: group.author,
+      }, text);
       input.value = '';
       Utils.showToast('Resposta enviada no Direct.');
     } catch (err) {
@@ -2641,25 +2986,51 @@ async function openStoryPremium(groupIndex, storyIndex) {
   hydrateStoryMeta(story.id, canViewReactions);
 }
 
+function pauseStoryPlayback(modal) {
+  const bar = modal.querySelector('.story-progress-stack .active i, .story-progress span');
+  const video = modal.querySelector('.story-media video');
+  if (bar) bar.style.animationPlayState = 'paused';
+  if (video instanceof HTMLVideoElement) video.pause();
+  modal.dataset.storyPaused = 'true';
+}
+
+function resumeStoryPlayback(modal) {
+  const bar = modal.querySelector('.story-progress-stack .active i, .story-progress span');
+  const video = modal.querySelector('.story-media video');
+  if (bar) bar.style.animationPlayState = 'running';
+  if (video instanceof HTMLVideoElement) playStoryVideo(video, modal).catch(() => {});
+  modal.dataset.storyTickAt = String(Date.now());
+  delete modal.dataset.storyPaused;
+}
+
 function bindStoryGestures(modal, go) {
   let startX = 0;
   let startY = 0;
-  let startAt = 0;
-  modal.querySelector('.story-panel')?.addEventListener('touchstart', (e) => {
-    if (e.target.closest('input,textarea,button')) return;
-    const touch = e.touches?.[0];
-    startX = touch?.clientX || 0;
-    startY = touch?.clientY || 0;
-    startAt = Date.now();
-  }, { passive: true });
-  modal.querySelector('.story-panel')?.addEventListener('touchend', (e) => {
-    if (e.target.closest('input,textarea,button')) return;
-    const touch = e.changedTouches?.[0];
-    const dx = (touch?.clientX || 0) - startX;
-    const dy = (touch?.clientY || 0) - startY;
+  const panel = modal.querySelector('.story-panel');
+  if (!panel) return;
+  const startHold = (event) => {
+    if (event.target.closest('input,textarea,button')) return;
+    const point = event.touches?.[0] || event;
+    startX = point?.clientX || 0;
+    startY = point?.clientY || 0;
+    pauseStoryPlayback(modal);
+  };
+  const endHold = (event) => {
+    if (event.target.closest('input,textarea,button')) return;
+    const point = event.changedTouches?.[0] || event;
+    const dx = (point?.clientX || 0) - startX;
+    const dy = (point?.clientY || 0) - startY;
+    resumeStoryPlayback(modal);
     if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
     else if (dy > 76 && Math.abs(dy) > Math.abs(dx) * 1.2) closeSocialModals();
-  }, { passive: true });
+  };
+  panel.addEventListener('touchstart', startHold, { passive: true });
+  panel.addEventListener('touchend', endHold, { passive: true });
+  panel.addEventListener('pointerdown', startHold, { passive: true });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => panel.addEventListener(eventName, (event) => {
+    if (modal.dataset.storyPaused !== 'true') return;
+    endHold(event);
+  }, { passive: true }));
 }
 
 async function openStory(groupIndex, storyIndex) {
@@ -2749,7 +3120,10 @@ async function openStoryFast(groupIndex, storyIndex) {
       const targetUserId = group?.author?.id;
       if (!targetUserId) throw new Error('Nao foi possivel identificar o autor do story.');
       const conversationId = await state.service.ensureDirectConversation(targetUserId);
-      await state.service.sendDirectMessage(conversationId, text);
+      await state.service.sendStoryReplyDirect(conversationId, {
+        ...story,
+        author: group.author,
+      }, text);
       input.value = '';
       const composer = document.getElementById('storyReplyComposer');
       if (composer) composer.style.display = 'none';
@@ -2801,12 +3175,23 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
     }, { once: true });
   }
   if (story.media_type !== 'image') return;
-  const timer = setTimeout(() => {
-    if (!modal.classList.contains('open')) return;
+  let elapsed = 0;
+  const tickAt = Date.now();
+  const timer = setInterval(() => {
+    if (!modal.classList.contains('open')) {
+      clearInterval(timer);
+      return;
+    }
+    if (modal.dataset.storyPaused === 'true') return;
+    elapsed += Date.now() - (Number(modal.dataset.storyTickAt || tickAt));
+    modal.dataset.storyTickAt = String(Date.now());
+    if (elapsed < 6000) return;
+    clearInterval(timer);
     if (go) return go(1);
     const next = getNextStoryCursor(groupIndex, storyIndex, 1);
     if (next) openStoryFast(next.groupIndex, next.storyIndex);
-  }, 6000);
+  }, 180);
+  modal.dataset.storyTickAt = String(tickAt);
   modal.dataset.storyTimer = String(timer);
 }
 
@@ -2968,7 +3353,10 @@ async function openStoryLegacy(groupIndex, storyIndex) {
       const targetUserId = group?.author?.id;
       if (!targetUserId) throw new Error('Não foi possível identificar o autor do story.');
       const conversationId = await state.service.ensureDirectConversation(targetUserId);
-      await state.service.sendDirectMessage(conversationId, text);
+      await state.service.sendStoryReplyDirect(conversationId, {
+        ...story,
+        author: group.author,
+      }, text);
       input.value = '';
       const composer = document.getElementById('storyReplyComposer');
       if (composer) composer.style.display = 'none';
@@ -2992,7 +3380,10 @@ async function deleteStory(storyId) {
   if (!story || !canManageStory(story)) return Utils.showToast('Sem permissao para excluir este story.', 'error');
   if (!await MSYConfirm.show('Excluir este story?', { title: 'Excluir story', type: 'danger', confirmText: 'Excluir' })) return;
   try {
-    await state.service.deleteStory(storyId);
+    const paths = await state.service.deleteStory(storyId);
+    if (paths.length) {
+      await removeSocialMedia(db, paths).catch((err) => console.warn('[MSY][feed-social] Story excluido, mas storage manteve midias:', err));
+    }
     closeSocialModals();
     state.stories = await state.service.loadStories();
     renderStories();
@@ -3163,113 +3554,114 @@ function previewSocialProfileImage(modal, kind) {
   }
 }
 
-function openStoryEditor(storyId) {
+async function openStoryEditor(storyId) {
   const story = findStoryById(storyId);
   if (!story || !canManageStory(story)) return Utils.showToast('Sem permissao para editar este story.', 'error');
-  const modal = document.getElementById('storyComposerModal');
-  if (!modal) return;
   state.activeStoryEditId = storyId;
   state.storyEditPreview = {
     id: story.id,
+    file: null,
     url: story.media_url,
     storage_path: story.storage_path,
+    thumbnail_url: story.thumbnail_url || story.media_url,
     media_type: story.media_type,
     isNew: false,
+    caption: story.caption || '',
+    editState: story.media_type === 'video'
+      ? {
+        ...createStoryMediaEditState(new File([], 'story.mp4', { type: 'video/mp4' })),
+        ...story.media_meta,
+        exportSupported: supportsVideoEditing(),
+        duration: Number(story.media_meta?.trimEnd || story.media_meta?.duration || 0),
+      }
+      : {
+        ...createStoryMediaEditState(new File([], 'story.webp', { type: 'image/webp' })),
+        ...story.media_meta,
+      },
+    elementsText: (story.elements || []).join('\n'),
   };
-  modal.innerHTML = `
-    <div class="story-compose-panel social-story-edit-panel">
-      <div class="story-compose-preview">
-        <div class="story-compose-slide-preview active" id="storyEditPreview">
-          ${editorMediaNode(state.storyEditPreview)}
-        </div>
-      </div>
-      <div class="story-compose-side">
-        <div class="story-compose-head">
-          <div>
-            <div class="story-compose-title">Editar story</div>
-            <div class="story-compose-subtitle">Substitua a midia sem alterar a posicao na sequencia.</div>
-          </div>
-          <button class="social-icon-btn story-compose-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <input id="storyEditFile" type="file" accept="image/*,video/*" hidden>
-        <button type="button" class="follow-btn" data-story-edit-media><i class="fa-solid fa-image"></i> Substituir midia</button>
-        <textarea id="storyEditCaption" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(story.caption || '')}</textarea>
-        <div class="story-caption-count"><span id="storyEditCaptionCount">${(story.caption || '').length}</span>/160</div>
-        <textarea id="storyEditElements" class="story-caption-input social-story-elements-input" maxlength="500" placeholder="Elementos extras, stickers ou observacoes">${Utils.escapeHtml((story.elements || []).join('\n'))}</textarea>
-        <div class="story-compose-actions">
-          <button class="btn btn-primary social-submit story-publish-btn" id="saveStoryEditBtn"><i class="fa-solid fa-check"></i> Salvar story</button>
-        </div>
-      </div>
-    </div>`;
-  openModal(modal);
-  modal.querySelector('[data-story-edit-media]')?.addEventListener('click', () => modal.querySelector('#storyEditFile')?.click());
-  modal.querySelector('#storyEditCaption')?.addEventListener('input', (e) => {
-    const counter = modal.querySelector('#storyEditCaptionCount');
-    if (counter) counter.textContent = String(e.currentTarget.value.length);
-  });
-  modal.querySelector('#storyEditFile')?.addEventListener('change', (e) => {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    try {
-      validateMediaFile(file);
-      if (state.storyEditPreview?.isNew) revokePreviews([state.storyEditPreview]);
-      state.storyEditPreview = { ...filePreview(file), isNew: true };
-      const preview = modal.querySelector('#storyEditPreview');
-      if (preview) preview.innerHTML = editorMediaNode(state.storyEditPreview);
-    } catch (err) {
-      Utils.showToast(err.message || 'Erro ao preparar midia.', 'error');
-    } finally {
-      e.currentTarget.value = '';
-    }
-  });
-  modal.querySelector('#saveStoryEditBtn')?.addEventListener('click', saveStoryEditor);
+  state.storyPreviews = [state.storyEditPreview];
+  state.activeStoryComposerIndex = 0;
+  await hydrateStoryComposerVideoMetadata();
+  renderStoryComposerBody();
 }
 
 async function saveStoryEditor() {
   const story = findStoryById(state.activeStoryEditId);
-  if (!story || !state.storyEditPreview) return;
-  const btn = document.getElementById('saveStoryEditBtn');
-  const caption = document.getElementById('storyEditCaption')?.value.trim() || '';
-  const elements = (document.getElementById('storyEditElements')?.value || '')
+  const item = activeStoryComposerItem();
+  if (!story || !item) return;
+  const btn = document.getElementById('publishStoryBtn');
+  const elements = String(item.elementsText || '')
     .split('\n')
-    .map((item) => item.trim())
+    .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, 12);
+  const cleanupPaths = [];
   try {
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     }
-    const oldStoragePath = story.storage_path;
-    const media = state.storyEditPreview.isNew
-      ? await uploadSocialMedia(db, state.profile.id, state.storyEditPreview.file, 'stories')
-      : null;
-    const updated = await state.service.updateStory(story.id, { caption, elements, media });
-    if (media && oldStoragePath && oldStoragePath !== media.storage_path) {
-      await removeSocialMedia(db, [oldStoragePath]).catch((err) => console.warn('[MSY][feed-social] Story atualizado, mas storage manteve midia antiga:', err));
+    let media = null;
+    let options = {
+      media_meta: item.editState || {},
+      thumbnail: item.thumbnail_url ? { url: item.thumbnail_url } : null,
+    };
+    if (item.isNew && item.file) {
+      const payload = await buildStoryUploadPayload(item);
+      media = payload.media;
+      options = { ...payload.options, thumbnail: payload.options.thumbnail_url ? { url: payload.options.thumbnail_url } : null };
+      if (media.storage_path) cleanupPaths.push(media.storage_path);
     }
-    Object.assign(story, {
+    const updated = await state.service.updateStory(story.id, {
+      caption: item.caption || '',
+      elements,
+      media,
+      media_meta: options.media_meta || item.editState || {},
+      thumbnail: options.thumbnail || null,
+    });
+    if (media && story.storage_path && story.storage_path !== media.storage_path) {
+      const oldPaths = [story.storage_path, story.thumbnail_storage_path].filter(Boolean);
+      await removeSocialMedia(db, oldPaths).catch((err) => console.warn('[MSY][feed-social] Story atualizado, mas storage manteve mídia antiga:', err));
+    }
+    patchStoryInState(story.id, {
       caption: updated.caption,
       elements: updated.elements || elements,
       media_url: updated.media_url,
       media_type: updated.media_type,
       storage_path: updated.storage_path,
+      thumbnail_url: updated.thumbnail_url || item.thumbnail_url,
+      thumbnail_storage_path: updated.thumbnail_storage_path || null,
+      media_meta: updated.media_meta || item.editState || {},
       edited_at: updated.edited_at,
       updated_at: updated.updated_at,
     });
-    if (state.storyEditPreview?.isNew) revokePreviews([state.storyEditPreview]);
+    revokePreviews(state.storyPreviews.filter((preview) => preview.isNew));
+    state.storyPreviews = [];
+    state.activeStoryComposerIndex = 0;
+    state.activeStoryEditId = null;
+    state.storyEditPreview = null;
     closeSocialModals();
     renderStories();
     const cursor = state.storyCursor;
-    if (cursor) openStory(cursor.groupIndex, cursor.storyIndex);
+    if (cursor) {
+      state.stories = await state.service.loadStories();
+      renderStories();
+      openStory(cursor.groupIndex, cursor.storyIndex);
+    }
     Utils.showToast('Story atualizado.');
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao editar story:', err);
+    if (cleanupPaths.length) {
+      await removeSocialMedia(db, cleanupPaths).catch((cleanupErr) => {
+        console.warn('[MSY][feed-social] Rollback parcial do upload do story editado falhou:', cleanupErr);
+      });
+    }
     Utils.showToast(err.message || 'Erro ao editar story.', 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar story';
+      btn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Salvar story';
     }
   }
 }
@@ -3322,6 +3714,214 @@ async function saveSocialProfile() {
   }
 }
 
+function findStoryCursorById(storyId) {
+  for (let groupIndex = 0; groupIndex < state.stories.length; groupIndex += 1) {
+    const storyIndex = state.stories[groupIndex]?.stories?.findIndex((item) => item.id === storyId) ?? -1;
+    if (storyIndex >= 0) return { groupIndex, storyIndex };
+  }
+  return null;
+}
+
+function resolveStoryReplyState(message) {
+  const attachment = message.attachment || {};
+  const storyId = attachment.story_id || message.metadata?.story_id || null;
+  const cursor = storyId ? findStoryCursorById(storyId) : null;
+  const story = cursor ? state.stories[cursor.groupIndex]?.stories?.[cursor.storyIndex] : null;
+  return {
+    available: Boolean(story && cursor),
+    cursor,
+    story,
+    storyId,
+    attachment,
+  };
+}
+
+function renderDirectMessageAttachment(message) {
+  if (message.attachment?.kind === 'deleted' || message.deleted_at) {
+    return '<div class="direct-message-deleted">Mensagem apagada</div>';
+  }
+  if (message.attachment?.kind === 'media') {
+    return `<div class="direct-message-media">${message.attachment.media_type === 'video' ? `<video src="${Utils.escapeHtml(message.attachment.url)}" controls playsinline></video>` : `<img src="${Utils.escapeHtml(message.attachment.url)}" alt="Anexo do Direct">`}</div>`;
+  }
+  if (message.attachment?.kind === 'story_reply') {
+    const reply = resolveStoryReplyState(message);
+    const previewUrl = reply.story?.thumbnail_url || reply.story?.media_url || reply.attachment.thumbnail_url || reply.attachment.story_url || reply.attachment.media_url || '';
+    const authorName = reply.story?.author?.name || reply.attachment.story_author_name || 'Story';
+    const caption = reply.story?.caption || reply.attachment.caption_excerpt || reply.attachment.caption || '';
+    return `
+      <button type="button" class="direct-story-reply-card${reply.available ? '' : ' unavailable'}" data-open-story-reference="${Utils.escapeHtml(reply.storyId || '')}" ${reply.available ? '' : 'disabled'}>
+        <div class="direct-story-reply-thumb">${previewUrl ? `<img src="${Utils.escapeHtml(previewUrl)}" alt="Preview do story">` : '<i class="fa-regular fa-image"></i>'}</div>
+        <div class="direct-story-reply-copy">
+          <strong>${Utils.escapeHtml(authorName)}</strong>
+          <span>${Utils.escapeHtml(caption || (reply.available ? 'Abrir story original' : 'Story indisponível'))}</span>
+          <em>${reply.available ? 'Abrir story' : 'Story indisponível'}</em>
+        </div>
+      </button>`;
+  }
+  return '';
+}
+
+function renderDirectMessageBubble(message, { mine = false, showDate = false } = {}) {
+  const edited = message.edited_at && !message.deleted_at ? '<span class="direct-message-status">editada</span>' : '';
+  const deleted = message.deleted_at || message.attachment?.kind === 'deleted';
+  const canDeleteForAll = mine && !deleted;
+  const canEdit = mine && !deleted && Boolean(message.body);
+  const canCopy = Boolean(message.body) && !deleted;
+  return `
+    ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
+    <div class="direct-message-row ${mine ? 'mine' : 'theirs'}" data-direct-message-row="${message.id}">
+      <div class="direct-message-bubble${deleted ? ' is-deleted' : ''}" data-direct-message-bubble="${message.id}">
+        <button type="button" class="social-icon-btn direct-message-menu-btn" data-open-direct-message-menu="${message.id}" aria-label="Mais opções"><i class="fa-solid fa-ellipsis"></i></button>
+        ${renderDirectMessageAttachment(message)}
+        ${message.body ? `<div class="direct-message-text">${Utils.escapeHtml(message.body || '')}</div>` : ''}
+        <div class="direct-message-meta-line">
+          ${edited}
+          <div class="direct-message-time">${new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+        <div class="post-menu direct-message-menu" data-direct-message-menu="${message.id}">
+          ${canEdit ? `<button data-direct-edit="${message.id}"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
+          ${canCopy ? `<button data-direct-copy="${message.id}"><i class="fa-solid fa-copy"></i> Copiar</button>` : ''}
+          <button data-direct-delete-me="${message.id}"><i class="fa-solid fa-eye-slash"></i> Apagar para mim</button>
+          ${canDeleteForAll ? `<button class="danger" data-direct-delete-all="${message.id}"><i class="fa-solid fa-trash"></i> Apagar para todos</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function openDirectStoryReference(storyId) {
+  const cursor = findStoryCursorById(storyId);
+  if (!cursor) {
+    Utils.showToast('Story indisponível.', 'error');
+    return;
+  }
+  closeSocialModals();
+  await openStory(cursor.groupIndex, cursor.storyIndex);
+}
+
+async function handleDirectCopy(messageId) {
+  const { message } = findDirectMessage(state.activeDirectConversationId, messageId);
+  if (!message?.body) return;
+  await navigator.clipboard.writeText(message.body);
+  Utils.showToast('Mensagem copiada.');
+}
+
+async function handleDirectEdit(messageId) {
+  const { message } = findDirectMessage(state.activeDirectConversationId, messageId);
+  if (!message?.body || message.deleted_at) return;
+  const input = document.getElementById('directMessageInput');
+  if (!input) return;
+  state.directEditingMessageId = messageId;
+  input.value = message.body;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  Utils.showToast('Editando mensagem.');
+}
+
+async function handleDirectDeleteForMe(messageId) {
+  await state.service.deleteDirectMessageForMe(messageId);
+  removeDirectMessageForViewer(state.activeDirectConversationId, messageId);
+  renderDirectInbox();
+  Utils.showToast('Mensagem removida para você.');
+}
+
+async function handleDirectDeleteForAll(messageId) {
+  if (!await MSYConfirm.show('Apagar esta mensagem para todos?', { title: 'Apagar mensagem', type: 'danger', confirmText: 'Apagar' })) return;
+  const updated = await state.service.deleteDirectMessageForAll(messageId);
+  upsertDirectMessage(updated.conversation_id, updated);
+  renderDirectInbox();
+  Utils.showToast('Mensagem apagada para todos.');
+}
+
+function bindDirectMessageActions(modal) {
+  const holdTimers = new Map();
+  const openMenu = (messageId) => {
+    const menu = modal.querySelector(`[data-direct-message-menu="${messageId}"]`);
+    modal.querySelectorAll('.direct-message-menu.open').forEach((node) => { if (node !== menu) node.classList.remove('open'); });
+    menu?.classList.toggle('open');
+  };
+  modal.querySelectorAll('[data-open-direct-message-menu]').forEach((btn) => btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openMenu(btn.dataset.openDirectMessageMenu);
+  }));
+  modal.querySelectorAll('[data-direct-message-row]').forEach((row) => {
+    const messageId = row.dataset.directMessageRow;
+    const startHold = () => {
+      clearTimeout(holdTimers.get(messageId));
+      holdTimers.set(messageId, setTimeout(() => openMenu(messageId), 420));
+    };
+    const stopHold = () => {
+      clearTimeout(holdTimers.get(messageId));
+      holdTimers.delete(messageId);
+    };
+    row.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button,input,textarea,video,a')) return;
+      startHold();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => row.addEventListener(eventName, stopHold));
+  });
+  modal.querySelectorAll('[data-direct-copy]').forEach((btn) => btn.addEventListener('click', async () => {
+    try {
+      await handleDirectCopy(btn.dataset.directCopy);
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao copiar mensagem direct:', err);
+      Utils.showToast(err.message || 'Erro ao copiar mensagem.', 'error');
+    }
+  }));
+  modal.querySelectorAll('[data-direct-edit]').forEach((btn) => btn.addEventListener('click', () => handleDirectEdit(btn.dataset.directEdit)));
+  modal.querySelectorAll('[data-direct-delete-me]').forEach((btn) => btn.addEventListener('click', async () => {
+    try {
+      await handleDirectDeleteForMe(btn.dataset.directDeleteMe);
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao apagar mensagem para mim:', err);
+      Utils.showToast(err.message || 'Erro ao apagar mensagem.', 'error');
+    }
+  }));
+  modal.querySelectorAll('[data-direct-delete-all]').forEach((btn) => btn.addEventListener('click', async () => {
+    try {
+      await handleDirectDeleteForAll(btn.dataset.directDeleteAll);
+    } catch (err) {
+      console.error('[MSY][feed-social] Erro ao apagar mensagem para todos:', err);
+      Utils.showToast(err.message || 'Erro ao apagar mensagem para todos.', 'error');
+    }
+  }));
+  modal.querySelectorAll('[data-open-story-reference]').forEach((btn) => btn.addEventListener('click', () => openDirectStoryReference(btn.dataset.openStoryReference)));
+}
+
+async function subscribeDirectConversation(conversationId) {
+  if (!state.hasSocialTables) return;
+  if (state.directMessagesChannel) {
+    try { await db.removeChannel(state.directMessagesChannel); } catch {}
+    state.directMessagesChannel = null;
+  }
+  if (!conversationId) return;
+  try {
+    state.directMessagesChannel = db
+      .channel(`feed-social-direct-${conversationId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      }, async (payload) => {
+        try {
+          const messages = await state.service.loadDirectMessages(conversationId);
+          const conversation = getActiveDirectConversation();
+          if (conversation) {
+            conversation.messages = messages;
+            conversation.lastMessage = messages.at(-1) || conversation.lastMessage;
+            conversation.last_message_at = conversation.lastMessage?.created_at || conversation.last_message_at;
+          }
+          renderDirectInbox();
+        } catch (err) {
+          console.warn('[MSY][feed-social] Realtime do direct indisponível:', err);
+        }
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[MSY][feed-social] Falha ao assinar realtime do direct:', err);
+  }
+}
+
 async function openDirectInbox(targetId = null) {
   if (!state.hasSocialTables) {
     Utils.showToast('Aplique as migrations sociais antes de usar o Direct.', 'error');
@@ -3340,9 +3940,7 @@ async function openDirectInbox(targetId = null) {
       const directConversation = state.directConversations.find((conversation) => conversation.id === maybeUuid);
       if (directConversation) {
         state.activeDirectConversationId = directConversation.id;
-        directConversation.messages = directConversation.messages?.length
-          ? directConversation.messages
-          : await state.service.loadDirectMessages(directConversation.id);
+        directConversation.messages = await state.service.loadDirectMessages(directConversation.id);
         await state.service.markDirectConversationRead(directConversation.id);
         directConversation.unread_count = 0;
         state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
@@ -3353,15 +3951,16 @@ async function openDirectInbox(targetId = null) {
       }
     }
 
-    const activeConversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
-    if (activeConversation?.unread_count) {
-      activeConversation.messages = activeConversation.messages?.length
-        ? activeConversation.messages
-        : await state.service.loadDirectMessages(activeConversation.id);
-      await state.service.markDirectConversationRead(activeConversation.id);
-      activeConversation.unread_count = 0;
-      state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
-      renderDirectUnreadBadges();
+    const activeConversation = getActiveDirectConversation();
+    if (activeConversation) {
+      activeConversation.messages = await state.service.loadDirectMessages(activeConversation.id);
+      if (activeConversation.unread_count) {
+        await state.service.markDirectConversationRead(activeConversation.id);
+        activeConversation.unread_count = 0;
+        state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+        renderDirectUnreadBadges();
+      }
+      await subscribeDirectConversation(activeConversation.id);
     }
 
     renderDirectInbox();
@@ -3373,7 +3972,7 @@ async function openDirectInbox(targetId = null) {
 
 function renderDirectInbox() {
   const modal = document.getElementById('directViewer');
-  const activeConversation = state.directConversations.find((conversation) => conversation.id === state.activeDirectConversationId) || null;
+  const activeConversation = getActiveDirectConversation();
   const activeMessages = activeConversation?.messages || [];
   const peer = activeConversation?.otherParticipants?.[0]?.profile || {};
   const streak = activeConversation?.streak || { days: 0, active: false, level: 'apagado' };
@@ -3398,7 +3997,7 @@ function renderDirectInbox() {
           ${state.directConversations.length ? state.directConversations.map((conversation) => {
             const person = conversation.otherParticipants[0]?.profile || {};
             const selected = conversation.id === state.activeDirectConversationId;
-            const preview = conversation.lastMessage?.body || conversation.lastMessage?.attachment?.kind || 'Nova conversa';
+            const preview = state.service.getDirectMessagePreview(conversation.lastMessage || {});
             const unread = Number(conversation.unread_count || 0) > 0;
             return `
               <button type="button" class="direct-thread${selected ? ' active' : ''}${unread ? ' unread' : ''}" data-open-direct-conversation="${conversation.id}">
@@ -3439,22 +4038,14 @@ function renderDirectInbox() {
             const mine = message.sender_id === state.profile.id;
             const prev = activeMessages[index - 1];
             const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(message.created_at).toDateString();
-            return `
-              ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
-              <div class="direct-message-row ${mine ? 'mine' : 'theirs'}">
-                <div class="direct-message-bubble">
-                  ${message.attachment?.kind === 'media' ? `<div class="direct-message-media">${message.attachment.media_type === 'video' ? `<video src="${Utils.escapeHtml(message.attachment.url)}" controls playsinline></video>` : `<img src="${Utils.escapeHtml(message.attachment.url)}" alt="Anexo do Direct">`}</div>` : ''}
-                  ${message.body ? `<div class="direct-message-text">${Utils.escapeHtml(message.body || '')}</div>` : ''}
-                  <div class="direct-message-time">${new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-              </div>`;
+            return renderDirectMessageBubble(message, { mine, showDate });
           }).join('') : '<div class="social-empty"><i class="fa-regular fa-paper-plane"></i>Nenhuma mensagem ainda.</div>'}
         </div>
         <form id="directComposer" class="direct-composer">
           <button type="button" class="direct-composer-icon" aria-label="Emoji"><i class="fa-regular fa-face-smile"></i></button>
           <button type="button" class="direct-composer-icon" aria-label="Anexo"><i class="fa-regular fa-square-plus"></i></button>
           <input type="file" id="directMediaInput" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
-          <input id="directMessageInput" class="direct-composer-input" placeholder="Enviar mensagem..." ${activeConversation ? '' : 'disabled'}>
+          <input id="directMessageInput" class="direct-composer-input" placeholder="${state.directEditingMessageId ? 'Editar mensagem...' : 'Enviar mensagem...'}" ${activeConversation ? '' : 'disabled'}>
           <button class="direct-composer-send" type="submit" ${activeConversation ? '' : 'disabled'}><i class="fa-solid fa-paper-plane"></i></button>
         </form>
       </section>
@@ -3462,9 +4053,10 @@ function renderDirectInbox() {
 
   openModal(modal);
   bindDirectViewport(modal);
+  bindDirectMessageActions(modal);
   modal.querySelectorAll('[data-open-direct-conversation]').forEach((node) => node.addEventListener('click', async () => {
     state.activeDirectConversationId = node.dataset.openDirectConversation;
-    const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+    const conversation = getActiveDirectConversation();
     if (conversation) {
       conversation.messages = await state.service.loadDirectMessages(conversation.id);
       await state.service.markDirectConversationRead(conversation.id);
@@ -3474,11 +4066,14 @@ function renderDirectInbox() {
       if (!conversation.streak || !conversation.streak.active) {
         conversation.streak = state.service.calculateDirectStreak(conversation.messages, conversation.otherParticipants.map((participant) => participant.user_id));
       }
+      await subscribeDirectConversation(conversation.id);
     }
     renderDirectInbox();
   }));
-  modal.querySelector('[data-direct-back]')?.addEventListener('click', () => {
+  modal.querySelector('[data-direct-back]')?.addEventListener('click', async () => {
     state.activeDirectConversationId = null;
+    state.directEditingMessageId = null;
+    await subscribeDirectConversation(null);
     renderDirectInbox();
   });
   modal.querySelector('#directComposer')?.addEventListener('submit', sendDirectMessage);
@@ -3494,18 +4089,13 @@ function renderDirectInbox() {
     if (!file || !state.activeDirectConversationId) return;
     try {
       validateMediaFile(file);
-      const media = await uploadSocialMedia(db, state.profile.id, file, 'direct');
+      const media = await uploadSocialMedia(db, state.profile.id, file, 'direct', { skipCompression: true });
       const message = await state.service.sendDirectMessage(state.activeDirectConversationId, '', { kind: 'media', ...media });
-      const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
-      if (conversation) {
-        conversation.messages = [...(conversation.messages || []), message];
-        conversation.lastMessage = message;
-        conversation.last_message_at = message.created_at;
-      }
+      upsertDirectMessage(state.activeDirectConversationId, message);
       renderDirectInbox();
     } catch (err) {
-      console.error(err);
-      Utils.showToast(err.message || 'Erro ao enviar midia no direct.', 'error');
+      console.error('[MSY][feed-social] Erro ao enviar mídia no direct:', err);
+      Utils.showToast(err.message || 'Erro ao enviar mídia no direct.', 'error');
     } finally {
       e.target.value = '';
     }
@@ -3522,6 +4112,11 @@ function renderDirectInbox() {
   requestAnimationFrame(() => {
     const list = modal.querySelector('#directMessagesList');
     if (list) list.scrollTop = list.scrollHeight;
+    if (state.directEditingMessageId) {
+      const input = document.getElementById('directMessageInput');
+      input?.focus();
+      input?.setSelectionRange(input.value.length, input.value.length);
+    }
   });
 }
 
@@ -3554,40 +4149,25 @@ async function sendDirectMessage(e) {
   const body = input?.value?.trim() || '';
   if (!body || !state.activeDirectConversationId) return;
   try {
-    const message = await state.service.sendDirectMessage(state.activeDirectConversationId, body);
-    const conversation = state.directConversations.find((item) => item.id === state.activeDirectConversationId);
+    const message = state.directEditingMessageId
+      ? await state.service.updateDirectMessage(state.directEditingMessageId, body)
+      : await state.service.sendDirectMessage(state.activeDirectConversationId, body);
+    const conversation = upsertDirectMessage(state.activeDirectConversationId, message);
     if (conversation) {
-      conversation.messages = [...(conversation.messages || []), message];
-      conversation.lastMessage = message;
-      conversation.last_message_at = message.created_at;
       conversation.streak = message.metadata?.direct_streak || conversation.streak;
     }
     input.value = '';
+    state.directEditingMessageId = null;
     appendDirectMessageToDom(message);
+    Utils.showToast(message.edited_at ? 'Mensagem atualizada.' : 'Mensagem enviada.');
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao enviar mensagem direct:', err);
     Utils.showToast(err.message || 'Erro ao enviar direct.', 'error');
   }
 }
 
-function appendDirectMessageToDom(message) {
-  const list = document.getElementById('directMessagesList');
-  if (!list) return renderDirectInbox();
-  const activeConversation = state.directConversations.find((conversation) => conversation.id === state.activeDirectConversationId);
-  const messages = activeConversation?.messages || [];
-  const prev = messages[messages.length - 2] || null;
-  const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(message.created_at).toDateString();
-  if (list.querySelector('.social-empty')) list.innerHTML = '';
-  list.insertAdjacentHTML('beforeend', `
-    ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
-    <div class="direct-message-row mine">
-      <div class="direct-message-bubble">
-        ${message.attachment?.kind === 'media' ? `<div class="direct-message-media">${message.attachment.media_type === 'video' ? `<video src="${Utils.escapeHtml(message.attachment.url)}" controls playsinline></video>` : `<img src="${Utils.escapeHtml(message.attachment.url)}" alt="Anexo do Direct">`}</div>` : ''}
-        ${message.body ? `<div class="direct-message-text">${Utils.escapeHtml(message.body || '')}</div>` : ''}
-        <div class="direct-message-time">${new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-      </div>
-    </div>`);
-  requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+function appendDirectMessageToDom() {
+  renderDirectInbox();
 }
 
 function bindModals() {

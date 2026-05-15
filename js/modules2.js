@@ -234,6 +234,8 @@ async function initFeed() {
   let allFeed       = [];
   let filtroTipo    = 'todos';
   let buscaFeed     = '';
+  let feedRealtimeChannel = null;
+  let feedRealtimeTimer = null;
 
   const TIPO_META = {
     atividade:  { icon:'fa-list-check',    color:'#e8c060', label:'Atividade'  },
@@ -244,6 +246,74 @@ async function initFeed() {
     biblioteca: { icon:'fa-book-open',      color:'#f59e0b', label:'Biblioteca' },
     custom:     { icon:'fa-star',           color:'#ececec', label:'Anúncio'    },
   };
+
+  async function resolveFeedStorageOwnerId() {
+    try {
+      const { data, error } = await db.auth.getUser();
+      if (!error && data?.user?.id) return data.user.id;
+    } catch {}
+    return profile.id;
+  }
+
+  async function uploadFeedImage(file) {
+    if (!file) return { url: null, storage_path: null };
+    if (!file.type.startsWith('image/')) throw new Error('A imagem da atividade precisa ser uma imagem válida.');
+    if (file.size > 12 * 1024 * 1024) throw new Error('A imagem da atividade pode ter no máximo 12MB.');
+    const ownerId = await resolveFeedStorageOwnerId();
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const safeName = (file.name || 'atividade')
+      .replace(/\.[^.]+$/, '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 42) || 'atividade';
+    const path = `${ownerId}/feed-activity/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
+    const { error } = await db.storage.from('social-media').upload(path, file, {
+      cacheControl: '31536000',
+      upsert: false,
+      contentType: file.type,
+    });
+    if (error) throw error;
+    const { data } = db.storage.from('social-media').getPublicUrl(path);
+    return { url: data.publicUrl, storage_path: path };
+  }
+
+  async function removeFeedImage(paths = []) {
+    const clean = [...new Set((paths || []).filter(Boolean))];
+    if (!clean.length) return;
+    const { error } = await db.storage.from('social-media').remove(clean);
+    if (error) throw error;
+  }
+
+  function formatFeedActivityMeta(item = {}) {
+    const chips = [];
+    if (item.categoria) chips.push(item.categoria);
+    if (item.data_atividade) {
+      const dateLabel = Utils.formatDate(item.data_atividade);
+      chips.push(item.horario_atividade ? `${dateLabel} · ${String(item.horario_atividade).slice(0, 5)}` : dateLabel);
+    }
+    if (item.localizacao) chips.push(item.localizacao);
+    return chips;
+  }
+
+  function subscribeFeedRealtime() {
+    if (feedRealtimeChannel) return;
+    try {
+      feedRealtimeChannel = db
+        .channel('feed-atividade-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_atividade' }, () => {
+          clearTimeout(feedRealtimeTimer);
+          feedRealtimeTimer = setTimeout(() => {
+            carregarFeed().catch((err) => console.warn('[MSY][feed] Realtime do feed indisponível:', err));
+          }, 180);
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('[MSY][feed] Falha ao assinar realtime do feed:', err);
+    }
+  }
 
   /* ---- MODAL CRIAR / EDITAR ---- */
   function abrirModal(itemEdit = null) {
@@ -285,6 +355,35 @@ async function initFeed() {
             <label class="form-label">Descrição <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
             <textarea class="form-input" id="feedDesc" rows="4" placeholder="Detalhes adicionais..." style="resize:vertical">${Utils.escapeHtml(itemEdit?.descricao||'')}</textarea>
           </div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Categoria</label>
+              <input type="text" class="form-input" id="feedCategoria" maxlength="80" placeholder="Ex.: Reunião, Evento, Aviso" value="${Utils.escapeHtml(itemEdit?.categoria||'')}">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Localização</label>
+              <input type="text" class="form-input" id="feedLocalizacao" maxlength="160" placeholder="Onde acontece?" value="${Utils.escapeHtml(itemEdit?.localizacao||'')}">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Data</label>
+              <input type="date" class="form-input" id="feedDataAtividade" value="${Utils.escapeHtml(itemEdit?.data_atividade||'')}">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Horário</label>
+              <input type="time" class="form-input" id="feedHorarioAtividade" value="${Utils.escapeHtml((itemEdit?.horario_atividade||'').slice?.(0,5) || '')}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Imagem <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="feedImagemFile" accept="image/*" hidden>
+              <button type="button" class="btn btn-ghost" id="feedImagemPickBtn"><i class="fa-solid fa-image"></i> Escolher imagem</button>
+              <input type="url" class="form-input" id="feedImagemUrl" placeholder="https://..." value="${Utils.escapeHtml(itemEdit?.imagem_url||'')}" style="flex:1;min-width:220px">
+            </div>
+            <div id="feedImagemPreview" style="margin-top:12px;${itemEdit?.imagem_url ? '' : 'display:none'}">
+              ${itemEdit?.imagem_url ? `<img src="${Utils.escapeHtml(itemEdit.imagem_url)}" alt="Preview da atividade" style="width:100%;max-height:220px;object-fit:cover;border-radius:18px;border:1px solid rgba(255,255,255,.08)">` : ''}
+            </div>
+          </div>
           <div class="form-group">
             <label class="form-label">Link <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
             <input type="url" class="form-input" id="feedLink" placeholder="https://..." value="${Utils.escapeHtml(itemEdit?.link||'')}">
@@ -303,32 +402,83 @@ async function initFeed() {
     modal.addEventListener('click', e => { if(e.target===modal) close(); });
     document.getElementById('feedModalClose').addEventListener('click', close);
     document.getElementById('feedCancelBtn').addEventListener('click', close);
+    document.getElementById('feedImagemPickBtn')?.addEventListener('click', () => document.getElementById('feedImagemFile')?.click());
+    document.getElementById('feedImagemFile')?.addEventListener('change', (event) => {
+      const file = event.currentTarget.files?.[0];
+      const preview = document.getElementById('feedImagemPreview');
+      if (!file || !preview) return;
+      const url = URL.createObjectURL(file);
+      preview.style.display = '';
+      preview.innerHTML = `<img src="${url}" alt="Preview da atividade" style="width:100%;max-height:220px;object-fit:cover;border-radius:18px;border:1px solid rgba(255,255,255,.08)">`;
+    });
+    document.getElementById('feedImagemUrl')?.addEventListener('input', (event) => {
+      const preview = document.getElementById('feedImagemPreview');
+      const url = event.currentTarget.value.trim();
+      if (!preview) return;
+      if (!url) {
+        preview.style.display = 'none';
+        preview.innerHTML = '';
+        return;
+      }
+      preview.style.display = '';
+      preview.innerHTML = `<img src="${Utils.escapeHtml(url)}" alt="Preview da atividade" style="width:100%;max-height:220px;object-fit:cover;border-radius:18px;border:1px solid rgba(255,255,255,.08)">`;
+    });
 
     document.getElementById('feedSaveBtn').addEventListener('click', async () => {
-      const titulo    = document.getElementById('feedTitulo').value.trim();
-      const descricao = document.getElementById('feedDesc').value.trim()||null;
-      const link      = document.getElementById('feedLink').value.trim()||null;
-      const tipo      = document.getElementById('feedTipo').value;
-      const icone     = document.getElementById('feedIcone').value.trim()||'📌';
+      const titulo       = document.getElementById('feedTitulo').value.trim();
+      const descricao    = document.getElementById('feedDesc').value.trim()||null;
+      const link         = document.getElementById('feedLink').value.trim()||null;
+      const tipo         = document.getElementById('feedTipo').value;
+      const icone        = document.getElementById('feedIcone').value.trim()||'📌';
+      const categoria    = document.getElementById('feedCategoria').value.trim()||null;
+      const localizacao  = document.getElementById('feedLocalizacao').value.trim()||null;
+      const dataAtividade = document.getElementById('feedDataAtividade').value || null;
+      const horarioAtividade = document.getElementById('feedHorarioAtividade').value || null;
+      const imagemUrlInput = document.getElementById('feedImagemUrl').value.trim() || null;
+      const imagemFile   = document.getElementById('feedImagemFile').files?.[0] || null;
       if (!titulo) { Utils.showToast('Título obrigatório.','error'); return; }
+      if (horarioAtividade && !dataAtividade) { Utils.showToast('Informe a data ao usar horário.','error'); return; }
       const btn = document.getElementById('feedSaveBtn');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+      let uploadedImage = null;
       try {
+        if (imagemFile) uploadedImage = await uploadFeedImage(imagemFile);
+        const nextImageUrl = uploadedImage?.url || imagemUrlInput || null;
+        const nextImageStoragePath = uploadedImage?.storage_path || (imagemUrlInput ? null : itemEdit?.imagem_storage_path || null);
+        const payload = {
+          titulo,
+          descricao,
+          link,
+          tipo,
+          icone,
+          categoria,
+          localizacao,
+          data_atividade: dataAtividade,
+          horario_atividade: horarioAtividade,
+          imagem_url: nextImageUrl,
+          imagem_storage_path: nextImageStoragePath,
+        };
         let error;
         if (isEdit) {
           ({ error } = await db.from('feed_atividade')
-            .update({ titulo, descricao, link, tipo, icone, updated_at: new Date().toISOString() })
+            .update({ ...payload, updated_at: new Date().toISOString() })
             .eq('id', itemEdit.id));
+          if (!error && itemEdit?.imagem_storage_path && itemEdit.imagem_storage_path !== nextImageStoragePath) {
+            await removeFeedImage([itemEdit.imagem_storage_path]).catch((cleanupErr) => console.warn('[MSY][feed] Imagem antiga da atividade mantida no storage:', cleanupErr));
+          }
         } else {
           ({ error } = await db.from('feed_atividade')
-            .insert({ titulo, descricao, link, tipo, icone, autor_id: profile.id }));
+            .insert({ ...payload, autor_id: profile.id }));
         }
         if (error) throw error;
         Utils.showToast(isEdit?'Publicação atualizada!':'Publicado no feed!');
         close(); page=1; await carregarFeed();
       } catch (err) {
         console.error('[MSY][feed] Erro ao salvar publicação:', err);
-        Utils.showToast('Erro ao salvar.','error');
+        if (uploadedImage?.storage_path) {
+          await removeFeedImage([uploadedImage.storage_path]).catch((cleanupErr) => console.warn('[MSY][feed] Rollback da imagem da atividade falhou:', cleanupErr));
+        }
+        Utils.showToast(err.message || 'Erro ao salvar.','error');
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-${isEdit?'floppy-disk':'paper-plane'}"></i> ${isEdit?'Salvar':'Publicar'}`;
       }
@@ -407,6 +557,7 @@ async function initFeed() {
             const autor   = item.autor;
             const canEdit = isDiretoria || (item.autor_id === profile.id);
             const canDelete = isDiretoria || (item.autor_id === profile.id);
+            const extraMeta = formatFeedActivityMeta(item);
             return `
               <div class="feed-card" data-id="${item.id}">
                 <div class="feed-card-accent" style="background:${meta.color}"></div>
@@ -417,9 +568,11 @@ async function initFeed() {
                     </div>
                     <div class="feed-card-time">${Utils.formatDateTime(item.created_at)}${item.updated_at?` <span class="feed-edited-tag">editado</span>`:''}</div>
                   </div>
+                  ${item.imagem_url ? `<div style="margin:0 0 12px"><img src="${Utils.escapeHtml(item.imagem_url)}" alt="Imagem da atividade" style="width:100%;max-height:240px;object-fit:cover;border-radius:18px;border:1px solid rgba(255,255,255,.06)"></div>` : ''}
                   <div class="feed-card-icone">${item.icone||'📌'}</div>
                   <div class="feed-card-titulo">${Utils.escapeHtml(item.titulo)}</div>
                   ${item.descricao?`<div class="feed-card-desc">${Utils.escapeHtml(item.descricao)}</div>`:''}
+                  ${extraMeta.length ? `<div class="message-sub" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0">${extraMeta.map((value) => `<span style="padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)">${Utils.escapeHtml(value)}</span>`).join('')}</div>` : ''}
                   <div class="feed-card-footer">
                     ${autor?`
                       <div class="feed-card-autor">
@@ -461,6 +614,8 @@ async function initFeed() {
       });
     });
   }
+
+  subscribeFeedRealtime();
 
   /* ---- LAYOUT ---- */
   content.innerHTML = `

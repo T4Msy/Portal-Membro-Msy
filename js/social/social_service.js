@@ -282,13 +282,19 @@ export class SocialService {
     return (data || []).map((item) => ({
       id: item.id,
       legacy: true,
-      content: [item.titulo, item.descricao].filter(Boolean).join('\n\n'),
+      content: [item.titulo, item.descricao, item.localizacao].filter(Boolean).join('\n\n'),
       created_at: item.created_at,
       edited_at: item.updated_at,
       is_pinned: false,
       author_id: item.autor_id,
       author: item.autor || { name: 'MSY', role: 'Portal', initials: 'MS' },
-      media: [],
+      media: item.imagem_url ? [{
+        id: `${item.id}-legacy-image`,
+        url: item.imagem_url,
+        storage_path: item.imagem_storage_path || null,
+        media_type: 'image',
+        position: 0,
+      }] : [],
       comments: [],
       comments_count: 0,
       likes_count: 0,
@@ -298,6 +304,12 @@ export class SocialService {
       link: item.link,
       tipo: item.tipo,
       icone: item.icone,
+      categoria: item.categoria || null,
+      localizacao: item.localizacao || null,
+      data_atividade: item.data_atividade || null,
+      horario_atividade: item.horario_atividade || null,
+      imagem_url: item.imagem_url || null,
+      imagem_storage_path: item.imagem_storage_path || null,
     }));
   }
 
@@ -629,6 +641,7 @@ export class SocialService {
       .is('deleted_at', null)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .limit(80);
     if (error) throw error;
 
@@ -636,39 +649,57 @@ export class SocialService {
     (data || []).forEach((story) => {
       const key = story.author_id;
       if (!grouped.has(key)) grouped.set(key, { author: story.author, stories: [] });
-      grouped.get(key).stories.push({ ...story, elements: story.elements || [] });
+      grouped.get(key).stories.push({
+        ...story,
+        elements: Array.isArray(story.elements) ? story.elements : [],
+        media_meta: story.media_meta || {},
+      });
     });
     return Array.from(grouped.values())
       .map((group) => ({
         ...group,
-        stories: group.stories.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+        stories: group.stories.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || String(a.id).localeCompare(String(b.id))),
       }))
-      .sort((a, b) => new Date(b.stories.at(-1)?.created_at || 0) - new Date(a.stories.at(-1)?.created_at || 0));
+      .sort((a, b) => {
+        const aFirst = a.stories[0];
+        const bFirst = b.stories[0];
+        return new Date(aFirst?.created_at || 0) - new Date(bFirst?.created_at || 0)
+          || String(aFirst?.id || '').localeCompare(String(bFirst?.id || ''));
+      });
   }
 
-  async createStory(media, caption = '') {
+  async createStory(media, caption = '', options = {}) {
+    const payload = {
+      author_id: this.profile.id,
+      media_url: media.url,
+      storage_path: media.storage_path || null,
+      media_type: media.media_type,
+      caption: caption || null,
+      media_meta: options.media_meta || {},
+      thumbnail_url: options.thumbnail_url || null,
+      thumbnail_storage_path: options.thumbnail_storage_path || null,
+    };
     const { data, error } = await this.db
       .from('social_stories')
-      .insert({
-        author_id: this.profile.id,
-        media_url: media.url,
-        storage_path: media.storage_path || null,
-        media_type: media.media_type,
-        caption: caption || null,
-      })
+      .insert(payload)
       .select('*')
       .single();
     if (error) throw error;
     return data;
   }
 
-  async updateStory(storyId, { caption = '', media = null, elements = [] } = {}) {
+  async updateStory(storyId, { caption = '', media = null, elements = [], media_meta = null, thumbnail = null } = {}) {
     const payload = {
       caption: caption || null,
       elements: elements || [],
       edited_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+    if (media_meta) payload.media_meta = media_meta;
+    if (thumbnail) {
+      payload.thumbnail_url = thumbnail.url || null;
+      payload.thumbnail_storage_path = thumbnail.storage_path || null;
+    }
     if (media) {
       payload.media_url = media.url;
       payload.storage_path = media.storage_path || null;
@@ -678,7 +709,7 @@ export class SocialService {
       .from('social_stories')
       .update(payload)
       .eq('id', storyId)
-      .select('id,storage_path,media_url,media_type,caption,elements,edited_at,updated_at')
+      .select('id,storage_path,thumbnail_storage_path,thumbnail_url,media_url,media_type,caption,elements,media_meta,edited_at,updated_at')
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new Error('Sem permissao para editar este story.');
@@ -714,30 +745,9 @@ export class SocialService {
   }
 
   async deleteStory(storyId) {
-    const { data: story, error: storyError } = await this.db
-      .from('social_stories')
-      .select('id,author_id,storage_path')
-      .eq('id', storyId)
-      .maybeSingle();
-    if (storyError) throw storyError;
-    if (!story || (this.profile.tier !== 'diretoria' && story.author_id !== this.profile.id)) {
-      throw new Error('Sem permissao para excluir este story.');
-    }
-
-    let request = this.db
-      .from('social_stories')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', storyId);
-    if (this.profile.tier !== 'diretoria') request = request.eq('author_id', this.profile.id);
-    const { error } = await request;
+    const { data, error } = await this.db.rpc('delete_social_story', { p_story_id: storyId });
     if (error) throw error;
-    if (story.storage_path) {
-      try {
-        await this.db.storage.from('social-media').remove([story.storage_path]);
-      } catch (err) {
-        console.warn('[MSY][social] Story removido do feed, mas a midia nao foi removida do storage:', err);
-      }
-    }
+    return Array.isArray(data) ? data : [];
   }
 
   async loadStoryReactions(storyId) {
@@ -949,56 +959,17 @@ export class SocialService {
   }
 
   async loadDirectConversations() {
-    const { data, error } = await this.db
-      .from('direct_participants')
-      .select(`
-        conversation_id,
-        joined_at,
-        last_read_at,
-        last_notified_at,
-        is_archived,
-        is_muted,
-        conversation:conversation_id(
-          id,
-          kind,
-          title,
-          metadata,
-          last_message_at,
-          created_at,
-          updated_at,
-          participants:direct_participants(
-            user_id,
-            joined_at,
-            last_read_at,
-            is_archived,
-            is_muted,
-            profile:user_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,social_bio,bio)
-          ),
-          messages:direct_messages(
-            id,
-            body,
-            attachment,
-            metadata,
-            created_at,
-            deleted_at,
-            sender:sender_id(id,name,username,initials,color,avatar_url)
-          )
-        )
-      `)
-      .eq('user_id', this.profile.id)
-      .eq('is_archived', false)
-      .order('last_message_at', { referencedTable: 'conversation', ascending: false, nullsFirst: false });
-
+    const { data, error } = await this.db.rpc('get_direct_conversations');
     if (error) throw error;
 
     return (data || [])
-      .map((row) => this.normalizeDirectConversation(row.conversation, row))
+      .map((row) => this.normalizeDirectConversation(row))
       .filter(Boolean)
       .sort((a, b) => new Date(b.last_message_at || b.updated_at || b.created_at) - new Date(a.last_message_at || a.updated_at || a.created_at));
   }
 
-  normalizeDirectConversation(conversation, participantRow = null) {
-    if (!conversation?.id) return null;
+  normalizeDirectConversation(conversation) {
+    if (!conversation?.conversation_id && !conversation?.id) return null;
 
     const participants = (conversation.participants || []).map((participant) => ({
       ...participant,
@@ -1008,23 +979,12 @@ export class SocialService {
       } : null,
     }));
 
-    const messages = [...(conversation.messages || [])]
-      .filter((message) => !message.deleted_at)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-      .map((message) => ({
-        ...message,
-        sender: message.sender ? {
-          ...message.sender,
-          username: this.getDisplayUsername(message.sender),
-        } : null,
-      }));
-
-    const lastMessage = messages.at(-1) || null;
+    const lastMessage = conversation.last_message ? this.normalizeDirectMessage(conversation.last_message) : null;
     const otherParticipants = participants.filter((participant) => participant.user_id !== this.profile.id);
-    const streak = this.normalizeDirectStreak(conversation.metadata?.direct_streak || this.calculateDirectStreak(messages, otherParticipants.map((participant) => participant.user_id)));
+    const streak = this.normalizeDirectStreak(conversation.metadata?.direct_streak || this.calculateDirectStreak(lastMessage ? [lastMessage] : [], otherParticipants.map((participant) => participant.user_id)));
 
     return {
-      id: conversation.id,
+      id: conversation.conversation_id || conversation.id,
       kind: conversation.kind || 'dm',
       title: conversation.title || otherParticipants.map((participant) => participant.profile?.name).filter(Boolean).join(', ') || 'Nova conversa',
       metadata: conversation.metadata || {},
@@ -1034,10 +994,12 @@ export class SocialService {
       participants,
       otherParticipants,
       lastMessage,
-      unread_count: this.countUnreadMessages(messages, participantRow?.last_read_at || null),
-      is_muted: Boolean(participantRow?.is_muted),
-      is_archived: Boolean(participantRow?.is_archived),
-      my_last_read_at: participantRow?.last_read_at || null,
+      unread_count: Number(conversation.unread_count || 0),
+      is_muted: Boolean(conversation.is_muted),
+      is_archived: Boolean(conversation.is_archived),
+      my_last_read_at: conversation.last_read_at || null,
+      joined_at: conversation.joined_at || null,
+      last_notified_at: conversation.last_notified_at || null,
       streak,
     };
   }
@@ -1058,6 +1020,29 @@ export class SocialService {
       message.sender_id !== this.profile.id
       && (!lastReadAt || new Date(message.created_at) > new Date(lastReadAt))
     )).length;
+  }
+
+  normalizeDirectMessage(message = {}) {
+    const sender = message.sender || null;
+    const normalized = {
+      ...message,
+      attachment: message.attachment || {},
+      metadata: message.metadata || {},
+    };
+    if (sender) {
+      normalized.sender = {
+        ...sender,
+        username: this.getDisplayUsername(sender),
+      };
+    }
+    return normalized;
+  }
+
+  getDirectMessagePreview(message = {}) {
+    if (message.deleted_at || message.attachment?.kind === 'deleted') return 'Mensagem apagada';
+    if (message.attachment?.kind === 'story_reply') return 'Respondeu um story';
+    if (message.attachment?.kind === 'media') return message.attachment?.media_type === 'video' ? 'Video' : 'Imagem';
+    return message.body || 'Nova conversa';
   }
 
   getDirectStreakLevel(days = 0, active = false) {
@@ -1128,23 +1113,14 @@ export class SocialService {
   }
 
   async loadDirectMessages(conversationId, { limit = this.directPageSize } = {}) {
-    const { data, error } = await this.db
-      .from('direct_messages')
-      .select('id,conversation_id,sender_id,body,attachment,metadata,edited_at,deleted_at,created_at,sender:sender_id(id,name,username,initials,color,avatar_url)')
-      .eq('conversation_id', conversationId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const { data, error } = await this.db.rpc('get_direct_messages', {
+      p_conversation_id: conversationId,
+      p_limit: limit,
+    });
 
     if (error) throw error;
 
-    return [...(data || [])].reverse().map((message) => ({
-      ...message,
-      sender: message.sender ? {
-        ...message.sender,
-        username: this.getDisplayUsername(message.sender),
-      } : null,
-    }));
+    return [...(data || [])].reverse().map((message) => this.normalizeDirectMessage(message));
   }
 
   async sendDirectMessage(conversationId, body, attachment = null) {
@@ -1175,25 +1151,45 @@ export class SocialService {
     if (streakError) console.warn('[MSY][social] streak do direct indisponivel:', streakError);
     if (streakData && typeof streakData === 'object') data.metadata = { ...(data.metadata || {}), direct_streak: streakData };
 
-    const participantRows = [];
+    return this.normalizeDirectMessage(data);
+  }
 
-    await Promise.all((participantRows || []).map((row) => this.notify(row.user_id, {
-      message: `${this.profile.name} enviou uma mensagem no Direct.`,
-      type: 'direct_message',
-      icon: '✉️',
-      target_type: 'direct_conversation',
-      target_id: conversationId,
-      target_url: `feed.html?direct=${conversationId}`,
-      metadata: { conversation_id: conversationId, message_id: data.id },
-    })));
+  async sendStoryReplyDirect(conversationId, story, body = '') {
+    return this.sendDirectMessage(conversationId, body, {
+      kind: 'story_reply',
+      story_id: story.id,
+      story_author_id: story.author_id || story.author?.id || null,
+      story_author_name: story.author?.name || null,
+      story_url: story.media_url,
+      media_type: story.media_type,
+      thumbnail_url: story.thumbnail_url || story.media_url,
+      caption_excerpt: (story.caption || '').slice(0, 80) || null,
+    });
+  }
 
-    return {
-      ...data,
-      sender: data.sender ? {
-        ...data.sender,
-        username: this.getDisplayUsername(data.sender),
-      } : null,
-    };
+  async updateDirectMessage(messageId, body) {
+    const { data, error } = await this.db.rpc('update_direct_message', {
+      p_message_id: messageId,
+      p_body: body,
+    });
+    if (error) throw error;
+    return this.normalizeDirectMessage(data);
+  }
+
+  async deleteDirectMessageForMe(messageId) {
+    const { data, error } = await this.db.rpc('delete_direct_message_for_me', {
+      p_message_id: messageId,
+    });
+    if (error) throw error;
+    return Boolean(data);
+  }
+
+  async deleteDirectMessageForAll(messageId) {
+    const { data, error } = await this.db.rpc('delete_direct_message_for_all', {
+      p_message_id: messageId,
+    });
+    if (error) throw error;
+    return this.normalizeDirectMessage(data);
   }
 
   async markDirectConversationRead(conversationId) {

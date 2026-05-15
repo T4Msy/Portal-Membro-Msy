@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(grep -E '\\\\.\\(tsx|ts|jsx|js|vue|svelte|json|sql\\)$')"
+    ]
+  }
+}
