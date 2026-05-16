@@ -11,6 +11,7 @@ const STORY_ASPECT_RATIOS = {
   '1:1': 1,
   '4:5': 4 / 5,
   '16:9': 16 / 9,
+  original: null,
 };
 
 export async function compressImage(file, options = {}) {
@@ -177,9 +178,13 @@ export function createStoryImageEditState() {
 export function createStoryVideoEditState() {
   return {
     kind: 'video',
+    zoom: 1,
+    rotation: 0,
+    aspect: '9:16',
+    offsetX: 0,
+    offsetY: 0,
     trimStart: 0,
     trimEnd: null,
-    rotation: 0,
     thumbnailTime: 0,
     duration: 0,
     exportSupported: supportsVideoEditing(),
@@ -196,16 +201,29 @@ export function getStoryAspectRatioValue(aspect = '9:16') {
   return STORY_ASPECT_RATIOS[aspect] || STORY_ASPECT_RATIOS['9:16'];
 }
 
+export function normalizeMediaEditState(editState = {}, mediaType = 'image') {
+  const base = mediaType === 'video' ? createStoryVideoEditState() : createStoryImageEditState();
+  return {
+    ...base,
+    ...editState,
+    zoom: clamp(Number(editState.zoom ?? base.zoom), 1, 5),
+    rotation: clamp(Number(editState.rotation ?? base.rotation), -180, 180),
+    offsetX: clamp(Number(editState.offsetX ?? base.offsetX), -1, 1),
+    offsetY: clamp(Number(editState.offsetY ?? base.offsetY), -1, 1),
+    aspect: editState.aspect || base.aspect,
+  };
+}
+
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
 export async function exportStoryImageFile(file, editState = {}) {
   const image = await loadImage(file);
-  const aspect = getStoryAspectRatioValue(editState.aspect);
-  const zoom = clamp(Number(editState.zoom || 1), 1, 4);
-  const rotation = ((Number(editState.rotation || 0) % 360) + 360) % 360;
-  const absRotation = rotation % 180 === 0 ? false : true;
+  const normalized = normalizeMediaEditState(editState, 'image');
+  const aspect = normalized.aspect === 'original' ? image.width / image.height : getStoryAspectRatioValue(normalized.aspect);
+  const zoom = clamp(Number(normalized.zoom || 1), 1, 5);
+  const rotation = Number(normalized.rotation || 0);
   const sourceAspect = image.width / image.height;
 
   let cropWidth;
@@ -223,16 +241,16 @@ export async function exportStoryImageFile(file, editState = {}) {
 
   const maxX = Math.max(0, (image.width - cropWidth) / 2);
   const maxY = Math.max(0, (image.height - cropHeight) / 2);
-  const offsetX = clamp(Number(editState.offsetX || 0), -1, 1) * maxX;
-  const offsetY = clamp(Number(editState.offsetY || 0), -1, 1) * maxY;
+  const offsetX = clamp(Number(normalized.offsetX || 0), -1, 1) * maxX;
+  const offsetY = clamp(Number(normalized.offsetY || 0), -1, 1) * maxY;
   const sx = clamp((image.width - cropWidth) / 2 + offsetX, 0, image.width - cropWidth);
   const sy = clamp((image.height - cropHeight) / 2 + offsetY, 0, image.height - cropHeight);
 
   const baseTargetWidth = Math.round(Math.min(1080, cropWidth));
   const baseTargetHeight = Math.round(baseTargetWidth / aspect);
   const canvas = document.createElement('canvas');
-  canvas.width = absRotation ? baseTargetHeight : baseTargetWidth;
-  canvas.height = absRotation ? baseTargetWidth : baseTargetHeight;
+  canvas.width = baseTargetWidth;
+  canvas.height = baseTargetHeight;
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -298,7 +316,7 @@ export async function captureStoryVideoThumbnail(file, time = 0, rotation = 0) {
   try {
     const targetTime = clamp(Number(time || 0), 0, Math.max(meta.duration || 0, 0));
     await seekVideo(meta.video, targetTime);
-    const frame = drawVideoFrame(meta.video, rotation);
+    const frame = drawVideoFrame(meta.video, { rotation });
     const blob = await new Promise((resolve) => frame.canvas.toBlob(resolve, STORY_IMAGE_EXPORT_MIME, 0.9));
     if (!blob) throw new Error('Nao foi possivel capturar a miniatura do video.');
     const url = URL.createObjectURL(blob);
@@ -314,19 +332,29 @@ export async function captureStoryVideoThumbnail(file, time = 0, rotation = 0) {
   }
 }
 
-function drawVideoFrame(video, rotation = 0) {
-  const normalized = ((Number(rotation || 0) % 360) + 360) % 360;
-  const swap = normalized % 180 !== 0;
+function drawVideoFrame(video, editState = {}) {
+  const normalized = normalizeMediaEditState(editState, 'video');
   const width = video.videoWidth || 720;
   const height = video.videoHeight || 1280;
+  const aspect = normalized.aspect === 'original' ? width / height : getStoryAspectRatioValue(normalized.aspect);
+  const sourceAspect = width / height;
+  const targetWidth = Math.min(1080, sourceAspect >= aspect ? height * aspect : width);
+  const targetHeight = targetWidth / aspect;
   const canvas = document.createElement('canvas');
-  canvas.width = swap ? height : width;
-  canvas.height = swap ? width : height;
+  canvas.width = Math.round(targetWidth);
+  canvas.height = Math.round(targetHeight);
   const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((normalized * Math.PI) / 180);
-  ctx.drawImage(video, -width / 2, -height / 2, width, height);
+  ctx.rotate((normalized.rotation * Math.PI) / 180);
+  const baseScale = Math.max(canvas.width / width, canvas.height / height);
+  const scale = baseScale * normalized.zoom;
+  const maxX = Math.max(0, ((width * scale) - canvas.width) / 2);
+  const maxY = Math.max(0, ((height * scale) - canvas.height) / 2);
+  ctx.translate(normalized.offsetX * maxX, normalized.offsetY * maxY);
+  ctx.drawImage(video, -(width * scale) / 2, -(height * scale) / 2, width * scale, height * scale);
   ctx.restore();
   return { canvas, width: canvas.width, height: canvas.height };
 }
@@ -361,9 +389,9 @@ export async function exportStoryVideoFile(file, editState = {}) {
   const { video, duration } = meta;
   const trimStart = clamp(Number(editState.trimStart || 0), 0, Math.max(duration - 0.25, 0));
   const trimEnd = clamp(Number(editState.trimEnd ?? duration), trimStart + 0.25, duration || trimStart + 0.25);
-  const rotation = ((Number(editState.rotation || 0) % 360) + 360) % 360;
+  const normalized = normalizeMediaEditState(editState, 'video');
   const sourceStream = video.captureStream();
-  const frame = drawVideoFrame(video, rotation);
+  const frame = drawVideoFrame(video, normalized);
   const canvasStream = frame.canvas.captureStream(30);
   const composedTracks = [
     ...canvasStream.getVideoTracks(),
@@ -381,7 +409,7 @@ export async function exportStoryVideoFile(file, editState = {}) {
 
   const renderFrame = () => {
     if (video.paused || video.ended) return;
-    const nextFrame = drawVideoFrame(video, rotation);
+    const nextFrame = drawVideoFrame(video, normalized);
     frame.canvas.width = nextFrame.canvas.width;
     frame.canvas.height = nextFrame.canvas.height;
     frame.canvas.getContext('2d', { alpha: false }).drawImage(nextFrame.canvas, 0, 0);

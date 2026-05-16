@@ -10,6 +10,7 @@ import {
   exportStoryImageFile,
   exportStoryVideoFile,
   filePreview,
+  normalizeMediaEditState,
   removeSocialMedia,
   revokePreviews,
   supportsVideoEditing,
@@ -212,6 +213,22 @@ function findStoryById(storyId) {
     if (story) return story;
   }
   return null;
+}
+
+function renderStoryMediaElement(story, attrs = '') {
+  const editState = normalizeMediaEditState(story?.media_meta || {}, story?.media_type || 'image');
+  const style = `--editor-transform:${mediaEditorTransform(editState)}`;
+  return story.media_type === 'video'
+    ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs} playsinline webkit-playsinline></video>`
+    : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs}>`;
+}
+
+function renderPostMediaElement(media, attrs = '') {
+  const editState = normalizeMediaEditState(media?.media_meta || {}, media?.media_type || 'image');
+  const style = `--editor-transform:${mediaEditorTransform(editState)}`;
+  return media.media_type === 'video'
+    ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs} playsinline></video>`
+    : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs}>`;
 }
 
 function getActiveDirectConversation() {
@@ -607,7 +624,7 @@ function renderPost(post) {
   const media = (post.media || []).length ? `
       <div class="post-media" data-media-post="${post.id}">
         <div class="post-media-track">
-        ${post.media.map((m, index) => `<div class="post-media-slide" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${m.media_type === 'video' ? `<video src="${Utils.escapeHtml(m.url)}" controls playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(m.url)}" loading="lazy" decoding="async">`}</div>`).join('')}
+        ${post.media.map((m, index) => `<div class="post-media-slide" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? 'controls preload="metadata"' : 'loading="lazy" decoding="async"')}</div>`).join('')}
       </div>
       ${post.media.length > 1 ? `<div class="post-media-dots">${post.media.map((_, i) => `<span class="post-media-dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>` : ''}
     </div>` : '';
@@ -831,7 +848,7 @@ function openMediaViewer(post, startIndex = 0) {
       </div>
       <div class="media-viewer-track">
         ${media.map((item, idx) => `<div class="media-viewer-slide${idx === index ? ' active' : ''}" data-media-view-slide="${idx}">
-          ${item.media_type === 'video' ? `<video src="${Utils.escapeHtml(item.url)}" controls playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(item.url)}" alt="Midia do post" decoding="async">`}
+          ${renderPostMediaElement(item, item.media_type === 'video' ? 'controls preload="metadata"' : 'alt="Midia do post" decoding="async"')}
         </div>`).join('')}
       </div>
       ${media.length > 1 ? `
@@ -1041,7 +1058,9 @@ function addFiles(files) {
     files.forEach((file) => {
       validateMediaFile(file);
       if (state.previews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
-      state.previews.push(filePreview(file));
+      const preview = filePreview(file);
+      preview.editState = normalizeMediaEditState(createStoryMediaEditState(file), preview.media_type);
+      state.previews.push(preview);
     });
     renderPreviews();
     if (isMobileSocial()) openMobilePostComposer();
@@ -1065,9 +1084,16 @@ function renderPreviews() {
   el.innerHTML = `
     <div class="composer-preview-stage">
       <div class="composer-preview-main" data-preview-id="${main.id}">
-        ${mediaNode(main)}
+        ${renderEditableMediaNode(main, { scope: 'post' })}
         <button class="composer-preview-remove" title="Remover midia" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
         <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
+      </div>
+      <div class="composer-media-controls" data-composer-media-controls="${main.id}">
+        <select class="form-input form-select" data-composer-edit-field="aspect">
+          ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+        <input type="range" min="1" max="5" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-composer-edit-field="zoom" aria-label="Zoom">
+        <input type="range" min="-180" max="180" step="1" value="${Number(main.editState?.rotation || 0)}" data-composer-edit-field="rotation" aria-label="Rotação">
       </div>
       <div class="composer-preview-info">
         <strong>Pronto para publicar</strong>
@@ -1094,6 +1120,19 @@ function renderPreviews() {
     state.previews = [state.previews[index], ...state.previews.filter((_, itemIndex) => itemIndex !== index)];
     renderPreviews();
   }));
+  el.querySelectorAll('[data-composer-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
+    const key = event.currentTarget.dataset.composerEditField;
+    const value = event.currentTarget.value;
+    if (key === 'zoom' || key === 'rotation') main.editState[key] = Number(value);
+    else main.editState[key] = value;
+    applyMediaEditorTransform(el, main);
+  }));
+  bindMediaEditorGestures(el, main, () => {
+    const zoom = el.querySelector('[data-composer-edit-field="zoom"]');
+    const rotation = el.querySelector('[data-composer-edit-field="rotation"]');
+    if (zoom) zoom.value = main.editState.zoom;
+    if (rotation) rotation.value = main.editState.rotation;
+  });
   syncComposerState();
   renderMobilePostComposer();
 }
@@ -1177,6 +1216,7 @@ function renderMobilePostComposer() {
     renderPreviews();
     renderMobilePostComposer();
   }));
+  if (state.previews[0]) bindMediaEditorGestures(modal, state.previews[0]);
 }
 
 function renderMobileComposerPreview() {
@@ -1194,7 +1234,7 @@ function renderMobileComposerPreview() {
   return `
     <div class="mobile-composer-preview">
       <div class="mobile-composer-preview-main">
-        ${mediaNode(main)}
+        ${renderEditableMediaNode(main, { scope: 'post' })}
         <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
       </div>
       ${state.previews.length > 1 ? `
@@ -1229,7 +1269,18 @@ async function publishPost() {
   try {
     const media = [];
     for (const item of state.previews) {
-      const uploaded = await uploadSocialMedia(db, state.profile.id, item.file, 'posts');
+      const editState = ensureMediaEditState(item, '4:5');
+      let uploadFile = item.file;
+      let skipCompression = false;
+      if (item.media_type === 'image') {
+        uploadFile = await exportStoryImageFile(item.file, editState);
+        skipCompression = true;
+      } else if (item.media_type === 'video' && item.editState?.exportSupported) {
+        uploadFile = await exportStoryVideoFile(item.file, editState);
+        skipCompression = true;
+      }
+      const uploaded = await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression });
+      uploaded.media_meta = editState;
       media.push(uploaded);
       if (uploaded.storage_path) uploadedPaths.push(uploaded.storage_path);
     }
@@ -1298,26 +1349,154 @@ function activeStoryComposerItem() {
   return state.storyPreviews[state.activeStoryComposerIndex] || null;
 }
 
-function renderStoryComposerMedia(item) {
+const mediaAspectOptions = [
+  ['9:16', 'Story'],
+  ['1:1', '1:1'],
+  ['4:5', '4:5'],
+  ['16:9', '16:9'],
+  ['original', 'Original'],
+];
+
+function mediaAspectCss(aspect = '9:16') {
+  const map = {
+    '9:16': '9 / 16',
+    '1:1': '1 / 1',
+    '4:5': '4 / 5',
+    '16:9': '16 / 9',
+    original: 'var(--editor-original-aspect, 9 / 16)',
+  };
+  return map[aspect] || map['9:16'];
+}
+
+function ensureMediaEditState(item, fallbackAspect = '9:16') {
+  if (!item) return null;
+  item.editState = normalizeMediaEditState({
+    aspect: fallbackAspect,
+    ...(item.media_meta || {}),
+    ...(item.editState || {}),
+  }, item.media_type || 'image');
+  return item.editState;
+}
+
+function mediaEditorTransform(editState = {}) {
+  const stateValue = normalizeMediaEditState(editState);
+  return `translate(calc(-50% + ${stateValue.offsetX * 42}%), calc(-50% + ${stateValue.offsetY * 42}%)) scale(${stateValue.zoom}) rotate(${stateValue.rotation}deg)`;
+}
+
+function mediaEditorSelector(id) {
+  const safeId = window.CSS?.escape ? CSS.escape(String(id)) : String(id).replace(/["\\]/g, '\\$&');
+  return `[data-media-editor="${safeId}"]`;
+}
+
+function renderEditableMediaNode(item, { scope = 'story', controls = true } = {}) {
   if (!item) return '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma mídia.</div>';
-  if (item.media_type === 'video') {
-    return `<video src="${Utils.escapeHtml(item.url)}" controls playsinline></video>`;
-  }
-  return `<img src="${Utils.escapeHtml(item.url)}" alt="Preview do story">`;
+  const editState = ensureMediaEditState(item, scope === 'post' ? '4:5' : '9:16');
+  const aspect = mediaAspectCss(editState.aspect);
+  const style = `--editor-aspect:${aspect};--editor-transform:${mediaEditorTransform(editState)}`;
+  const media = item.media_type === 'video'
+    ? `<video class="media-editor-media" src="${Utils.escapeHtml(item.url)}" ${scope === 'story' ? 'controls' : 'muted'} playsinline preload="metadata"></video>`
+    : `<img class="media-editor-media" src="${Utils.escapeHtml(item.url)}" alt="Preview da mídia">`;
+  return `
+    <div class="media-editor-crop" style="${style}" data-media-editor="${Utils.escapeHtml(item.id)}" data-media-editor-scope="${scope}">
+      <div class="media-editor-viewport">
+        ${media}
+        ${controls ? '<div class="media-editor-mask" aria-hidden="true"></div>' : ''}
+      </div>
+    </div>`;
+}
+
+function applyMediaEditorTransform(root, item) {
+  const editor = root?.querySelector?.(mediaEditorSelector(item.id));
+  if (!editor) return;
+  const editState = ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? '4:5' : '9:16');
+  editor.style.setProperty('--editor-aspect', mediaAspectCss(editState.aspect));
+  editor.style.setProperty('--editor-transform', mediaEditorTransform(editState));
+}
+
+function bindMediaEditorGestures(root, item, onChange = () => {}) {
+  const editor = root?.querySelector?.(mediaEditorSelector(item.id));
+  if (!editor) return;
+  ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? '4:5' : '9:16');
+  const pointers = new Map();
+  let start = null;
+  const pointDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  const pointAngle = (a, b) => Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180 / Math.PI;
+  const schedule = () => requestAnimationFrame(() => {
+    applyMediaEditorTransform(root, item);
+    onChange(item);
+  });
+  editor.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button,input,select,textarea')) return;
+    event.preventDefault();
+    editor.setPointerCapture?.(event.pointerId);
+    pointers.set(event.pointerId, event);
+    const values = [...pointers.values()];
+    start = {
+      points: values,
+      offsetX: item.editState.offsetX,
+      offsetY: item.editState.offsetY,
+      zoom: item.editState.zoom,
+      rotation: item.editState.rotation,
+      distance: values.length > 1 ? pointDistance(values[0], values[1]) : 0,
+      angle: values.length > 1 ? pointAngle(values[0], values[1]) : 0,
+    };
+  });
+  editor.addEventListener('pointermove', (event) => {
+    if (!pointers.has(event.pointerId) || !start) return;
+    pointers.set(event.pointerId, event);
+    const values = [...pointers.values()];
+    if (values.length > 1 && start.points.length > 1) {
+      const distance = pointDistance(values[0], values[1]);
+      const angle = pointAngle(values[0], values[1]);
+      item.editState.zoom = Math.min(5, Math.max(1, start.zoom * (distance / Math.max(start.distance, 1))));
+      item.editState.rotation = Math.min(180, Math.max(-180, start.rotation + angle - start.angle));
+    } else {
+      const first = start.points[0];
+      const current = values[0];
+      const rect = editor.getBoundingClientRect();
+      item.editState.offsetX = Math.min(1, Math.max(-1, start.offsetX + ((current.clientX - first.clientX) / Math.max(rect.width, 1)) * 2));
+      item.editState.offsetY = Math.min(1, Math.max(-1, start.offsetY + ((current.clientY - first.clientY) / Math.max(rect.height, 1)) * 2));
+    }
+    schedule();
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((eventName) => editor.addEventListener(eventName, (event) => {
+    pointers.delete(event.pointerId);
+    start = null;
+  }));
+}
+
+function renderStoryComposerMedia(item) {
+  return renderEditableMediaNode(item, { scope: 'story' });
 }
 
 function renderStoryComposerControls(item) {
   if (!item) return '';
+  ensureMediaEditState(item);
+  const aspectControl = `
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Proporção</label>
+      <select class="form-input form-select" data-story-edit-field="aspect">
+        ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+    </div>`;
+  const transformControls = `
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Zoom <span data-story-zoom-label>${Number(item.editState?.zoom || 1).toFixed(2)}x</span></label>
+      <input type="range" min="1" max="5" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Rotação <span data-story-rotation-label>${Math.round(Number(item.editState?.rotation || 0))}°</span></label>
+      <input type="range" min="-180" max="180" step="1" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
+    </div>
+    <button type="button" class="follow-btn media-editor-reset" data-media-edit-reset><i class="fa-solid fa-rotate-left"></i> Resetar enquadramento</button>`;
   if (item.media_type === 'video') {
     const duration = Number(item.editState?.duration || 0);
     const trimStart = Number(item.editState?.trimStart || 0);
     const trimEnd = Number(item.editState?.trimEnd ?? duration ?? 0);
     return `
       <div class="story-compose-tools">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Rotação</label>
-          <input type="range" min="0" max="270" step="90" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
-        </div>
+        ${aspectControl}
+        ${transformControls}
         <div class="form-group" style="margin:0">
           <label class="form-label">Início do vídeo</label>
           <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${trimStart}" data-story-edit-field="trimStart">
@@ -1335,20 +1514,8 @@ function renderStoryComposerControls(item) {
   }
   return `
     <div class="story-compose-tools">
-      <div class="form-group" style="margin:0">
-        <label class="form-label">Proporção</label>
-        <select class="form-input form-select" data-story-edit-field="aspect">
-          ${[['9:16', 'Story'], ['1:1', 'Quadrado'], ['4:5', 'Retrato'], ['16:9', 'Paisagem']].map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group" style="margin:0">
-        <label class="form-label">Zoom</label>
-        <input type="range" min="1" max="4" step="0.05" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label class="form-label">Rotação</label>
-        <input type="range" min="0" max="270" step="90" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
-      </div>
+      ${aspectControl}
+      ${transformControls}
     </div>`;
 }
 
@@ -1404,6 +1571,16 @@ function renderStoryComposerBody() {
       </div>
     </div>`;
   openModal(modal);
+  bindMediaEditorGestures(modal, item, () => {
+    const zoomLabel = modal.querySelector('[data-story-zoom-label]');
+    const rotationLabel = modal.querySelector('[data-story-rotation-label]');
+    const zoomInput = modal.querySelector('[data-story-edit-field="zoom"]');
+    const rotationInput = modal.querySelector('[data-story-edit-field="rotation"]');
+    if (zoomLabel) zoomLabel.textContent = `${Number(item.editState.zoom || 1).toFixed(2)}x`;
+    if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(item.editState.rotation || 0))}°`;
+    if (zoomInput) zoomInput.value = item.editState.zoom;
+    if (rotationInput) rotationInput.value = item.editState.rotation;
+  });
   modal.querySelector('[data-close-story-composer]')?.addEventListener('click', closeStoryComposer);
   modal.querySelectorAll('[data-story-thumb]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeStoryComposerIndex = Number(btn.dataset.storyThumb);
@@ -1421,6 +1598,14 @@ function renderStoryComposerBody() {
     const value = event.currentTarget.value;
     if (key === 'zoom' || key === 'rotation' || key === 'trimStart' || key === 'trimEnd' || key === 'thumbnailTime') current.editState[key] = Number(value);
     else current.editState[key] = value;
+    if (['zoom', 'rotation', 'aspect'].includes(key)) {
+      applyMediaEditorTransform(modal, current);
+      const zoomLabel = modal.querySelector('[data-story-zoom-label]');
+      const rotationLabel = modal.querySelector('[data-story-rotation-label]');
+      if (zoomLabel) zoomLabel.textContent = `${Number(current.editState.zoom || 1).toFixed(2)}x`;
+      if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(current.editState.rotation || 0))}°`;
+      return;
+    }
     if (key === 'thumbnailTime' && current.media_type === 'video') {
       try {
         const thumb = await captureStoryVideoThumbnail(current.file || current.url, current.editState.thumbnailTime, current.editState.rotation || 0);
@@ -1432,8 +1617,13 @@ function renderStoryComposerBody() {
       }
       return;
     }
-    if (current.media_type === 'image') renderStoryComposerBody();
   }));
+  modal.querySelector('[data-media-edit-reset]')?.addEventListener('click', () => {
+    const current = activeStoryComposerItem();
+    if (!current) return;
+    current.editState = normalizeMediaEditState({ ...current.editState, zoom: 1, rotation: 0, offsetX: 0, offsetY: 0 }, current.media_type);
+    renderStoryComposerBody();
+  });
   modal.querySelector('[data-story-replace-media]')?.addEventListener('click', () => modal.querySelector('#storyComposerFile')?.click());
   modal.querySelector('#storyComposerFile')?.addEventListener('change', async (event) => {
     const file = event.currentTarget.files?.[0];
@@ -1661,7 +1851,11 @@ function openPostEditor(post) {
   const modal = document.getElementById('postEditorModal');
   if (!modal) return;
   state.activePostEditId = post.id;
-  state.postEditPreviews = (post.media || []).map((item) => ({ ...item, isNew: false }));
+  state.postEditPreviews = (post.media || []).map((item) => ({
+    ...item,
+    isNew: false,
+    editState: normalizeMediaEditState(item.media_meta || {}, item.media_type),
+  }));
   modal.innerHTML = `
     <div class="social-edit-post-panel">
       <div class="social-edit-post-head">
@@ -1694,7 +1888,9 @@ function openPostEditor(post) {
       [...(e.currentTarget.files || [])].forEach((file) => {
         validateMediaFile(file);
         if (state.postEditPreviews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
-        state.postEditPreviews.push({ ...filePreview(file), isNew: true });
+        const preview = { ...filePreview(file), isNew: true };
+        preview.editState = normalizeMediaEditState(createStoryMediaEditState(file), preview.media_type);
+        state.postEditPreviews.push(preview);
       });
       renderPostEditMediaList();
     } catch (err) {
@@ -1718,7 +1914,14 @@ function renderPostEditMediaList() {
   }
   list.innerHTML = state.postEditPreviews.map((item, index) => `
     <div class="social-edit-media-item" data-edit-media-id="${item.id}">
-      <div class="social-edit-media-preview">${editorMediaNode(item)}</div>
+      <div class="social-edit-media-preview">${renderEditableMediaNode(item, { scope: 'post' })}</div>
+      <div class="social-edit-media-controls">
+        <select class="form-input form-select" data-post-media-edit-field="aspect">
+          ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+        <label>Zoom <input type="range" min="1" max="5" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-post-media-edit-field="zoom"></label>
+        <label>Rotação <input type="range" min="-180" max="180" step="1" value="${Number(item.editState?.rotation || 0)}" data-post-media-edit-field="rotation"></label>
+      </div>
       <div class="social-edit-media-actions">
         <span>${index + 1}</span>
         <button type="button" class="social-icon-btn" data-edit-media-move="-1" ${index === 0 ? 'disabled' : ''} title="Mover para esquerda"><i class="fa-solid fa-arrow-left"></i></button>
@@ -1732,6 +1935,17 @@ function renderPostEditMediaList() {
     if (item?.isNew) revokePreviews([item]);
     state.postEditPreviews = state.postEditPreviews.filter((media) => media.id !== id);
     renderPostEditMediaList();
+  }));
+  state.postEditPreviews.forEach((item) => bindMediaEditorGestures(list, item));
+  list.querySelectorAll('[data-post-media-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
+    const id = event.currentTarget.closest('[data-edit-media-id]')?.dataset.editMediaId;
+    const item = state.postEditPreviews.find((media) => media.id === id);
+    if (!item) return;
+    const key = event.currentTarget.dataset.postMediaEditField;
+    const value = event.currentTarget.value;
+    if (key === 'zoom' || key === 'rotation') item.editState[key] = Number(value);
+    else item.editState[key] = value;
+    applyMediaEditorTransform(list, item);
   }));
   list.querySelectorAll('[data-edit-media-move]').forEach((btn) => btn.addEventListener('click', () => {
     const id = btn.closest('[data-edit-media-id]')?.dataset.editMediaId;
@@ -1758,7 +1972,21 @@ async function savePostEditor() {
     }
     const media = [];
     for (const item of state.postEditPreviews) {
-      media.push(item.isNew ? await uploadSocialMedia(db, state.profile.id, item.file, 'posts') : item);
+      const editState = ensureMediaEditState(item, '4:5');
+      if (item.isNew) {
+        let uploadFile = item.file;
+        let skipCompression = false;
+        if (item.media_type === 'image') {
+          uploadFile = await exportStoryImageFile(item.file, editState);
+          skipCompression = true;
+        } else if (item.media_type === 'video' && item.editState?.exportSupported) {
+          uploadFile = await exportStoryVideoFile(item.file, editState);
+          skipCompression = true;
+        }
+        media.push({ ...(await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression })), media_meta: editState });
+      } else {
+        media.push({ ...item, media_meta: editState });
+      }
     }
     const { removedStoragePaths } = await state.service.updatePost(postId, { content, media });
     await removeSocialMedia(db, removedStoragePaths).catch((err) => console.warn('[MSY][feed-social] Post atualizado, mas storage manteve midias antigas:', err));
@@ -1851,21 +2079,25 @@ function copyPost(postId) {
 
 const notificationFilters = [
   { key: 'all', label: 'Tudo' },
-  { key: 'posts', label: 'Posts' },
-  { key: 'stories', label: 'Stories' },
-  { key: 'comments', label: 'Comentarios' },
+  { key: 'likes', label: 'Curtidas' },
+  { key: 'comments', label: 'Comentários' },
   { key: 'followers', label: 'Seguidores' },
-  { key: 'mentions', label: '@Mencoes' },
+  { key: 'story_replies', label: 'Stories' },
+  { key: 'direct', label: 'Direct' },
+  { key: 'mentions', label: 'Menções' },
+  { key: 'activities', label: 'Atividades' },
 ];
 
 function notificationIcon(category) {
   const map = {
-    posts: 'fa-heart',
+    likes: 'fa-heart',
     stories: 'fa-circle-play',
+    story_replies: 'fa-reply',
     comments: 'fa-comment',
     followers: 'fa-user-plus',
     mentions: 'fa-at',
-    important: 'fa-bolt',
+    direct: 'fa-paper-plane',
+    activities: 'fa-bolt',
   };
   return map[category] || 'fa-heart';
 }
@@ -1874,16 +2106,17 @@ function notificationLabel(notification) {
   const actorName = notification.actor?.name || 'Alguem';
   const event = notification.metadata?.event;
   if (event === 'story_reply') return `${actorName} respondeu seu story.`;
-  if (notification.category === 'posts') return `${actorName} curtiu sua publicacao.`;
+  if (notification.category === 'likes') return `${actorName} curtiu sua publicacao.`;
   if (notification.category === 'stories') return `${actorName} interagiu com seu story.`;
   if (notification.category === 'comments') return `${actorName} comentou em uma publicacao.`;
   if (notification.category === 'followers') return `${actorName} comecou a seguir voce.`;
   if (notification.category === 'mentions') return `${actorName} mencionou voce.`;
+  if (notification.category === 'direct') return notification.message || `${actorName} enviou uma mensagem.`;
   return notification.message || 'Nova interacao social.';
 }
 
 function renderSocialNotifications() {
-  const unread = state.socialNotifications.filter((item) => !item.read).length;
+  const unread = state.socialNotifications.filter((item) => !item.read && item.category !== 'direct').length;
   document.getElementById('socialNotificationBadge')?.toggleAttribute('hidden', unread === 0);
   const badge = document.getElementById('socialNotificationBadge');
   if (badge) badge.textContent = unread > 9 ? '9+' : String(unread);
@@ -1926,6 +2159,10 @@ function renderNotificationCenter({ compact = false } = {}) {
     ? state.socialNotifications
     : state.socialNotifications.filter((item) => item.category === state.notificationFilter);
   const items = compact ? filtered.slice(0, 10) : filtered;
+  const unreadByCategory = state.socialNotifications.reduce((acc, item) => {
+    if (!item.read) acc[item.category] = (acc[item.category] || 0) + 1;
+    return acc;
+  }, {});
   const grouped = items.reduce((acc, item) => {
     const period = notificationPeriod(item.created_at);
     if (!acc[period]) acc[period] = [];
@@ -1941,7 +2178,12 @@ function renderNotificationCenter({ compact = false } = {}) {
       <button class="social-icon-btn" data-mark-social-read title="Marcar tudo como lido"><i class="fa-solid fa-check-double"></i></button>
     </div>
     <div class="activity-filters">
-      ${notificationFilters.map((filter) => `<button type="button" class="${state.notificationFilter === filter.key ? 'active' : ''}" data-notification-filter="${filter.key}">${filter.label}</button>`).join('')}
+      ${notificationFilters.map((filter) => {
+        const count = filter.key === 'all'
+          ? state.socialNotifications.filter((item) => !item.read).length
+          : unreadByCategory[filter.key] || 0;
+        return `<button type="button" class="${state.notificationFilter === filter.key ? 'active' : ''}" data-notification-filter="${filter.key}"><i class="fa-solid ${notificationIcon(filter.key)}"></i>${filter.label}${count ? `<span>${count > 9 ? '9+' : count}</span>` : ''}</button>`;
+      }).join('')}
     </div>
     <div class="activity-list premium">
       ${items.length ? ['Hoje', 'Esta semana', 'Anterior'].map((period) => grouped[period]?.length ? `
@@ -2016,6 +2258,7 @@ async function markAllSocialNotificationsRead() {
   try {
     await Promise.all(state.socialNotifications.filter((item) => !item.read).map((item) => state.service.markSocialNotificationRead(item.id)));
     state.socialNotifications = state.socialNotifications.map((item) => ({ ...item, read: true, unread: false }));
+    refreshDirectUnreadCount();
     renderSocialNotifications();
     if (state.notificationPanelOpen) renderSocialNotificationsDrawer();
   } catch {
@@ -2101,10 +2344,7 @@ function subscribeSocialNotifications() {
         filter: `user_id=eq.${state.profile.id}`,
       }, (payload) => {
         const item = state.service.normalizeSocialNotification(payload.new);
-        if (state.service.isDirectNotification(item)) {
-          refreshDirectUnreadCount();
-          return;
-        }
+        if (state.service.isDirectNotification(item)) refreshDirectUnreadCount();
         if (!state.service.isSocialActivityNotification(item)) return;
         state.socialNotifications = [item, ...state.socialNotifications.filter((current) => current.id !== item.id)].slice(0, 48);
         renderSocialNotifications();
@@ -2903,9 +3143,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
       <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
       <div class="story-media story-media-premium is-loading">
         <div class="story-media-loader"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
-        ${story.media_type === 'video'
-          ? `<video src="${Utils.escapeHtml(story.media_url)}" playsinline webkit-playsinline preload="auto"></video>`
-          : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}
+        ${renderStoryMediaElement(story, story.media_type === 'video' ? 'preload="auto"' : 'decoding="async" fetchpriority="high"')}
       </div>
       <div class="story-top story-top-instagram">
         ${avatar(group.author, 38)}
@@ -3053,7 +3291,7 @@ async function openStoryFast(groupIndex, storyIndex) {
       <div class="story-progress"><span></span></div>
       <button type="button" class="story-tap-zone story-tap-prev" data-story-prev aria-label="Story anterior"></button>
       <button type="button" class="story-tap-zone story-tap-next" data-story-next aria-label="Proximo story"></button>
-      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" controls playsinline webkit-playsinline preload="auto"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" decoding="async" fetchpriority="high">`}</div>
+      <div class="story-media">${renderStoryMediaElement(story, story.media_type === 'video' ? 'controls preload="auto"' : 'decoding="async" fetchpriority="high"')}</div>
       <div class="story-top">
         ${avatar(group.author, 34)}
         <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
@@ -3267,7 +3505,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
   const modal = document.getElementById('storyViewer');
   modal.innerHTML = `
     <div class="story-panel">
-      <div class="story-media">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" autoplay controls playsinline></video>` : `<img src="${Utils.escapeHtml(story.media_url)}">`}</div>
+      <div class="story-media">${renderStoryMediaElement(story, story.media_type === 'video' ? 'autoplay controls' : '')}</div>
       <div class="story-top">
         ${avatar(group.author, 34)}
         <div class="story-author-copy"><strong>${Utils.escapeHtml(group.author?.name || 'Membro')}</strong><span>@${Utils.escapeHtml(displayUsername(group.author || {}))} · ${timeAgo(story.created_at)}</span></div>
@@ -3747,9 +3985,15 @@ function renderDirectMessageAttachment(message) {
     const previewUrl = reply.story?.thumbnail_url || reply.story?.media_url || reply.attachment.thumbnail_url || reply.attachment.story_url || reply.attachment.media_url || '';
     const authorName = reply.story?.author?.name || reply.attachment.story_author_name || 'Story';
     const caption = reply.story?.caption || reply.attachment.caption_excerpt || reply.attachment.caption || '';
+    const mediaType = reply.story?.media_type || reply.attachment.media_type || 'image';
+    const thumb = previewUrl
+      ? (mediaType === 'video'
+        ? `<video src="${Utils.escapeHtml(previewUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
+        : `<img src="${Utils.escapeHtml(previewUrl)}" alt="Preview do story" loading="lazy" decoding="async">`)
+      : '<i class="fa-regular fa-image"></i>';
     return `
       <button type="button" class="direct-story-reply-card${reply.available ? '' : ' unavailable'}" data-open-story-reference="${Utils.escapeHtml(reply.storyId || '')}" ${reply.available ? '' : 'disabled'}>
-        <div class="direct-story-reply-thumb">${previewUrl ? `<img src="${Utils.escapeHtml(previewUrl)}" alt="Preview do story">` : '<i class="fa-regular fa-image"></i>'}</div>
+        <div class="direct-story-reply-thumb">${thumb}</div>
         <div class="direct-story-reply-copy">
           <strong>${Utils.escapeHtml(authorName)}</strong>
           <span>${Utils.escapeHtml(caption || (reply.available ? 'Abrir story original' : 'Story indisponível'))}</span>

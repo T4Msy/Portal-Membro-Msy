@@ -334,6 +334,9 @@ GRANT EXECUTE ON FUNCTION public.get_direct_messages(uuid, integer) TO authentic
 GRANT EXECUTE ON FUNCTION public.get_direct_conversations() TO authenticated;
 
 -- ── STORIES: METADADOS E RPC SEGURA ─────────────────────────
+ALTER TABLE public.social_post_media
+  ADD COLUMN IF NOT EXISTS media_meta jsonb NOT NULL DEFAULT '{}'::jsonb;
+
 ALTER TABLE public.social_stories
   ADD COLUMN IF NOT EXISTS media_meta jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS thumbnail_url text,

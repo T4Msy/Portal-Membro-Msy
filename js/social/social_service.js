@@ -63,10 +63,10 @@ export class SocialService {
   }
 
   isSocialActivityNotification(notification = {}) {
-    if (this.isDirectNotification(notification)) return false;
     const socialTargets = new Set(['post', 'comment', 'profile', 'story']);
     const socialTypes = new Set(['social', 'social_post', 'social_comment', 'social_follow', 'social_story', 'mention']);
-    return socialTargets.has(notification.target_type)
+    return this.isDirectNotification(notification)
+      || socialTargets.has(notification.target_type)
       || socialTypes.has(notification.type)
       || this.isStoryReplyNotification(notification);
   }
@@ -75,14 +75,14 @@ export class SocialService {
     const event = notification.metadata?.event;
     const type = notification.type;
     const targetType = notification.target_type;
-    if (event === 'story_reply') return 'stories';
+    if (event === 'story_reply') return 'story_replies';
     if (this.isDirectNotification(notification)) return 'direct';
     if (type === 'social_follow' || targetType === 'profile') return 'followers';
     if (type === 'social_story' || targetType === 'story') return 'stories';
     if (type === 'social_comment' || targetType === 'comment') return 'comments';
-    if (event === 'social_like' || type === 'info' || targetType === 'post') return 'posts';
     if (type === 'mention') return 'mentions';
-    return 'important';
+    if (event === 'social_like' || type === 'info' || targetType === 'post') return 'likes';
+    return 'activities';
   }
 
   normalizeSocialNotification(notification = {}) {
@@ -119,9 +119,22 @@ export class SocialService {
     const { data, error } = await request;
     if (error) throw error;
 
+    const seen = new Set();
     const items = (data || [])
       .map((item) => this.normalizeSocialNotification(item))
-      .filter((item) => this.isSocialActivityNotification(item));
+      .filter((item) => {
+        const dedupeKey = [
+          item.actor_id || '',
+          item.type || '',
+          item.target_type || '',
+          item.target_id || '',
+          item.metadata?.event || '',
+          item.message || '',
+        ].join(':');
+        if (!this.isSocialActivityNotification(item) || seen.has(dedupeKey)) return false;
+        seen.add(dedupeKey);
+        return true;
+      });
     return filter === 'all' ? items : items.filter((item) => item.category === filter);
   }
 
@@ -231,7 +244,7 @@ export class SocialService {
       .select(`
         *,
         author:author_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio),
-        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text),
+        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text,media_meta),
         comments:social_comments(id,parent_id,author_id,content,created_at,edited_at,author:author_id(id,name,username,initials,color,avatar_url,role,tier))
       `)
       .eq('is_deleted', false)
@@ -259,7 +272,7 @@ export class SocialService {
       .select(`
         *,
         author:author_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio),
-        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text),
+        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text,media_meta),
         comments:social_comments(id,parent_id,author_id,content,created_at,edited_at,author:author_id(id,name,username,initials,color,avatar_url,role,tier))
       `)
       .eq('is_deleted', false)
@@ -427,7 +440,7 @@ export class SocialService {
       .select(`
         *,
         author:author_id(id,name,username,role,tier,initials,color,avatar_url,banner_url,bio,social_bio),
-        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text),
+        media:social_post_media(id,url,storage_path,media_type,width,height,position,alt_text,media_meta),
         comments:social_comments(id,parent_id,author_id,content,created_at,edited_at,author:author_id(id,name,username,initials,color,avatar_url,role,tier))
       `)
       .eq('id', postId)
@@ -452,6 +465,7 @@ export class SocialService {
       height: item.height || null,
       position: index,
       alt_text: item.alt_text || null,
+      media_meta: item.media_meta || {},
     }));
 
     const { data, error } = await this.db
@@ -483,7 +497,7 @@ export class SocialService {
     const existingRows = nextMedia.filter((item) => item.id);
     const reorderResults = await Promise.all(existingRows.map((item) => this.db
       .from('social_post_media')
-      .update({ position: item.position, alt_text: item.alt_text })
+      .update({ position: item.position, alt_text: item.alt_text, media_meta: item.media_meta || {} })
       .eq('id', item.id)
       .eq('post_id', postId)
     ));
