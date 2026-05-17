@@ -104,12 +104,18 @@ function _tronDedupRecords(lista = []) {
 }
 
 function _tronDedupRankingEntries(entries = []) {
-  return _tronDedupRecords(entries.map(e => ({
-    name: e.name,
-    nome: e.name,
-    messages: parseInt(e.messages) || 0,
-    mensagens: parseInt(e.messages) || 0,
-  }))).map(e => ({ name: e.name, messages: e.messages }));
+  const best = new Map();
+  for (const e of entries || []) {
+    const name = e.name || e.nome || '';
+    const messages = parseInt(e.messages ?? e.mensagens, 10) || 0;
+    if (!name || !messages) continue;
+    const key = e.user_id || e.userId || e.profile_id || _tronNormalize(name);
+    const current = best.get(key);
+    if (!current || messages > current.messages) {
+      best.set(key, { name, messages, user_id: e.user_id || e.userId || e.profile_id || null });
+    }
+  }
+  return Array.from(best.values()).sort((a, b) => b.messages - a.messages);
 }
 
 function _tronCalcTop3FromRankings(todos) {
@@ -356,6 +362,8 @@ async function initRanking() {
   let pageSem   = 1, pageMen = 1;
   let semanais  = [], mensais = [];
   let tronoBanco = { semanal: [], mensal: [], diario: [] };
+  let constanciaResumo = { semanal: [], mensal: [], byUser: {} };
+  let membrosRanking = [];
 
   if (!document.getElementById('msy-trono-css')) {
     const s = document.createElement('style');
@@ -602,7 +610,38 @@ async function initRanking() {
       .trono-diario-nome { flex: 1; font-weight: 600; font-size: .88rem; color: var(--text-1); }
       .trono-diario-msgs { font-size: .8rem; color: var(--gold); font-weight: 700; }
 
+      .constancia-wrap { display: flex; flex-direction: column; gap: 20px; }
+      .constancia-hero {
+        border: 1px solid rgba(201,168,76,.18); border-radius: 18px; padding: 22px 24px;
+        background: linear-gradient(145deg, rgba(201,168,76,.09), rgba(255,255,255,.025));
+        display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 20px; align-items: center;
+      }
+      .constancia-title { font-family: 'Cinzel', serif; color: var(--gold); font-size: 1rem; letter-spacing: .1em; text-transform: uppercase; }
+      .constancia-sub { color: var(--text-3); font-size: .78rem; line-height: 1.6; margin-top: 6px; max-width: 720px; }
+      .constancia-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .constancia-card {
+        border: 1px solid rgba(255,255,255,.08); border-radius: 18px; overflow: hidden;
+        background: linear-gradient(160deg, #111118, #08080c);
+        box-shadow: 0 20px 60px rgba(0,0,0,.28);
+      }
+      .constancia-card.mensal { border-color: rgba(225,29,72,.2); }
+      .constancia-head { padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,.06); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+      .constancia-head strong { font-family: 'Cinzel', serif; color: var(--constancia-color, var(--gold)); letter-spacing: .08em; text-transform: uppercase; font-size: .86rem; }
+      .constancia-head span { color: var(--text-3); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+      .constancia-list { display: flex; flex-direction: column; }
+      .constancia-row { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 13px 18px; border-bottom: 1px solid rgba(255,255,255,.05); }
+      .constancia-row:last-child { border-bottom: 0; }
+      .constancia-pos { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05); color: var(--constancia-color, var(--gold)); font-family: 'Cinzel', serif; font-weight: 900; font-size: .78rem; }
+      .constancia-name { color: var(--text-1); font-weight: 800; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .constancia-meta { color: var(--text-3); font-size: .68rem; margin-top: 2px; }
+      .constancia-score { text-align: right; color: var(--constancia-color, var(--gold)); font-weight: 900; font-size: .92rem; }
+      .constancia-score span { display: block; color: var(--text-3); font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+      .constancia-empty { padding: 30px 18px; text-align: center; color: var(--text-3); font-size: .82rem; }
+
       @media (max-width: 640px) {
+        .constancia-hero { grid-template-columns: 1fr; padding: 18px; }
+        .constancia-grid { grid-template-columns: 1fr; }
+        .constancia-row { grid-template-columns: 30px minmax(0,1fr) auto; padding: 12px 14px; }
         .trono-cat-header { padding: 18px 18px 14px; flex-direction: column; align-items: flex-start; gap: 10px; }
         .trono-cat-title { font-size: .85rem; letter-spacing: .08em; }
         .trono-cat-label { font-size: .6rem; }
@@ -646,11 +685,15 @@ async function initRanking() {
 
   Utils.showLoading(content, 'Carregando rankings...');
 
-  const [rankRes, tronoDB] = await Promise.all([
+  const [rankRes, tronoDB, constanciaDB, membrosRes] = await Promise.all([
     db.from('weekly_rankings')
       .select('*, creator:created_by(name,initials)')
       .order('week_start', { ascending: false }),
     _tronLerTop3Banco(),
+    window.MSYBadges?.getRankingStreakSummary?.(true) || Promise.resolve({ semanal: [], mensal: [], byUser: {} }),
+    db.from('profiles')
+      .select('id,name,role,initials,color')
+      .order('name', { ascending: true }),
   ]);
 
   if (rankRes.error) {
@@ -662,6 +705,8 @@ async function initRanking() {
   semanais = todos.filter(r => !r.tipo || r.tipo === 'semanal');
   mensais  = todos.filter(r => r.tipo === 'mensal');
   tronoBanco = tronoDB;
+  constanciaResumo = constanciaDB || { semanal: [], mensal: [], byUser: {} };
+  membrosRanking = membrosRes.data || [];
 
   const tronoSnapshot = (lista = []) => (lista || [])
     .slice()
@@ -758,6 +803,72 @@ async function initRanking() {
     });
   }
 
+  function renderConstancia() {
+    const el = document.getElementById('rankContent');
+    if (!el) return;
+
+    const renderRows = (tipo, color) => {
+      const lista = (constanciaResumo[tipo] || []).filter(item => (item[tipo]?.best || 0) > 0).slice(0, 10);
+      if (!lista.length) {
+        return `<div class="constancia-empty">Nenhuma sequencia registrada ainda.</div>`;
+      }
+      return `<div class="constancia-list">
+        ${lista.map((item, idx) => {
+          const streak = item[tipo] || {};
+          const periodo = streak.bestStart && streak.bestEnd ? `${streak.bestStart} ate ${streak.bestEnd}` : 'Historico completo';
+          return `
+            <div class="constancia-row">
+              <div class="constancia-pos">${idx + 1}</div>
+              <div style="min-width:0">
+                <div class="constancia-name">${Utils.escapeHtml(item.name || 'Membro')}</div>
+                <div class="constancia-meta">${Utils.escapeHtml(periodo)}</div>
+              </div>
+              <div class="constancia-score" style="color:${color}">
+                ${streak.best || 0}
+                <span>seguidas</span>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+    };
+
+    el.innerHTML = `
+      <div class="constancia-wrap">
+        <div class="constancia-hero">
+          <div>
+            <div class="constancia-title">Hall da Constancia</div>
+            <div class="constancia-sub">
+              Sequencias calculadas automaticamente a partir dos relatorios semanais e mensais. Empates no topo contam para todos; periodos sem relatorio cadastrado sao ignorados.
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+            <span class="trono-cat-badge">Semanal: 5 / 10 / 20</span>
+            <span class="trono-cat-badge">Mensal: 3 / 6 / 12</span>
+          </div>
+        </div>
+        <div class="constancia-grid">
+          <section class="constancia-card" style="--constancia-color:#f59e0b">
+            <div class="constancia-head">
+              <div>
+                <strong><i class="fa-solid fa-bolt"></i> Constancia Semanal</strong>
+                <span>Maior sequencia de vitorias semanais</span>
+              </div>
+            </div>
+            ${renderRows('semanal', '#f59e0b')}
+          </section>
+          <section class="constancia-card mensal" style="--constancia-color:#e11d48">
+            <div class="constancia-head">
+              <div>
+                <strong><i class="fa-solid fa-crown"></i> Constancia Mensal</strong>
+                <span>Maior sequencia de vitorias mensais</span>
+              </div>
+            </div>
+            ${renderRows('mensal', '#e11d48')}
+          </section>
+        </div>
+      </div>`;
+  }
+
   function rankCard(r, idx, offset) {
     const entries  = _tronDedupRankingEntries(r.entries || []);
     const top3C    = entries.slice(0, 3);
@@ -830,6 +941,10 @@ async function initRanking() {
           ).catch(err => console.warn('[MSY][ranking] Ranking removido em tela, mas nao foi possivel atualizar Top 3:', err));
           window._msyRecordesCache   = null;
           window._msyRecordesCacheTs = 0;
+          if (window.MSYBadges?.clearCache) window.MSYBadges.clearCache();
+          if (window.MSYBadges?.getRankingStreakSummary) {
+            constanciaResumo = await window.MSYBadges.getRankingStreakSummary(true);
+          }
           Utils.showToast('Ranking removido.');
           renderListaRanking();
         } else {
@@ -843,6 +958,7 @@ async function initRanking() {
     abaAtiva = tipo;
     document.querySelectorAll('.rank-main-tab').forEach(b => b.classList.toggle('active', b.dataset.aba === tipo));
     if (tipo === 'trono') renderTrono();
+    else if (tipo === 'constancia') renderConstancia();
     else renderListaRanking();
   }
 
@@ -851,7 +967,7 @@ async function initRanking() {
     if (!modal) { modal = document.createElement('div'); modal.id = 'rankModal'; modal.className = 'modal-overlay'; document.body.appendChild(modal); }
 
     modal.innerHTML = `
-      <div class="modal-box" style="max-width:520px">
+      <div class="modal-box" style="max-width:680px">
         <div class="modal-header">
           <h3 class="font-cinzel"><i class="fa-solid fa-plus" style="color:var(--gold);margin-right:8px"></i>Novo Ranking ${tipo === 'semanal' ? 'Semanal' : 'Mensal'}</h3>
           <button class="modal-close" id="rankModalClose"><i class="fa-solid fa-xmark"></i></button>
@@ -879,12 +995,26 @@ async function initRanking() {
     document.getElementById('rankModalClose').addEventListener('click', close);
     document.getElementById('rankCancelBtn').addEventListener('click', close);
 
-    const addRow = (n = '', m = '') => {
+    const memberOptions = (membrosRanking || [])
+      .map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}${m.role ? ` · ${Utils.escapeHtml(m.role)}` : ''}</option>`)
+      .join('');
+
+    const addRow = (n = '', m = '', uid = '') => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:8px;align-items:center';
-      row.innerHTML = `<input type="text" class="form-input rank-name" placeholder="Nome" value="${Utils.escapeHtml(n)}" style="flex:2;padding:8px 10px;font-size:.85rem">
-        <input type="number" class="form-input rank-msgs" placeholder="Msgs" value="${m}" min="0" style="flex:1;padding:8px 10px;font-size:.85rem">
+      row.style.cssText = 'display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(130px,1fr) 90px 34px;gap:8px;align-items:center';
+      row.innerHTML = `<select class="form-input rank-member" style="padding:8px 10px;font-size:.85rem">
+          <option value="">Membro cadastrado</option>
+          ${memberOptions}
+        </select>
+        <input type="text" class="form-input rank-name" placeholder="Nome legado/manual" value="${Utils.escapeHtml(n)}" style="padding:8px 10px;font-size:.85rem">
+        <input type="number" class="form-input rank-msgs" placeholder="Msgs" value="${m}" min="0" style="padding:8px 10px;font-size:.85rem">
         <button class="btn btn-ghost btn-sm" style="padding:8px;flex-shrink:0"><i class="fa-solid fa-times" style="color:var(--red-bright)"></i></button>`;
+      const select = row.querySelector('.rank-member');
+      if (uid) select.value = uid;
+      select.addEventListener('change', () => {
+        const member = (membrosRanking || []).find(item => item.id === select.value);
+        if (member) row.querySelector('.rank-name').value = member.name || '';
+      });
       row.querySelector('button').addEventListener('click', () => row.remove());
       document.getElementById('rankEntries').appendChild(row);
     };
@@ -897,7 +1027,15 @@ async function initRanking() {
       if (!start || !end) { Utils.showToast('Informe as datas.', 'error'); return; }
 
       const entries = _tronDedupRankingEntries([...document.querySelectorAll('#rankEntries > div')]
-        .map(r => ({ name: r.querySelector('.rank-name').value.trim(), messages: parseInt(r.querySelector('.rank-msgs').value) || 0 }))
+        .map(r => {
+          const userId = r.querySelector('.rank-member')?.value || null;
+          const member = userId ? (membrosRanking || []).find(item => item.id === userId) : null;
+          return {
+            user_id: userId,
+            name: (member?.name || r.querySelector('.rank-name').value || '').trim(),
+            messages: parseInt(r.querySelector('.rank-msgs').value) || 0,
+          };
+        })
         .filter(e => e.name));
 
       if (!entries.length) { Utils.showToast('Adicione participantes.', 'error'); return; }
@@ -930,6 +1068,10 @@ async function initRanking() {
       if (novoCalc) {
         tronoBanco.semanal = novoCalc.semanal;
         tronoBanco.mensal  = novoCalc.mensal;
+      }
+      if (window.MSYBadges?.clearCache) window.MSYBadges.clearCache();
+      if (window.MSYBadges?.getRankingStreakSummary) {
+        constanciaResumo = await window.MSYBadges.getRankingStreakSummary(true);
       }
       if (eventos.length > 0) {
         Utils.showToast(`🏆 Trono dos Recordes atualizado!`);
@@ -1098,6 +1240,9 @@ async function initRanking() {
     <div class="rank-main-tabs">
       <button class="rank-main-tab active" data-aba="trono">
         🏆 Trono dos Recordes
+      </button>
+      <button class="rank-main-tab" data-aba="constancia">
+        <i class="fa-solid fa-fire-flame-curved"></i> Constância
       </button>
       <button class="rank-main-tab" data-aba="mensal">
         <i class="fa-solid fa-calendar-days"></i> Mensal

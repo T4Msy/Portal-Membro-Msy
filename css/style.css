@@ -3349,6 +3349,13 @@ select option:hover,
   flex-shrink: 0;
 }
 
+.badge-icon-img {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: contain;
+}
+
 .badge-info {
   display: flex;
   flex-direction: column;
@@ -3371,6 +3378,39 @@ select option:hover,
   letter-spacing: 0.03em;
   color: var(--badge-color, var(--gold));
   line-height: 1;
+}
+
+.badge-item.badge-constancia {
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
+  border-left-width: 4px;
+}
+
+.badge-item.badge-constancia .badge-icon-img {
+  width: 38px;
+  height: 38px;
+}
+
+.badge-item.badge-constancia .badge-info {
+  gap: 4px;
+  min-width: 0;
+}
+
+.badge-item.badge-constancia .badge-titulo {
+  font-size: 0.78rem;
+  line-height: 1.18;
+  letter-spacing: 0.035em;
+  text-wrap: balance;
+}
+
+.badge-item.badge-constancia .badge-qtd {
+  color: var(--badge-color, var(--gold)) !important;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: 0.01em;
 }
 
 /* -------- RESPONSIVE -------- */

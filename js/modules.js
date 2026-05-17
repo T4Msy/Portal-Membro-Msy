@@ -694,8 +694,9 @@ async function initPremiacoes() {
         ` : ''}
       </div>
       <div class="filters-bar" style="margin-bottom:20px" id="premSubTabs">
-        <button class="filter-btn active" data-subtab="premiacoes"><i class="fa-solid fa-trophy"></i> Premiações</button>
-        <button class="filter-btn" data-subtab="recordes"><i class="fa-solid fa-crown"></i> Recordes</button>
+        <button class="filter-btn active" data-subtab="recordes"><i class="fa-solid fa-crown"></i> Recordes</button>
+        <button class="filter-btn" data-subtab="premiacoes"><i class="fa-solid fa-trophy"></i> Premiações</button>
+        <button class="filter-btn" data-subtab="conquistas"><i class="fa-solid fa-medal"></i> Conquistas</button>
       </div>
       <div id="premSubContent"></div>
     `;
@@ -726,7 +727,504 @@ async function initPremiacoes() {
       });
     }
 
-    renderSubPremiacoes();
+    const getConstanciaMetas = (tipo) => (window.MSYBadges?.CONSTANCIA_META?.[tipo] || []);
+    const getConquistaMeta = (tipo, threshold) => getConstanciaMetas(tipo).find(meta => Number(meta.threshold) === Number(threshold));
+    const conquistaTipoLabel = (tipo) => tipo === 'mensal' ? 'Relatorios Mensais' : 'Relatorios Semanais';
+    const conquistaRegra = (tipo, threshold) => `1º lugar em ${threshold} relatorios ${tipo === 'mensal' ? 'mensais' : 'semanais'} seguidos`;
+    const conquistaComoGanha = (tipo, threshold) =>
+      `Conquistada automaticamente ao ficar em 1º lugar em ${threshold} relatorios ${tipo === 'mensal' ? 'mensais' : 'semanais'} seguidos. Empate em 1º tambem conta.`;
+    const recordeConquistaMetas = {
+      semanal: {
+        icon: '⚡',
+        label: 'Soberania Semanal',
+        color: '#f59e0b',
+        desc: '1º lugar no recorde historico semanal',
+        regra: 'Conquistada por quem ocupa o 1º lugar do Trono dos Recordes Semanais, com o maior numero de mensagens em uma unica semana.',
+      },
+      mensal: {
+        icon: '🩸',
+        label: 'Dominio Mensal',
+        color: '#cc0000',
+        desc: '1º lugar no recorde historico mensal',
+        regra: 'Conquistada por quem ocupa o 1º lugar do Trono dos Recordes Mensais, com o maior numero de mensagens em um unico mes.',
+      },
+      diario: {
+        icon: '🔱',
+        label: 'Marca Perpetua',
+        color: '#8b5cf6',
+        desc: '1º lugar no recorde historico diario',
+        regra: 'Conquistada por quem ocupa o 1º lugar do Trono dos Recordes Diarios. Esse recorde usa o valor oficial registrado pela Diretoria.',
+      },
+    };
+    const recordeTipoLabel = (tipo) => tipo === 'mensal' ? 'Recorde Mensal' : tipo === 'diario' ? 'Recorde Diario' : 'Recorde Semanal';
+    const normalizeNameForView = (n) => {
+      if (typeof window.MSYNormalizeRankingName === 'function') return window.MSYNormalizeRankingName(n);
+      return String(n || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    };
+
+    async function getConquistasSummary() {
+      if (!window.MSYBadges?.getRankingStreakSummary) {
+        return { semanal: [], mensal: [] };
+      }
+      return window.MSYBadges.getRankingStreakSummary(true);
+    }
+
+    async function getRecordesConquistas() {
+      const [recRes, rankRes, profRes] = await Promise.all([
+        db.from('msy_recordes_top3')
+          .select('tipo,posicao,nome,mensagens,periodo,data_ref')
+          .order('tipo')
+          .order('posicao'),
+        db.from('weekly_rankings')
+          .select('id,tipo,entries,week_start,week_end,created_at')
+          .order('week_start', { ascending: true }),
+        db.from('profiles')
+          .select('id,name,role,initials,color,avatar_url'),
+      ]);
+      if (recRes.error) throw recRes.error;
+      if (rankRes.error) throw rankRes.error;
+      if (profRes.error) throw profRes.error;
+
+      const normalize = (n) => {
+        if (typeof window.MSYNormalizeRankingName === 'function') return window.MSYNormalizeRankingName(n);
+        return String(n || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      };
+      const formatIsoDate = (value) => {
+        if (!value) return '';
+        const [y, m, d] = String(value).slice(0, 10).split('-');
+        return y && m && d ? `${d}/${m}/${y}` : String(value);
+      };
+      const periodLabel = (row) => {
+        if (row?.week_start && row?.week_end) return `${formatIsoDate(row.week_start)} a ${formatIsoDate(row.week_end)}`;
+        return formatIsoDate(row?.week_start || row?.week_end || row?.created_at);
+      };
+      const profilesByName = {};
+      const profilesById = {};
+      (profRes.data || []).forEach(p => {
+        if (p.id) profilesById[p.id] = p;
+        const key = normalize(p.name);
+        if (key && !profilesByName[key]) profilesByName[key] = p;
+      });
+
+      const current = { semanal: [], mensal: [], diario: [] };
+      (recRes.data || []).forEach(row => {
+        if (!current[row.tipo]) return;
+        const profile = profilesByName[normalize(row.nome)] || null;
+        current[row.tipo].push({ ...row, profile, origem: 'trono' });
+      });
+      Object.keys(current).forEach(tipo => current[tipo].sort((a, b) => (a.posicao || 99) - (b.posicao || 99)));
+
+      const lineage = { semanal: [], mensal: [], diario: [] };
+      const bestByTipo = { semanal: 0, mensal: 0 };
+      const orderedRankings = (rankRes.data || [])
+        .slice()
+        .sort((a, b) => String(a.week_start || a.created_at || '').localeCompare(String(b.week_start || b.created_at || '')));
+
+      for (const row of orderedRankings) {
+        const tipo = (!row.tipo || row.tipo === 'semanal') ? 'semanal' : 'mensal';
+        const byPerson = new Map();
+        for (const entry of (row.entries || [])) {
+          const rawUserId = entry?.user_id || entry?.userId || entry?.profile_id || null;
+          const rawName = entry?.name || entry?.nome || '';
+          const messages = parseInt(entry?.messages ?? entry?.mensagens, 10) || 0;
+          if (!rawName || messages <= 0) continue;
+          const profile = (rawUserId && profilesById[rawUserId]) || profilesByName[normalize(rawName)] || null;
+          const key = rawUserId || profile?.id || normalize(rawName);
+          const prev = byPerson.get(key);
+          if (!prev || messages > prev.mensagens) {
+            byPerson.set(key, {
+              tipo,
+              posicao: 1,
+              nome: profile?.name || rawName,
+              mensagens: messages,
+              periodo: periodLabel(row),
+              data_ref: row.week_start || row.created_at || null,
+              profile,
+              origem: 'ranking',
+            });
+          }
+        }
+
+        const entries = Array.from(byPerson.values());
+        const topMessages = entries.reduce((max, item) => Math.max(max, item.mensagens || 0), 0);
+        if (topMessages > bestByTipo[tipo]) {
+          entries
+            .filter(item => item.mensagens === topMessages)
+            .forEach(item => lineage[tipo].push(item));
+          bestByTipo[tipo] = topMessages;
+        }
+      }
+
+      for (const tipo of ['semanal', 'mensal']) {
+        const atual = (current[tipo] || []).find(r => Number(r.posicao) === 1);
+        if (!atual) continue;
+        const hasCurrent = lineage[tipo].some(item =>
+          normalize(item.nome) === normalize(atual.nome) && Number(item.mensagens || 0) === Number(atual.mensagens || 0)
+        );
+        if (!hasCurrent) lineage[tipo].push({ ...atual, origem: 'trono' });
+      }
+
+      const diarioAtual = (current.diario || []).find(r => Number(r.posicao) === 1);
+      if (diarioAtual) lineage.diario = [{ ...diarioAtual, origem: 'trono' }];
+
+      Object.keys(lineage).forEach(tipo => {
+        lineage[tipo].sort((a, b) => {
+          const msgDiff = (b.mensagens || 0) - (a.mensagens || 0);
+          if (msgDiff) return msgDiff;
+          return String(b.data_ref || '').localeCompare(String(a.data_ref || ''));
+        });
+      });
+
+      return { current, lineage };
+    }
+
+    async function renderConquistas() {
+      const sub = document.getElementById('premSubContent');
+      if (!sub) return;
+      if (isDiretoria) document.getElementById('premAddBtn').style.display = 'none';
+      sub.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-3)">
+        <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando conquistas...
+      </div>`;
+
+      let summary = { semanal: [], mensal: [] };
+      let recordes = { current: { semanal: [], mensal: [], diario: [] }, lineage: { semanal: [], mensal: [], diario: [] } };
+      try {
+        [summary, recordes] = await Promise.all([
+          getConquistasSummary(),
+          getRecordesConquistas(),
+        ]);
+      } catch (err) {
+        console.error('[MSY][premiacoes] Erro ao carregar conquistas:', err);
+        sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar conquistas.</div>`;
+        Utils.showToast('Erro ao carregar conquistas.', 'error');
+        return;
+      }
+
+      const gruposConquista = [
+        { tipo: 'mensal', color: 'var(--gold)' },
+        { tipo: 'semanal', color: '#3b82f6' },
+      ];
+
+      sub.innerHTML = `
+        <div style="margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="height:2px;flex:0 0 24px;background:var(--gold)"></span>
+            <h2 class="font-cinzel" style="font-size:1rem;color:var(--gold);letter-spacing:.1em;text-transform:uppercase">Conquistas por Regras</h2>
+            <span style="height:1px;flex:1;background:var(--border-faint)"></span>
+          </div>
+          <p style="font-size:.78rem;color:var(--text-3);margin-bottom:20px">Insignias conquistadas por regras do portal: recordes historicos e constancia nos relatorios.</p>
+        </div>
+        <div style="margin-bottom:32px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <span style="height:2px;flex:0 0 24px;background:var(--red-bright)"></span>
+            <h3 class="font-cinzel" style="font-size:1rem;color:var(--red-bright);letter-spacing:.1em;text-transform:uppercase">Recordes Historicos</h3>
+            <span style="height:1px;flex:1;background:var(--border-faint)"></span>
+          </div>
+          <div class="prem-list-grid">
+            ${['mensal', 'semanal', 'diario'].map(tipo => {
+              const meta = recordeConquistaMetas[tipo];
+              const atual = (recordes.current[tipo] || []).find(r => Number(r.posicao) === 1);
+              return `
+                <div class="prem-card recorde-conquista-card" data-recorde-tipo="${tipo}">
+                  <div class="prem-card-icon" style="font-size:2.55rem;filter:drop-shadow(0 0 10px ${meta.color}66)">${meta.icon}</div>
+                  <div class="prem-card-body">
+                    <div class="prem-card-imp" style="color:${meta.color}">${recordeTipoLabel(tipo)}</div>
+                    <div class="prem-card-title">${Utils.escapeHtml(meta.label)}</div>
+                    <div class="prem-card-desc">${Utils.escapeHtml(meta.desc)}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:auto">
+                    <span style="font-size:.72rem;color:var(--text-3)">
+                      ${atual ? `${Utils.escapeHtml(atual.nome)} - ${Number(atual.mensagens || 0).toLocaleString('pt-BR')} msgs` : 'Sem vencedor atual'}
+                    </span>
+                    <button class="btn btn-ghost btn-sm recorde-conquista-detail-btn" data-recorde-tipo="${tipo}" style="align-self:flex-start">
+                      <i class="fa-solid fa-arrow-right"></i> Ver
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        ${gruposConquista.map(grupo => {
+          const metas = getConstanciaMetas(grupo.tipo);
+          if (!metas.length) return '';
+          return `
+            <div style="margin-bottom:32px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                <span style="height:2px;flex:0 0 24px;background:${grupo.color}"></span>
+                <h3 class="font-cinzel" style="font-size:1rem;color:${grupo.color};letter-spacing:.1em;text-transform:uppercase">${conquistaTipoLabel(grupo.tipo)}</h3>
+                <span style="height:1px;flex:1;background:var(--border-faint)"></span>
+              </div>
+              <div class="prem-list-grid">
+                ${metas.map(meta => {
+                  const vencedores = (summary[grupo.tipo] || []).filter(p => (p[grupo.tipo]?.best || 0) >= meta.threshold);
+                  const ocorrencias = vencedores.reduce((acc, p) => acc + (p.achievements?.[grupo.tipo]?.[meta.threshold] || 1), 0);
+                  return `
+                    <div class="prem-card conquista-card" data-tipo="${grupo.tipo}" data-threshold="${meta.threshold}">
+                      <div class="prem-card-icon">
+                        <img src="${Utils.escapeHtml(meta.image)}" alt="${Utils.escapeHtml(meta.label)}" style="width:58px;height:58px;object-fit:contain;filter:drop-shadow(0 0 10px ${meta.color}66)">
+                      </div>
+                      <div class="prem-card-body">
+                        <div class="prem-card-imp" style="color:${meta.color}">${conquistaTipoLabel(grupo.tipo)}</div>
+                        <div class="prem-card-title">${Utils.escapeHtml(meta.label)}</div>
+                        <div class="prem-card-desc">${Utils.escapeHtml(meta.desc || conquistaRegra(grupo.tipo, meta.threshold))}</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:auto">
+                        <span style="font-size:.72rem;color:var(--text-3)">${vencedores.length} membro${vencedores.length !== 1 ? 's' : ''} - ${ocorrencias} vez${ocorrencias !== 1 ? 'es' : ''}</span>
+                        <button class="btn btn-ghost btn-sm conquista-detail-btn" data-tipo="${grupo.tipo}" data-threshold="${meta.threshold}" style="align-self:flex-start">
+                          <i class="fa-solid fa-arrow-right"></i> Ver
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      `;
+
+      sub.querySelectorAll('.conquista-detail-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          renderDetalheConquista(btn.dataset.tipo, Number(btn.dataset.threshold));
+        });
+      });
+      sub.querySelectorAll('.conquista-card').forEach(card => {
+        card.addEventListener('click', () => renderDetalheConquista(card.dataset.tipo, Number(card.dataset.threshold)));
+      });
+      sub.querySelectorAll('.recorde-conquista-detail-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          renderDetalheRecordeConquista(btn.dataset.recordeTipo);
+        });
+      });
+      sub.querySelectorAll('.recorde-conquista-card').forEach(card => {
+        card.addEventListener('click', () => renderDetalheRecordeConquista(card.dataset.recordeTipo));
+      });
+    }
+
+    async function renderDetalheRecordeConquista(tipo) {
+      const sub = document.getElementById('premSubContent');
+      if (!sub) return;
+      const meta = recordeConquistaMetas[tipo];
+      if (!meta) {
+        sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Recorde nao encontrado.</div>`;
+        return;
+      }
+
+      sub.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-3)">
+        <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando recorde...
+      </div>`;
+
+      let recordes = { current: { semanal: [], mensal: [], diario: [] }, lineage: { semanal: [], mensal: [], diario: [] } };
+      try {
+        recordes = await getRecordesConquistas();
+      } catch (err) {
+        console.error('[MSY][premiacoes] Erro ao carregar detalhe do recorde:', err);
+        sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar recorde.</div>`;
+        return;
+      }
+
+      const lista = recordes.lineage[tipo] || [];
+      const atual = (recordes.current[tipo] || []).find(r => Number(r.posicao) === 1) || lista[0] || null;
+      const total = lista.length;
+
+      sub.innerHTML = `
+        <button class="btn btn-ghost btn-sm" id="recordeConquistaBackBtn" style="margin-bottom:18px">
+          <i class="fa-solid fa-arrow-left"></i> Voltar as Conquistas
+        </button>
+        <div class="card" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-bottom:24px;padding:24px;border-color:${meta.color}44">
+          <div style="font-size:4.2rem;line-height:1;filter:drop-shadow(0 0 14px ${meta.color}77)">${meta.icon}</div>
+          <div style="flex:1;min-width:240px">
+            <div class="prem-card-imp" style="color:${meta.color};margin-bottom:8px">${recordeTipoLabel(tipo)}</div>
+            <h2 class="font-cinzel" style="font-size:1.35rem;color:var(--text-1);margin-bottom:8px">${Utils.escapeHtml(meta.label)}</h2>
+            <div style="color:${meta.color};font-size:.92rem;font-weight:800;margin-bottom:8px">${Utils.escapeHtml(meta.desc)}</div>
+            <div style="color:var(--text-2);font-size:.84rem;line-height:1.6">${Utils.escapeHtml(meta.regra)}</div>
+          </div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <div style="text-align:center;min-width:96px">
+              <div class="font-cinzel" style="font-size:2rem;color:${meta.color}">${atual ? Number(atual.mensagens || 0).toLocaleString('pt-BR') : '-'}</div>
+              <div style="font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Mensagens</div>
+            </div>
+            <div style="text-align:center;min-width:86px">
+              <div class="font-cinzel" style="font-size:2rem;color:${meta.color}">${total}</div>
+              <div style="font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Recordistas</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <h3 class="font-cinzel" style="font-size:1rem">
+              <i class="fa-solid fa-crown" style="color:${meta.color};margin-right:8px"></i>Historico do 1º lugar
+            </h3>
+            <span style="color:var(--text-3);font-size:.8rem">${atual ? `Atual vencedor: ${Utils.escapeHtml(atual.nome)}` : 'Sem vencedor atual'}</span>
+          </div>
+          <div style="padding:20px 24px">
+            ${lista.length === 0 ? `
+              <div style="text-align:center;padding:40px;color:var(--text-3)">
+                <i class="fa-solid fa-crown" style="font-size:2rem;opacity:.3;margin-bottom:12px;display:block"></i>
+                Nenhum recordista registrado ainda.
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:12px">
+                ${lista.map(r => {
+                  const p = r.profile || {};
+                  const canLink = p.id;
+                  const avatarStyle = `background:linear-gradient(135deg,${p.color || '#7f1d1d'},#1a1a1a)`;
+                  const avatarContent = p.avatar_url
+                    ? `<img src="${Utils.escapeHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                    : (p.initials || Utils.getInitials(r.nome || 'Membro'));
+                  const avatar = `<div class="avatar" style="${avatarStyle}">${avatarContent}</div>`;
+                  const isAtual = atual && normalizeNameForView(r.nome) === normalizeNameForView(atual.nome) && Number(r.mensagens || 0) === Number(atual.mensagens || 0);
+                  return `
+                    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--black-3);border-radius:var(--radius);border:1px solid ${isAtual ? `${meta.color}66` : 'var(--border-faint)'}" class="venc-row">
+                      <div style="width:82px;text-align:center;font-size:.7rem;font-weight:800;color:${isAtual ? meta.color : 'var(--text-3)'};text-transform:uppercase;letter-spacing:.04em">${isAtual ? 'Atual' : 'Antigo'}</div>
+                      ${canLink ? `<a href="perfil.html?id=${p.id}" style="flex-shrink:0">${avatar}</a>` : `<div style="flex-shrink:0">${avatar}</div>`}
+                      <div style="flex:1;min-width:170px">
+                        ${canLink ? `
+                          <a href="perfil.html?id=${p.id}" style="font-weight:600;color:var(--text-1);transition:color .2s" class="venc-name">${Utils.escapeHtml(r.nome || 'Membro')}</a>
+                        ` : `<div style="font-weight:600;color:var(--text-1)">${Utils.escapeHtml(r.nome || 'Membro')}</div>`}
+                        <div style="font-size:.78rem;color:var(--text-3)">${Utils.escapeHtml(isAtual ? 'Recordista atual' : 'Antigo recordista')}</div>
+                        ${r.periodo ? `<div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Periodo: ${Utils.escapeHtml(r.periodo)}</div>` : ''}
+                      </div>
+                      <div style="text-align:right;flex-shrink:0">
+                        <div style="font-weight:800;color:${meta.color};font-size:1.1rem">${Number(r.mensagens || 0).toLocaleString('pt-BR')}</div>
+                        <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">mensagens</div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('recordeConquistaBackBtn')?.addEventListener('click', renderConquistas);
+    }
+
+    async function renderDetalheConquista(tipo, threshold) {
+      const sub = document.getElementById('premSubContent');
+      if (!sub) return;
+      const meta = getConquistaMeta(tipo, threshold);
+      if (!meta) {
+        sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Conquista nao encontrada.</div>`;
+        return;
+      }
+      sub.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-3)">
+        <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);margin-right:8px"></i> Carregando conquista...
+      </div>`;
+
+      let summary = { semanal: [], mensal: [] };
+      try {
+        summary = await getConquistasSummary();
+      } catch (err) {
+        console.error('[MSY][premiacoes] Erro ao carregar detalhe da conquista:', err);
+        sub.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)">Erro ao carregar conquista.</div>`;
+        return;
+      }
+
+      const vencedores = (summary[tipo] || [])
+        .filter(p => (p[tipo]?.best || 0) >= threshold)
+        .sort((a, b) => {
+          const bestDiff = (b[tipo]?.best || 0) - (a[tipo]?.best || 0);
+          if (bestDiff) return bestDiff;
+          const achDiff = (b.achievements?.[tipo]?.[threshold] || 0) - (a.achievements?.[tipo]?.[threshold] || 0);
+          if (achDiff) return achDiff;
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+      const ocorrencias = vencedores.reduce((acc, p) => acc + (p.achievements?.[tipo]?.[threshold] || 1), 0);
+
+      sub.innerHTML = `
+        <button class="btn btn-ghost btn-sm" id="conquistaBackBtn" style="margin-bottom:18px">
+          <i class="fa-solid fa-arrow-left"></i> Voltar as Conquistas
+        </button>
+        <div class="card" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-bottom:24px;padding:24px;border-color:${meta.color}44">
+          <img src="${Utils.escapeHtml(meta.image)}" alt="${Utils.escapeHtml(meta.label)}" style="width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 0 14px ${meta.color}77)">
+          <div style="flex:1;min-width:240px">
+            <div class="prem-card-imp" style="color:${meta.color};margin-bottom:8px">${conquistaTipoLabel(tipo)}</div>
+            <h2 class="font-cinzel" style="font-size:1.35rem;color:var(--text-1);margin-bottom:8px">${Utils.escapeHtml(meta.label)}</h2>
+            <div style="color:${meta.color};font-size:.92rem;font-weight:800;margin-bottom:8px">${Utils.escapeHtml(meta.desc || conquistaRegra(tipo, threshold))}</div>
+            <div style="color:var(--text-2);font-size:.84rem;line-height:1.6">${Utils.escapeHtml(conquistaComoGanha(tipo, threshold))}</div>
+          </div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <div style="text-align:center;min-width:86px">
+              <div class="font-cinzel" style="font-size:2rem;color:${meta.color}">${vencedores.length}</div>
+              <div style="font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Membros</div>
+            </div>
+            <div style="text-align:center;min-width:86px">
+              <div class="font-cinzel" style="font-size:2rem;color:${meta.color}">${ocorrencias}</div>
+              <div style="font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Conquistas</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <h3 class="font-cinzel" style="font-size:1rem">
+              <i class="fa-solid fa-medal" style="color:${meta.color};margin-right:8px"></i>Membros que conquistaram
+            </h3>
+            <span style="color:var(--text-3);font-size:.8rem">${vencedores.length} registro${vencedores.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="padding:20px 24px">
+            ${vencedores.length === 0 ? `
+              <div style="text-align:center;padding:40px;color:var(--text-3)">
+                <i class="fa-solid fa-medal" style="font-size:2rem;opacity:.3;margin-bottom:12px;display:block"></i>
+                Ninguem conquistou essa insignia ainda.
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:12px">
+                ${vencedores.map(p => {
+                  const streak = p[tipo] || {};
+                  const vezes = p.achievements?.[tipo]?.[threshold] || 1;
+                  const canLink = p.user_id && !String(p.user_id).startsWith('name:');
+                  const avatarStyle = `background:linear-gradient(135deg,${p.color || '#7f1d1d'},#1a1a1a)`;
+                  const avatarContent = p.avatar_url
+                    ? `<img src="${Utils.escapeHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                    : (p.initials || Utils.getInitials(p.name || 'Membro'));
+                  const avatar = `<div class="avatar" style="${avatarStyle}">${avatarContent}</div>`;
+                  return `
+                    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--black-3);border-radius:var(--radius);border:1px solid var(--border-faint)" class="venc-row">
+                      ${canLink ? `<a href="perfil.html?id=${p.user_id}" style="flex-shrink:0">${avatar}</a>` : `<div style="flex-shrink:0">${avatar}</div>`}
+                      <div style="flex:1;min-width:170px">
+                        ${canLink ? `
+                          <a href="perfil.html?id=${p.user_id}" style="font-weight:600;color:var(--text-1);transition:color .2s" class="venc-name">${Utils.escapeHtml(p.name || 'Membro')}</a>
+                        ` : `<div style="font-weight:600;color:var(--text-1)">${Utils.escapeHtml(p.name || 'Membro')}</div>`}
+                        <div style="font-size:.78rem;color:var(--text-3)">${Utils.escapeHtml(p.role || '')}</div>
+                        <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">
+                          Melhor periodo: ${Utils.escapeHtml(streak.bestStart || '-')} ${streak.bestEnd ? `ate ${Utils.escapeHtml(streak.bestEnd)}` : ''}
+                        </div>
+                      </div>
+                      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+                        <div style="text-align:right">
+                          <div style="font-weight:800;color:${meta.color};font-size:1.05rem">${streak.best || 0}</div>
+                          <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">melhor seq.</div>
+                        </div>
+                        <div style="text-align:right">
+                          <div style="font-weight:800;color:var(--text-1);font-size:1.05rem">${streak.current || 0}</div>
+                          <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">seq. atual</div>
+                        </div>
+                        <div style="text-align:right">
+                          <div style="font-weight:800;color:var(--gold);font-size:1.05rem">${vezes}x</div>
+                          <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">ganhou</div>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('conquistaBackBtn')?.addEventListener('click', renderConquistas);
+    }
+
+    if (isDiretoria) document.getElementById('premAddBtn').style.display = 'none';
+    renderRecordes();
 
     // Sub-tab switcher
     document.querySelectorAll('#premSubTabs .filter-btn').forEach(btn => {
@@ -736,6 +1234,9 @@ async function initPremiacoes() {
         if (btn.dataset.subtab === 'recordes') {
           if (isDiretoria) document.getElementById('premAddBtn').style.display = 'none';
           renderRecordes();
+        } else if (btn.dataset.subtab === 'conquistas') {
+          if (isDiretoria) document.getElementById('premAddBtn').style.display = 'none';
+          renderConquistas();
         } else {
           renderSubPremiacoes();
         }

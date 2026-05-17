@@ -57,6 +57,68 @@
     diario:  { icon: '🔱', label: 'Marca Perpétua',    color: '#8b5cf6' },
   };
 
+  /* -- METADADOS DAS INSIGNIAS DE CONSTANCIA ------------------ */
+  const CONSTANCIA_META = {
+    semanal: [
+      {
+        key: 'constancia-semanal-5',
+        threshold: 5,
+        label: 'Chama da Constancia',
+        icon: '◆',
+        image: 'icons/badges/constancia-semanal-5.png',
+        color: '#f59e0b',
+        desc: '1º em 5 relatorios semanais seguidos',
+      },
+      {
+        key: 'constancia-semanal-10',
+        threshold: 10,
+        label: 'Estandarte da Soberania',
+        icon: '◆',
+        image: 'icons/badges/constancia-semanal-10.png',
+        color: '#facc15',
+        desc: '1º em 10 relatorios semanais seguidos',
+      },
+      {
+        key: 'constancia-semanal-20',
+        threshold: 20,
+        label: 'Coroa da Supremacia Semanal',
+        icon: '◆',
+        image: 'icons/badges/constancia-semanal-20.png',
+        color: '#f97316',
+        desc: '1º em 20 relatorios semanais seguidos',
+      },
+    ],
+    mensal: [
+      {
+        key: 'constancia-mensal-3',
+        threshold: 3,
+        label: 'Pilar da Constancia',
+        icon: '◆',
+        image: 'icons/badges/constancia-mensal-3.png',
+        color: '#c9a84c',
+        desc: '1º em 3 relatorios mensais seguidos',
+      },
+      {
+        key: 'constancia-mensal-6',
+        threshold: 6,
+        label: 'Trono da Persistencia',
+        icon: '◆',
+        image: 'icons/badges/constancia-mensal-6.png',
+        color: '#e11d48',
+        desc: '1º em 6 relatorios mensais seguidos',
+      },
+      {
+        key: 'constancia-mensal-12',
+        threshold: 12,
+        label: 'Dinastia Sangrenta',
+        icon: '◆',
+        image: 'icons/badges/constancia-mensal-12.png',
+        color: '#dc2626',
+        desc: '1º em 12 relatorios mensais seguidos',
+      },
+    ],
+  };
+
   /* ── METADADOS DAS INSÍGNIAS DE PREMIAÇÃO ───────────────── */
   const PREMIACAO_COLORS = {
     'Semanal':  '#3b82f6',
@@ -122,6 +184,10 @@
   let _recordesCacheTs  = 0;
   const RECORDES_TTL    = 5 * 60 * 1000;
 
+  let _constanciaCache   = null;
+  let _constanciaCacheTs = 0;
+  const CONSTANCIA_TTL   = 3 * 60 * 1000;
+
   async function _fetchRecordesTop3() {
     const agora = Date.now();
     if (_recordesCache && (agora - _recordesCacheTs) < RECORDES_TTL) {
@@ -183,7 +249,236 @@
     }
   }
 
-  /* ── FONTE 3: ICM ────────────────────────────────────────── */
+  /* -- FONTE 3: CONSTANCIA EM RELATORIOS ---------------------- */
+
+  function _emptyStreak() {
+    return { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
+  }
+
+  function _blankConstanciaSummary() {
+    return { semanal: _emptyStreak(), mensal: _emptyStreak() };
+  }
+
+  function _periodRef(row) {
+    return row?.week_start || row?.created_at || row?.week_end || '';
+  }
+
+  function _periodLabel(row) {
+    if (!row) return '';
+    if (row.week_start && row.week_end) return `${row.week_start} a ${row.week_end}`;
+    return row.week_start || row.week_end || '';
+  }
+
+  function _makeProfileIndexes(profiles = []) {
+    const byId = new Map();
+    const byName = new Map();
+    for (const p of profiles || []) {
+      if (!p?.id) continue;
+      byId.set(p.id, p);
+      const norm = normalizeName(p.name);
+      if (norm && !byName.has(norm)) byName.set(norm, p);
+    }
+    return { byId, byName };
+  }
+
+  function _resolveRankingEntry(entry, indexes) {
+    const rawUserId = entry?.user_id || entry?.userId || entry?.profile_id || null;
+    const rawName = entry?.name || entry?.nome || '';
+    const normName = normalizeName(rawName);
+    const profileById = rawUserId ? indexes.byId.get(rawUserId) : null;
+    const profileByName = normName ? indexes.byName.get(normName) : null;
+    const profile = profileById || profileByName || null;
+    const userId = rawUserId || profile?.id || null;
+    const key = userId ? `id:${userId}` : (normName ? `name:${normName}` : '');
+    if (!key) return null;
+    return {
+      key,
+      user_id: userId,
+      name: profile?.name || rawName || 'Membro',
+      initials: profile?.initials || null,
+      color: profile?.color || null,
+      role: profile?.role || null,
+      avatar_url: profile?.avatar_url || null,
+    };
+  }
+
+  function _winnersFromRanking(row, indexes) {
+    const bestByKey = new Map();
+    for (const entry of (row?.entries || [])) {
+      const messages = parseInt(entry?.messages ?? entry?.mensagens, 10) || 0;
+      if (messages <= 0) continue;
+      const participant = _resolveRankingEntry(entry, indexes);
+      if (!participant) continue;
+      const current = bestByKey.get(participant.key);
+      if (!current || messages > current.messages) {
+        bestByKey.set(participant.key, { ...participant, messages });
+      }
+    }
+    const entries = Array.from(bestByKey.values());
+    const max = entries.reduce((acc, entry) => Math.max(acc, entry.messages || 0), 0);
+    return entries.filter(entry => entry.messages === max && max > 0);
+  }
+
+  function _ensureConstanciaPerson(map, participant) {
+    if (!map.has(participant.key)) {
+      map.set(participant.key, {
+        key: participant.key,
+        user_id: participant.user_id || null,
+        name: participant.name,
+        initials: participant.initials || null,
+        color: participant.color || null,
+        role: participant.role || null,
+        avatar_url: participant.avatar_url || null,
+        semanal: _emptyStreak(),
+        mensal: _emptyStreak(),
+        achievements: { semanal: {}, mensal: {} },
+      });
+    }
+    const person = map.get(participant.key);
+    if (!person.user_id && participant.user_id) person.user_id = participant.user_id;
+    if (participant.name) person.name = participant.name;
+    if (participant.initials) person.initials = participant.initials;
+    if (participant.color) person.color = participant.color;
+    if (participant.role) person.role = participant.role;
+    if (participant.avatar_url) person.avatar_url = participant.avatar_url;
+    return person;
+  }
+
+  function _applyStreakWin(person, tipo, row) {
+    const streak = person[tipo];
+    const label = _periodLabel(row);
+    if (streak.current === 0) streak.currentStart = label;
+    streak.current += 1;
+    streak.currentEnd = label;
+    for (const meta of (CONSTANCIA_META[tipo] || [])) {
+      if (streak.current === meta.threshold) {
+        person.achievements[tipo][meta.threshold] = (person.achievements[tipo][meta.threshold] || 0) + 1;
+      }
+    }
+    if (streak.current > streak.best) {
+      streak.best = streak.current;
+      streak.bestStart = streak.currentStart;
+      streak.bestEnd = streak.currentEnd;
+    }
+  }
+
+  function _calcTipoConstancia(rankings, tipo, indexes, people) {
+    const active = new Set();
+    const ordered = (rankings || [])
+      .filter(row => ((!row.tipo || row.tipo === 'semanal') ? 'semanal' : 'mensal') === tipo)
+      .slice()
+      .sort((a, b) => {
+        const byDate = String(_periodRef(a)).localeCompare(String(_periodRef(b)));
+        if (byDate !== 0) return byDate;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+
+    for (const row of ordered) {
+      const winners = _winnersFromRanking(row, indexes);
+      if (!winners.length) continue;
+      const winnerKeys = new Set(winners.map(w => w.key));
+
+      for (const key of Array.from(active)) {
+        if (!winnerKeys.has(key)) {
+          const person = people.get(key);
+          if (person) person[tipo].current = 0;
+          active.delete(key);
+        }
+      }
+
+      for (const winner of winners) {
+        const person = _ensureConstanciaPerson(people, winner);
+        _applyStreakWin(person, tipo, row);
+        active.add(winner.key);
+      }
+    }
+  }
+
+  function _sortConstanciaList(list, tipo) {
+    return list.slice().sort((a, b) => {
+      if ((b[tipo]?.best || 0) !== (a[tipo]?.best || 0)) return (b[tipo]?.best || 0) - (a[tipo]?.best || 0);
+      if ((b[tipo]?.current || 0) !== (a[tipo]?.current || 0)) return (b[tipo]?.current || 0) - (a[tipo]?.current || 0);
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }
+
+  async function _buildRankingConstanciaSummary() {
+    const [rankRes, profRes] = await Promise.all([
+      db.from('weekly_rankings')
+        .select('id,tipo,week_start,week_end,created_at,entries')
+        .order('week_start', { ascending: true }),
+      db.from('profiles')
+        .select('id,name,role,initials,color,avatar_url'),
+    ]);
+    if (rankRes.error) throw rankRes.error;
+    if (profRes.error) throw profRes.error;
+
+    const indexes = _makeProfileIndexes(profRes.data || []);
+    const people = new Map();
+    _calcTipoConstancia(rankRes.data || [], 'semanal', indexes, people);
+    _calcTipoConstancia(rankRes.data || [], 'mensal', indexes, people);
+
+    const all = Array.from(people.values());
+    return {
+      updatedAt: new Date().toISOString(),
+      all,
+      semanal: _sortConstanciaList(all.filter(p => (p.semanal?.best || 0) > 0), 'semanal'),
+      mensal: _sortConstanciaList(all.filter(p => (p.mensal?.best || 0) > 0), 'mensal'),
+      byUser: all.reduce((acc, person) => {
+        if (person.user_id) acc[person.user_id] = person;
+        return acc;
+      }, {}),
+    };
+  }
+
+  async function _getRankingConstanciaSummary(noCache = false) {
+    const agora = Date.now();
+    if (!noCache && _constanciaCache && (agora - _constanciaCacheTs) < CONSTANCIA_TTL) {
+      return _constanciaCache;
+    }
+    try {
+      _constanciaCache = await _buildRankingConstanciaSummary();
+      _constanciaCacheTs = agora;
+      return _constanciaCache;
+    } catch (e) {
+      console.warn('[MSYBadges] Erro ao calcular constancia:', e);
+      return { updatedAt: null, all: [], semanal: [], mensal: [], byUser: {} };
+    }
+  }
+
+  async function _fetchConstancia(userId, noCache = false) {
+    const summary = await _getRankingConstanciaSummary(noCache);
+    const person = summary.byUser?.[userId] || _blankConstanciaSummary();
+    const badges = [];
+
+    for (const tipo of ['semanal', 'mensal']) {
+      const streak = person[tipo] || _emptyStreak();
+      for (const meta of CONSTANCIA_META[tipo]) {
+        if ((streak.best || 0) < meta.threshold) continue;
+        badges.push({
+          key: meta.key,
+          label: meta.label,
+          icon: meta.icon,
+          image: meta.image,
+          color: meta.color,
+          desc: meta.desc,
+          origem: 'constancia',
+          meta: {
+            tipo,
+            marco: meta.threshold,
+            melhorSequencia: streak.best || 0,
+            sequenciaAtual: streak.current || 0,
+            periodo: streak.bestStart && streak.bestEnd ? `${streak.bestStart} ate ${streak.bestEnd}` : '',
+            tooltip: `1º lugar em ${meta.threshold} relatorios ${tipo === 'mensal' ? 'mensais' : 'semanais'} seguidos. Melhor sequencia: ${streak.best || 0}. Sequencia atual: ${streak.current || 0}.`,
+          },
+        });
+      }
+    }
+
+    return badges;
+  }
+
+  /* -- FONTE 4: ICM ------------------------------------------- */
 
   /**
    * Deriva as insígnias que um resultado ICM desbloqueia.
@@ -296,8 +591,9 @@
         return _cache[userId];
       }
 
-      const [recordes, premiacoes, icm] = await Promise.all([
+      const [recordes, constancia, premiacoes, icm] = await Promise.all([
         _fetchRecordes(userId),
+        _fetchConstancia(userId, noCache),
         _fetchPremiacao(userId),
         _fetchICM(userId),
       ]);
@@ -305,7 +601,7 @@
       // Deduplicar por key (ICM nunca sobrescreve premiação ou recorde)
       const seen  = new Set();
       const final = [];
-      for (const b of [...recordes, ...premiacoes, ...icm]) {
+      for (const b of [...recordes, ...constancia, ...premiacoes, ...icm]) {
         if (!seen.has(b.key)) {
           seen.add(b.key);
           final.push(b);
@@ -354,6 +650,8 @@
       // Limpa também o cache de recordes para forçar atualização
       _recordesCache   = null;
       _recordesCacheTs = 0;
+      _constanciaCache   = null;
+      _constanciaCacheTs = 0;
     },
 
     /**
@@ -405,6 +703,16 @@
     /* Expõe ICM_META para uso externo (renderICMBadgesSection no app.js) */
     ICM_META,
 
+    CONSTANCIA_META,
+
+    async getRankingStreakSummary(noCache = false) {
+      return _getRankingConstanciaSummary(noCache);
+    },
+
+    async getRankingStreakBadges(userId, noCache = false) {
+      return _fetchConstancia(userId, noCache);
+    },
+
     /**
      * Calcula o total ponderado de insígnias e retorna o nível FIFA.
      * total: premiacoes contam pela quantidade, outros contam 1
@@ -427,17 +735,20 @@
   /* ── RENDER INTERNO DE UM ITEM ───────────────────────────── */
   function _renderBadgeItem(b, compact) {
     const tooltipText = b.meta?.tooltip || b.desc || '';
-    const glowStyle   = b.origem === 'recorde'
+    const glowStyle   = (b.origem === 'recorde' || b.origem === 'constancia')
       ? `filter:drop-shadow(0 0 6px ${b.color}88);`
       : '';
+    const visual = b.image
+      ? `<img class="badge-icon-img" src="${_esc(b.image)}" alt="" loading="lazy">`
+      : b.icon;
 
     if (compact) {
       // Layout compacto — mostra xN para premiações, label para outros
       const qtdStr = b.origem === 'premiacao' && b.meta?.quantidade > 0
         ? `×${b.meta.quantidade}` : _origemLabel(b);
       return `
-        <div class="badge-item" title="${_esc(tooltipText)}" style="--badge-color:${b.color}">
-          <div class="badge-icon" style="${glowStyle}">${b.icon}</div>
+        <div class="badge-item badge-${_esc(b.origem)}" title="${_esc(tooltipText)}" style="--badge-color:${b.color}">
+          <div class="badge-icon" style="${glowStyle}">${visual}</div>
           <div class="badge-info">
             <div class="badge-titulo">${_esc(b.label)}</div>
             <div class="badge-qtd" style="color:${b.color}">${qtdStr}</div>
@@ -451,8 +762,8 @@
       : _origemLabel(b);
 
     return `
-      <div class="badge-item" title="${_esc(tooltipText)}" style="--badge-color:${b.color}">
-        <div class="badge-icon" style="${glowStyle}">${b.icon}</div>
+      <div class="badge-item badge-${_esc(b.origem)}" title="${_esc(tooltipText)}" style="--badge-color:${b.color}">
+        <div class="badge-icon" style="${glowStyle}">${visual}</div>
         <div class="badge-info">
           <div class="badge-titulo">${_esc(b.label)}</div>
           <div class="badge-qtd" style="color:${b.color}">${extraInfo}</div>
@@ -462,6 +773,7 @@
 
   function _origemLabel(b) {
     if (b.origem === 'recorde')    return 'Recorde';
+    if (b.origem === 'constancia') return b.desc || (b.meta?.tipo === 'mensal' ? 'Constancia Mensal' : 'Constancia Semanal');
     if (b.origem === 'icm')        return b.meta?.subtipo === 'tier' ? 'ICM' : 'Espectro ICM';
     if (b.origem === 'premiacao')  return b.meta?.importancia || 'Premiação';
     return '';
