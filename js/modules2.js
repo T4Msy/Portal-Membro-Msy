@@ -875,7 +875,7 @@ async function initPresencas() {
     const membros   = memRes.data||[];
     const presencas = presRes.data||[];
     const presMap   = {};
-    presencas.forEach(p=>{presMap[p.membro_id]=p;});
+    presencas.forEach(p=>{presMap[p.user_id || p.membro_id]=p;});
 
     const conf  = presencas.filter(p=>p.status==='confirmado').length;
     const aus   = presencas.filter(p=>p.status==='ausente').length;
@@ -887,10 +887,10 @@ async function initPresencas() {
         const ex = presMap[membroId];
         let error;
         if (ex) {
-          ({error}=await db.from('event_presencas').update({status,marcado_por:profile.id}).eq('id',ex.id));
+          ({error}=await db.from('event_presencas').update({status}).eq('id',ex.id));
           if (!error) presMap[membroId].status=status;
         } else {
-          const {data,error:e}=await db.from('event_presencas').insert({event_id:eventId,membro_id:membroId,status,marcado_por:profile.id}).select().single();
+          const {data,error:e}=await db.from('event_presencas').insert({event_id:eventId,user_id:membroId,membro_id:membroId,status}).select().single();
           error=e; if(!error) presMap[membroId]=data;
         }
         if (error) throw error;

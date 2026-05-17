@@ -79,18 +79,68 @@ DROP POLICY IF EXISTS ep_member_select ON event_presencas;
 CREATE POLICY ep_member_select ON event_presencas FOR SELECT
   USING (
     user_id = auth.uid()
+    OR membro_id = auth.uid()
     OR EXISTS (
       SELECT 1 FROM profiles WHERE id = auth.uid() AND tier = 'diretoria'
+    )
+    OR EXISTS (
+      SELECT 1 FROM member_permissions
+      WHERE user_id = auth.uid()
+        AND (
+          'gerenciar_presencas' = ANY(permissions)
+          OR 'registrar_participantes' = ANY(permissions)
+          OR 'gerenciar_eventos' = ANY(permissions)
+        )
     )
   );
 
 DROP POLICY IF EXISTS ep_member_insert ON event_presencas;
 CREATE POLICY ep_member_insert ON event_presencas FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (
+    user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles WHERE id = auth.uid() AND tier = 'diretoria'
+    )
+    OR EXISTS (
+      SELECT 1 FROM member_permissions
+      WHERE user_id = auth.uid()
+        AND (
+          'gerenciar_presencas' = ANY(permissions)
+          OR 'registrar_participantes' = ANY(permissions)
+          OR 'gerenciar_eventos' = ANY(permissions)
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS ep_member_update ON event_presencas;
 CREATE POLICY ep_member_update ON event_presencas FOR UPDATE
-  USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND tier = 'diretoria'));
+  USING (
+    user_id = auth.uid()
+    OR membro_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND tier = 'diretoria')
+    OR EXISTS (
+      SELECT 1 FROM member_permissions
+      WHERE user_id = auth.uid()
+        AND (
+          'gerenciar_presencas' = ANY(permissions)
+          OR 'registrar_participantes' = ANY(permissions)
+          OR 'gerenciar_eventos' = ANY(permissions)
+        )
+    )
+  )
+  WITH CHECK (
+    user_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND tier = 'diretoria')
+    OR EXISTS (
+      SELECT 1 FROM member_permissions
+      WHERE user_id = auth.uid()
+        AND (
+          'gerenciar_presencas' = ANY(permissions)
+          OR 'registrar_participantes' = ANY(permissions)
+          OR 'gerenciar_eventos' = ANY(permissions)
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS ep_diretoria_delete ON event_presencas;
 CREATE POLICY ep_diretoria_delete ON event_presencas FOR DELETE

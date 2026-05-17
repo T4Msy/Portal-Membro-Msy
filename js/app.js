@@ -4375,7 +4375,7 @@
          if (!error) presMap[uid].status = status;
        } else {
          const { data, error: e } = await db.from('event_presencas').insert({
-           event_id: eventId, user_id: uid, status
+           event_id: eventId, user_id: uid, membro_id: uid, status
          }).select().single();
          error = e;
          if (!error) presMap[uid] = data;
