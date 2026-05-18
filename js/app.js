@@ -1063,6 +1063,21 @@
      const canGerenciar = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['gerenciar_atividades','criar_atividades','editar_atividades']);
      const canConcluir  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'concluir_atividades');
      let activeFilter = 'Todos';
+     let activeMemberFilter = 'Todos';
+     let activityMembers = [];
+
+     if (canGerenciar) {
+       const { data: membersData, error: membersError } = await db
+         .from('profiles')
+         .select('id,name,role')
+         .eq('status', 'ativo')
+         .order('name');
+       if (membersError) console.warn('[MSY][atividades] Erro ao carregar filtro de membros:', membersError);
+       activityMembers = membersData || [];
+     }
+
+     const memberNameMap = {};
+     activityMembers.forEach(m => { memberNameMap[m.id] = m.name; });
    
      async function loadActivities() {
        const grid = document.getElementById('activitiesGrid');
@@ -1076,14 +1091,22 @@
        if (activeFilter !== 'Todos') query = query.eq('status', activeFilter);
 
        let { data: acts, error } = await query;
+       if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
-       if (!canGerenciar) {
-         const { data: collabRows } = await db.from('activity_collaborators').select('activity_id').eq('user_id', profile.id);
-         const collabActIds = new Set((collabRows||[]).map(r => r.activity_id));
-         acts = (acts||[]).filter(a => a.assigned_to === profile.id || collabActIds.has(a.id));
+       const needsCollabFilter = !canGerenciar || activeMemberFilter !== 'Todos';
+       let collabActIds = new Set();
+       if (needsCollabFilter) {
+         const targetMemberId = canGerenciar && activeMemberFilter !== 'Todos' ? activeMemberFilter : profile.id;
+         const { data: collabRows } = await db.from('activity_collaborators').select('activity_id').eq('user_id', targetMemberId);
+         collabActIds = new Set((collabRows||[]).map(r => r.activity_id));
        }
-       if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
+
+       if (!canGerenciar) {
+         acts = (acts||[]).filter(a => a.assigned_to === profile.id || collabActIds.has(a.id));
+       } else if (activeMemberFilter !== 'Todos') {
+         acts = (acts||[]).filter(a => a.assigned_to === activeMemberFilter || collabActIds.has(a.id));
+       }
    
        if (!acts || acts.length === 0) {
          grid.innerHTML = `<div style="grid-column:1/-1" class="empty-state"><div class="empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div><div class="empty-state-text">Nenhuma atividade encontrada.</div></div>`;
@@ -1279,6 +1302,14 @@
          <button class="filter-btn filter-btn-anexos" data-filter="__anexos__">
            <i class="fa-solid fa-paperclip" style="font-size:.75rem;margin-right:4px"></i>Anexos
          </button>
+         ${canGerenciar ? `
+           <div id="activityMemberFilterWrap" style="margin-left:auto;display:flex;align-items:center;gap:8px;min-width:240px">
+             <i class="fa-solid fa-users" style="color:var(--gold);font-size:.78rem"></i>
+             <select class="form-input form-select" id="activityMemberFilter" aria-label="Filtrar atividades por membro" style="height:34px;min-height:34px;padding:6px 34px 6px 12px;font-size:.78rem">
+               <option value="Todos">Todos os membros</option>
+               ${activityMembers.map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}${m.role ? ` - ${Utils.escapeHtml(m.role)}` : ''}</option>`).join('')}
+             </select>
+           </div>` : ''}
        </div>
        <div class="activities-grid" id="activitiesGrid"></div>
        <div class="modal-overlay" id="activityModal">
@@ -1294,23 +1325,52 @@
      `;
    
      await loadActivities();
+
+     function updateActivityHeader() {
+       const subEl = document.getElementById('pageHeaderSub');
+       if (!subEl) return;
+       if (activeFilter === '__anexos__') {
+         subEl.textContent = 'Todos os arquivos enviados nas atividades';
+       } else if (canGerenciar && activeMemberFilter !== 'Todos') {
+         subEl.textContent = `Atividades de ${memberNameMap[activeMemberFilter] || 'membro selecionado'}`;
+       } else {
+         subEl.textContent = canGerenciar ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas';
+       }
+     }
+
+     function setMemberFilterVisible(visible) {
+       const wrap = document.getElementById('activityMemberFilterWrap');
+       if (wrap) wrap.style.display = visible ? 'flex' : 'none';
+     }
    
      content.querySelectorAll('.filter-btn').forEach(btn => {
        btn.addEventListener('click', () => {
          content.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
          btn.classList.add('active');
          activeFilter = btn.dataset.filter;
-         const subEl = document.getElementById('pageHeaderSub');
+         updateActivityHeader();
          if (activeFilter === '__anexos__') {
-           if (subEl) subEl.textContent = 'Todos os arquivos enviados nas atividades';
            if (canCriar) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = 'none');
+           setMemberFilterVisible(false);
            loadAnexosView();
          } else {
-           if (subEl) subEl.textContent = canGerenciar ? 'Gerenciar todas as atividades' : 'Suas tarefas e entregas';
            if (canCriar) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = '');
+           setMemberFilterVisible(true);
            loadActivities();
          }
        });
+     });
+
+     document.getElementById('activityMemberFilter')?.addEventListener('change', e => {
+       activeMemberFilter = e.target.value || 'Todos';
+       if (activeFilter === '__anexos__') {
+         activeFilter = 'Todos';
+         content.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === 'Todos'));
+         if (canCriar) document.getElementById('newActivityBtn') && (document.getElementById('newActivityBtn').style.display = '');
+         setMemberFilterVisible(true);
+       }
+       updateActivityHeader();
+       loadActivities();
      });
    
      if (canCriar) {
