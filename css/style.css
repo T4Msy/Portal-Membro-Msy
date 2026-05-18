@@ -2072,7 +2072,7 @@ select option:hover,
   font-size: .78rem;
   font-weight: 700;
   letter-spacing: .03em;
-  padding: 0 34px 0 0;
+  padding: 0 34px 0 36px;
   cursor: pointer;
 }
 .activity-member-filter select option {
