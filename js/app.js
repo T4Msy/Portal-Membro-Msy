@@ -1303,12 +1303,13 @@
            <i class="fa-solid fa-paperclip" style="font-size:.75rem;margin-right:4px"></i>Anexos
          </button>
          ${canGerenciar ? `
-           <div id="activityMemberFilterWrap" style="margin-left:auto;display:flex;align-items:center;gap:8px;min-width:240px">
-             <i class="fa-solid fa-users" style="color:var(--gold);font-size:.78rem"></i>
-             <select class="form-input form-select" id="activityMemberFilter" aria-label="Filtrar atividades por membro" style="height:34px;min-height:34px;padding:6px 34px 6px 12px;font-size:.78rem">
+           <div class="activity-member-filter" id="activityMemberFilterWrap">
+             <span class="activity-member-filter-icon"><i class="fa-solid fa-user-check"></i></span>
+             <select id="activityMemberFilter" aria-label="Filtrar atividades por membro">
                <option value="Todos">Todos os membros</option>
                ${activityMembers.map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}${m.role ? ` - ${Utils.escapeHtml(m.role)}` : ''}</option>`).join('')}
              </select>
+             <i class="fa-solid fa-chevron-down activity-member-filter-arrow"></i>
            </div>` : ''}
        </div>
        <div class="activities-grid" id="activitiesGrid"></div>
