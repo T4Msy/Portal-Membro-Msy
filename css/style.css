@@ -2024,6 +2024,71 @@ select option:hover,
   color: var(--gold-bright);
 }
 
+.activity-member-filter {
+  margin-left: auto;
+  min-width: 250px;
+  max-width: 340px;
+  height: 38px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.055), rgba(255,255,255,.018)),
+    var(--black-4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.18);
+  transition: border-color var(--t1) var(--ease), box-shadow var(--t1) var(--ease), background var(--t1) var(--ease);
+}
+.activity-member-filter:hover,
+.activity-member-filter:focus-within {
+  border-color: rgba(201, 168, 76, 0.48);
+  background:
+    linear-gradient(135deg, rgba(201,168,76,.08), rgba(255,255,255,.025)),
+    var(--black-4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 12px 32px rgba(0,0,0,.24);
+}
+.activity-member-filter-icon {
+  width: 36px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-size: .78rem;
+  flex-shrink: 0;
+}
+.activity-member-filter select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  padding: 0 34px 0 0;
+  cursor: pointer;
+}
+.activity-member-filter select option {
+  background: #111116;
+  color: var(--text-1);
+}
+.activity-member-filter-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  font-size: .66rem;
+  pointer-events: none;
+}
+
 /* ============================================================
    ANEXOS — Grid de Cards
    ============================================================ */
@@ -4882,6 +4947,11 @@ select option:hover,
   .filters-bar::-webkit-scrollbar { display: none; }
   .filters-bar .form-input { flex-shrink: 0; }
   .filter-btn { flex-shrink: 0; white-space: nowrap; }
+  .activity-member-filter {
+    min-width: 230px;
+    margin-left: 0;
+    flex-shrink: 0;
+  }
 }
 
 /* ── Page header no mobile — título não vaza ── */
