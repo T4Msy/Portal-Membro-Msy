@@ -3490,16 +3490,19 @@
          .select('event_id,status').eq('user_id', profile.id).eq('status','pendente');
        const cancelPending = new Set((cancelReqs||[]).map(r => r.event_id));
 
-       // Load confirmed counts for upcoming events (visible to all)
+       // Load confirmed counts for all visible events (visible to all)
        const today    = new Date().toISOString().split('T')[0];
        const upcoming = (evs||[]).filter(e => e.event_date >= today && e.status !== 'concluido');
        const done     = (evs||[]).filter(e => e.status === 'concluido');
        const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
 
        let presCountMap = {};
-       if (upcoming.length) {
+       const visibleEventIds = [...upcoming, ...done, ...past].map(e => e.id);
+       if (visibleEventIds.length) {
          const { data: counts } = await db.from('event_presencas')
-           .select('event_id,status').in('event_id', upcoming.map(e=>e.id)).eq('status','participar');
+           .select('event_id,status')
+           .in('event_id', visibleEventIds)
+           .in('status', ['participar', 'confirmado']);
          (counts||[]).forEach(c => { presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1; });
        }
 
@@ -3537,12 +3540,12 @@
 
          ${done.length > 0 ? `
            <div class="ev-section-label" style="color:#10b981"><i class="fa-solid fa-circle-check"></i> Concluídos</div>
-           ${done.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, false, 0)).join('')}
+           ${done.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
          ` : ''}
 
          ${past.length > 0 ? `
            <div class="ev-section-label" style="color:var(--text-3)"><i class="fa-regular fa-calendar"></i> Encerrados</div>
-           ${past.map(ev => renderEventCard(ev, canManage, true, myPresMap[ev.id]||null, false, 0)).join('')}
+           ${past.map(ev => renderEventCard(ev, canManage, true, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
          ` : ''}
        `;
 
