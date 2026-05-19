@@ -10,6 +10,7 @@ import {
   exportStoryImageFile,
   exportStoryVideoFile,
   filePreview,
+  loadImage,
   normalizeMediaEditState,
   removeSocialMedia,
   revokePreviews,
@@ -120,6 +121,14 @@ function canManageStory(story) {
   return state.profile.tier === 'diretoria' || story.author_id === state.profile.id;
 }
 
+function isAdminProfile(profile = state.profile) {
+  return profile?.tier === 'diretoria' || /admin|diretoria/i.test(profile?.role || '');
+}
+
+function canManageComment(comment) {
+  return isAdminProfile() || comment?.author_id === state.profile?.id;
+}
+
 function displayUsername(member) {
   return state.service?.getDisplayUsername(member) || 'membro';
 }
@@ -217,7 +226,8 @@ function findStoryById(storyId) {
 
 function renderStoryMediaElement(story, attrs = '') {
   const editState = normalizeMediaEditState(story?.media_meta || {}, story?.media_type || 'image');
-  const style = `--editor-transform:${mediaEditorTransform(editState)}`;
+  const aspect = mediaAspectCss(editState.aspect || '9:16', editState.originalAspect);
+  const style = `--editor-transform:${mediaEditorTransform(editState)};--story-media-aspect:${aspect}`;
   return story.media_type === 'video'
     ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs} playsinline webkit-playsinline></video>`
     : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs}>`;
@@ -788,6 +798,8 @@ function handleFeedClick(e) {
   }
   const openCommentsBtn = e.target.closest('[data-open-comments]');
   if (openCommentsBtn) return openPostComments(openCommentsBtn.dataset.openComments);
+  const deleteCommentBtn = e.target.closest('[data-delete-comment]');
+  if (deleteCommentBtn) return deleteComment(deleteCommentBtn.dataset.postId, deleteCommentBtn.dataset.deleteComment);
   const replyBtn = e.target.closest('[data-reply-comment]');
   if (replyBtn) return openPostComments(replyBtn.dataset.postId, replyBtn.dataset.replyComment);
   const directBtn = e.target.closest('[data-message-post-author]');
@@ -879,7 +891,11 @@ function renderComments(post) {
       <div class="comment-body">
         <div class="comment-name">${Utils.escapeHtml(c.author?.name || 'Membro')} <span class="message-sub">@${Utils.escapeHtml(displayUsername(c.author || {}))}</span></div>
         <div class="comment-text">${richText(c.content)}</div>
-        <div class="comment-meta"><span>${timeAgo(c.created_at)}</span><button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button></div>
+        <div class="comment-meta">
+          <span>${timeAgo(c.created_at)}</span>
+          <button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button>
+          ${canManageComment(c) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
+        </div>
       </div>
     </div>`).join('');
 }
@@ -892,7 +908,11 @@ function renderCommentRows(post, { full = false } = {}) {
       <div class="comment-body">
         <div class="comment-name">${Utils.escapeHtml(c.author?.name || 'Membro')} <span class="message-sub">@${Utils.escapeHtml(displayUsername(c.author || {}))}</span></div>
         <div class="comment-text">${richText(c.content)}</div>
-        <div class="comment-meta"><span>${timeAgo(c.created_at)}</span><button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button></div>
+        <div class="comment-meta">
+          <span>${timeAgo(c.created_at)}</span>
+          <button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button>
+          ${canManageComment(c) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
+        </div>
       </div>
     </div>`).join('');
 }
@@ -936,6 +956,11 @@ function openPostComments(postId, replyToCommentId = null) {
   const input = modal.querySelector('input[name="comment"]');
   bindMentionAutocomplete(input, { minChars: 1 });
   modal.querySelector('#postCommentsSheetList')?.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('[data-delete-comment]');
+    if (deleteBtn) {
+      deleteComment(deleteBtn.dataset.postId, deleteBtn.dataset.deleteComment);
+      return;
+    }
     const btn = e.target.closest('[data-reply-comment]');
     if (btn) setPostCommentReply(post, btn.dataset.replyComment);
   });
@@ -1321,7 +1346,6 @@ async function createStoryFromFile(e = null) {
       validateMediaFile(file);
       const preview = filePreview(file);
       preview.caption = '';
-      preview.elementsText = '';
       preview.editState = createStoryMediaEditState(file);
       if (preview.media_type === 'video') {
         preview.editState.exportSupported = supportsVideoEditing();
@@ -1331,6 +1355,13 @@ async function createStoryFromFile(e = null) {
           preview.editState.thumbnailTime = thumb.time;
         } catch (thumbErr) {
           console.warn('[MSY][feed-social] Miniatura inicial do story em video indisponivel:', thumbErr);
+        }
+      } else {
+        try {
+          const image = await loadImage(file);
+          preview.editState.originalAspect = image.width / image.height;
+        } catch (imageErr) {
+          console.warn('[MSY][feed-social] Proporcao original da imagem indisponivel:', imageErr);
         }
       }
       prepared.push(preview);
@@ -1357,7 +1388,8 @@ const mediaAspectOptions = [
   ['original', 'Original'],
 ];
 
-function mediaAspectCss(aspect = '9:16') {
+function mediaAspectCss(aspect = '9:16', originalAspect = null) {
+  if (aspect === 'original' && Number(originalAspect) > 0) return `${Number(originalAspect)} / 1`;
   const map = {
     '9:16': '9 / 16',
     '1:1': '1 / 1',
@@ -1391,7 +1423,7 @@ function mediaEditorSelector(id) {
 function renderEditableMediaNode(item, { scope = 'story', controls = true } = {}) {
   if (!item) return '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma mídia.</div>';
   const editState = ensureMediaEditState(item, scope === 'post' ? '4:5' : '9:16');
-  const aspect = mediaAspectCss(editState.aspect);
+  const aspect = mediaAspectCss(editState.aspect, editState.originalAspect);
   const style = `--editor-aspect:${aspect};--editor-transform:${mediaEditorTransform(editState)}`;
   const media = item.media_type === 'video'
     ? `<video class="media-editor-media" src="${Utils.escapeHtml(item.url)}" ${scope === 'story' ? 'controls' : 'muted'} playsinline preload="metadata"></video>`
@@ -1409,7 +1441,7 @@ function applyMediaEditorTransform(root, item) {
   const editor = root?.querySelector?.(mediaEditorSelector(item.id));
   if (!editor) return;
   const editState = ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? '4:5' : '9:16');
-  editor.style.setProperty('--editor-aspect', mediaAspectCss(editState.aspect));
+  editor.style.setProperty('--editor-aspect', mediaAspectCss(editState.aspect, editState.originalAspect));
   editor.style.setProperty('--editor-transform', mediaEditorTransform(editState));
 }
 
@@ -1551,7 +1583,7 @@ function renderStoryComposerBody() {
         <div class="story-compose-head">
           <div>
             <div class="social-title" style="font-size:1.05rem">${state.activeStoryEditId ? 'Editar story' : 'Novo story'}</div>
-            <div class="social-subtitle">Edite mídia, legenda e publique mantendo a experiência atual.</div>
+        <div class="social-subtitle">Edite midia, legenda e envie mantendo a experiencia atual.</div>
           </div>
           <button class="social-icon-btn" data-close-story-composer><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -1561,12 +1593,11 @@ function renderStoryComposerBody() {
         ${renderStoryComposerControls(item)}
         <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
         <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
-        <textarea id="storyElementsInput" class="story-caption-input social-story-elements-input" maxlength="500" placeholder="Elementos extras, stickers ou observações">${Utils.escapeHtml(item.elementsText || '')}</textarea>
-        <div class="message-sub">${item.media_type === 'video' ? 'Vídeos serão exportados localmente antes do upload quando suportado.' : 'Imagens mantêm qualidade alta com compressão apenas quando necessária.'}</div>
+        <div class="message-sub">${item.media_type === 'video' ? 'Videos serao exportados localmente antes do upload quando suportado.' : 'Imagens mantem qualidade alta com compressao apenas quando necessaria.'}</div>
         <div class="story-compose-actions">
-          <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir mídia</button>
+          <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir midia</button>
           <input id="storyComposerFile" type="file" accept="image/*,video/*" hidden>
-          <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-circle-plus"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Publicar stories'}</button>
+          <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-paper-plane"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Enviar Story'}</button>
         </div>
       </div>
     </div>`;
@@ -1587,11 +1618,7 @@ function renderStoryComposerBody() {
     renderStoryComposerBody();
   }));
   modal.querySelector('#storyCaptionInput')?.addEventListener('input', syncStoryComposerCaption);
-  modal.querySelector('#storyElementsInput')?.addEventListener('input', (event) => {
-    const current = activeStoryComposerItem();
-    if (current) current.elementsText = event.currentTarget.value;
-  });
-  modal.querySelectorAll('[data-story-edit-field]').forEach((field) => field.addEventListener('input', async (event) => {
+  const syncStoryEditField = async (event) => {
     const current = activeStoryComposerItem();
     if (!current) return;
     const key = event.currentTarget.dataset.storyEditField;
@@ -1617,7 +1644,11 @@ function renderStoryComposerBody() {
       }
       return;
     }
-  }));
+  };
+  modal.querySelectorAll('[data-story-edit-field]').forEach((field) => {
+    field.addEventListener('input', syncStoryEditField);
+    field.addEventListener('change', syncStoryEditField);
+  });
   modal.querySelector('[data-media-edit-reset]')?.addEventListener('click', () => {
     const current = activeStoryComposerItem();
     if (!current) return;
@@ -1633,15 +1664,18 @@ function renderStoryComposerBody() {
       const nextPreview = { ...filePreview(file), isNew: true };
       nextPreview.editState = createStoryMediaEditState(file);
       nextPreview.caption = activeStoryComposerItem()?.caption || '';
-      nextPreview.elementsText = activeStoryComposerItem()?.elementsText || '';
       if (nextPreview.media_type === 'video') {
         nextPreview.editState.exportSupported = supportsVideoEditing();
         const thumb = await captureStoryVideoThumbnail(file, 0, 0);
         nextPreview.thumbnail_url = thumb.url;
+      } else {
+        const image = await loadImage(file);
+        nextPreview.editState.originalAspect = image.width / image.height;
       }
       const current = activeStoryComposerItem();
       if (current) revokePreviews([current]);
       state.storyPreviews[state.activeStoryComposerIndex] = nextPreview;
+      await hydrateStoryComposerVideoMetadata();
       renderStoryComposerBody();
     } catch (err) {
       console.error('[MSY][feed-social] Erro ao substituir mídia do story:', err);
@@ -1663,6 +1697,7 @@ async function hydrateStoryComposerVideoMetadata() {
       video.onloadedmetadata = () => {
         item.editState.duration = Number.isFinite(video.duration) ? video.duration : 0;
         item.editState.trimEnd = item.editState.trimEnd ?? item.editState.duration;
+        if (video.videoWidth && video.videoHeight) item.editState.originalAspect = video.videoWidth / video.videoHeight;
         resolve();
       };
       video.onerror = () => resolve();
@@ -1688,6 +1723,8 @@ function closeStoryComposer() {
 }
 
 async function buildStoryUploadPayload(item) {
+  if (!item?.file) throw new Error('Selecione uma midia para enviar o story.');
+  const aspect = item.editState?.aspect || '9:16';
   if (item.media_type === 'video') {
     if (!item.editState?.exportSupported) {
       throw new Error('Seu navegador não suporta exportação local segura de vídeo para stories editados.');
@@ -1699,12 +1736,18 @@ async function buildStoryUploadPayload(item) {
       options: {
         media_meta: {
           kind: 'video',
-          trimStart: Number(item.editState?.trimStart || 0),
-          trimEnd: Number(item.editState?.trimEnd || item.editState?.duration || 0),
-          rotation: Number(item.editState?.rotation || 0),
+          aspect,
+          zoom: 1,
+          rotation: 0,
+          offsetX: 0,
+          offsetY: 0,
+          trimStart: 0,
+          trimEnd: 0,
           thumbnailTime: Number(item.editState?.thumbnailTime || 0),
+          originalAspect: Number(item.editState?.originalAspect || 0) || null,
+          exported: true,
         },
-        thumbnail_url: item.thumbnail_url || media.url,
+        thumbnail_url: item.thumbnail_url?.startsWith('blob:') ? media.url : (item.thumbnail_url || media.url),
       },
     };
   }
@@ -1716,17 +1759,34 @@ async function buildStoryUploadPayload(item) {
     options: {
       media_meta: {
         kind: 'image',
-        aspect: item.editState?.aspect || '9:16',
-        zoom: Number(item.editState?.zoom || 1),
-        rotation: Number(item.editState?.rotation || 0),
+        aspect,
+        zoom: 1,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: 0,
+        originalAspect: Number(item.editState?.originalAspect || 0) || null,
+        exported: true,
       },
     },
   };
 }
 
 async function publishStoryFromPreview() {
-  if (!state.storyPreviews?.length) return;
+  if (!state.storyPreviews?.length) {
+    Utils.showToast('Selecione uma midia para enviar o story.', 'error');
+    return;
+  }
   const btn = document.getElementById('publishStoryBtn');
+  const invalid = state.storyPreviews.find((item) => !item?.file || !item?.url || !['image', 'video'].includes(item.media_type));
+  if (invalid) {
+    Utils.showToast('Selecione uma imagem ou video valido para enviar o story.', 'error');
+    return;
+  }
+  const longCaption = state.storyPreviews.find((item) => String(item.caption || '').length > 160);
+  if (longCaption) {
+    Utils.showToast('A legenda do story deve ter no maximo 160 caracteres.', 'error');
+    return;
+  }
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
   const uploadedPaths = [];
@@ -1813,6 +1873,32 @@ async function addComment(e) {
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast('Erro ao comentar.', 'error');
+  }
+}
+
+async function deleteComment(postId, commentId) {
+  const post = state.posts.find((p) => p.id === postId);
+  const comment = post?.comments?.find((item) => item.id === commentId);
+  if (!post || !comment) return;
+  if (!canManageComment(comment)) return Utils.showToast('Sem permissao para excluir este comentario.', 'error');
+  if (!await MSYConfirm.show('Excluir este comentario?', { title: 'Excluir comentario', type: 'danger', confirmText: 'Excluir' })) return;
+  try {
+    await state.service.deleteComment(commentId);
+    post.comments = (post.comments || []).filter((item) => item.id !== commentId);
+    post.comments_count = Math.max(0, Number(post.comments_count || 0) - 1);
+    const modal = document.getElementById('postCommentsModal');
+    const list = document.getElementById('postCommentsSheetList');
+    if (modal?.classList.contains('open') && modal.dataset.postId === postId && list) {
+      list.innerHTML = post.comments.length
+        ? renderCommentRows(post, { full: true })
+        : '<div class="social-empty"><i class="fa-regular fa-comment"></i>Nenhum comentario ainda.</div>';
+    }
+    updatePostStatsNode(post);
+    updatePostNode(post.id);
+    Utils.showToast('Comentario excluido.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao excluir comentario:', err);
+    Utils.showToast(err.message || 'Erro ao excluir comentario.', 'error');
   }
 }
 
@@ -3815,7 +3901,6 @@ async function openStoryEditor(storyId) {
         ...createStoryMediaEditState(new File([], 'story.webp', { type: 'image/webp' })),
         ...story.media_meta,
       },
-    elementsText: (story.elements || []).join('\n'),
   };
   state.storyPreviews = [state.storyEditPreview];
   state.activeStoryComposerIndex = 0;
@@ -3828,11 +3913,6 @@ async function saveStoryEditor() {
   const item = activeStoryComposerItem();
   if (!story || !item) return;
   const btn = document.getElementById('publishStoryBtn');
-  const elements = String(item.elementsText || '')
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .slice(0, 12);
   const cleanupPaths = [];
   try {
     if (btn) {
@@ -3852,7 +3932,7 @@ async function saveStoryEditor() {
     }
     const updated = await state.service.updateStory(story.id, {
       caption: item.caption || '',
-      elements,
+      elements: story.elements || [],
       media,
       media_meta: options.media_meta || item.editState || {},
       thumbnail: options.thumbnail || null,
@@ -3863,7 +3943,7 @@ async function saveStoryEditor() {
     }
     patchStoryInState(story.id, {
       caption: updated.caption,
-      elements: updated.elements || elements,
+      elements: updated.elements || story.elements || [],
       media_url: updated.media_url,
       media_type: updated.media_type,
       storage_path: updated.storage_path,
