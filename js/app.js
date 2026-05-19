@@ -4275,9 +4275,11 @@
                  ${cancelPending
                    ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
                    : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
-               ` : myStatus === 'nao_participar' || myStatus === 'justificado' ? `
-                 <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'aceita' ? 'Justificativa aceita' : myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
-                 <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                ` : myStatus === 'nao_participar' || (myStatus === 'justificado' && myJustStatus !== 'aceita') ? `
+                  <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'aceita' ? 'Justificativa aceita' : myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
+                  <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                ` : myStatus === 'justificado' && myJustStatus === 'aceita' ? `
+                  <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
                ` : `
                  <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
                  <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
