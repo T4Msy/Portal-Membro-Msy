@@ -73,7 +73,9 @@ function calcScore(d, ev_publicos, msgs_media) {
   if (d.acts_total > 0)
     comps.acts = Math.round((d.concluidas / d.acts_total) * 100);
 
-  if (ev_publicos > 0)
+  if (d.pres_total > 0)
+    comps.pres = Math.round(Math.max(0, Math.min(100, (d.pres_score / d.pres_total) * 100)));
+  else if (ev_publicos > 0)
     comps.pres = Math.round((d.pres_conf / ev_publicos) * 100);
 
   const keys = Object.keys(comps);
@@ -145,8 +147,8 @@ async function initDesempenho() {
     const [r1,r2,r3,r4,r5,r6] = await Promise.all([
       db.from('profiles').select('id,name,role,initials,color,avatar_url,tier,join_date,created_at').eq('status','ativo').order('name'),
       db.from('activities').select('id,assigned_to,status,title,deadline,closes_at'),
-      db.from('events').select('id,title,event_date,event_time,type,mandatory,created_by,helper_id,is_private,description,performance_weight').gte('event_date',mStart).lte('event_date',mEnd).order('event_date',{ascending:false}),
-      db.from('event_presencas').select('event_id,membro_id,status'),
+      db.from('events').select('id,title,event_date,event_time,type,mandatory,created_by,helper_id,is_private,description,performance_weight,status').gte('event_date',mStart).lte('event_date',mEnd).order('event_date',{ascending:false}),
+      db.from('event_presencas').select('event_id,membro_id,user_id,status,response_status,justificativa_status,attendance_status'),
       db.from('weekly_rankings').select('week_start,week_end,entries').lte('week_start',mEnd).gte('week_end',mStart).order('week_start',{ascending:true}),
       db.from('premiacao_vencedores').select('membro_id,created_at').gte('created_at',`${mStart}T00:00:00`).lte('created_at',`${mEnd}T23:59:59`),
     ]);
@@ -184,12 +186,30 @@ async function initDesempenho() {
     const { membros, atividades, eventosMes, presencas, rankings, premiacoes } = data;
     const evPub = eventosMes.filter(e => !e.is_private);
 
+    const todayIso = new Date().toISOString().split('T')[0];
+    const evAccountable = evPub.filter(e => e.status === 'concluido' || e.event_date < todayIso);
     const presByM = {};
     presencas.forEach(p => {
-      if (!presByM[p.membro_id]) presByM[p.membro_id] = { conf:0, aus:0, just:0 };
-      if      (p.status === 'confirmado') presByM[p.membro_id].conf++;
-      else if (p.status === 'ausente')    presByM[p.membro_id].aus++;
-      else                                presByM[p.membro_id].just++;
+      const uid = p.membro_id || p.user_id;
+      if (!uid) return;
+      if (!presByM[uid]) presByM[uid] = { conf:0, aus:0, just:0, penalty:0, neutral:0, events:new Set() };
+      const bucket = presByM[uid];
+      bucket.events.add(p.event_id);
+      const attendance = p.attendance_status || (p.status === 'confirmado' ? 'presente' : p.status === 'ausente' ? 'ausente' : null);
+      const response = p.response_status || (['participar','confirmado'].includes(p.status) ? 'participar' : ['nao_participar','justificado','ausente'].includes(p.status) ? 'nao_participar' : null);
+      if (attendance === 'presente') {
+        bucket.conf++;
+      } else if (attendance === 'ausente') {
+        bucket.aus++;
+        if (response === 'participar') bucket.penalty += 1;
+        else if (p.justificativa_status === 'aceita') { bucket.just++; bucket.neutral++; }
+        else if (p.justificativa_status === 'recusada') bucket.penalty += .45;
+        else bucket.penalty += .6;
+      } else if (response === 'nao_participar') {
+        if (p.justificativa_status === 'aceita') { bucket.just++; bucket.neutral++; }
+        else if (p.justificativa_status === 'recusada') { bucket.aus++; bucket.penalty += .45; }
+        else bucket.just++;
+      }
     });
 
     const actsByM = {};
@@ -222,12 +242,16 @@ async function initDesempenho() {
 
     const membrosScored = membros.map(m => {
       const acts    = actsByM[m.id] || { total:0, concluidas:0, atrasadas:0, pendentes:0, andamento:0 };
-      const pres    = presByM[m.id] || { conf:0, aus:0, just:0 };
+      const pres    = presByM[m.id] || { conf:0, aus:0, just:0, penalty:0, neutral:0, events:new Set() };
       const contrib = evContrib[m.id] || { criou:0, ajudou:0 };
       const msgs    = msgsById[m.id] || 0;
-      const score   = calcScore({ acts_total:acts.total, concluidas:acts.concluidas, pres_conf:pres.conf, msgs }, evPub.length, msgMedia);
+      const missingPres = Math.max(0, evAccountable.length - (pres.events?.size || 0));
+      const presPenalty = (pres.penalty || 0) + (missingPres * .35);
+      const presTotal = Math.max(0, evAccountable.length - (pres.neutral || 0));
+      const presScore = Math.max(0, pres.conf - presPenalty);
+      const score   = calcScore({ acts_total:acts.total, concluidas:acts.concluidas, pres_conf:pres.conf, pres_total:presTotal, pres_score:presScore, msgs }, evPub.length, msgMedia);
       const taxaActs = acts.total > 0    ? Math.round((acts.concluidas / acts.total) * 100)          : null;
-      const taxaPres = evPub.length > 0  ? Math.round((pres.conf / evPub.length) * 100)              : null;
+      const taxaPres = presTotal > 0     ? Math.round(Math.max(0, Math.min(100, (presScore / presTotal) * 100))) : null;
       const taxaMsgs = msgMedia > 0 && msgs > 0 ? Math.round(Math.min(100, (msgs / msgMedia) * 100)) : null;
       return { ...m, acts, pres, contrib, msgs, score, taxaActs, taxaPres, taxaMsgs, premiacoes: premByM[m.id] || 0 };
     });
@@ -242,8 +266,8 @@ async function initDesempenho() {
     const totalActs  = atividades.length;
     const concl      = atividades.filter(a => a.status === 'Concluída').length;
     const taxaGeral  = totalActs > 0 ? Math.round((concl / totalActs) * 100) : 0;
-    const presConf   = presencas.filter(p => p.status === 'confirmado').length;
-    const taxaPres   = evPub.length > 0 && membros.length > 0 ? Math.round((presConf / (evPub.length * membros.length)) * 100) : 0;
+    const presConf   = presencas.filter(p => p.attendance_status === 'presente' || p.status === 'confirmado').length;
+    const taxaPres   = evAccountable.length > 0 && membros.length > 0 ? Math.round((presConf / (evAccountable.length * membros.length)) * 100) : 0;
     const alertas    = buildAlertas(membrosOrdenados, atividades, eventosMes, presencas, evPub, msgsById, msgMedia, rankings);
     const curMonth   = months.find(m => m.val === selectedMonth) || { lbl: selectedMonth };
     const nDanger    = alertas.filter(a => a.level === 'danger').length;
@@ -347,7 +371,7 @@ async function initDesempenho() {
       activeTab = tab;
       document.querySelectorAll('.dp-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
       const tc = document.getElementById('dpTabContent'); if (!tc) return;
-      if (tab === 'membros') renderMembros(tc, membrosOrdenados, evPub.length, msgMedia);
+      if (tab === 'membros') renderMembros(tc, membrosOrdenados, evAccountable.length, msgMedia);
       if (tab === 'alertas') renderAlertas(tc, alertas);
     }
     content.querySelectorAll('.dp-tab').forEach(btn => btn.addEventListener('click', () => renderTab(btn.dataset.tab)));

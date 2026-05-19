@@ -21,9 +21,12 @@ const MSYPerms = {
     { key: 'editar_eventos',        label: 'Editar Eventos',         group: 'Eventos',    icon: 'fa-pen-to-square' },
     { key: 'excluir_eventos',       label: 'Excluir Eventos',        group: 'Eventos',    icon: 'fa-calendar-xmark' },
     { key: 'gerenciar_eventos',     label: 'Gerenciar Eventos',      group: 'Eventos',    icon: 'fa-calendar-days' },
+    { key: 'concluir_eventos',      label: 'Concluir Eventos',       group: 'Eventos',    icon: 'fa-circle-check' },
+    { key: 'revisar_justificativas_eventos', label: 'Revisar Justificativas', group: 'Eventos', icon: 'fa-comments' },
     // ── Presenças
     { key: 'registrar_participantes', label: 'Registrar Participantes', group: 'Presenças', icon: 'fa-user-check' },
     { key: 'gerenciar_presencas',    label: 'Gerenciar Presenças',    group: 'Presenças', icon: 'fa-clipboard-list' },
+    { key: 'registrar_presencas_eventos', label: 'Registrar Presencas de Eventos', group: 'Presenças', icon: 'fa-list-check' },
     { key: 'ver_relatorio_presencas', label: 'Ver Relatório de Presenças', group: 'Presenças', icon: 'fa-chart-bar' },
     // ── Membros
     { key: 'aprovar_membros',       label: 'Aprovar Membros',        group: 'Membros',    icon: 'fa-user-check' },
@@ -203,8 +206,8 @@ async function openPermissionsManager() {
   (allPermsData || []).forEach(p => { permsMap[p.user_id] = p.permissions || []; });
 
   const GROUPS = {
-    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','gerenciar_eventos'] },
-    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','ver_relatorio_presencas'] },
+    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
+    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
     'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
@@ -1350,9 +1353,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const profile = await Auth.getProfile();
         if (!profile || profile.tier === 'diretoria') return;
 
-        const canCreate = await MSYPerms.check(profile.id, profile.tier, 'criar_eventos');
-        const canDelete = await MSYPerms.check(profile.id, profile.tier, 'excluir_eventos');
-        if (!canCreate && !canDelete) return;
+        const canCreate = await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','gerenciar_eventos']);
+        const canDelete = await MSYPerms.checkAny(profile.id, profile.tier, ['excluir_eventos','gerenciar_eventos']);
+        const canConclude = await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
+        if (!canCreate && !canDelete && !canConclude) return;
 
         // Observa o #evTab para injetar botões após cada renderização
         const content = document.getElementById('pageContent');
@@ -1384,8 +1388,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           // Mostra botões de concluir/reabrir para quem tem permissão de criar/gerenciar
-          const canConclude = canCreate || canDelete;
-          if (canConclude) {
+          if (canConclude || canCreate || canDelete) {
             tab.querySelectorAll('.ev-conclude-btn, .ev-unconclude-btn').forEach(el => { el.style.display = ''; });
           }
         });

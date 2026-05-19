@@ -1,0 +1,380 @@
+/* ============================================================
+   MSY Portal - Eventos Premium
+   ============================================================ */
+
+body[data-page="eventos"] .events-premium-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+body[data-page="eventos"] .events-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 76, .18);
+  border-radius: 12px;
+  padding: 26px 28px;
+  margin-bottom: 18px;
+  background:
+    linear-gradient(135deg, rgba(201, 168, 76, .10), rgba(220, 38, 38, .07) 38%, rgba(255,255,255,.02)),
+    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+  box-shadow: 0 22px 70px rgba(0,0,0,.34);
+}
+
+body[data-page="eventos"] .events-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(201,168,76,.18), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 84px);
+  opacity: .45;
+}
+
+body[data-page="eventos"] .events-hero-main {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+body[data-page="eventos"] .events-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gold);
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+body[data-page="eventos"] .events-title {
+  font-family: "Cinzel", serif;
+  color: var(--text-1);
+  font-size: clamp(1.55rem, 3vw, 2.4rem);
+  line-height: 1.04;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+body[data-page="eventos"] .events-subtitle {
+  color: var(--text-2);
+  font-size: .88rem;
+  line-height: 1.55;
+  max-width: 620px;
+  margin-top: 9px;
+}
+
+body[data-page="eventos"] .events-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  gap: 8px;
+  min-width: 300px;
+}
+
+body[data-page="eventos"] .events-stat {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(4,4,7,.36);
+  padding: 11px 12px;
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+
+body[data-page="eventos"] .events-stat-value {
+  color: var(--gold);
+  font-family: "Cinzel", serif;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body[data-page="eventos"] .events-stat-label {
+  color: var(--text-3);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
+body[data-page="eventos"] .events-tabs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  overflow-x: auto;
+  padding: 3px 0 16px;
+  scrollbar-width: none;
+}
+
+body[data-page="eventos"] .events-tabs::-webkit-scrollbar { display: none; }
+
+body[data-page="eventos"] .events-tab {
+  min-height: 38px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025));
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  cursor: pointer;
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  transition: transform .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease), color .2s var(--ease);
+}
+
+body[data-page="eventos"] .events-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(201,168,76,.35);
+  color: var(--gold);
+}
+
+body[data-page="eventos"] .events-tab.active {
+  border-color: rgba(220,38,38,.55);
+  background: linear-gradient(135deg, rgba(220,38,38,.24), rgba(201,168,76,.12));
+  color: var(--red-bright);
+  box-shadow: 0 12px 26px rgba(220,38,38,.12);
+}
+
+body[data-page="eventos"] .ev-card {
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 18% 0, rgba(201,168,76,.10), transparent 34%),
+    linear-gradient(135deg, rgba(22,22,28,.96), rgba(12,12,17,.98));
+  border: 1px solid rgba(201,168,76,.12);
+  box-shadow: 0 18px 48px rgba(0,0,0,.30);
+  isolation: isolate;
+}
+
+body[data-page="eventos"] .ev-card:hover {
+  border-color: rgba(201,168,76,.36);
+  box-shadow: 0 26px 78px rgba(0,0,0,.46), 0 0 0 1px rgba(201,168,76,.08) inset;
+  transform: translateY(-3px);
+}
+
+body[data-page="eventos"] .ev-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,255,255,.035), transparent 45%);
+  opacity: .45;
+  z-index: -1;
+}
+
+body[data-page="eventos"] .ev-card[data-open-detail="true"] {
+  cursor: pointer;
+}
+
+body[data-page="eventos"] .ev-card-inner {
+  padding: 22px 24px 18px 26px;
+}
+
+body[data-page="eventos"] .ev-card-title {
+  font-size: 1.08rem;
+  margin: 12px 0 11px;
+}
+
+body[data-page="eventos"] .ev-card-meta {
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+body[data-page="eventos"] .ev-card-desc {
+  border-top-color: rgba(201,168,76,.10);
+  background: rgba(255,255,255,.018);
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin: 9px 0 11px;
+}
+
+body[data-page="eventos"] .ev-card-crew {
+  border-top-color: rgba(201,168,76,.10);
+  background: rgba(0,0,0,.12);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+
+body[data-page="eventos"] .ev-presence-bar {
+  gap: 9px;
+  align-items: center;
+  border-top-color: rgba(201,168,76,.12);
+  background: rgba(0,0,0,.16);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+body[data-page="eventos"] .ev-presence-btn,
+body[data-page="eventos"] .ev-presence-status {
+  border-radius: 999px;
+}
+
+body[data-page="eventos"] .ev-presence-spacer {
+  flex: 1 1 auto;
+}
+
+body[data-page="eventos"] .ev-presence-register {
+  background:
+    linear-gradient(135deg, rgba(201,168,76,.16), rgba(201,168,76,.06));
+  border: 1px solid rgba(201,168,76,.30);
+  color: var(--gold);
+  padding: 8px 13px;
+}
+
+body[data-page="eventos"] .ev-presence-register span {
+  color: var(--text-3);
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-left: 4px;
+}
+
+body[data-page="eventos"] .events-director-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body[data-page="eventos"] .events-review-card {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
+    rgba(12,12,17,.94);
+  padding: 15px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.24);
+}
+
+body[data-page="eventos"] .events-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+body[data-page="eventos"] .events-review-title {
+  color: var(--text-1);
+  font-weight: 800;
+  font-size: .9rem;
+}
+
+body[data-page="eventos"] .events-review-meta {
+  color: var(--text-3);
+  font-size: .7rem;
+  margin-top: 3px;
+}
+
+body[data-page="eventos"] .events-review-text {
+  color: var(--text-2);
+  font-size: .8rem;
+  line-height: 1.55;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(0,0,0,.18);
+  padding: 9px 10px;
+  margin-bottom: 10px;
+}
+
+body[data-page="eventos"] .events-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body[data-page="eventos"] .event-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+body[data-page="eventos"] .event-detail-stat {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+  padding: 12px;
+}
+
+body[data-page="eventos"] .event-detail-stat-label {
+  color: var(--text-3);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+body[data-page="eventos"] .event-detail-stat-value {
+  color: var(--text-1);
+  font-size: .88rem;
+  font-weight: 800;
+  margin-top: 5px;
+}
+
+body[data-page="eventos"] .event-detail-desc {
+  border-left: 3px solid rgba(201,168,76,.65);
+  background: rgba(201,168,76,.055);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text-2);
+  line-height: 1.65;
+  font-size: .85rem;
+}
+
+@media (max-width: 900px) {
+  body[data-page="eventos"] .events-hero-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body[data-page="eventos"] .events-hero-stats {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body[data-page="eventos"] .events-director-grid,
+  body[data-page="eventos"] .event-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  body[data-page="eventos"] .events-hero {
+    padding: 20px 16px;
+    border-radius: 10px;
+  }
+
+  body[data-page="eventos"] .events-hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body[data-page="eventos"] .events-stat {
+    padding: 9px 7px;
+  }
+
+  body[data-page="eventos"] .events-stat-value {
+    font-size: 1.15rem;
+  }
+
+  body[data-page="eventos"] .ev-card-inner {
+    padding: 17px 15px 15px 18px;
+  }
+
+  body[data-page="eventos"] .ev-presence-count,
+  body[data-page="eventos"] .ev-pres-detail-btn {
+    margin-left: 0 !important;
+  }
+
+  body[data-page="eventos"] .ev-presence-spacer {
+    display: none;
+  }
+}

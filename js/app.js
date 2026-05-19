@@ -3266,7 +3266,7 @@
      Utils.showLoading(content);
    
      const isDiretoria = profile.tier === 'diretoria';
-     let activeTab = 'eventos';
+     let activeTab = 'proximos';
    
      /* ── CSS premium de eventos (injetado uma vez) ── */
      if (!document.getElementById('msy-ev-css')) {
@@ -3528,23 +3528,25 @@
        tab.innerHTML = `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>`;
 
        /* Checar permissão de gerenciar eventos (diretoria OU permissão individual) */
-       let canManage = isDiretoria;
-       if (!isDiretoria) {
-         canManage = await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','excluir_eventos','gerenciar_eventos']);
-       }
+       const canCreate = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','gerenciar_eventos']);
+       const canDelete = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['excluir_eventos','gerenciar_eventos']);
+       const canConclude = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
+       const canReview = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['revisar_justificativas_eventos','gerenciar_eventos']);
+       const canAttendance = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['registrar_presencas_eventos','registrar_participantes','gerenciar_presencas','gerenciar_eventos']);
+       const canManage = canCreate || canDelete || canConclude || canReview || canAttendance;
 
        const [{ data: evs, error }, { data: myPresencas }] = await Promise.all([
          db.from('events')
            .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
            .order('event_date', { ascending: false }),
-         db.from('event_presencas').select('event_id,status,justificativa').eq('user_id', profile.id)
+         db.from('event_presencas').select('*').eq('user_id', profile.id)
        ]);
 
        if (error) { Utils.showToast('Erro ao carregar eventos.', 'error'); return; }
 
-       // Build my presence map { event_id -> status }
+       // Build my presence map { event_id -> row }
        const myPresMap = {};
-       (myPresencas||[]).forEach(p => { myPresMap[p.event_id] = p.status; });
+       (myPresencas||[]).forEach(p => { myPresMap[p.event_id] = p; });
 
        // Load cancel requests pending
        const { data: cancelReqs } = await db.from('event_cancel_requests')
@@ -3558,59 +3560,86 @@
        const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
 
        let presCountMap = {};
+       let allPresencas = [];
        const visibleEventIds = [...upcoming, ...done, ...past].map(e => e.id);
        if (visibleEventIds.length) {
          const { data: counts } = await db.from('event_presencas')
-           .select('event_id,status')
-           .in('event_id', visibleEventIds)
-           .in('status', ['participar', 'confirmado']);
-         (counts||[]).forEach(c => { presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1; });
+           .select('*')
+           .in('event_id', visibleEventIds);
+         allPresencas = counts || [];
+         allPresencas.forEach(c => {
+           const response = c.response_status || (['participar', 'confirmado'].includes(c.status) ? 'participar' : null);
+           if (response === 'participar') presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
+         });
        }
 
        // Load cancel requests for diretoria
        let allCancelReqs = [];
-       if (isDiretoria) {
-         const { data: cr } = await db.from('event_cancel_requests')
-           .select('*').eq('status','pendente').order('created_at',{ascending:false});
-         if (cr && cr.length) {
-           const uids = [...new Set(cr.map(r => r.user_id).filter(Boolean))];
-           const { data: profs } = await db.from('profiles').select('id,name').in('id', uids);
-           const pm = {}; (profs||[]).forEach(p => { pm[p.id] = p; });
-           cr.forEach(r => { r.requester = pm[r.user_id] || null; });
-         }
-         allCancelReqs = cr||[];
+       let pendingJustifs = [];
+       if (canReview || canAttendance) {
+         const [{ data: cr }, { data: pj }] = await Promise.all([
+           db.from('event_cancel_requests').select('*').eq('status','pendente').order('created_at',{ascending:false}),
+           db.from('event_presencas').select('*').eq('justificativa_status','pendente').order('response_at',{ascending:false})
+         ]);
+         allCancelReqs = cr || [];
+         pendingJustifs = pj || [];
+         await enrichEventReviewRows(allCancelReqs, pendingJustifs);
        }
 
-       tab.innerHTML = `
-         ${canManage ? `
-           <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-             <button class="btn btn-primary" id="newEventBtn">
-               <i class="fa-solid fa-calendar-plus"></i> Novo Evento
-             </button>
-             ${allCancelReqs.length > 0 ? `<button class="btn btn-gold" id="cancelReqsBtn"><i class="fa-solid fa-bell"></i> ${allCancelReqs.length} Pedido(s) de Cancelamento</button>` : ''}
-           </div>` : ''}
+       const directorCount = allCancelReqs.length + pendingJustifs.length + (canAttendance ? done.length : 0);
+       const dirTab = document.getElementById('eventDirectorTabBtn');
+       if (dirTab) {
+         dirTab.style.display = canManage ? '' : 'none';
+         const badge = dirTab.querySelector('[data-count]');
+         if (badge) badge.textContent = String(directorCount);
+       }
+       const su = document.getElementById('eventsStatUpcoming'); if (su) su.textContent = String(upcoming.length);
+       const sd = document.getElementById('eventsStatDone'); if (sd) sd.textContent = String(done.length);
+       const sp = document.getElementById('eventsStatPending'); if (sp) sp.textContent = String(allCancelReqs.length + pendingJustifs.length);
 
-         ${upcoming.length > 0 ? `
-           <div class="ev-section-label"><i class="fa-solid fa-calendar-days"></i> Próximos Eventos</div>
-           ${upcoming.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, cancelPending.has(ev.id), presCountMap[ev.id]||0)).join('')}
-         ` : `
-           <div class="empty-state" style="padding:40px">
-             <div class="empty-state-icon"><i class="fa-solid fa-calendar-days"></i></div>
-             <div class="empty-state-text">Nenhum evento agendado.</div>
-           </div>`}
+       const actionsHtml = canCreate ? `
+         <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+           <button class="btn btn-primary" id="newEventBtn">
+             <i class="fa-solid fa-calendar-plus"></i> Novo Evento
+           </button>
+         </div>` : '';
+       const cardOptions = { canDelete, canConclude, canAttendance, canReview };
 
-         ${done.length > 0 ? `
-           <div class="ev-section-label" style="color:#10b981"><i class="fa-solid fa-circle-check"></i> Concluídos</div>
-           ${done.map(ev => renderEventCard(ev, canManage, false, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
-         ` : ''}
+       if (activeTab === 'concluidos') {
+         tab.innerHTML = `
+           ${actionsHtml}
+           ${done.length > 0 ? `
+             <div class="ev-section-label" style="color:#10b981"><i class="fa-solid fa-circle-check"></i> Eventos Concluidos</div>
+             ${done.map(ev => renderEventCard(ev, cardOptions, false, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
+           ` : `<div class="empty-state" style="padding:44px"><div class="empty-state-icon"><i class="fa-solid fa-circle-check"></i></div><div class="empty-state-text">Nenhum evento concluido ainda.</div></div>`}
+         `;
+       } else if (activeTab === 'diretoria' && canManage) {
+         tab.innerHTML = renderEventDirectorPanel({
+           actionsHtml,
+           pendingJustifs,
+           cancelReqs: allCancelReqs,
+           concluded: done,
+           canReview,
+           canAttendance
+         });
+       } else {
+         activeTab = 'proximos';
+         tab.innerHTML = `
+           ${actionsHtml}
+           ${upcoming.length > 0 ? `
+             <div class="ev-section-label"><i class="fa-solid fa-calendar-days"></i> Proximos Eventos</div>
+             ${upcoming.map(ev => renderEventCard(ev, cardOptions, false, myPresMap[ev.id]||null, cancelPending.has(ev.id), presCountMap[ev.id]||0)).join('')}
+           ` : `<div class="empty-state" style="padding:44px"><div class="empty-state-icon"><i class="fa-solid fa-calendar-days"></i></div><div class="empty-state-text">Nenhum evento agendado.</div></div>`}
 
-         ${past.length > 0 ? `
-           <div class="ev-section-label" style="color:var(--text-3)"><i class="fa-regular fa-calendar"></i> Encerrados</div>
-           ${past.map(ev => renderEventCard(ev, canManage, true, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
-         ` : ''}
-       `;
+           ${past.length > 0 ? `
+             <div class="ev-section-label" style="color:var(--text-3)"><i class="fa-regular fa-calendar"></i> Encerrados sem conclusao</div>
+             ${past.map(ev => renderEventCard(ev, cardOptions, true, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
+           ` : ''}
+         `;
+       }
 
        document.getElementById('newEventBtn')?.addEventListener('click', () => openNewEventModal(profile, loadEventos));
+       document.querySelectorAll('.events-tab[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
 
        document.getElementById('cancelReqsBtn')?.addEventListener('click', () => openCancelRequestsModal(loadEventos));
 
@@ -3652,7 +3681,7 @@
            btn.disabled = true;
            const eid = btn.dataset.id;
            const { error } = await db.from('event_presencas').upsert(
-             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar' },
+             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar', response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null },
              { onConflict: 'event_id,user_id', ignoreDuplicates: false }
            );
            if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
@@ -3691,6 +3720,62 @@
            e.stopPropagation();
            const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
            openPresenceDetailModal(btn.dataset.id, ev);
+         });
+       });
+
+       tab.querySelectorAll('.ev-card[data-open-detail="true"]').forEach(card => {
+         card.addEventListener('click', e => {
+           if (e.target.closest('button, a, input, textarea, select')) return;
+           const ev = [...(evs||[])].find(ev2 => ev2.id === card.dataset.id);
+           if (ev) openEventDetailModal(ev, myPresMap[ev.id] || null, cancelPending.has(ev.id), presCountMap[ev.id] || 0, profile, loadEventos);
+         });
+       });
+
+       tab.querySelectorAll('.ev-just-approve, .ev-just-refuse').forEach(btn => {
+         btn.addEventListener('click', async () => {
+           btn.disabled = true;
+           const accepted = btn.classList.contains('ev-just-approve');
+           const { error } = await db.from('event_presencas').update({
+             justificativa_status: accepted ? 'aceita' : 'recusada',
+             justificativa_reviewed_by: profile.id,
+             justificativa_reviewed_at: new Date().toISOString(),
+             status: accepted ? 'justificado' : 'nao_participar'
+           }).eq('id', btn.dataset.pid);
+           if (!error) { Utils.showToast(accepted ? 'Justificativa aceita.' : 'Justificativa recusada.'); loadEventos(); }
+           else { Utils.showToast('Erro ao revisar justificativa.', 'error'); btn.disabled = false; }
+         });
+       });
+
+       tab.querySelectorAll('.ev-change-approve, .ev-change-refuse').forEach(btn => {
+         btn.addEventListener('click', async () => {
+           btn.disabled = true;
+           const accepted = btn.classList.contains('ev-change-approve');
+           const req = allCancelReqs.find(r => r.id === btn.dataset.rid);
+           const updates = [
+             db.from('event_cancel_requests').update({
+               status: accepted ? 'aprovado' : 'recusado',
+               reviewed_by: profile.id,
+               reviewed_at: new Date().toISOString()
+             }).eq('id', btn.dataset.rid)
+           ];
+           if (accepted && req) {
+             updates.push(db.from('event_presencas').upsert({
+               event_id: req.event_id,
+               user_id: req.user_id,
+               membro_id: req.user_id,
+               status: 'nao_participar',
+               response_status: 'nao_participar',
+               response_at: new Date().toISOString(),
+               justificativa: req.justificativa,
+               justificativa_status: 'aceita',
+               justificativa_reviewed_by: profile.id,
+               justificativa_reviewed_at: new Date().toISOString()
+             }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }));
+           }
+           const results = await Promise.all(updates);
+           const error = results.find(r => r.error)?.error;
+           if (!error) { Utils.showToast(accepted ? 'Mudanca aprovada.' : 'Mudanca recusada.'); loadEventos(); }
+           else { Utils.showToast('Erro ao revisar pedido.', 'error'); btn.disabled = false; }
          });
        });
      }
@@ -3839,17 +3924,28 @@
      }
    
      content.innerHTML = `
-       <div class="page-header">
-         <div>
-           <div class="page-header-title">Eventos</div>
-           <div class="page-header-sub">Agenda, atas e rankings da Masayoshi Order</div>
+       <div class="events-premium-shell">
+         <section class="events-hero card-enter">
+           <div class="events-hero-main">
+             <div>
+               <div class="events-kicker"><i class="fa-solid fa-crown"></i> Cerimonias da Ordem</div>
+               <h1 class="events-title">Eventos Masayoshi</h1>
+               <div class="events-subtitle">Agenda oficial, respostas de participacao, justificativas e presencas da Masayoshi Order.</div>
+             </div>
+             <div class="events-hero-stats">
+               <div class="events-stat"><div class="events-stat-value" id="eventsStatUpcoming">0</div><div class="events-stat-label">Proximos</div></div>
+               <div class="events-stat"><div class="events-stat-value" id="eventsStatDone">0</div><div class="events-stat-label">Concluidos</div></div>
+               <div class="events-stat"><div class="events-stat-value" id="eventsStatPending">0</div><div class="events-stat-label">Pendencias</div></div>
+             </div>
+           </div>
+         </section>
+         <div class="events-tabs">
+           <button class="events-tab active" data-tab="proximos"><i class="fa-solid fa-calendar-days"></i> Proximos Eventos</button>
+           <button class="events-tab" data-tab="concluidos"><i class="fa-solid fa-circle-check"></i> Eventos Concluidos</button>
+           <button class="events-tab" data-tab="diretoria" id="eventDirectorTabBtn" style="display:none"><i class="fa-solid fa-user-shield"></i> Diretoria <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
          </div>
+         <div id="evTab"></div>
        </div>
-       <div class="filters-bar" style="margin-bottom:20px">
-         <button class="filter-btn active" data-tab="eventos"><i class="fa-solid fa-calendar-days"></i> Eventos</button>
-
-       </div>
-       <div id="evTab"></div>
    
        <!-- New Event Modal -->
        <div class="modal-overlay" id="newEventModal">
@@ -4018,14 +4114,12 @@
      `;
    
      // Tab switching
-     content.querySelectorAll('.filter-btn[data-tab]').forEach(btn => {
+     content.querySelectorAll('.events-tab[data-tab]').forEach(btn => {
        btn.addEventListener('click', () => {
-         content.querySelectorAll('.filter-btn[data-tab]').forEach(b => b.classList.remove('active'));
+         content.querySelectorAll('.events-tab[data-tab]').forEach(b => b.classList.remove('active'));
          btn.classList.add('active');
          activeTab = btn.dataset.tab;
-         if (activeTab === 'eventos') loadEventos();
-         
-         else if (activeTab === 'ranking') loadRanking();
+         loadEventos();
        });
      });
    
@@ -4059,11 +4153,18 @@
      await loadEventos();
    }
    
-   function renderEventCard(ev, canManage, isPast = false, myStatus = null, cancelPending = false, presCount = 0) {
+   function renderEventCard(ev, permissions, isPast = false, myPresence = null, cancelPending = false, presCount = 0) {
      const isDone     = ev.status === 'concluido';
      const isPrivate  = ev.is_private;
      const creator    = ev.creator;
      const helper     = ev.helper;
+     const canManage = typeof permissions === 'boolean' ? permissions : !!(permissions?.canDelete || permissions?.canConclude || permissions?.canAttendance || permissions?.canReview);
+     const canDelete = typeof permissions === 'boolean' ? permissions : !!permissions?.canDelete;
+     const canConclude = typeof permissions === 'boolean' ? permissions : !!permissions?.canConclude;
+     const canAttendance = typeof permissions === 'boolean' ? permissions : !!permissions?.canAttendance;
+     const canReview = typeof permissions === 'boolean' ? permissions : !!permissions?.canReview;
+     const myStatus = myPresence?.response_status || myPresence?.status || null;
+     const myJustStatus = myPresence?.justificativa_status || null;
 
      /* Cor e ícone por tipo */
      const TYPE_META = {
@@ -4086,7 +4187,7 @@
        : '';
 
      return `
-       <div class="ev-card card-enter" data-id="${ev.id}" style="${dimStyle}">
+       <div class="ev-card card-enter" data-id="${ev.id}" data-open-detail="true" style="${dimStyle}">
          <!-- Faixa lateral colorida por tipo -->
          <div class="ev-card-stripe" style="background:${typeMeta.color}"></div>
 
@@ -4104,16 +4205,16 @@
                    ? `<span class="ev-badge ev-badge-obrig"><i class="fa-solid fa-circle-exclamation" style="font-size:.6rem"></i> Obrigatório</span>`
                    : `<span class="ev-badge ev-badge-opt">Opcional</span>`}
                ${isPrivate ? `<span class="ev-badge" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c084fc"><i class="fa-solid fa-lock" style="font-size:.55rem"></i> Diretoria</span>` : ''}
-               ${canManage ? `
+               ${(canDelete || canConclude) ? `
                  <div style="display:flex;gap:4px;margin-left:4px">
-                   ${!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
+                   ${canConclude ? (!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
                      <i class="fa-solid fa-circle-check"></i>
                    </button>` : `<button class="ev-action-btn ev-unconclude-btn" data-id="${ev.id}" title="Reabrir evento" style="color:var(--text-3)">
                      <i class="fa-solid fa-rotate-left"></i>
-                   </button>`}
-                   <button class="ev-action-btn delete-event-btn" data-id="${ev.id}" title="Excluir evento" style="color:var(--red-bright)">
+                   </button>`) : ''}
+                   ${canDelete ? `<button class="ev-action-btn delete-event-btn" data-id="${ev.id}" title="Excluir evento" style="color:var(--red-bright)">
                      <i class="fa-solid fa-trash"></i>
-                   </button>
+                   </button>` : ''}
                  </div>` : ''}
              </div>
            </div>
@@ -4155,22 +4256,168 @@
                  ${cancelPending
                    ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
                    : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
-               ` : myStatus === 'nao_participar' ? `
-                 <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificou ausência</span>
+               ` : myStatus === 'nao_participar' || myStatus === 'justificado' ? `
+                 <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'aceita' ? 'Justificativa aceita' : myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
+                 <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
                ` : `
                  <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
                  <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
                `}
-               <span class="ev-presence-count"><i class="fa-solid fa-users" style="font-size:.6rem"></i> ${presCount} confirmado${presCount!==1?'s':''}</span>
-               ${canManage ? `<button class="ev-presence-btn ev-pres-detail-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);color:var(--gold);margin-left:auto;font-size:.65rem;padding:4px 10px"><i class="fa-solid fa-eye"></i> Ver detalhes</button>` : ''}
-             </div>` : (isPast || isDone) && canManage ? `
+               <span class="ev-presence-spacer"></span>
+               ${canReview ? `<button class="ev-presence-btn ev-pres-detail-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);color:var(--gold);font-size:.65rem;padding:4px 10px"><i class="fa-solid fa-eye"></i> Ver respostas</button>` : ''}
+             </div>` : isDone && canAttendance ? `
              <div class="ev-presence-bar" data-evid="${ev.id}">
-               <button class="ev-presence-btn ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);color:var(--gold)">
-                 <i class="fa-solid fa-clipboard-list"></i> Registrar Presenças (${presCount} confirmado${presCount!==1?'s':''})
+               <button class="ev-presence-btn ev-pres-manage-btn ev-presence-register" data-id="${ev.id}">
+                 <i class="fa-solid fa-clipboard-list"></i> Registrar Presenças <span>${presCount} confirmado${presCount!==1?'s':''}</span>
                </button>
              </div>` : ''}
          </div>
        </div>`;
+   }
+
+   async function enrichEventReviewRows(cancelReqs, pendingJustifs) {
+     const userIds = [
+       ...cancelReqs.map(r => r.user_id),
+       ...pendingJustifs.map(p => p.user_id || p.membro_id)
+     ].filter(Boolean);
+     const eventIds = [
+       ...cancelReqs.map(r => r.event_id),
+       ...pendingJustifs.map(p => p.event_id)
+     ].filter(Boolean);
+     const [profilesRes, eventsRes] = await Promise.all([
+       userIds.length ? db.from('profiles').select('id,name,role,initials,color,avatar_url').in('id', [...new Set(userIds)]) : Promise.resolve({ data: [] }),
+       eventIds.length ? db.from('events').select('id,title,event_date,event_time,status').in('id', [...new Set(eventIds)]) : Promise.resolve({ data: [] })
+     ]);
+     const profileMap = {}; (profilesRes.data || []).forEach(p => { profileMap[p.id] = p; });
+     const eventMap = {}; (eventsRes.data || []).forEach(e => { eventMap[e.id] = e; });
+     cancelReqs.forEach(r => { r.requester = profileMap[r.user_id] || null; r.ev = eventMap[r.event_id] || null; });
+     pendingJustifs.forEach(p => { p.requester = profileMap[p.user_id || p.membro_id] || null; p.ev = eventMap[p.event_id] || null; });
+   }
+
+   function renderEventDirectorPanel({ actionsHtml, pendingJustifs, cancelReqs, concluded, canReview, canAttendance }) {
+     const justCards = (pendingJustifs || []).map(p => `
+       <div class="events-review-card">
+         <div class="events-review-head">
+           <div>
+             <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
+             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(p.ev?.title || 'Evento')} · ${Utils.formatDate(p.ev?.event_date)}</div>
+           </div>
+           <span class="ev-badge ev-badge-opt">Justificativa</span>
+         </div>
+         <div class="events-review-text">${Utils.escapeHtml(p.justificativa || 'Sem justificativa informada.')}</div>
+         <div class="events-review-actions">
+           <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aceitar</button>
+           <button class="btn btn-sm ev-just-refuse" data-pid="${p.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
+         </div>
+       </div>`).join('');
+
+     const changeCards = (cancelReqs || []).map(r => `
+       <div class="events-review-card">
+         <div class="events-review-head">
+           <div>
+             <div class="events-review-title">${Utils.escapeHtml(r.requester?.name || 'Membro')}</div>
+             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title || 'Evento')} · ${Utils.formatDate(r.ev?.event_date)}</div>
+           </div>
+           <span class="ev-badge" style="background:rgba(245,158,11,.09);border-color:rgba(245,158,11,.25);color:#f59e0b">Mudanca</span>
+         </div>
+         <div class="events-review-text">${Utils.escapeHtml(r.justificativa || 'Sem justificativa informada.')}</div>
+         <div class="events-review-actions">
+           <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
+           <button class="btn btn-sm ev-change-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
+         </div>
+       </div>`).join('');
+
+     const presenceCards = (concluded || []).map(ev => `
+       <div class="events-review-card">
+         <div class="events-review-head">
+           <div>
+             <div class="events-review-title">${Utils.escapeHtml(ev.title)}</div>
+             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(ev.event_date)} · ${ev.event_time || '--'}</div>
+           </div>
+           <span class="ev-badge ev-badge-done">Concluido</span>
+         </div>
+         <div class="events-review-text">Registre quem realmente participou para atualizar o desempenho da Ordem.</div>
+         <div class="events-review-actions">
+           <button class="btn btn-sm ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Registrar Presencas</button>
+         </div>
+       </div>`).join('');
+
+     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-shield-check"></i></div><div class="empty-state-text">Nada pendente para analisar.</div></div>`;
+     return `
+       ${actionsHtml}
+       <div class="ev-section-label"><i class="fa-solid fa-user-shield"></i> Central da Diretoria</div>
+       ${(canReview && (justCards || changeCards)) || (canAttendance && presenceCards) ? `
+         <div class="events-director-grid">
+           ${canReview ? justCards : ''}
+           ${canReview ? changeCards : ''}
+           ${canAttendance ? presenceCards : ''}
+         </div>` : empty}
+     `;
+   }
+
+   function openEventDetailModal(ev, myPresence, cancelPending, presCount, currentProfile, onSuccess) {
+     const status = myPresence?.response_status || myPresence?.status || null;
+     const justStatus = myPresence?.justificativa_status || null;
+     const statusText = status === 'participar'
+       ? (cancelPending ? 'Participacao confirmada · mudanca em analise' : 'Participacao confirmada')
+       : status === 'nao_participar' || status === 'justificado'
+         ? (justStatus === 'aceita' ? 'Ausencia justificada aceita' : justStatus === 'recusada' ? 'Ausencia recusada' : 'Ausencia em analise')
+         : 'Sem resposta';
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:640px;background:#0e0e13;border:1px solid rgba(201,168,76,.22)">
+         <div class="modal-header" style="background:linear-gradient(135deg,rgba(201,168,76,.08),transparent);border-bottom:1px solid rgba(201,168,76,.15)">
+           <div>
+             <div class="modal-title font-cinzel" style="color:var(--gold)"><i class="fa-solid fa-calendar-days"></i> ${Utils.escapeHtml(ev.title)}</div>
+             <div style="font-size:.72rem;color:var(--text-3);margin-top:3px">${Utils.escapeHtml(ev.type || 'Evento')}</div>
+           </div>
+           <button class="modal-close" id="eventDetailClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body">
+           <div class="event-detail-grid">
+             <div class="event-detail-stat"><div class="event-detail-stat-label">Data</div><div class="event-detail-stat-value">${Utils.formatDate(ev.event_date)}</div></div>
+             <div class="event-detail-stat"><div class="event-detail-stat-label">Horario</div><div class="event-detail-stat-value">${ev.event_time || '--'}</div></div>
+             <div class="event-detail-stat"><div class="event-detail-stat-label">${ev.status === 'concluido' ? 'Confirmados' : 'Tipo'}</div><div class="event-detail-stat-value">${ev.status === 'concluido' ? presCount : Utils.escapeHtml(ev.type || 'Evento')}</div></div>
+           </div>
+           <div class="event-detail-desc">${ev.description ? Utils.escapeHtml(ev.description) : 'Sem descricao cadastrada.'}</div>
+           <div style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)">
+             <div style="font-size:.65rem;color:var(--text-3);font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Sua resposta</div>
+             <div style="font-weight:800;color:var(--text-1)">${statusText}</div>
+             ${myPresence?.justificativa ? `<div style="font-size:.78rem;color:var(--text-2);line-height:1.55;margin-top:8px">${Utils.escapeHtml(myPresence.justificativa)}</div>` : ''}
+           </div>
+         </div>
+         <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+           ${ev.status !== 'concluido' && status !== 'participar' ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
+           ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
+           ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
+           <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
+         </div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => overlay.remove();
+     overlay.querySelector('#eventDetailClose')?.addEventListener('click', close);
+     overlay.querySelector('#eventDetailDone')?.addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+     overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
+       const btn = e.currentTarget; btn.disabled = true;
+       const { error } = await db.from('event_presencas').upsert({
+         event_id: ev.id, user_id: currentProfile.id, membro_id: currentProfile.id, status: 'participar',
+         response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null
+       }, { onConflict: 'event_id,user_id', ignoreDuplicates: false });
+       if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
+       else { Utils.showToast('Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
+     });
+     overlay.addEventListener('click', e => {
+       const skipBtn = e.target.closest?.('#detailSkipBtn');
+       const cancelBtn = e.target.closest?.('#detailCancelBtn');
+       if (!skipBtn && !cancelBtn) return;
+       e.preventDefault();
+       e.stopPropagation();
+       close();
+       if (skipBtn) openSkipModal(ev.id, currentProfile, onSuccess);
+       if (cancelBtn) openPresenceCancelModal(ev.id, currentProfile, onSuccess);
+     });
    }
    
    function renderAtaCard(ata, isDiretoria) {
@@ -4325,8 +4572,18 @@
      body.querySelectorAll('.pd-cr-approve').forEach(btn => {
        btn.addEventListener('click', async () => {
          btn.disabled = true;
+         const req = cancelReqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('user_id', btn.dataset.uid),
+           db.from('event_presencas').upsert({
+             event_id: btn.dataset.eid,
+             user_id: btn.dataset.uid,
+             membro_id: btn.dataset.uid,
+             status: 'nao_participar',
+             response_status: 'nao_participar',
+             response_at: new Date().toISOString(),
+             justificativa: req?.justificativa || null,
+             justificativa_status: 'aceita'
+           }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }),
            db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[style*="rgba(245"]').remove(); }
@@ -4376,9 +4633,9 @@
      const presMap  = {};
      (presRes.data||[]).forEach(p => { presMap[p.user_id || p.membro_id] = p; });
 
-     const conf  = Object.values(presMap).filter(p => p.status === 'participar' || p.status === 'confirmado').length;
-     const skip  = Object.values(presMap).filter(p => p.status === 'nao_participar' || p.status === 'ausente').length;
-     const sem   = membros.length - Object.keys(presMap).length;
+     const conf  = Object.values(presMap).filter(p => p.attendance_status === 'presente' || p.status === 'confirmado').length;
+     const skip  = Object.values(presMap).filter(p => p.attendance_status === 'ausente' || p.status === 'ausente').length;
+     const sem   = membros.length - Object.values(presMap).filter(p => p.attendance_status || p.status === 'confirmado' || p.status === 'ausente').length;
 
      const body = overlay.querySelector('#pmBody');
 
@@ -4407,7 +4664,8 @@
        <div style="display:flex;flex-direction:column;gap:6px">
          ${membros.map(m => {
            const p = presMap[m.id];
-           const status = p?.status || null;
+           const status = p?.attendance_status || (p?.status === 'confirmado' ? 'presente' : p?.status === 'ausente' ? 'ausente' : null);
+           const intent = p?.response_status || (['participar','confirmado'].includes(p?.status) ? 'participar' : ['nao_participar','justificado','ausente'].includes(p?.status) ? 'nao_participar' : null);
            const av = m.avatar_url
              ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
              : (m.initials || Utils.getInitials(m.name));
@@ -4417,13 +4675,14 @@
                <div style="flex:1;min-width:0">
                  <div style="font-size:.82rem;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(m.name)}</div>
                  ${m.role ? `<div style="font-size:.65rem;color:var(--text-3)">${Utils.escapeHtml(m.role)}</div>` : ''}
+                 <div style="font-size:.62rem;color:${intent === 'participar' ? '#10b981' : intent === 'nao_participar' ? '#f59e0b' : 'var(--text-3)'};margin-top:2px">${intent === 'participar' ? 'Disse que iria participar' : intent === 'nao_participar' ? 'Disse que nao iria participar' : 'Nao respondeu'}</div>
                </div>
                <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
                  ${p?.justificativa ? `<button class="pm-btn pm-justif" data-uid="${m.id}" data-justif="${Utils.escapeHtml(p.justificativa)}" title="Ver justificativa" style="width:30px;height:30px;border-radius:7px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.1);cursor:pointer;color:#f59e0b;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s"><i class="fa-solid fa-comment-dots"></i></button>` : ''}
-                 <button class="pm-btn pm-present" data-uid="${m.id}" title="Presente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${(status==='participar'||status==='confirmado')?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${(status==='participar'||status==='confirmado')?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${(status==='participar'||status==='confirmado')?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
+                 <button class="pm-btn pm-present" data-uid="${m.id}" title="Presente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${status==='presente'?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${status==='presente'?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${status==='presente'?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
                    <i class="fa-solid fa-check"></i>
                  </button>
-                 <button class="pm-btn pm-absent" data-uid="${m.id}" title="Ausente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${(status==='nao_participar'||status==='ausente')?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${(status==='nao_participar'||status==='ausente')?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${(status==='nao_participar'||status==='ausente')?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
+                 <button class="pm-btn pm-absent" data-uid="${m.id}" title="Ausente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${status==='ausente'?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${status==='ausente'?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${status==='ausente'?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
                    <i class="fa-solid fa-xmark"></i>
                  </button>
                </div>
@@ -4433,13 +4692,14 @@
 
      async function setStatus(uid, status) {
        const ex = presMap[uid];
+       const attendance = status === 'confirmado' ? 'presente' : 'ausente';
        let error;
        if (ex) {
-         ({ error } = await db.from('event_presencas').update({ status }).eq('id', ex.id));
-         if (!error) presMap[uid].status = status;
+         ({ error } = await db.from('event_presencas').update({ status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: new Date().toISOString() }).eq('id', ex.id));
+         if (!error) { presMap[uid].status = status; presMap[uid].attendance_status = attendance; }
        } else {
          const { data, error: e } = await db.from('event_presencas').insert({
-           event_id: eventId, user_id: uid, membro_id: uid, status
+           event_id: eventId, user_id: uid, membro_id: uid, status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: new Date().toISOString()
          }).select().single();
          error = e;
          if (!error) presMap[uid] = data;
@@ -4451,8 +4711,8 @@
        if (row) {
          const pBtn = row.querySelector('.pm-present');
          const aBtn = row.querySelector('.pm-absent');
-         const isP = status === 'participar' || status === 'confirmado';
-         const isA = status === 'nao_participar' || status === 'ausente';
+         const isP = attendance === 'presente';
+         const isA = attendance === 'ausente';
          pBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isP?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${isP?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isP?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
          aBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isA?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${isA?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isA?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
        }
@@ -4514,7 +4774,7 @@
        const btn = overlay.querySelector('#skipSave');
        btn.disabled = true;
        const { error } = await db.from('event_presencas').upsert(
-         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', justificativa: reason },
+         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' },
          { onConflict: 'event_id,user_id', ignoreDuplicates: false }
        );
        if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
@@ -4629,8 +4889,18 @@
      body.querySelectorAll('.cr-approve').forEach(btn => {
        btn.addEventListener('click', async () => {
          btn.disabled = true;
+         const req = reqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           db.from('event_presencas').delete().eq('event_id', btn.dataset.eid).eq('user_id', btn.dataset.uid),
+           db.from('event_presencas').upsert({
+             event_id: btn.dataset.eid,
+             user_id: btn.dataset.uid,
+             membro_id: btn.dataset.uid,
+             status: 'nao_participar',
+             response_status: 'nao_participar',
+             response_at: new Date().toISOString(),
+             justificativa: req?.justificativa || null,
+             justificativa_status: 'aceita'
+           }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }),
            db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[data-rid]').remove(); }
