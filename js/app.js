@@ -4294,22 +4294,26 @@
                  </div>` : ''}
              </div>` : ''}
 
-           ${!isPast && !isDone ? `
-             <div class="ev-presence-bar" data-evid="${ev.id}">
-               ${myStatus === 'participar' ? `
-                 <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Confirmado</span>
-                 ${cancelPending
-                   ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
-                   : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
-                ` : myStatus === 'nao_participar' || (myStatus === 'justificado' && myJustStatus !== 'aceita') ? `
-                  <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'aceita' ? 'Justificativa aceita' : myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
-                  <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
-                ` : myStatus === 'justificado' && myJustStatus === 'aceita' ? `
-                  <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
-               ` : `
-                 <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
-                 <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
-               `}
+            ${!isPast && !isDone ? `
+              <div class="ev-presence-bar" data-evid="${ev.id}">
+                ${myStatus === 'participar' ? `
+                  <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Confirmado</span>
+                  ${cancelPending
+                    ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
+                    : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
+                 ` : myStatus === 'nao_participar' ? `
+                   ${myJustStatus === 'aceita' ? `
+                     <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
+                     <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                     <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
+                   ` : `
+                     <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
+                     <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                   `}
+                ` : `
+                  <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
+                  <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
+                `}
                <span class="ev-presence-spacer"></span>
                ${canReview ? `<button class="ev-presence-btn ev-pres-detail-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);color:var(--gold);font-size:.65rem;padding:4px 10px"><i class="fa-solid fa-eye"></i> Ver respostas</button>` : ''}
              </div>` : isDone && canAttendance ? `
@@ -4434,12 +4438,13 @@
              ${myPresence?.justificativa ? `<div style="font-size:.78rem;color:var(--text-2);line-height:1.55;margin-top:8px">${Utils.escapeHtml(myPresence.justificativa)}</div>` : ''}
            </div>
          </div>
-         <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
-           ${ev.status !== 'concluido' && status !== 'participar' ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
-           ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
-           ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
-           <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
-         </div>
+          <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+            ${ev.status !== 'concluido' && status !== 'participar' ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
+            ${ev.status !== 'concluido' && status === 'nao_participar' && justStatus === 'aceita' ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
+            ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
+            ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
+            <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
+          </div>
        </div>`;
      document.body.appendChild(overlay);
      const close = () => overlay.remove();
@@ -4805,27 +4810,33 @@
              <textarea class="form-input form-textarea" id="skipReason" style="min-height:90px" placeholder="Explique o motivo..."></textarea>
            </div>
          </div>
-         <div class="modal-footer">
-           <button class="btn btn-ghost" id="skipCancel">Cancelar</button>
-           <button class="btn" id="skipSave" style="background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.35);color:#ef4444"><i class="fa-solid fa-floppy-disk"></i> Confirmar</button>
-         </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" id="skipCancel">Cancelar</button>
+            <button class="btn" id="skipSave" style="background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.35);color:#ef4444;position:relative;z-index:1"><i class="fa-solid fa-floppy-disk"></i> Confirmar</button>
+          </div>
        </div>`;
      document.body.appendChild(overlay);
      const close = () => overlay.remove();
      overlay.querySelector('#skipClose').addEventListener('click', close);
      overlay.querySelector('#skipCancel').addEventListener('click', close);
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-     overlay.querySelector('#skipSave').addEventListener('click', async () => {
-       const reason = overlay.querySelector('#skipReason').value.trim();
-       if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
-       const btn = overlay.querySelector('#skipSave');
-       btn.disabled = true;
-       const { error } = await saveEventPresence(
-         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' }
-       );
-       if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
-       else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
-     });
+      overlay.querySelector('#skipSave').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('[MSY][skip] Botão confirmar clicado');
+        const reason = overlay.querySelector('#skipReason').value.trim();
+        console.log('[MSY][skip] Motivo:', reason);
+        if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
+        const btn = overlay.querySelector('#skipSave');
+        console.log('[MSY][skip] Desabilitando botão...');
+        btn.disabled = true;
+        const { error } = await saveEventPresence(
+          { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' }
+        );
+        console.log('[MSY][skip] Resultado:', error);
+        if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
+        else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
+      });
    }
 
    /* ── Presença: modal Solicitar Cancelamento ── */
