@@ -3302,6 +3302,32 @@
      return db.from('event_presencas').insert(legacyRow);
    }
 
+   async function confirmEventParticipation(eventId, userId) {
+     const now = new Date().toISOString();
+     const presence = {
+       event_id: eventId,
+       user_id: userId,
+       membro_id: userId,
+       status: 'participar',
+       response_status: 'participar',
+       response_at: now,
+       justificativa: null,
+       justificativa_status: null
+     };
+     const result = await saveEventPresence(presence);
+     if (result.error) return result;
+
+     try {
+       await db.from('event_cancel_requests')
+         .update({ status: 'recusado', reviewed_at: now })
+         .eq('event_id', eventId)
+         .eq('user_id', userId)
+         .eq('status', 'pendente');
+     } catch {}
+
+     return result;
+   }
+
    async function initEventos() {
      const profile = await renderSidebar('eventos');
      if (!profile) return;
@@ -3735,15 +3761,13 @@
        /* PRESENÇA — Participar */
        tab.querySelectorAll('.pres-join-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
-           e.stopPropagation();
-           btn.disabled = true;
-           const eid = btn.dataset.id;
-           const { error } = await saveEventPresence(
-             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar', response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null }
-           );
-           if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
-           else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; }
-         });
+          e.stopPropagation();
+          btn.disabled = true;
+          const eid = btn.dataset.id;
+          const { error } = await confirmEventParticipation(eid, profile.id);
+          if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
+          else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; }
+        });
        });
 
        /* PRESENÇA — Não Participar (abre modal de justificativa) */
@@ -4493,13 +4517,10 @@
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
      overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
        const btn = e.currentTarget; btn.disabled = true;
-       const { error } = await saveEventPresence({
-         event_id: ev.id, user_id: currentProfile.id, membro_id: currentProfile.id, status: 'participar',
-         response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null
-       });
-       if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
-       else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
-     });
+      const { error } = await confirmEventParticipation(ev.id, currentProfile.id);
+      if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
+      else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
+    });
      overlay.addEventListener('click', e => {
        const skipBtn = e.target.closest?.('#detailSkipBtn');
        const cancelBtn = e.target.closest?.('#detailCancelBtn');

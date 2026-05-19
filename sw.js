@@ -2,7 +2,7 @@
    Cache-first para assets estaticos | Network-first para paginas
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v18-accepted-absence-actions';
+const CACHE_VERSION  = 'msy-v19-rejoin-after-absence';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
