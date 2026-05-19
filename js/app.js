@@ -3260,8 +3260,7 @@
    function normalizeEventPresenceStatus(presence) {
      const status = presence?.response_status || presence?.status || null;
      if (status === 'participar' || status === 'confirmado') return 'participar';
-     if (status === 'justificado') return 'justificado';
-     if (status === 'nao_participar' || status === 'ausente') return 'nao_participar';
+     if (status === 'nao_participar' || status === 'ausente' || status === 'justificado') return 'nao_participar';
      return status;
    }
 
@@ -3784,9 +3783,23 @@
              justificativa_status: accepted ? 'aceita' : 'recusada',
              justificativa_reviewed_by: profile.id,
              justificativa_reviewed_at: new Date().toISOString(),
-             status: accepted ? 'justificado' : 'nao_participar'
+             status: accepted ? 'justificado' : 'nao_participar',
+             response_status: 'nao_participar'
            }).eq('id', btn.dataset.pid);
-           if (!error) { Utils.showToast(accepted ? 'Justificativa aceita.' : 'Justificativa recusada.'); loadEventos(); }
+           if (!error) {
+             if (btn.dataset.uid) {
+               await db.rpc('notify_member', {
+                 p_user_id: btn.dataset.uid,
+                 p_message: accepted
+                   ? `Sua ausencia em "${btn.dataset.eventTitle}" foi aprovada pela Diretoria.`
+                   : `Sua ausencia em "${btn.dataset.eventTitle}" foi recusada pela Diretoria.`,
+                 p_type: 'event',
+                 p_icon: accepted ? '✅' : '⚠️'
+               }).catch(() => {});
+             }
+             Utils.showToast(accepted ? 'Ausencia aprovada.' : 'Ausencia recusada.');
+             loadEventos();
+           }
            else { Utils.showToast('Erro ao revisar justificativa.', 'error'); btn.disabled = false; }
          });
        });
@@ -4353,14 +4366,14 @@
              <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
              <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(p.ev?.title || 'Evento')} · ${Utils.formatDate(p.ev?.event_date)}</div>
            </div>
-           <span class="ev-badge ev-badge-opt">Justificativa</span>
-         </div>
-         <div class="events-review-text">${Utils.escapeHtml(p.justificativa || 'Sem justificativa informada.')}</div>
-         <div class="events-review-actions">
-           <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aceitar</button>
-           <button class="btn btn-sm ev-just-refuse" data-pid="${p.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
-         </div>
-       </div>`).join('');
+          <span class="ev-badge ev-badge-opt">Ausencia</span>
+        </div>
+        <div class="events-review-text">${Utils.escapeHtml(p.justificativa || 'Sem justificativa informada.')}</div>
+        <div class="events-review-actions">
+          <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Ausencia</button>
+          <button class="btn btn-sm ev-just-refuse" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Ausencia</button>
+        </div>
+      </div>`).join('');
 
      const changeCards = (cancelReqs || []).map(r => `
        <div class="events-review-card">
@@ -4820,23 +4833,28 @@
      overlay.querySelector('#skipClose').addEventListener('click', close);
      overlay.querySelector('#skipCancel').addEventListener('click', close);
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-      overlay.querySelector('#skipSave').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        console.log('[MSY][skip] Botão confirmar clicado');
-        const reason = overlay.querySelector('#skipReason').value.trim();
-        console.log('[MSY][skip] Motivo:', reason);
-        if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
-        const btn = overlay.querySelector('#skipSave');
-        console.log('[MSY][skip] Desabilitando botão...');
-        btn.disabled = true;
-        const { error } = await saveEventPresence(
-          { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' }
-        );
-        console.log('[MSY][skip] Resultado:', error);
-        if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
-        else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
-      });
+     overlay.querySelector('#skipSave').addEventListener('click', async (e) => {
+       e.stopPropagation();
+       e.preventDefault();
+       const reason = overlay.querySelector('#skipReason').value.trim();
+       if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
+       const btn = overlay.querySelector('#skipSave');
+       btn.disabled = true;
+       const { error } = await saveEventPresence(
+         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' }
+       );
+       if (!error) {
+         await db.rpc('notify_diretoria', {
+           p_message: `${profile.name} enviou uma justificativa de ausencia para evento.`,
+           p_type: 'event',
+           p_icon: '🗓️'
+         }).catch(() => {});
+         Utils.showToast('Ausencia enviada para analise da Diretoria.');
+         close();
+         onSuccess();
+       }
+       else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
+     });
    }
 
    /* ── Presença: modal Solicitar Cancelamento ── */
