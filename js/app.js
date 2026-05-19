@@ -3265,6 +3265,44 @@
      return status;
    }
 
+   async function saveEventPresence(payload) {
+     const row = {
+       ...payload,
+       user_id: payload.user_id || payload.membro_id,
+       membro_id: payload.membro_id || payload.user_id
+     };
+     const memberId = row.user_id || row.membro_id;
+     const legacyRow = {
+       event_id: row.event_id,
+       user_id: row.user_id,
+       membro_id: row.membro_id,
+       status: row.response_status === 'participar'
+         ? 'confirmado'
+         : row.response_status === 'nao_participar'
+           ? (row.justificativa ? 'justificado' : 'ausente')
+           : row.status,
+       justificativa: row.justificativa || null
+     };
+
+     const { data: existing, error: findError } = await db.from('event_presencas')
+       .select('id')
+       .eq('event_id', row.event_id)
+       .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`)
+       .limit(1);
+     if (findError) return { data: null, error: findError };
+
+     if (existing && existing.length) {
+       const modern = await db.from('event_presencas').update(row).eq('id', existing[0].id);
+       if (!modern.error) return modern;
+       console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+       return db.from('event_presencas').update(legacyRow).eq('id', existing[0].id);
+     }
+     const modern = await db.from('event_presencas').insert(row);
+     if (!modern.error) return modern;
+     console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+     return db.from('event_presencas').insert(legacyRow);
+   }
+
    async function initEventos() {
      const profile = await renderSidebar('eventos');
      if (!profile) return;
@@ -3528,44 +3566,6 @@
          .ev-presence-count { font-size:.68rem; color:var(--text-3); margin-left:auto; }
        `;
        document.head.appendChild(_s);
-     }
-
-     async function saveEventPresence(payload) {
-       const row = {
-         ...payload,
-         user_id: payload.user_id || payload.membro_id,
-         membro_id: payload.membro_id || payload.user_id
-       };
-       const memberId = row.user_id || row.membro_id;
-       const legacyRow = {
-         event_id: row.event_id,
-         user_id: row.user_id,
-         membro_id: row.membro_id,
-         status: row.response_status === 'participar'
-           ? 'confirmado'
-           : row.response_status === 'nao_participar'
-             ? (row.justificativa ? 'justificado' : 'ausente')
-             : row.status,
-         justificativa: row.justificativa || null
-       };
-
-       const { data: existing, error: findError } = await db.from('event_presencas')
-         .select('id')
-         .eq('event_id', row.event_id)
-         .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`)
-         .limit(1);
-       if (findError) return { data: null, error: findError };
-
-       if (existing && existing.length) {
-         const modern = await db.from('event_presencas').update(row).eq('id', existing[0].id);
-         if (!modern.error) return modern;
-         console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
-         return db.from('event_presencas').update(legacyRow).eq('id', existing[0].id);
-       }
-       const modern = await db.from('event_presencas').insert(row);
-       if (!modern.error) return modern;
-       console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
-       return db.from('event_presencas').insert(legacyRow);
      }
 
      async function loadEventos() {
