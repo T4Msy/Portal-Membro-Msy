@@ -242,6 +242,8 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_social_post(uuid);
+
 CREATE OR REPLACE FUNCTION public.delete_social_post(p_post_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql

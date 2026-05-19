@@ -599,7 +599,6 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
 .social-edit-media-actions{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:8px}.social-edit-media-actions span{color:var(--text-3);font-size:.72rem;font-weight:950}
 .social-icon-btn.danger{color:var(--red-bright)}
 .social-edit-empty-media{min-height:190px;border:1px dashed var(--border-faint);background:var(--social-soft);border-radius:18px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-weight:950;cursor:pointer}
-.social-story-elements-input{min-height:80px!important}
 @media(max-width:640px){
   body[data-page="feed"] #profileViewer.profile-viewer.social-profile-editor-viewer{padding:0;align-items:stretch;justify-content:stretch}
   body[data-page="feed"] #profileViewer .social-editor-panel{width:100%;height:100dvh;max-height:100dvh;border-radius:0;border:0}
@@ -729,6 +728,8 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
 .story-media{position:relative;overflow:hidden}
 .post-media-edited{transform:var(--editor-transform,translate(calc(-50% + 0%),calc(-50% + 0%)) scale(1) rotate(0deg));transform-origin:center center;will-change:transform}
 .post-media-slide .post-media-edited,.composer-preview-main .post-media-edited,.story-media .post-media-edited,.media-viewer-slide .post-media-edited{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:cover;max-width:none;max-height:none}
+.story-viewer.open .story-media-premium .post-media-edited{width:min(100%,calc((100dvh - 24px) * var(--story-media-aspect,9 / 16)));height:auto;aspect-ratio:var(--story-media-aspect,9 / 16);max-width:100%;max-height:100%;object-fit:cover}
+.comment-delete-btn{color:var(--red-bright)!important}
 .composer-media-controls{display:grid;grid-template-columns:minmax(94px,.7fr) minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;margin-top:10px}
 .composer-media-controls input,.social-edit-media-controls input{min-width:0}
 .social-edit-media-controls{display:grid;grid-template-columns:1fr;gap:8px;padding:8px;border-top:1px solid rgba(255,255,255,.07)}

@@ -3257,6 +3257,14 @@
    /* ============================================================
       PAGE: EVENTOS
       ============================================================ */
+   function normalizeEventPresenceStatus(presence) {
+     const status = presence?.response_status || presence?.status || null;
+     if (status === 'participar' || status === 'confirmado') return 'participar';
+     if (status === 'justificado') return 'justificado';
+     if (status === 'nao_participar' || status === 'ausente') return 'nao_participar';
+     return status;
+   }
+
    async function initEventos() {
      const profile = await renderSidebar('eventos');
      if (!profile) return;
@@ -3528,18 +3536,36 @@
          user_id: payload.user_id || payload.membro_id,
          membro_id: payload.membro_id || payload.user_id
        };
+       const memberId = row.user_id || row.membro_id;
+       const legacyRow = {
+         event_id: row.event_id,
+         user_id: row.user_id,
+         membro_id: row.membro_id,
+         status: row.response_status === 'participar'
+           ? 'confirmado'
+           : row.response_status === 'nao_participar'
+             ? (row.justificativa ? 'justificado' : 'ausente')
+             : row.status,
+         justificativa: row.justificativa || null
+       };
 
        const { data: existing, error: findError } = await db.from('event_presencas')
          .select('id')
          .eq('event_id', row.event_id)
-         .eq('user_id', row.user_id)
+         .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`)
          .limit(1);
        if (findError) return { data: null, error: findError };
 
        if (existing && existing.length) {
-         return db.from('event_presencas').update(row).eq('id', existing[0].id);
+         const modern = await db.from('event_presencas').update(row).eq('id', existing[0].id);
+         if (!modern.error) return modern;
+         console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+         return db.from('event_presencas').update(legacyRow).eq('id', existing[0].id);
        }
-       return db.from('event_presencas').insert(row);
+       const modern = await db.from('event_presencas').insert(row);
+       if (!modern.error) return modern;
+       console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+       return db.from('event_presencas').insert(legacyRow);
      }
 
      async function loadEventos() {
@@ -3559,7 +3585,7 @@
          db.from('events')
            .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
            .order('event_date', { ascending: false }),
-         db.from('event_presencas').select('*').eq('user_id', profile.id)
+         db.from('event_presencas').select('*').or(`user_id.eq.${profile.id},membro_id.eq.${profile.id}`)
        ]);
 
        if (error) { Utils.showToast('Erro ao carregar eventos.', 'error'); return; }
@@ -3588,7 +3614,7 @@
            .in('event_id', visibleEventIds);
          allPresencas = counts || [];
          allPresencas.forEach(c => {
-           const response = c.response_status || (['participar', 'confirmado'].includes(c.status) ? 'participar' : null);
+           const response = normalizeEventPresenceStatus(c);
            if (response === 'participar') presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
          });
        }
@@ -3704,7 +3730,7 @@
              { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar', response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null }
            );
            if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
-           else { Utils.showToast('Erro ao confirmar presença.', 'error'); btn.disabled = false; }
+           else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; }
          });
        });
 
@@ -4182,7 +4208,7 @@
      const canConclude = typeof permissions === 'boolean' ? permissions : !!permissions?.canConclude;
      const canAttendance = typeof permissions === 'boolean' ? permissions : !!permissions?.canAttendance;
      const canReview = typeof permissions === 'boolean' ? permissions : !!permissions?.canReview;
-     const myStatus = myPresence?.response_status || myPresence?.status || null;
+     const myStatus = normalizeEventPresenceStatus(myPresence);
      const myJustStatus = myPresence?.justificativa_status || null;
 
      /* Cor e ícone por tipo */
@@ -4375,7 +4401,7 @@
    }
 
    function openEventDetailModal(ev, myPresence, cancelPending, presCount, currentProfile, onSuccess) {
-     const status = myPresence?.response_status || myPresence?.status || null;
+     const status = normalizeEventPresenceStatus(myPresence);
      const justStatus = myPresence?.justificativa_status || null;
      const statusText = status === 'participar'
        ? (cancelPending ? 'Participacao confirmada · mudanca em analise' : 'Participacao confirmada')
@@ -4425,7 +4451,7 @@
          response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null
        });
        if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
-       else { Utils.showToast('Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
+       else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
      });
      overlay.addEventListener('click', e => {
        const skipBtn = e.target.closest?.('#detailSkipBtn');
