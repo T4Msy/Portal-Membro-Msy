@@ -3575,10 +3575,9 @@
        /* Checar permissão de gerenciar eventos (diretoria OU permissão individual) */
        const canCreate = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','gerenciar_eventos']);
        const canDelete = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['excluir_eventos','gerenciar_eventos']);
-       const canConclude = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
-       const canReview = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['revisar_justificativas_eventos','gerenciar_eventos']);
-       const canAttendance = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['registrar_presencas_eventos','registrar_participantes','gerenciar_presencas','gerenciar_eventos']);
-       const canManage = canCreate || canDelete || canConclude || canReview || canAttendance;
+      const canConclude = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
+      const canReview = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['revisar_justificativas_eventos','gerenciar_eventos']);
+      const canAttendance = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['registrar_presencas_eventos','registrar_participantes','gerenciar_presencas','gerenciar_eventos']);
 
        const [{ data: evs, error }, { data: myPresencas }] = await Promise.all([
          db.from('events')
@@ -3631,16 +3630,23 @@
          await enrichEventReviewRows(allCancelReqs, pendingJustifs);
        }
 
-       const directorCount = allCancelReqs.length + pendingJustifs.length + (canAttendance ? done.length : 0);
-       const dirTab = document.getElementById('eventDirectorTabBtn');
-       if (dirTab) {
-         dirTab.style.display = canManage ? '' : 'none';
-         const badge = dirTab.querySelector('[data-count]');
-         if (badge) badge.textContent = String(directorCount);
-       }
-       const su = document.getElementById('eventsStatUpcoming'); if (su) su.textContent = String(upcoming.length);
-       const sd = document.getElementById('eventsStatDone'); if (sd) sd.textContent = String(done.length);
-       const sp = document.getElementById('eventsStatPending'); if (sp) sp.textContent = String(allCancelReqs.length + pendingJustifs.length);
+      const attendanceCount = canAttendance ? done.length : 0;
+      const justificationCount = allCancelReqs.length + pendingJustifs.length;
+      const presenceTab = document.getElementById('eventPresenceTabBtn');
+      if (presenceTab) {
+        presenceTab.style.display = canAttendance ? '' : 'none';
+        const badge = presenceTab.querySelector('[data-count]');
+        if (badge) badge.textContent = String(attendanceCount);
+      }
+      const justTab = document.getElementById('eventJustificationTabBtn');
+      if (justTab) {
+        justTab.style.display = canReview ? '' : 'none';
+        const badge = justTab.querySelector('[data-count]');
+        if (badge) badge.textContent = String(justificationCount);
+      }
+      const su = document.getElementById('eventsStatUpcoming'); if (su) su.textContent = String(upcoming.length);
+      const sd = document.getElementById('eventsStatDone'); if (sd) sd.textContent = String(done.length);
+      const sp = document.getElementById('eventsStatPending'); if (sp) sp.textContent = String(justificationCount);
 
        const actionsHtml = canCreate ? `
          <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -3658,17 +3664,21 @@
              ${done.map(ev => renderEventCard(ev, cardOptions, false, myPresMap[ev.id]||null, false, presCountMap[ev.id]||0)).join('')}
            ` : `<div class="empty-state" style="padding:44px"><div class="empty-state-icon"><i class="fa-solid fa-circle-check"></i></div><div class="empty-state-text">Nenhum evento concluido ainda.</div></div>`}
          `;
-       } else if (activeTab === 'diretoria' && canManage) {
-         tab.innerHTML = renderEventDirectorPanel({
-           actionsHtml,
-           pendingJustifs,
-           cancelReqs: allCancelReqs,
-           concluded: done,
-           canReview,
-           canAttendance
-         });
-       } else {
-         activeTab = 'proximos';
+      } else if (activeTab === 'presencas' && canAttendance) {
+        tab.innerHTML = renderEventPresencePanel({
+          actionsHtml,
+          concluded: done,
+          canAttendance
+        });
+      } else if (activeTab === 'justificativas' && canReview) {
+        tab.innerHTML = renderEventJustificationPanel({
+          actionsHtml,
+          pendingJustifs,
+          cancelReqs: allCancelReqs,
+          canReview
+        });
+      } else {
+        activeTab = 'proximos';
          tab.innerHTML = `
            ${actionsHtml}
            ${upcoming.length > 0 ? `
@@ -4000,7 +4010,8 @@
          <div class="events-tabs">
            <button class="events-tab active" data-tab="proximos"><i class="fa-solid fa-calendar-days"></i> Proximos Eventos</button>
            <button class="events-tab" data-tab="concluidos"><i class="fa-solid fa-circle-check"></i> Eventos Concluidos</button>
-           <button class="events-tab" data-tab="diretoria" id="eventDirectorTabBtn" style="display:none"><i class="fa-solid fa-user-shield"></i> Diretoria <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
+          <button class="events-tab" data-tab="presencas" id="eventPresenceTabBtn" style="display:none"><i class="fa-solid fa-clipboard-check"></i> Presenças <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
+          <button class="events-tab" data-tab="justificativas" id="eventJustificationTabBtn" style="display:none"><i class="fa-solid fa-comment-dots"></i> Justificativas <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
          </div>
          <div id="evTab"></div>
        </div>
@@ -4314,15 +4325,17 @@
                   ${cancelPending
                     ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
                     : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
-                 ` : myStatus === 'nao_participar' ? `
-                   ${myJustStatus === 'aceita' ? `
-                     <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
-                     <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
-                     <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
-                   ` : `
-                     <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> ${myJustStatus === 'recusada' ? 'Justificativa recusada' : 'Justificativa em analise'}</span>
-                     <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
-                   `}
+                  ` : myStatus === 'nao_participar' ? `
+                    ${myJustStatus === 'aceita' ? `
+                      <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
+                      <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                      <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
+                    ` : myJustStatus === 'recusada' ? `
+                      <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa recusada</span>
+                      <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                    ` : `
+                      <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-clock"></i> Justificativa em analise</span>
+                    `}
                 ` : `
                   <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>
                   <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
@@ -4358,10 +4371,10 @@
      pendingJustifs.forEach(p => { p.requester = profileMap[p.user_id || p.membro_id] || null; p.ev = eventMap[p.event_id] || null; });
    }
 
-   function renderEventDirectorPanel({ actionsHtml, pendingJustifs, cancelReqs, concluded, canReview, canAttendance }) {
-     const justCards = (pendingJustifs || []).map(p => `
-       <div class="events-review-card">
-         <div class="events-review-head">
+  function renderEventJustificationPanel({ actionsHtml, pendingJustifs, cancelReqs, canReview }) {
+    const justCards = (pendingJustifs || []).map(p => `
+      <div class="events-review-card">
+        <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
              <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(p.ev?.title || 'Evento')} · ${Utils.formatDate(p.ev?.event_date)}</div>
@@ -4375,7 +4388,7 @@
         </div>
       </div>`).join('');
 
-     const changeCards = (cancelReqs || []).map(r => `
+    const changeCards = (cancelReqs || []).map(r => `
        <div class="events-review-card">
          <div class="events-review-head">
            <div>
@@ -4388,12 +4401,25 @@
          <div class="events-review-actions">
            <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
            <button class="btn btn-sm ev-change-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>
-         </div>
-       </div>`).join('');
+        </div>
+      </div>`).join('');
 
-     const presenceCards = (concluded || []).map(ev => `
-       <div class="events-review-card">
-         <div class="events-review-head">
+    const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa pendente.</div></div>`;
+    return `
+      ${actionsHtml}
+      <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas Pendentes</div>
+      ${canReview && (justCards || changeCards) ? `
+        <div class="events-director-grid">
+          ${justCards}
+          ${changeCards}
+        </div>` : empty}
+    `;
+  }
+
+  function renderEventPresencePanel({ actionsHtml, concluded, canAttendance }) {
+    const presenceCards = (concluded || []).map(ev => `
+      <div class="events-review-card">
+        <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(ev.title)}</div>
              <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(ev.event_date)} · ${ev.event_time || '--'}</div>
@@ -4403,28 +4429,29 @@
          <div class="events-review-text">Registre quem realmente participou para atualizar o desempenho da Ordem.</div>
          <div class="events-review-actions">
            <button class="btn btn-sm ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Registrar Presencas</button>
-         </div>
-       </div>`).join('');
+        </div>
+      </div>`).join('');
 
-     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-shield-check"></i></div><div class="empty-state-text">Nada pendente para analisar.</div></div>`;
-     return `
-       ${actionsHtml}
-       <div class="ev-section-label"><i class="fa-solid fa-user-shield"></i> Central da Diretoria</div>
-       ${(canReview && (justCards || changeCards)) || (canAttendance && presenceCards) ? `
-         <div class="events-director-grid">
-           ${canReview ? justCards : ''}
-           ${canReview ? changeCards : ''}
-           ${canAttendance ? presenceCards : ''}
-         </div>` : empty}
-     `;
-   }
+    const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div><div class="empty-state-text">Nenhum evento concluido para registrar presencas.</div></div>`;
+    return `
+      ${actionsHtml}
+      <div class="ev-section-label"><i class="fa-solid fa-clipboard-check"></i> Presencas</div>
+      ${canAttendance && presenceCards ? `
+        <div class="events-director-grid">
+          ${presenceCards}
+        </div>` : empty}
+    `;
+  }
 
-   function openEventDetailModal(ev, myPresence, cancelPending, presCount, currentProfile, onSuccess) {
-     const status = normalizeEventPresenceStatus(myPresence);
-     const justStatus = myPresence?.justificativa_status || null;
-     const statusText = status === 'participar'
-       ? (cancelPending ? 'Participacao confirmada · mudanca em analise' : 'Participacao confirmada')
-       : status === 'nao_participar' || status === 'justificado'
+  function openEventDetailModal(ev, myPresence, cancelPending, presCount, currentProfile, onSuccess) {
+    const status = normalizeEventPresenceStatus(myPresence);
+    const justStatus = myPresence?.justificativa_status || null;
+    const canChangeToParticipating = ev.status !== 'concluido'
+      && status !== 'participar'
+      && !(status === 'nao_participar' && justStatus === 'pendente');
+    const statusText = status === 'participar'
+      ? (cancelPending ? 'Participacao confirmada · mudanca em analise' : 'Participacao confirmada')
+      : status === 'nao_participar' || status === 'justificado'
          ? (justStatus === 'aceita' ? 'Ausencia justificada aceita' : justStatus === 'recusada' ? 'Ausencia recusada' : 'Ausencia em analise')
          : 'Sem resposta';
      const overlay = document.createElement('div');
@@ -4452,7 +4479,7 @@
            </div>
          </div>
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
-            ${ev.status !== 'concluido' && status !== 'participar' ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
+           ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && status === 'nao_participar' && justStatus === 'aceita' ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
