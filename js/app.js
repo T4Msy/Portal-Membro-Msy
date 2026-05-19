@@ -4332,7 +4332,6 @@
                     ${myJustStatus === 'aceita' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
-                      <button class="ev-presence-btn ev-presence-btn-skip pres-skip-btn" data-id="${ev.id}"><i class="fa-solid fa-xmark"></i> Não Vou Participar</button>
                     ` : myJustStatus === 'recusada' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa recusada</span>
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
@@ -4482,7 +4481,6 @@
          </div>
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
            ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
-            ${ev.status !== 'concluido' && status === 'nao_participar' && justStatus === 'aceita' ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
             <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
