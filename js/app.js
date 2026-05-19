@@ -3522,6 +3522,26 @@
        document.head.appendChild(_s);
      }
 
+     async function saveEventPresence(payload) {
+       const row = {
+         ...payload,
+         user_id: payload.user_id || payload.membro_id,
+         membro_id: payload.membro_id || payload.user_id
+       };
+
+       const { data: existing, error: findError } = await db.from('event_presencas')
+         .select('id')
+         .eq('event_id', row.event_id)
+         .eq('user_id', row.user_id)
+         .limit(1);
+       if (findError) return { data: null, error: findError };
+
+       if (existing && existing.length) {
+         return db.from('event_presencas').update(row).eq('id', existing[0].id);
+       }
+       return db.from('event_presencas').insert(row);
+     }
+
      async function loadEventos() {
        const tab = document.getElementById('evTab');
        if (!tab) return;
@@ -3680,9 +3700,8 @@
            e.stopPropagation();
            btn.disabled = true;
            const eid = btn.dataset.id;
-           const { error } = await db.from('event_presencas').upsert(
-             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar', response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null },
-             { onConflict: 'event_id,user_id', ignoreDuplicates: false }
+           const { error } = await saveEventPresence(
+             { event_id: eid, user_id: profile.id, membro_id: profile.id, status: 'participar', response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null }
            );
            if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
            else { Utils.showToast('Erro ao confirmar presença.', 'error'); btn.disabled = false; }
@@ -3759,7 +3778,7 @@
              }).eq('id', btn.dataset.rid)
            ];
            if (accepted && req) {
-             updates.push(db.from('event_presencas').upsert({
+             updates.push(saveEventPresence({
                event_id: req.event_id,
                user_id: req.user_id,
                membro_id: req.user_id,
@@ -3770,7 +3789,7 @@
                justificativa_status: 'aceita',
                justificativa_reviewed_by: profile.id,
                justificativa_reviewed_at: new Date().toISOString()
-             }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }));
+             }));
            }
            const results = await Promise.all(updates);
            const error = results.find(r => r.error)?.error;
@@ -4401,10 +4420,10 @@
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
      overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
        const btn = e.currentTarget; btn.disabled = true;
-       const { error } = await db.from('event_presencas').upsert({
+       const { error } = await saveEventPresence({
          event_id: ev.id, user_id: currentProfile.id, membro_id: currentProfile.id, status: 'participar',
          response_status: 'participar', response_at: new Date().toISOString(), justificativa: null, justificativa_status: null
-       }, { onConflict: 'event_id,user_id', ignoreDuplicates: false });
+       });
        if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
        else { Utils.showToast('Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
      });
@@ -4574,7 +4593,7 @@
          btn.disabled = true;
          const req = cancelReqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           db.from('event_presencas').upsert({
+           saveEventPresence({
              event_id: btn.dataset.eid,
              user_id: btn.dataset.uid,
              membro_id: btn.dataset.uid,
@@ -4583,7 +4602,7 @@
              response_at: new Date().toISOString(),
              justificativa: req?.justificativa || null,
              justificativa_status: 'aceita'
-           }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }),
+           }),
            db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[style*="rgba(245"]').remove(); }
@@ -4773,9 +4792,8 @@
        if (!reason) { Utils.showToast('Informe o motivo.', 'error'); return; }
        const btn = overlay.querySelector('#skipSave');
        btn.disabled = true;
-       const { error } = await db.from('event_presencas').upsert(
-         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' },
-         { onConflict: 'event_id,user_id', ignoreDuplicates: false }
+       const { error } = await saveEventPresence(
+         { event_id: eventId, user_id: profile.id, membro_id: profile.id, status: 'nao_participar', response_status: 'nao_participar', response_at: new Date().toISOString(), justificativa: reason, justificativa_status: 'pendente' }
        );
        if (!error) { Utils.showToast('Ausência registrada.'); close(); onSuccess(); }
        else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
@@ -4891,7 +4909,7 @@
          btn.disabled = true;
          const req = reqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           db.from('event_presencas').upsert({
+           saveEventPresence({
              event_id: btn.dataset.eid,
              user_id: btn.dataset.uid,
              membro_id: btn.dataset.uid,
@@ -4900,7 +4918,7 @@
              response_at: new Date().toISOString(),
              justificativa: req?.justificativa || null,
              justificativa_status: 'aceita'
-           }, { onConflict: 'event_id,user_id', ignoreDuplicates: false }),
+           }),
            db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[data-rid]').remove(); }

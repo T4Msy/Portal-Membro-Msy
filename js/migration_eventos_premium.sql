@@ -7,6 +7,8 @@
 -- Mantem compatibilidade com status legado:
 -- participar, nao_participar, confirmado, ausente, justificado.
 ALTER TABLE public.event_presencas
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS justificativa text,
   ADD COLUMN IF NOT EXISTS response_status text,
   ADD COLUMN IF NOT EXISTS response_at timestamptz,
   ADD COLUMN IF NOT EXISTS justificativa_status text,
@@ -16,6 +18,11 @@ ALTER TABLE public.event_presencas
   ADD COLUMN IF NOT EXISTS attendance_status text,
   ADD COLUMN IF NOT EXISTS attendance_recorded_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS attendance_recorded_at timestamptz;
+
+UPDATE public.event_presencas
+SET user_id = membro_id
+WHERE user_id IS NULL
+  AND membro_id IS NOT NULL;
 
 DO $$
 BEGIN
@@ -41,6 +48,21 @@ BEGIN
     ALTER TABLE public.event_presencas
       ADD CONSTRAINT event_presencas_attendance_status_check
       CHECK (attendance_status IS NULL OR attendance_status IN ('presente','ausente'));
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'event_presencas_user_event_unique'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.event_presencas
+        ADD CONSTRAINT event_presencas_user_event_unique UNIQUE (event_id, user_id);
+    EXCEPTION
+      WHEN unique_violation THEN
+        RAISE NOTICE 'event_presencas tem duplicados em (event_id,user_id); frontend usara fallback sem ON CONFLICT ate a base ser saneada.';
+    END;
   END IF;
 END$$;
 
@@ -86,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_event_cancel_requests_pending_lookup
   ON public.event_cancel_requests(user_id, event_id, status);
 
 -- 3) RLS ampliado para permissoes granulares novas.
-CREATE OR REPLACE FUNCTION public.has_permission(p_name text)
+CREATE OR REPLACE FUNCTION public.has_permission(perm text)
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
@@ -100,7 +122,7 @@ AS $$
   OR EXISTS (
     SELECT 1 FROM public.member_permissions
     WHERE user_id = auth.uid()
-      AND p_name = ANY(permissions)
+      AND perm = ANY(permissions)
   );
 $$;
 
