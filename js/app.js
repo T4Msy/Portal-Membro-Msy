@@ -3376,6 +3376,73 @@
      return result;
    }
 
+   async function approveEventCancellation(eventId, userId, justificativa, reviewerId) {
+     const now = new Date().toISOString();
+     const modernRow = {
+       event_id: eventId,
+       user_id: userId,
+       membro_id: userId,
+       status: 'justificado',
+       response_status: 'nao_participar',
+       response_at: now,
+       justificativa: justificativa || null,
+       justificativa_status: 'aceita',
+       justificativa_reviewed_by: reviewerId,
+       justificativa_reviewed_at: now
+     };
+     const legacyRow = {
+       event_id: eventId,
+       user_id: userId,
+       membro_id: userId,
+       status: 'justificado',
+       justificativa: justificativa || null
+     };
+
+     const memberFilter = `user_id.eq.${userId},membro_id.eq.${userId}`;
+     const { data: existing, error: findError } = await db.from('event_presencas')
+       .select('id')
+       .eq('event_id', eventId)
+       .or(memberFilter);
+     if (findError) return { data: null, error: findError };
+
+     let result;
+     if (existing && existing.length) {
+       result = await db.from('event_presencas')
+         .update(modernRow)
+         .eq('event_id', eventId)
+         .or(memberFilter)
+         .select('id');
+
+       if (result.error) {
+         console.warn('[MSY][eventos] Aprovacao de cancelamento com schema moderno falhou; tentando schema legado:', result.error);
+         result = await db.from('event_presencas')
+           .update(legacyRow)
+           .eq('event_id', eventId)
+           .or(memberFilter)
+           .select('id');
+       }
+     } else {
+       result = await db.from('event_presencas')
+         .insert(modernRow)
+         .select('id')
+         .maybeSingle();
+
+       if (result.error) {
+         console.warn('[MSY][eventos] Aprovacao de cancelamento com schema moderno falhou; tentando schema legado:', result.error);
+         result = await db.from('event_presencas')
+           .insert(legacyRow)
+           .select('id')
+           .maybeSingle();
+       }
+     }
+
+     if (result.error) return result;
+     if (!result.data || (Array.isArray(result.data) && result.data.length === 0)) {
+       return { data: null, error: new Error('Nenhum registro de presença foi atualizado.') };
+     }
+     return result;
+   }
+
    async function initEventos() {
      const profile = await renderSidebar('eventos');
      if (!profile) return;
@@ -3907,18 +3974,7 @@
              }).eq('id', btn.dataset.rid)
            ];
            if (accepted && req) {
-             updates.push(saveEventPresence({
-               event_id: req.event_id,
-               user_id: req.user_id,
-               membro_id: req.user_id,
-               status: 'nao_participar',
-               response_status: 'nao_participar',
-               response_at: new Date().toISOString(),
-               justificativa: req.justificativa,
-               justificativa_status: 'aceita',
-               justificativa_reviewed_by: profile.id,
-               justificativa_reviewed_at: new Date().toISOString()
-             }));
+             updates.push(approveEventCancellation(req.event_id, req.user_id, req.justificativa, profile.id));
            }
            const results = await Promise.all(updates);
            const error = results.find(r => r.error)?.error;
@@ -4768,17 +4824,8 @@
          btn.disabled = true;
          const req = cancelReqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           saveEventPresence({
-             event_id: btn.dataset.eid,
-             user_id: btn.dataset.uid,
-             membro_id: btn.dataset.uid,
-             status: 'nao_participar',
-             response_status: 'nao_participar',
-             response_at: new Date().toISOString(),
-             justificativa: req?.justificativa || null,
-             justificativa_status: 'aceita'
-           }),
-           db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
+           approveEventCancellation(btn.dataset.eid, btn.dataset.uid, req?.justificativa || null, profile.id),
+           db.from('event_cancel_requests').update({ status: 'aprovado', reviewed_by: profile.id, reviewed_at: new Date().toISOString() }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[style*="rgba(245"]').remove(); }
          else { Utils.showToast('Erro.', 'error'); btn.disabled = false; }
@@ -5095,17 +5142,8 @@
          btn.disabled = true;
          const req = reqs.find(r => r.id === btn.dataset.rid);
          const [{ error: e1 }, { error: e2 }] = await Promise.all([
-           saveEventPresence({
-             event_id: btn.dataset.eid,
-             user_id: btn.dataset.uid,
-             membro_id: btn.dataset.uid,
-             status: 'nao_participar',
-             response_status: 'nao_participar',
-             response_at: new Date().toISOString(),
-             justificativa: req?.justificativa || null,
-             justificativa_status: 'aceita'
-           }),
-           db.from('event_cancel_requests').update({ status: 'aprovado' }).eq('id', btn.dataset.rid)
+           approveEventCancellation(btn.dataset.eid, btn.dataset.uid, req?.justificativa || null, null),
+           db.from('event_cancel_requests').update({ status: 'aprovado', reviewed_at: new Date().toISOString() }).eq('id', btn.dataset.rid)
          ]);
          if (!e1 && !e2) { Utils.showToast('Cancelamento aprovado.'); btn.closest('[data-rid]').remove(); }
          else { Utils.showToast('Erro ao aprovar.', 'error'); btn.disabled = false; }
