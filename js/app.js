@@ -3304,7 +3304,7 @@
 
    async function confirmEventParticipation(eventId, userId) {
      const now = new Date().toISOString();
-     const presence = {
+     const modernRow = {
        event_id: eventId,
        user_id: userId,
        membro_id: userId,
@@ -3314,8 +3314,56 @@
        justificativa: null,
        justificativa_status: null
      };
-     const result = await saveEventPresence(presence);
+     const legacyRow = {
+       event_id: eventId,
+       user_id: userId,
+       membro_id: userId,
+       status: 'confirmado',
+       justificativa: null
+     };
+
+     const { data: existing, error: findError } = await db.from('event_presencas')
+       .select('id')
+       .eq('event_id', eventId)
+       .or(`user_id.eq.${userId},membro_id.eq.${userId}`)
+       .limit(1);
+     if (findError) return { data: null, error: findError };
+
+     let result;
+     if (existing && existing.length) {
+       result = await db.from('event_presencas')
+         .update(modernRow)
+         .eq('id', existing[0].id)
+         .select('id')
+         .maybeSingle();
+
+       if (result.error) {
+         console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
+         result = await db.from('event_presencas')
+           .update(legacyRow)
+           .eq('id', existing[0].id)
+           .select('id')
+           .maybeSingle();
+       }
+     } else {
+       result = await db.from('event_presencas')
+         .insert(modernRow)
+         .select('id')
+         .maybeSingle();
+
+       if (result.error) {
+         console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
+         result = await db.from('event_presencas')
+           .insert(legacyRow)
+           .select('id')
+           .maybeSingle();
+       }
+     }
+
      if (result.error) return result;
+     if (!result.data) {
+       return { data: null, error: new Error('Nenhum registro de presença foi atualizado.') };
+     }
 
      try {
        await db.from('event_cancel_requests')
@@ -3761,12 +3809,13 @@
        /* PRESENÇA — Participar */
        tab.querySelectorAll('.pres-join-btn').forEach(btn => {
          btn.addEventListener('click', async e => {
-          e.stopPropagation();
-          btn.disabled = true;
-          const eid = btn.dataset.id;
-          const { error } = await confirmEventParticipation(eid, profile.id);
-          if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
-          else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; }
+         e.stopPropagation();
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
+         const eid = btn.dataset.id;
+         const { error } = await confirmEventParticipation(eid, profile.id);
+         if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
+         else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Agora vou participar'; }
         });
        });
 
@@ -4517,7 +4566,8 @@
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
      overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
        const btn = e.currentTarget; btn.disabled = true;
-      const { error } = await confirmEventParticipation(ev.id, currentProfile.id);
+       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
+       const { error } = await confirmEventParticipation(ev.id, currentProfile.id);
       if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
       else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
     });
