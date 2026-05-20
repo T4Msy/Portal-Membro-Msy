@@ -3308,7 +3308,7 @@
        event_id: eventId,
        user_id: userId,
        membro_id: userId,
-       status: 'participar',
+       status: 'confirmado',
        response_status: 'participar',
        response_at: now,
        justificativa: null,
