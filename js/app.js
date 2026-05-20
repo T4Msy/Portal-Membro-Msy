@@ -3322,28 +3322,28 @@
        justificativa: null
      };
 
+     const memberFilter = `user_id.eq.${userId},membro_id.eq.${userId}`;
      const { data: existing, error: findError } = await db.from('event_presencas')
        .select('id')
        .eq('event_id', eventId)
-       .or(`user_id.eq.${userId},membro_id.eq.${userId}`)
-       .limit(1);
+       .or(memberFilter);
      if (findError) return { data: null, error: findError };
 
      let result;
      if (existing && existing.length) {
        result = await db.from('event_presencas')
          .update(modernRow)
-         .eq('id', existing[0].id)
-         .select('id')
-         .maybeSingle();
+         .eq('event_id', eventId)
+         .or(memberFilter)
+         .select('id');
 
        if (result.error) {
          console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
          result = await db.from('event_presencas')
            .update(legacyRow)
-           .eq('id', existing[0].id)
-           .select('id')
-           .maybeSingle();
+           .eq('event_id', eventId)
+           .or(memberFilter)
+           .select('id');
        }
      } else {
        result = await db.from('event_presencas')
@@ -3361,7 +3361,7 @@
      }
 
      if (result.error) return result;
-     if (!result.data) {
+     if (!result.data || (Array.isArray(result.data) && result.data.length === 0)) {
        return { data: null, error: new Error('Nenhum registro de presença foi atualizado.') };
      }
 
@@ -3662,9 +3662,12 @@
 
        if (error) { Utils.showToast('Erro ao carregar eventos.', 'error'); return; }
 
-       // Build my presence map { event_id -> row }
-       const myPresMap = {};
-       (myPresencas||[]).forEach(p => { myPresMap[p.event_id] = p; });
+      // Build my presence map { event_id -> best row }. Duplicates can exist in older data.
+      const myPresMap = {};
+      (myPresencas||[]).forEach(p => {
+        const current = myPresMap[p.event_id];
+        if (!current || shouldPreferEventPresenceRow(p, current)) myPresMap[p.event_id] = p;
+      });
 
        // Load cancel requests pending
        const { data: cancelReqs } = await db.from('event_cancel_requests')
@@ -4460,6 +4463,16 @@
       if (!map.has(key)) map.set(key, row);
     });
     return [...map.values()];
+  }
+
+  function shouldPreferEventPresenceRow(next, current) {
+    const nextStatus = normalizeEventPresenceStatus(next);
+    const currentStatus = normalizeEventPresenceStatus(current);
+    if (nextStatus === 'participar' && currentStatus !== 'participar') return true;
+    if (nextStatus !== 'participar' && currentStatus === 'participar') return false;
+    const nextTime = Date.parse(next.response_at || next.updated_at || next.created_at || '') || 0;
+    const currentTime = Date.parse(current.response_at || current.updated_at || current.created_at || '') || 0;
+    return nextTime >= currentTime;
   }
 
   function renderEventJustificationPanel({ actionsHtml, pendingJustifs, canReview }) {
