@@ -3302,79 +3302,81 @@
      return db.from('event_presencas').insert(legacyRow);
    }
 
-   async function confirmEventParticipation(eventId, userId) {
-     const now = new Date().toISOString();
-     const modernRow = {
-       event_id: eventId,
-       user_id: userId,
-       membro_id: userId,
-       status: 'confirmado',
-       response_status: 'participar',
-       response_at: now,
-       justificativa: null,
-       justificativa_status: null
-     };
-     const legacyRow = {
-       event_id: eventId,
-       user_id: userId,
-       membro_id: userId,
-       status: 'confirmado',
-       justificativa: null
-     };
+    async function confirmEventParticipation(eventId, userId) {
+      const now = new Date().toISOString();
+      const memberFilter = `user_id.eq.${userId},membro_id.eq.${userId}`;
+      const { data: existingRows, error: findError } = await db.from('event_presencas')
+        .select('id,justificativa,justificativa_status')
+        .eq('event_id', eventId)
+        .or(memberFilter);
+      if (findError) return { data: null, error: findError };
 
-     const memberFilter = `user_id.eq.${userId},membro_id.eq.${userId}`;
-     const { data: existing, error: findError } = await db.from('event_presencas')
-       .select('id')
-       .eq('event_id', eventId)
-       .or(memberFilter);
-     if (findError) return { data: null, error: findError };
+      const hadJustificativa = !!(existingRows?.length && existingRows[0]?.justificativa);
 
-     let result;
-     if (existing && existing.length) {
-       result = await db.from('event_presencas')
-         .update(modernRow)
-         .eq('event_id', eventId)
-         .or(memberFilter)
-         .select('id');
+      const modernRow = {
+        event_id: eventId,
+        user_id: userId,
+        membro_id: userId,
+        status: 'confirmado',
+        response_status: 'participar',
+        response_at: now,
+        justificativa: null,
+        justificativa_status: null
+      };
+      const legacyRow = {
+        event_id: eventId,
+        user_id: userId,
+        membro_id: userId,
+        status: 'confirmado',
+        justificativa: null
+      };
 
-       if (result.error) {
-         console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
-         result = await db.from('event_presencas')
-           .update(legacyRow)
-           .eq('event_id', eventId)
-           .or(memberFilter)
-           .select('id');
-       }
-     } else {
-       result = await db.from('event_presencas')
-         .insert(modernRow)
-         .select('id')
-         .maybeSingle();
+      let result;
+      if (existingRows && existingRows.length) {
+        result = await db.from('event_presencas')
+          .update(modernRow)
+          .eq('event_id', eventId)
+          .or(memberFilter)
+          .select('id');
 
-       if (result.error) {
-         console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
-         result = await db.from('event_presencas')
-           .insert(legacyRow)
-           .select('id')
-           .maybeSingle();
-       }
-     }
+        if (result.error) {
+          console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
+          result = await db.from('event_presencas')
+            .update(legacyRow)
+            .eq('event_id', eventId)
+            .or(memberFilter)
+            .select('id');
+        }
+      } else {
+        result = await db.from('event_presencas')
+          .insert(modernRow)
+          .select('id')
+          .maybeSingle();
 
-     if (result.error) return result;
-     if (!result.data || (Array.isArray(result.data) && result.data.length === 0)) {
-       return { data: null, error: new Error('Nenhum registro de presença foi atualizado.') };
-     }
+        if (result.error) {
+          console.warn('[MSY][eventos] Reconfirmacao com schema moderno falhou; tentando schema legado:', result.error);
+          result = await db.from('event_presencas')
+            .insert(legacyRow)
+            .select('id')
+            .maybeSingle();
+        }
+      }
 
-     try {
-       await db.from('event_cancel_requests')
-         .update({ status: 'recusado', reviewed_at: now })
-         .eq('event_id', eventId)
-         .eq('user_id', userId)
-         .eq('status', 'pendente');
-     } catch {}
+      if (result.error) return result;
+      if (!result.data || (Array.isArray(result.data) && result.data.length === 0)) {
+        return { data: null, error: new Error('Nenhum registro de presença foi atualizado.') };
+      }
 
-     return result;
-   }
+      try {
+        await db.from('event_cancel_requests')
+          .update({ status: 'recusado', reviewed_at: now })
+          .eq('event_id', eventId)
+          .eq('user_id', userId)
+          .eq('status', 'pendente');
+      } catch {}
+
+      return { ...result, hadJustificativa };
+    }
 
    async function approveEventCancellation(eventId, userId, justificativa, reviewerId) {
      const now = new Date().toISOString();
@@ -3891,18 +3893,21 @@
          });
        });
 
-       /* PRESENÇA — Participar */
-       tab.querySelectorAll('.pres-join-btn').forEach(btn => {
-         btn.addEventListener('click', async e => {
-         e.stopPropagation();
-         btn.disabled = true;
-         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
-         const eid = btn.dataset.id;
-         const { error } = await confirmEventParticipation(eid, profile.id);
-         if (!error) { Utils.showToast('Presença confirmada!'); loadEventos(); }
-         else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Agora vou participar'; }
+        /* PRESENÇA — Participar */
+        tab.querySelectorAll('.pres-join-btn').forEach(btn => {
+          btn.addEventListener('click', async e => {
+          e.stopPropagation();
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
+          const eid = btn.dataset.id;
+          const { error, hadJustificativa } = await confirmEventParticipation(eid, profile.id);
+          if (!error) {
+            Utils.showToast(hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presença confirmada!');
+            loadEventos();
+          }
+          else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Agora vou participar'; }
+         });
         });
-       });
 
        /* PRESENÇA — Não Participar (abre modal de justificativa) */
        tab.querySelectorAll('.pres-skip-btn').forEach(btn => {
@@ -3912,7 +3917,7 @@
          });
        });
 
-       /* PRESENÇA — Solicitar Cancelamento */
+        /* PRESENÇA — Solicitar Troca */
        tab.querySelectorAll('.pres-cancel-btn').forEach(btn => {
          btn.addEventListener('click', e => {
            e.stopPropagation();
@@ -4503,10 +4508,10 @@
             ${!isPast && !isDone ? `
               <div class="ev-presence-bar" data-evid="${ev.id}">
                 ${myStatus === 'participar' ? `
-                  <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Confirmado</span>
-                  ${cancelPending
-                    ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Cancelamento Pendente</span>`
-                    : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</button>`}
+                   <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Presença confirmada</span>
+                   ${cancelPending
+                     ? `<span class="ev-presence-btn ev-presence-btn-cancel" style="cursor:default"><i class="fa-solid fa-clock"></i> Troca Pendente</span>`
+                     : `<button class="ev-presence-btn ev-presence-btn-cancel pres-cancel-btn" data-id="${ev.id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Troca</button>`}
                   ` : myStatus === 'nao_participar' ? `
                     ${myJustStatus === 'aceita' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
@@ -4714,7 +4719,7 @@
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
            ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
-            ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Mudanca</button>` : ''}
+             ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Troca</button>` : ''}
             <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
           </div>
        </div>`;
@@ -4723,13 +4728,13 @@
      overlay.querySelector('#eventDetailClose')?.addEventListener('click', close);
      overlay.querySelector('#eventDetailDone')?.addEventListener('click', close);
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-     overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
-       const btn = e.currentTarget; btn.disabled = true;
-       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
-       const { error } = await confirmEventParticipation(ev.id, currentProfile.id);
-      if (!error) { Utils.showToast('Presenca confirmada!'); close(); onSuccess?.(); }
-      else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
-    });
+      overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
+        const btn = e.currentTarget; btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
+        const { error, hadJustificativa } = await confirmEventParticipation(ev.id, currentProfile.id);
+       if (!error) { Utils.showToast(hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presenca confirmada!'); close(); onSuccess?.(); }
+       else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
+     });
      overlay.addEventListener('click', e => {
        const skipBtn = e.target.closest?.('#detailSkipBtn');
        const cancelBtn = e.target.closest?.('#detailCancelBtn');
@@ -5105,24 +5110,24 @@
      });
    }
 
-   /* ── Presença: modal Solicitar Cancelamento ── */
+    /* ── Presença: modal Solicitar Troca ── */
    function openPresenceCancelModal(eventId, profile, onSuccess) {
      const overlay = document.createElement('div');
      overlay.className = 'modal-overlay open';
      overlay.innerHTML = `
        <div class="modal" style="max-width:440px;background:#0e0e13;border:1px solid rgba(245,158,11,.2)">
          <div class="modal-header" style="border-bottom:1px solid rgba(245,158,11,.12)">
-           <div class="modal-title" style="color:#f59e0b"><i class="fa-solid fa-rotate-left"></i> Solicitar Cancelamento</div>
+            <div class="modal-title" style="color:#f59e0b"><i class="fa-solid fa-rotate-left"></i> Solicitar Troca</div>
            <button class="modal-close" id="pcClose"><i class="fa-solid fa-xmark"></i></button>
          </div>
          <div class="modal-body">
            <div style="font-size:.81rem;color:var(--text-2);margin-bottom:14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;padding:10px 14px">
              <i class="fa-solid fa-circle-info" style="color:#f59e0b;margin-right:6px"></i>
-             Sua solicitação será analisada pela Diretoria. O cancelamento só será efetivado após aprovação.
+              Sua solicitação será analisada pela Diretoria. A troca só será efetivada após aprovação.
            </div>
            <div class="form-group">
              <label class="form-label">Motivo <span style="color:var(--red-bright)">*</span></label>
-             <textarea class="form-input form-textarea" id="pcReason" style="min-height:90px" placeholder="Por que deseja cancelar sua participação?"></textarea>
+              <textarea class="form-input form-textarea" id="pcReason" style="min-height:90px" placeholder="Por que deseja trocar sua participação?"></textarea>
            </div>
          </div>
          <div class="modal-footer">
