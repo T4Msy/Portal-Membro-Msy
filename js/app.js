@@ -3712,7 +3712,7 @@
       }
 
       const attendanceCount = canAttendance ? done.length : 0;
-      const justificationCount = pendingJustifs.length;
+      const justificationCount = pendingJustifs.length + allCancelReqs.length;
       const presenceTab = document.getElementById('eventPresenceTabBtn');
       if (presenceTab) {
         presenceTab.style.display = canAttendance ? '' : 'none';
@@ -3755,6 +3755,7 @@
         tab.innerHTML = renderEventJustificationPanel({
           actionsHtml,
           pendingJustifs,
+          cancelReqs: allCancelReqs,
           canReview
         });
       } else {
@@ -4475,7 +4476,23 @@
     return nextTime >= currentTime;
   }
 
-  function renderEventJustificationPanel({ actionsHtml, pendingJustifs, canReview }) {
+  function renderEventJustificationPanel({ actionsHtml, pendingJustifs, cancelReqs = [], canReview }) {
+    const cancelCards = (cancelReqs || []).map(r => `
+      <div class="events-review-card">
+        <div class="events-review-head">
+           <div>
+             <div class="events-review-title">${Utils.escapeHtml(r.requester?.name || 'Membro')}</div>
+             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title || 'Evento')} · ${Utils.formatDate(r.ev?.event_date)}</div>
+           </div>
+          <span class="ev-badge ev-badge-opt">Cancelamento</span>
+        </div>
+        <div class="events-review-text">${Utils.escapeHtml(r.justificativa || 'Sem justificativa informada.')}</div>
+        <div class="events-review-actions">
+          <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Cancelamento</button>
+          <button class="btn btn-sm ev-change-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Cancelamento</button>
+        </div>
+      </div>`).join('');
+
     const justCards = (pendingJustifs || []).map(p => `
       <div class="events-review-card">
         <div class="events-review-head">
@@ -4493,12 +4510,13 @@
       </div>`).join('');
 
     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa pendente.</div></div>`;
+    const reviewCards = `${cancelCards}${justCards}`;
     return `
       ${actionsHtml}
       <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas Pendentes</div>
-      ${canReview && justCards ? `
+      ${canReview && reviewCards ? `
         <div class="events-director-grid">
-          ${justCards}
+          ${reviewCards}
         </div>` : empty}
     `;
   }
