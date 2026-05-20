@@ -3736,10 +3736,24 @@
         if (!current || shouldPreferEventPresenceRow(p, current)) myPresMap[p.event_id] = p;
       });
 
-       // Load cancel requests pending
+       // Load my cancel requests. Approved cancellations must override old duplicated confirmations.
        const { data: cancelReqs } = await db.from('event_cancel_requests')
-         .select('event_id,status').eq('user_id', profile.id).eq('status','pendente');
-       const cancelPending = new Set((cancelReqs||[]).map(r => r.event_id));
+         .select('event_id,user_id,status,justificativa,created_at,reviewed_at')
+         .eq('user_id', profile.id);
+       const cancelPending = new Set((cancelReqs||[]).filter(r => r.status === 'pendente').map(r => r.event_id));
+      (cancelReqs || []).filter(r => r.status === 'aprovado').forEach(r => {
+        myPresMap[r.event_id] = {
+          ...(myPresMap[r.event_id] || {}),
+          event_id: r.event_id,
+          user_id: profile.id,
+          membro_id: profile.id,
+          status: 'justificado',
+          response_status: 'nao_participar',
+          justificativa: r.justificativa || myPresMap[r.event_id]?.justificativa || null,
+          justificativa_status: 'aceita',
+          response_at: r.reviewed_at || r.created_at || myPresMap[r.event_id]?.response_at
+        };
+      });
 
        // Load confirmed counts for all visible events (visible to all)
        const today    = new Date().toISOString().split('T')[0];
@@ -3763,23 +3777,23 @@
 
        // Load cancel requests for diretoria
       let allCancelReqs = [];
-      let pendingJustifs = [];
+      let eventJustifs = [];
       if (canReview || canAttendance) {
         const [{ data: cr }, { data: pj }] = await Promise.all([
-          db.from('event_cancel_requests').select('*').eq('status','pendente').order('created_at',{ascending:false}),
+          db.from('event_cancel_requests').select('*').order('created_at',{ascending:false}),
           visibleEventIds.length
             ? db.from('event_presencas').select('*').in('event_id', visibleEventIds).not('justificativa','is',null)
             : Promise.resolve({ data: [] })
         ]);
         allCancelReqs = cr || [];
-        const visibleJustifs = allPresencas.filter(isPendingEventJustification);
-        pendingJustifs = dedupeEventPresenceRows([...(pj || []), ...visibleJustifs].filter(isPendingEventJustification));
-        pendingJustifs.sort((a, b) => String(b.response_at || b.created_at || '').localeCompare(String(a.response_at || a.created_at || '')));
-        await enrichEventReviewRows(allCancelReqs, pendingJustifs);
+        const visibleJustifs = allPresencas.filter(isEventJustification);
+        eventJustifs = dedupeEventPresenceRows([...(pj || []), ...visibleJustifs].filter(isEventJustification));
+        eventJustifs.sort((a, b) => String(b.response_at || b.created_at || '').localeCompare(String(a.response_at || a.created_at || '')));
+        await enrichEventReviewRows(allCancelReqs, eventJustifs);
       }
 
       const attendanceCount = canAttendance ? done.length : 0;
-      const justificationCount = pendingJustifs.length + allCancelReqs.length;
+      const justificationCount = eventJustifs.length + allCancelReqs.length;
       const presenceTab = document.getElementById('eventPresenceTabBtn');
       if (presenceTab) {
         presenceTab.style.display = canAttendance ? '' : 'none';
@@ -3821,7 +3835,7 @@
       } else if (activeTab === 'justificativas' && canReview) {
         tab.innerHTML = renderEventJustificationPanel({
           actionsHtml,
-          pendingJustifs,
+          eventJustifs,
           cancelReqs: allCancelReqs,
           canReview
         });
@@ -3980,6 +3994,37 @@
            const error = results.find(r => r.error)?.error;
            if (!error) { Utils.showToast(accepted ? 'Mudanca aprovada.' : 'Mudanca recusada.'); loadEventos(); }
            else { Utils.showToast('Erro ao revisar pedido.', 'error'); btn.disabled = false; }
+         });
+       });
+
+       tab.querySelectorAll('.ev-change-delete').forEach(btn => {
+         btn.addEventListener('click', async () => {
+           if (!await MSYConfirm.show('Apagar esta solicitação de cancelamento da lista?', { title: 'Apagar justificativa', type: 'danger', confirmText: 'Apagar' })) return;
+           btn.disabled = true;
+           const { error } = await db.from('event_cancel_requests').delete().eq('id', btn.dataset.rid);
+           if (!error) { Utils.showToast('Solicitação apagada.'); loadEventos(); }
+           else { Utils.showToast('Erro ao apagar solicitação.', 'error'); btn.disabled = false; }
+         });
+       });
+
+       tab.querySelectorAll('.ev-just-delete').forEach(btn => {
+         btn.addEventListener('click', async () => {
+           if (!await MSYConfirm.show('Apagar esta justificativa da lista?', { title: 'Apagar justificativa', type: 'danger', confirmText: 'Apagar' })) return;
+           btn.disabled = true;
+           let result = await db.from('event_presencas').update({
+             justificativa: null,
+             justificativa_status: null,
+             justificativa_reviewed_by: null,
+             justificativa_reviewed_at: null,
+             justificativa_review_note: null
+           }).eq('id', btn.dataset.pid);
+           if (result.error) {
+             result = await db.from('event_presencas').update({
+               justificativa: null
+             }).eq('id', btn.dataset.pid);
+           }
+           if (!result.error) { Utils.showToast('Justificativa apagada.'); loadEventos(); }
+           else { Utils.showToast('Erro ao apagar justificativa.', 'error'); btn.disabled = false; }
          });
        });
      }
@@ -4370,6 +4415,7 @@
      const canReview = typeof permissions === 'boolean' ? permissions : !!permissions?.canReview;
      const myStatus = normalizeEventPresenceStatus(myPresence);
      const myJustStatus = myPresence?.justificativa_status || null;
+     const hasMyJustification = !!(myPresence?.justificativa && String(myPresence.justificativa).trim());
 
      /* Cor e ícone por tipo */
      const TYPE_META = {
@@ -4468,6 +4514,9 @@
                     ` : myJustStatus === 'recusada' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa recusada</span>
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                    ` : !hasMyJustification ? `
+                      <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-xmark"></i> Não vai participar</span>
+                      <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
                     ` : `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-clock"></i> Justificativa em analise</span>
                     `}
@@ -4487,14 +4536,14 @@
        </div>`;
    }
 
-  async function enrichEventReviewRows(cancelReqs, pendingJustifs) {
+  async function enrichEventReviewRows(cancelReqs, eventJustifs) {
      const userIds = [
        ...cancelReqs.map(r => r.user_id),
-       ...pendingJustifs.map(p => p.user_id || p.membro_id)
+       ...eventJustifs.map(p => p.user_id || p.membro_id)
      ].filter(Boolean);
      const eventIds = [
        ...cancelReqs.map(r => r.event_id),
-       ...pendingJustifs.map(p => p.event_id)
+       ...eventJustifs.map(p => p.event_id)
      ].filter(Boolean);
      const [profilesRes, eventsRes] = await Promise.all([
        userIds.length ? db.from('profiles').select('id,name,role,initials,color,avatar_url').in('id', [...new Set(userIds)]) : Promise.resolve({ data: [] }),
@@ -4503,13 +4552,11 @@
      const profileMap = {}; (profilesRes.data || []).forEach(p => { profileMap[p.id] = p; });
      const eventMap = {}; (eventsRes.data || []).forEach(e => { eventMap[e.id] = e; });
      cancelReqs.forEach(r => { r.requester = profileMap[r.user_id] || null; r.ev = eventMap[r.event_id] || null; });
-    pendingJustifs.forEach(p => { p.requester = profileMap[p.user_id || p.membro_id] || null; p.ev = eventMap[p.event_id] || null; });
+    eventJustifs.forEach(p => { p.requester = profileMap[p.user_id || p.membro_id] || null; p.ev = eventMap[p.event_id] || null; });
   }
 
-  function isPendingEventJustification(presence) {
+  function isEventJustification(presence) {
     if (!presence?.justificativa || !String(presence.justificativa).trim()) return false;
-    if (presence.justificativa_status === 'aceita' || presence.justificativa_status === 'recusada') return false;
-    if (presence.justificativa_status === 'pendente') return true;
     return normalizeEventPresenceStatus(presence) === 'nao_participar';
   }
 
@@ -4532,44 +4579,68 @@
     return nextTime >= currentTime;
   }
 
-  function renderEventJustificationPanel({ actionsHtml, pendingJustifs, cancelReqs = [], canReview }) {
-    const cancelCards = (cancelReqs || []).map(r => `
+  function renderEventJustificationPanel({ actionsHtml, eventJustifs, cancelReqs = [], canReview }) {
+    const reviewStatus = (status) => {
+      if (status === 'aprovado' || status === 'aceita') return { label: 'Aceita', color: '#10b981', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.28)' };
+      if (status === 'recusado' || status === 'recusada') return { label: 'Recusada', color: '#ef4444', bg: 'rgba(220,38,38,.08)', border: 'rgba(220,38,38,.28)' };
+      return { label: 'Pendente', color: '#f59e0b', bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.28)' };
+    };
+    const statusBadge = (meta) => `<span class="ev-badge" style="background:${meta.bg};border-color:${meta.border};color:${meta.color}">${meta.label}</span>`;
+    const cancelCards = (cancelReqs || []).map(r => {
+      const meta = reviewStatus(r.status);
+      return `
       <div class="events-review-card">
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(r.requester?.name || 'Membro')}</div>
              <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title || 'Evento')} · ${Utils.formatDate(r.ev?.event_date)}</div>
            </div>
-          <span class="ev-badge ev-badge-opt">Cancelamento</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <span class="ev-badge ev-badge-opt">Cancelamento</span>
+            ${statusBadge(meta)}
+          </div>
         </div>
         <div class="events-review-text">${Utils.escapeHtml(r.justificativa || 'Sem justificativa informada.')}</div>
         <div class="events-review-actions">
-          <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Cancelamento</button>
-          <button class="btn btn-sm ev-change-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Cancelamento</button>
+          ${r.status === 'pendente' ? `
+            <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Cancelamento</button>
+            <button class="btn btn-sm ev-change-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Cancelamento</button>
+          ` : ''}
+          <button class="btn btn-sm ev-change-delete" data-rid="${r.id}" style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.22);color:#ef4444"><i class="fa-solid fa-trash"></i> Apagar</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
-    const justCards = (pendingJustifs || []).map(p => `
+    const justCards = (eventJustifs || []).map(p => {
+      const meta = reviewStatus(p.justificativa_status || 'pendente');
+      return `
       <div class="events-review-card">
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
              <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(p.ev?.title || 'Evento')} · ${Utils.formatDate(p.ev?.event_date)}</div>
            </div>
-          <span class="ev-badge ev-badge-opt">Ausencia</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <span class="ev-badge ev-badge-opt">Ausencia</span>
+            ${statusBadge(meta)}
+          </div>
         </div>
         <div class="events-review-text">${Utils.escapeHtml(p.justificativa || 'Sem justificativa informada.')}</div>
         <div class="events-review-actions">
-          <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Ausencia</button>
-          <button class="btn btn-sm ev-just-refuse" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Ausencia</button>
+          ${p.justificativa_status !== 'aceita' && p.justificativa_status !== 'recusada' ? `
+            <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Ausencia</button>
+            <button class="btn btn-sm ev-just-refuse" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.28);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar Ausencia</button>
+          ` : ''}
+          <button class="btn btn-sm ev-just-delete" data-pid="${p.id}" style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.22);color:#ef4444"><i class="fa-solid fa-trash"></i> Apagar</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
-    const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa pendente.</div></div>`;
+    const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa registrada.</div></div>`;
     const reviewCards = `${cancelCards}${justCards}`;
     return `
       ${actionsHtml}
-      <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas Pendentes</div>
+      <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas</div>
       ${canReview && reviewCards ? `
         <div class="events-director-grid">
           ${reviewCards}
@@ -4607,13 +4678,14 @@
   function openEventDetailModal(ev, myPresence, cancelPending, presCount, currentProfile, onSuccess) {
     const status = normalizeEventPresenceStatus(myPresence);
     const justStatus = myPresence?.justificativa_status || null;
+    const hasJustification = !!(myPresence?.justificativa && String(myPresence.justificativa).trim());
     const canChangeToParticipating = ev.status !== 'concluido'
       && status !== 'participar'
       && !(status === 'nao_participar' && justStatus === 'pendente');
     const statusText = status === 'participar'
       ? (cancelPending ? 'Participacao confirmada · mudanca em analise' : 'Participacao confirmada')
       : status === 'nao_participar' || status === 'justificado'
-         ? (justStatus === 'aceita' ? 'Ausencia justificada aceita' : justStatus === 'recusada' ? 'Ausencia recusada' : 'Ausencia em analise')
+         ? (justStatus === 'aceita' ? 'Ausencia justificada aceita' : justStatus === 'recusada' ? 'Ausencia recusada' : hasJustification ? 'Ausencia em analise' : 'Nao vai participar')
          : 'Sem resposta';
      const overlay = document.createElement('div');
      overlay.className = 'modal-overlay open';
