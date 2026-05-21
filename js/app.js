@@ -3257,11 +3257,21 @@
    /* ============================================================
       PAGE: EVENTOS
       ============================================================ */
-   function normalizeEventPresenceStatus(presence) {
+  function normalizeEventPresenceStatus(presence) {
      const status = presence?.response_status || presence?.status || null;
      if (status === 'participar' || status === 'confirmado') return 'participar';
      if (status === 'nao_participar' || status === 'ausente' || status === 'justificado') return 'nao_participar';
      return status;
+   }
+
+   function getEventDeclaredResponse(presence) {
+     if (!presence) return null;
+     if (presence.response_status === 'participar' || presence.response_status === 'nao_participar') return presence.response_status;
+     if (presence.justificativa && String(presence.justificativa).trim()) return 'nao_participar';
+     if (presence.attendance_recorded_at) return null;
+     if (presence.status === 'participar' || presence.status === 'confirmado') return 'participar';
+     if (presence.status === 'nao_participar' || presence.status === 'ausente' || presence.status === 'justificado') return 'nao_participar';
+     return null;
    }
 
    async function saveEventPresence(payload) {
@@ -3774,6 +3784,7 @@
        const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
 
        let presCountMap = {};
+       let attendanceStatsMap = {};
        let allPresencas = [];
        let presenceByMemberEvent = {};
        const visibleEventIds = [...upcoming, ...done, ...past].map(e => e.id);
@@ -3789,7 +3800,18 @@
            }
          });
          Object.values(presenceByMemberEvent).forEach(c => {
-           if (normalizeEventPresenceStatus(c) === 'participar') presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
+           if (!attendanceStatsMap[c.event_id]) attendanceStatsMap[c.event_id] = { expected: 0, present: 0, absent: 0, registered: 0, noShow: 0 };
+           const stats = attendanceStatsMap[c.event_id];
+           if (getEventDeclaredResponse(c) === 'participar') {
+             presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
+             stats.expected += 1;
+           }
+           if (c.attendance_status === 'presente') { stats.present += 1; stats.registered += 1; }
+           if (c.attendance_status === 'ausente') {
+             stats.absent += 1;
+             stats.registered += 1;
+             if (getEventDeclaredResponse(c) === 'participar') stats.noShow += 1;
+           }
          });
        }
 
@@ -3855,7 +3877,8 @@
         tab.innerHTML = renderEventPresencePanel({
           actionsHtml,
           concluded: done,
-          canAttendance
+          canAttendance,
+          attendanceStatsMap
         });
       } else if (activeTab === 'justificativas' && canReview) {
         tab.innerHTML = renderEventJustificationPanel({
@@ -4619,6 +4642,10 @@
     return Date.parse(presence?.response_at || presence?.updated_at || presence?.created_at || '') || 0;
   }
 
+  function getEventAttendanceTimestamp(presence) {
+    return Date.parse(presence?.attendance_recorded_at || presence?.response_at || presence?.updated_at || presence?.created_at || '') || 0;
+  }
+
   function getEventCancelRequestTimestamp(request) {
     return Date.parse(request?.reviewed_at || request?.created_at || '') || 0;
   }
@@ -4660,6 +4687,18 @@
     if (nextStatus === 'participar' && currentStatus !== 'participar') return true;
     if (nextStatus !== 'participar' && currentStatus === 'participar') return false;
     return true;
+  }
+
+  function shouldPreferEventAttendanceRow(next, current) {
+    const nextHasAttendance = next?.attendance_status === 'presente' || next?.attendance_status === 'ausente';
+    const currentHasAttendance = current?.attendance_status === 'presente' || current?.attendance_status === 'ausente';
+    if (nextHasAttendance !== currentHasAttendance) return nextHasAttendance;
+    const nextTime = getEventAttendanceTimestamp(next);
+    const currentTime = getEventAttendanceTimestamp(current);
+    if (nextTime || currentTime) {
+      if (nextTime !== currentTime) return nextTime > currentTime;
+    }
+    return shouldPreferEventPresenceRow(next, current);
   }
 
   function renderEventJustificationPanel({ actionsHtml, eventJustifs, cancelReqs = [], canReview }) {
@@ -4734,8 +4773,10 @@
     `;
   }
 
-  function renderEventPresencePanel({ actionsHtml, concluded, canAttendance }) {
-    const presenceCards = (concluded || []).map(ev => `
+  function renderEventPresencePanel({ actionsHtml, concluded, canAttendance, attendanceStatsMap = {} }) {
+    const presenceCards = (concluded || []).map(ev => {
+      const stats = attendanceStatsMap[ev.id] || { expected: 0, present: 0, absent: 0, registered: 0, noShow: 0 };
+      return `
       <div class="events-review-card">
         <div class="events-review-head">
            <div>
@@ -4745,10 +4786,18 @@
            <span class="ev-badge ev-badge-done">Concluido</span>
          </div>
          <div class="events-review-text">Registre quem realmente participou para atualizar o desempenho da Ordem.</div>
+         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px">
+           <span class="ev-badge" style="background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.22);color:#10b981">${stats.expected} disseram que iam</span>
+           <span class="ev-badge" style="background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.22);color:var(--gold)">${stats.registered} registros reais</span>
+           <span class="ev-badge" style="background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.22);color:#10b981">${stats.present} presentes</span>
+           <span class="ev-badge" style="background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.22);color:#ef4444">${stats.absent} ausentes</span>
+           <span class="ev-badge" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.28);color:#f87171">${stats.noShow} disseram que iam e não foram</span>
+         </div>
          <div class="events-review-actions">
-           <button class="btn btn-sm ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Registrar Presencas</button>
+           <button class="btn btn-sm ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Registrar presença real</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-clipboard-check"></i></div><div class="empty-state-text">Nenhum evento concluido para registrar presencas.</div></div>`;
     return `
@@ -5042,13 +5091,49 @@
 
      const membros  = memRes.data || [];
      const presMap  = {};
-     (presRes.data||[]).forEach(p => { presMap[p.user_id || p.membro_id] = p; });
+     (presRes.data||[]).forEach(p => {
+       const uid = p.user_id || p.membro_id;
+       if (uid && (!presMap[uid] || shouldPreferEventAttendanceRow(p, presMap[uid]))) presMap[uid] = p;
+     });
 
-     const conf  = Object.values(presMap).filter(p => p.attendance_status === 'presente' || p.status === 'confirmado').length;
-     const skip  = Object.values(presMap).filter(p => p.attendance_status === 'ausente' || p.status === 'ausente').length;
-     const sem   = membros.length - Object.values(presMap).filter(p => p.attendance_status || p.status === 'confirmado' || p.status === 'ausente').length;
+     const attendanceRows = () => Object.values(presMap).filter(p => p.attendance_status === 'presente' || p.attendance_status === 'ausente');
+     const confirmedIntentCount = () => Object.values(presMap).filter(p => getEventDeclaredResponse(p) === 'participar').length;
+     const presentCount = () => attendanceRows().filter(p => p.attendance_status === 'presente').length;
+     const absentCount = () => attendanceRows().filter(p => p.attendance_status === 'ausente').length;
+     const noShowMembers = () => membros.filter(m => {
+       const p = presMap[m.id];
+       return getEventDeclaredResponse(p) === 'participar' && p?.attendance_status === 'ausente';
+     });
+     const noShowCount = () => noShowMembers().length;
+     const unregisteredCount = () => membros.length - attendanceRows().length;
 
      const body = overlay.querySelector('#pmBody');
+
+     const noShowSectionHtml = () => {
+       const rows = noShowMembers();
+       if (!rows.length) return '';
+       return `
+         <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(239,68,68,.22);border-radius:9px;background:rgba(239,68,68,.06)">
+           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#f87171;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em">
+             <i class="fa-solid fa-triangle-exclamation"></i>
+             Disseram que iam e não participaram
+             <span style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.24);border-radius:999px;padding:1px 7px">${rows.length}</span>
+           </div>
+           <div style="display:flex;flex-direction:column;gap:5px">
+             ${rows.map(m => `
+               <div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.06)">
+                 <div class="avatar" style="width:24px;height:24px;font-size:.48rem;flex-shrink:0;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">
+                   ${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials || Utils.getInitials(m.name))}
+                 </div>
+                 <div style="min-width:0;flex:1">
+                   <div style="font-size:.78rem;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(m.name)}</div>
+                   ${m.role ? `<div style="font-size:.62rem;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(m.role)}</div>` : ''}
+                 </div>
+               </div>
+             `).join('')}
+           </div>
+         </div>`;
+     };
 
      function statusIcon(s) {
        if (s === 'participar' || s === 'confirmado') return '<i class="fa-solid fa-check" style="color:#10b981"></i>';
@@ -5058,25 +5143,38 @@
      }
 
      body.innerHTML = `
-       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px">
+       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:12px">
+         <div style="background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.2);border-radius:10px;padding:12px;text-align:center">
+           <div data-pm-expected-count style="font-size:1.4rem;font-weight:700;color:var(--gold)">${confirmedIntentCount()}</div>
+           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Disseram que iam</div>
+         </div>
          <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px;text-align:center">
-           <div style="font-size:1.4rem;font-weight:700;color:#10b981">${conf}</div>
+           <div data-pm-present-count style="font-size:1.4rem;font-weight:700;color:#10b981">${presentCount()}</div>
            <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Presentes</div>
          </div>
          <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);border-radius:10px;padding:12px;text-align:center">
-           <div style="font-size:1.4rem;font-weight:700;color:#ef4444">${skip}</div>
+           <div data-pm-absent-count style="font-size:1.4rem;font-weight:700;color:#ef4444">${absentCount()}</div>
            <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Ausentes</div>
          </div>
+         <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.24);border-radius:10px;padding:12px;text-align:center">
+           <div data-pm-noshow-count style="font-size:1.4rem;font-weight:700;color:#f87171">${noShowCount()}</div>
+           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Iam e não foram</div>
+         </div>
          <div style="background:rgba(255,255,255,.03);border:1px solid var(--border-faint);border-radius:10px;padding:12px;text-align:center">
-           <div style="font-size:1.4rem;font-weight:700;color:var(--text-3)">${sem}</div>
+           <div data-pm-unregistered-count style="font-size:1.4rem;font-weight:700;color:var(--text-3)">${unregisteredCount()}</div>
            <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Sem registro</div>
          </div>
        </div>
+       <div style="font-size:.72rem;color:var(--text-3);line-height:1.45;margin-bottom:14px;padding:9px 12px;border:1px solid rgba(201,168,76,.14);border-radius:8px;background:rgba(201,168,76,.04)">
+         <i class="fa-solid fa-circle-info" style="color:var(--gold);margin-right:6px"></i>
+         A resposta declarada antes do evento aparece em cada linha. Os botões registram a presença real após o evento.
+       </div>
+       <div data-pm-noshow-list>${noShowSectionHtml()}</div>
        <div style="display:flex;flex-direction:column;gap:6px">
          ${membros.map(m => {
            const p = presMap[m.id];
-           const status = p?.attendance_status || (p?.status === 'confirmado' ? 'presente' : p?.status === 'ausente' ? 'ausente' : null);
-           const intent = p?.response_status || (['participar','confirmado'].includes(p?.status) ? 'participar' : ['nao_participar','justificado','ausente'].includes(p?.status) ? 'nao_participar' : null);
+           const status = p?.attendance_status || null;
+           const intent = getEventDeclaredResponse(p);
            const av = m.avatar_url
              ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
              : (m.initials || Utils.getInitials(m.name));
@@ -5101,16 +5199,32 @@
          }).join('')}
        </div>`;
 
+     function refreshAttendanceCounters() {
+       const expectedEl = body.querySelector('[data-pm-expected-count]');
+       const presentEl = body.querySelector('[data-pm-present-count]');
+       const absentEl = body.querySelector('[data-pm-absent-count]');
+       const noShowEl = body.querySelector('[data-pm-noshow-count]');
+       const unregisteredEl = body.querySelector('[data-pm-unregistered-count]');
+       const noShowList = body.querySelector('[data-pm-noshow-list]');
+       if (expectedEl) expectedEl.textContent = String(confirmedIntentCount());
+       if (presentEl) presentEl.textContent = String(presentCount());
+       if (absentEl) absentEl.textContent = String(absentCount());
+       if (noShowEl) noShowEl.textContent = String(noShowCount());
+       if (unregisteredEl) unregisteredEl.textContent = String(unregisteredCount());
+       if (noShowList) noShowList.innerHTML = noShowSectionHtml();
+     }
+
      async function setStatus(uid, status) {
        const ex = presMap[uid];
        const attendance = status === 'confirmado' ? 'presente' : 'ausente';
+       const recordedAt = new Date().toISOString();
        let error;
        if (ex) {
-         ({ error } = await db.from('event_presencas').update({ status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: new Date().toISOString() }).eq('id', ex.id));
-         if (!error) { presMap[uid].status = status; presMap[uid].attendance_status = attendance; }
+         ({ error } = await db.from('event_presencas').update({ status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt }).eq('id', ex.id));
+         if (!error) Object.assign(presMap[uid], { status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt });
        } else {
          const { data, error: e } = await db.from('event_presencas').insert({
-           event_id: eventId, user_id: uid, membro_id: uid, status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: new Date().toISOString()
+           event_id: eventId, user_id: uid, membro_id: uid, status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt
          }).select().single();
          error = e;
          if (!error) presMap[uid] = data;
@@ -5127,6 +5241,7 @@
          pBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isP?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${isP?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isP?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
          aBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isA?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${isA?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isA?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
        }
+       refreshAttendanceCounters();
      }
 
      body.querySelectorAll('.pm-present').forEach(btn => {
