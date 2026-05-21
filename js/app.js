@@ -3800,18 +3800,14 @@
            }
          });
          Object.values(presenceByMemberEvent).forEach(c => {
-           if (!attendanceStatsMap[c.event_id]) attendanceStatsMap[c.event_id] = { expected: 0, present: 0, absent: 0, registered: 0, noShow: 0 };
+           if (!attendanceStatsMap[c.event_id]) attendanceStatsMap[c.event_id] = { expected: 0, present: 0, absent: 0, registered: 0 };
            const stats = attendanceStatsMap[c.event_id];
            if (getEventDeclaredResponse(c) === 'participar') {
              presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
              stats.expected += 1;
            }
            if (c.attendance_status === 'presente') { stats.present += 1; stats.registered += 1; }
-           if (c.attendance_status === 'ausente') {
-             stats.absent += 1;
-             stats.registered += 1;
-             if (getEventDeclaredResponse(c) === 'participar') stats.noShow += 1;
-           }
+           if (c.attendance_status === 'ausente') { stats.absent += 1; stats.registered += 1; }
          });
        }
 
@@ -3986,7 +3982,7 @@
          btn.addEventListener('click', e => {
            e.stopPropagation();
            const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
-           openPresenceManageModal(btn.dataset.id, ev, loadEventos);
+           openPresenceManageModal(btn.dataset.id, ev, loadEventos, profile);
          });
        });
 
@@ -4775,7 +4771,7 @@
 
   function renderEventPresencePanel({ actionsHtml, concluded, canAttendance, attendanceStatsMap = {} }) {
     const presenceCards = (concluded || []).map(ev => {
-      const stats = attendanceStatsMap[ev.id] || { expected: 0, present: 0, absent: 0, registered: 0, noShow: 0 };
+      const stats = attendanceStatsMap[ev.id] || { expected: 0, present: 0, absent: 0, registered: 0 };
       return `
       <div class="events-review-card">
         <div class="events-review-head">
@@ -4791,7 +4787,6 @@
            <span class="ev-badge" style="background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.22);color:var(--gold)">${stats.registered} registros reais</span>
            <span class="ev-badge" style="background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.22);color:#10b981">${stats.present} presentes</span>
            <span class="ev-badge" style="background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.22);color:#ef4444">${stats.absent} ausentes</span>
-           <span class="ev-badge" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.28);color:#f87171">${stats.noShow} disseram que iam e não foram</span>
          </div>
          <div class="events-review-actions">
            <button class="btn btn-sm ev-pres-manage-btn" data-id="${ev.id}" style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-clipboard-list"></i> Registrar presença real</button>
@@ -5061,7 +5056,7 @@
    }
 
    /* ── Presença: modal Gerenciar Presenças (evento concluído/encerrado) ── */
-   async function openPresenceManageModal(eventId, evento, onSuccess) {
+   async function openPresenceManageModal(eventId, evento, onSuccess, currentProfile = profile) {
      const overlay = document.createElement('div');
      overlay.className = 'modal-overlay open';
      overlay.innerHTML = `
@@ -5104,7 +5099,6 @@
        const p = presMap[m.id];
        return getEventDeclaredResponse(p) === 'participar' && p?.attendance_status === 'ausente';
      });
-     const noShowCount = () => noShowMembers().length;
      const unregisteredCount = () => membros.length - attendanceRows().length;
 
      const body = overlay.querySelector('#pmBody');
@@ -5117,7 +5111,6 @@
            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#f87171;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em">
              <i class="fa-solid fa-triangle-exclamation"></i>
              Disseram que iam e não participaram
-             <span style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.24);border-radius:999px;padding:1px 7px">${rows.length}</span>
            </div>
            <div style="display:flex;flex-direction:column;gap:5px">
              ${rows.map(m => `
@@ -5155,10 +5148,6 @@
          <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);border-radius:10px;padding:12px;text-align:center">
            <div data-pm-absent-count style="font-size:1.4rem;font-weight:700;color:#ef4444">${absentCount()}</div>
            <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Ausentes</div>
-         </div>
-         <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.24);border-radius:10px;padding:12px;text-align:center">
-           <div data-pm-noshow-count style="font-size:1.4rem;font-weight:700;color:#f87171">${noShowCount()}</div>
-           <div style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Iam e não foram</div>
          </div>
          <div style="background:rgba(255,255,255,.03);border:1px solid var(--border-faint);border-radius:10px;padding:12px;text-align:center">
            <div data-pm-unregistered-count style="font-size:1.4rem;font-weight:700;color:var(--text-3)">${unregisteredCount()}</div>
@@ -5203,52 +5192,83 @@
        const expectedEl = body.querySelector('[data-pm-expected-count]');
        const presentEl = body.querySelector('[data-pm-present-count]');
        const absentEl = body.querySelector('[data-pm-absent-count]');
-       const noShowEl = body.querySelector('[data-pm-noshow-count]');
        const unregisteredEl = body.querySelector('[data-pm-unregistered-count]');
        const noShowList = body.querySelector('[data-pm-noshow-list]');
        if (expectedEl) expectedEl.textContent = String(confirmedIntentCount());
        if (presentEl) presentEl.textContent = String(presentCount());
        if (absentEl) absentEl.textContent = String(absentCount());
-       if (noShowEl) noShowEl.textContent = String(noShowCount());
        if (unregisteredEl) unregisteredEl.textContent = String(unregisteredCount());
        if (noShowList) noShowList.innerHTML = noShowSectionHtml();
      }
 
-     async function setStatus(uid, status) {
-       const ex = presMap[uid];
-       const attendance = status === 'confirmado' ? 'presente' : 'ausente';
-       const recordedAt = new Date().toISOString();
-       let error;
-       if (ex) {
-         ({ error } = await db.from('event_presencas').update({ status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt }).eq('id', ex.id));
-         if (!error) Object.assign(presMap[uid], { status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt });
-       } else {
-         const { data, error: e } = await db.from('event_presencas').insert({
-           event_id: eventId, user_id: uid, membro_id: uid, status, attendance_status: attendance, attendance_recorded_by: profile.id, attendance_recorded_at: recordedAt
-         }).select().single();
-         error = e;
-         if (!error) presMap[uid] = data;
-       }
-       if (error) { Utils.showToast('Erro ao registrar.', 'error'); return; }
+     async function setStatus(uid, status, clickedBtn) {
+       const buttons = clickedBtn ? [...clickedBtn.closest('.pm-row')?.querySelectorAll('.pm-btn') || []] : [];
+       buttons.forEach(b => { b.disabled = true; });
+       try {
+         const ex = presMap[uid];
+         const attendance = status === 'confirmado' ? 'presente' : 'ausente';
+         const recordedAt = new Date().toISOString();
+         const recordedBy = currentProfile?.id || null;
+         const attendancePatch = {
+           status,
+           attendance_status: attendance,
+           attendance_recorded_at: recordedAt
+         };
+         if (recordedBy) attendancePatch.attendance_recorded_by = recordedBy;
 
-       // Update row visually
-       const row = body.querySelector(`.pm-row[data-uid="${uid}"]`);
-       if (row) {
-         const pBtn = row.querySelector('.pm-present');
-         const aBtn = row.querySelector('.pm-absent');
-         const isP = attendance === 'presente';
-         const isA = attendance === 'ausente';
-         pBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isP?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${isP?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isP?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
-         aBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isA?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${isA?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isA?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
+         if (ex) {
+           const declaredBeforeAttendance = getEventDeclaredResponse(ex);
+           if (declaredBeforeAttendance && !ex.response_status) {
+             attendancePatch.response_status = declaredBeforeAttendance;
+             attendancePatch.response_at = ex.response_at || recordedAt;
+           }
+           const { error } = await db.from('event_presencas')
+             .update(attendancePatch)
+             .eq('id', ex.id);
+           if (error) throw error;
+           Object.assign(presMap[uid], attendancePatch);
+         } else {
+           const { data, error } = await db.from('event_presencas').insert({
+             event_id: eventId,
+             user_id: uid,
+             membro_id: uid,
+             ...attendancePatch
+           }).select().single();
+           if (error) throw error;
+           presMap[uid] = data;
+         }
+
+         const row = body.querySelector(`.pm-row[data-uid="${uid}"]`);
+         if (row) {
+           const pBtn = row.querySelector('.pm-present');
+           const aBtn = row.querySelector('.pm-absent');
+           const isP = attendance === 'presente';
+           const isA = attendance === 'ausente';
+           pBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isP?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${isP?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isP?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
+           aBtn.style.cssText = `width:30px;height:30px;border-radius:7px;border:1px solid ${isA?'rgba(220,38,38,.5)':'var(--border-faint)'};background:${isA?'rgba(220,38,38,.1)':'rgba(255,255,255,.02)'};cursor:pointer;color:${isA?'#ef4444':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s`;
+         }
+         refreshAttendanceCounters();
+       } catch (err) {
+         console.error('[MSY][eventos] Erro ao registrar presença real:', err);
+         Utils.showToast(err?.message || 'Erro ao registrar presença.', 'error');
+       } finally {
+         buttons.forEach(b => { b.disabled = false; });
        }
-       refreshAttendanceCounters();
      }
 
      body.querySelectorAll('.pm-present').forEach(btn => {
-       btn.addEventListener('click', () => setStatus(btn.dataset.uid, 'confirmado'));
+       btn.addEventListener('click', e => {
+         e.preventDefault();
+         e.stopPropagation();
+         setStatus(btn.dataset.uid, 'confirmado', e.currentTarget);
+       });
      });
      body.querySelectorAll('.pm-absent').forEach(btn => {
-       btn.addEventListener('click', () => setStatus(btn.dataset.uid, 'ausente'));
+       btn.addEventListener('click', e => {
+         e.preventDefault();
+         e.stopPropagation();
+         setStatus(btn.dataset.uid, 'ausente', e.currentTarget);
+       });
      });
      body.querySelectorAll('.pm-justif').forEach(btn => {
        btn.addEventListener('click', e => {
