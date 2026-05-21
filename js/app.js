@@ -3286,15 +3286,20 @@
      const { data: existing, error: findError } = await db.from('event_presencas')
        .select('id')
        .eq('event_id', row.event_id)
-       .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`)
-       .limit(1);
+       .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`);
      if (findError) return { data: null, error: findError };
 
      if (existing && existing.length) {
-       const modern = await db.from('event_presencas').update(row).eq('id', existing[0].id);
+       const modern = await db.from('event_presencas')
+         .update(row)
+         .eq('event_id', row.event_id)
+         .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`);
        if (!modern.error) return modern;
        console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
-       return db.from('event_presencas').update(legacyRow).eq('id', existing[0].id);
+       return db.from('event_presencas')
+         .update(legacyRow)
+         .eq('event_id', row.event_id)
+         .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`);
      }
      const modern = await db.from('event_presencas').insert(row);
      if (!modern.error) return modern;
@@ -3373,7 +3378,7 @@
           .update({ status: 'recusado', reviewed_at: now })
           .eq('event_id', eventId)
           .eq('user_id', userId)
-          .eq('status', 'pendente');
+          .in('status', ['pendente', 'aprovado']);
       } catch {}
 
       return { ...result, hadJustificativa, hadAcceptedJustificativa };
@@ -3743,8 +3748,15 @@
        const { data: cancelReqs } = await db.from('event_cancel_requests')
          .select('event_id,user_id,status,justificativa,created_at,reviewed_at')
          .eq('user_id', profile.id);
-       const cancelPending = new Set((cancelReqs||[]).filter(r => r.status === 'pendente').map(r => r.event_id));
-      (cancelReqs || []).filter(r => r.status === 'aprovado').forEach(r => {
+       const myCancelReqs = cancelReqs || [];
+       const cancelPending = new Set(myCancelReqs
+         .filter(r => r.status === 'pendente' && !isCancelRequestSupersededByParticipation(r, myPresMap[r.event_id] || null))
+         .map(r => r.event_id));
+      myCancelReqs
+        .filter(r => r.status === 'aprovado')
+        .sort((a, b) => getEventCancelRequestTimestamp(a) - getEventCancelRequestTimestamp(b))
+        .forEach(r => {
+        if (isCancelRequestSupersededByParticipation(r, myPresMap[r.event_id] || null)) return;
         myPresMap[r.event_id] = {
           ...(myPresMap[r.event_id] || {}),
           event_id: r.event_id,
@@ -3766,6 +3778,7 @@
 
        let presCountMap = {};
        let allPresencas = [];
+       let presenceByMemberEvent = {};
        const visibleEventIds = [...upcoming, ...done, ...past].map(e => e.id);
        if (visibleEventIds.length) {
          const { data: counts } = await db.from('event_presencas')
@@ -3773,8 +3786,13 @@
            .in('event_id', visibleEventIds);
          allPresencas = counts || [];
          allPresencas.forEach(c => {
-           const response = normalizeEventPresenceStatus(c);
-           if (response === 'participar') presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
+           const key = getEventPresenceMapKey(c);
+           if (key && (!presenceByMemberEvent[key] || shouldPreferEventPresenceRow(c, presenceByMemberEvent[key]))) {
+             presenceByMemberEvent[key] = c;
+           }
+         });
+         Object.values(presenceByMemberEvent).forEach(c => {
+           if (normalizeEventPresenceStatus(c) === 'participar') presCountMap[c.event_id] = (presCountMap[c.event_id]||0)+1;
          });
        }
 
@@ -3788,9 +3806,9 @@
             ? db.from('event_presencas').select('*').in('event_id', visibleEventIds).not('justificativa','is',null)
             : Promise.resolve({ data: [] })
         ]);
-        allCancelReqs = cr || [];
-        const visibleJustifs = allPresencas.filter(isEventJustification);
-        eventJustifs = dedupeEventPresenceRows([...(pj || []), ...visibleJustifs].filter(isEventJustification));
+        allCancelReqs = (cr || []).filter(r => !isCancelRequestSupersededByParticipation(r, presenceByMemberEvent[getEventCancelRequestMapKey(r)] || null));
+        const visibleJustifs = allPresencas.filter(p => isActiveEventJustification(p, presenceByMemberEvent));
+        eventJustifs = dedupeEventPresenceRows([...(pj || []), ...visibleJustifs].filter(p => isActiveEventJustification(p, presenceByMemberEvent)));
         eventJustifs.sort((a, b) => String(b.response_at || b.created_at || '').localeCompare(String(a.response_at || a.created_at || '')));
         await enrichEventReviewRows(allCancelReqs, eventJustifs);
       }
@@ -3898,7 +3916,8 @@
         tab.querySelectorAll('.pres-join-btn').forEach(btn => {
           btn.addEventListener('click', async e => {
           e.stopPropagation();
-          if (btn.dataset.justificativaAceita === 'true') {
+          const hadAcceptedJustificationOnScreen = btn.dataset.justificativaAceita === 'true';
+          if (hadAcceptedJustificationOnScreen) {
             const confirmed = await MSYConfirm.show('Se continuar, sua justificativa será anulada e sua presença será confirmada.', {
               title: 'Tem certeza?',
               type: 'warning',
@@ -3912,7 +3931,7 @@
           const eid = btn.dataset.id;
           const { error, hadJustificativa, hadAcceptedJustificativa } = await confirmEventParticipation(eid, profile.id);
           if (!error) {
-            Utils.showToast(hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presença confirmada!');
+            Utils.showToast(hadAcceptedJustificationOnScreen || hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presença confirmada!');
             loadEventos();
           }
           else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Agora vou participar'; }
@@ -4575,11 +4594,46 @@
     return normalizeEventPresenceStatus(presence) === 'nao_participar';
   }
 
+  function getEventPresenceMemberId(presence) {
+    return presence?.user_id || presence?.membro_id || null;
+  }
+
+  function getEventPresenceMapKey(presence) {
+    const memberId = getEventPresenceMemberId(presence);
+    return presence?.event_id && memberId ? `${presence.event_id}:${memberId}` : null;
+  }
+
+  function getEventCancelRequestMapKey(request) {
+    return request?.event_id && request?.user_id ? `${request.event_id}:${request.user_id}` : null;
+  }
+
+  function getEventPresenceTimestamp(presence) {
+    return Date.parse(presence?.response_at || presence?.updated_at || presence?.created_at || '') || 0;
+  }
+
+  function getEventCancelRequestTimestamp(request) {
+    return Date.parse(request?.reviewed_at || request?.created_at || '') || 0;
+  }
+
+  function isCancelRequestSupersededByParticipation(request, presence) {
+    if (!request || normalizeEventPresenceStatus(presence) !== 'participar') return false;
+    const presenceTime = getEventPresenceTimestamp(presence);
+    if (!presenceTime) return false;
+    const requestTime = getEventCancelRequestTimestamp(request);
+    return !requestTime || presenceTime >= requestTime;
+  }
+
+  function isActiveEventJustification(presence, presenceByMemberEvent = {}) {
+    if (!isEventJustification(presence)) return false;
+    const bestPresence = presenceByMemberEvent[getEventPresenceMapKey(presence)] || presence;
+    return normalizeEventPresenceStatus(bestPresence) !== 'participar';
+  }
+
   function dedupeEventPresenceRows(rows) {
     const map = new Map();
     rows.forEach(row => {
-      const key = row.id || `${row.event_id}:${row.user_id || row.membro_id}`;
-      if (!map.has(key)) map.set(key, row);
+      const key = getEventPresenceMapKey(row) || row.id || Symbol('event-presenca');
+      if (!map.has(key) || shouldPreferEventPresenceRow(row, map.get(key))) map.set(key, row);
     });
     return [...map.values()];
   }
@@ -4587,11 +4641,14 @@
   function shouldPreferEventPresenceRow(next, current) {
     const nextStatus = normalizeEventPresenceStatus(next);
     const currentStatus = normalizeEventPresenceStatus(current);
+    const nextTime = getEventPresenceTimestamp(next);
+    const currentTime = getEventPresenceTimestamp(current);
+    if (nextTime || currentTime) {
+      if (nextTime !== currentTime) return nextTime > currentTime;
+    }
     if (nextStatus === 'participar' && currentStatus !== 'participar') return true;
     if (nextStatus !== 'participar' && currentStatus === 'participar') return false;
-    const nextTime = Date.parse(next.response_at || next.updated_at || next.created_at || '') || 0;
-    const currentTime = Date.parse(current.response_at || current.updated_at || current.created_at || '') || 0;
-    return nextTime >= currentTime;
+    return true;
   }
 
   function renderEventJustificationPanel({ actionsHtml, eventJustifs, cancelReqs = [], canReview }) {
@@ -4740,7 +4797,8 @@
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
       overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
         const btn = e.currentTarget;
-        if (btn.dataset.justificativaAceita === 'true') {
+        const hadAcceptedJustificationOnScreen = btn.dataset.justificativaAceita === 'true';
+        if (hadAcceptedJustificationOnScreen) {
           const confirmed = await MSYConfirm.show('Se continuar, sua justificativa será anulada e sua presença será confirmada.', {
             title: 'Tem certeza?',
             type: 'warning',
@@ -4752,7 +4810,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
         const { error, hadJustificativa, hadAcceptedJustificativa } = await confirmEventParticipation(ev.id, currentProfile.id);
-       if (!error) { Utils.showToast(hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presenca confirmada!'); close(); onSuccess?.(); }
+       if (!error) { Utils.showToast(hadAcceptedJustificationOnScreen || hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presenca confirmada!'); close(); onSuccess?.(); }
        else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
      });
      overlay.addEventListener('click', e => {
