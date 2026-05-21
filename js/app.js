@@ -3311,7 +3311,8 @@
         .or(memberFilter);
       if (findError) return { data: null, error: findError };
 
-      const hadJustificativa = !!(existingRows?.length && existingRows[0]?.justificativa);
+      const hadJustificativa = !!(existingRows?.length && existingRows.some(row => row?.justificativa));
+      const hadAcceptedJustificativa = !!(existingRows?.length && existingRows.some(row => row?.justificativa_status === 'aceita'));
 
       const modernRow = {
         event_id: eventId,
@@ -3375,7 +3376,7 @@
           .eq('status', 'pendente');
       } catch {}
 
-      return { ...result, hadJustificativa };
+      return { ...result, hadJustificativa, hadAcceptedJustificativa };
     }
 
    async function approveEventCancellation(eventId, userId, justificativa, reviewerId) {
@@ -3897,12 +3898,21 @@
         tab.querySelectorAll('.pres-join-btn').forEach(btn => {
           btn.addEventListener('click', async e => {
           e.stopPropagation();
+          if (btn.dataset.justificativaAceita === 'true') {
+            const confirmed = await MSYConfirm.show('Se continuar, sua justificativa será anulada e sua presença será confirmada.', {
+              title: 'Tem certeza?',
+              type: 'warning',
+              confirmText: 'Sim',
+              cancelText: 'Cancelar'
+            });
+            if (!confirmed) return;
+          }
           btn.disabled = true;
           btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
           const eid = btn.dataset.id;
-          const { error, hadJustificativa } = await confirmEventParticipation(eid, profile.id);
+          const { error, hadJustificativa, hadAcceptedJustificativa } = await confirmEventParticipation(eid, profile.id);
           if (!error) {
-            Utils.showToast(hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presença confirmada!');
+            Utils.showToast(hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presença confirmada!');
             loadEventos();
           }
           else { console.error('[MSY][eventos] Erro ao confirmar presenca:', error); Utils.showToast(error.message || 'Erro ao confirmar presença.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Agora vou participar'; }
@@ -4515,7 +4525,7 @@
                   ` : myStatus === 'nao_participar' ? `
                     ${myJustStatus === 'aceita' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa aceita</span>
-                      <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
+                      <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}" data-justificativa-aceita="true"><i class="fa-solid fa-check"></i> Agora vou participar</button>
                     ` : myJustStatus === 'recusada' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa recusada</span>
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
@@ -4717,7 +4727,7 @@
            </div>
          </div>
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
-           ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
+           ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}" ${justStatus === 'aceita' ? 'data-justificativa-aceita="true"' : ''}><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
             ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
              ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Troca</button>` : ''}
             <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
@@ -4729,10 +4739,20 @@
      overlay.querySelector('#eventDetailDone')?.addEventListener('click', close);
      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
       overlay.querySelector('.pres-join-btn')?.addEventListener('click', async e => {
-        const btn = e.currentTarget; btn.disabled = true;
+        const btn = e.currentTarget;
+        if (btn.dataset.justificativaAceita === 'true') {
+          const confirmed = await MSYConfirm.show('Se continuar, sua justificativa será anulada e sua presença será confirmada.', {
+            title: 'Tem certeza?',
+            type: 'warning',
+            confirmText: 'Sim',
+            cancelText: 'Cancelar'
+          });
+          if (!confirmed) return;
+        }
+        btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reconfirmando...';
-        const { error, hadJustificativa } = await confirmEventParticipation(ev.id, currentProfile.id);
-       if (!error) { Utils.showToast(hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presenca confirmada!'); close(); onSuccess?.(); }
+        const { error, hadJustificativa, hadAcceptedJustificativa } = await confirmEventParticipation(ev.id, currentProfile.id);
+       if (!error) { Utils.showToast(hadAcceptedJustificativa || hadJustificativa ? 'Presença confirmada! Justificativa anulada.' : 'Presenca confirmada!'); close(); onSuccess?.(); }
        else { console.error('[MSY][eventos] Erro ao confirmar presenca no detalhe:', error); Utils.showToast(error.message || 'Erro ao confirmar presenca.', 'error'); btn.disabled = false; }
      });
      overlay.addEventListener('click', e => {
