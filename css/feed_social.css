@@ -230,9 +230,10 @@ body[data-page="feed"] .page-content{animation:none}
 body[data-page="feed"] .social-main{min-width:0}
 body[data-page="feed"] .stories-strip{touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-size:720px}
-.story-viewer{position:fixed;inset:0;z-index:980;display:none;align-items:center;justify-content:center;width:100vw;height:var(--story-vh,100dvh);max-height:var(--story-vh,100dvh);padding:12px;background:#000;opacity:0;overflow:hidden;overscroll-behavior:contain;touch-action:none;transition:opacity .16s var(--ease);-webkit-text-size-adjust:100%}
+.story-viewer{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483000;display:none;align-items:center;justify-content:center;width:100vw;height:100vh;min-height:100dvh;max-height:none;padding:12px;background:#000;opacity:0;overflow:hidden;overscroll-behavior:contain;touch-action:none;transition:opacity .16s var(--ease);-webkit-text-size-adjust:100%;isolation:isolate}
+.story-viewer::before{content:"";position:fixed;inset:-2px;z-index:0;background:#000;pointer-events:none}
 .story-viewer.open{display:flex;opacity:1}
-.story-viewer.open .story-panel-instagram{position:relative;width:min(430px,calc(100vw - 24px));height:min(780px,calc(var(--story-vh,100dvh) - 24px));max-height:calc(var(--story-vh,100dvh) - 24px);overflow:hidden;border-radius:14px;background:#030406;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 90px rgba(0,0,0,.78);animation:socialModalIn .18s var(--ease) both;isolation:isolate}
+.story-viewer.open .story-panel-instagram{position:relative;z-index:1;width:min(430px,calc(100vw - 24px));height:min(780px,calc(var(--story-vh,100dvh) - 24px));max-height:calc(var(--story-vh,100dvh) - 24px);overflow:hidden;border-radius:14px;background:#030406;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 90px rgba(0,0,0,.78);animation:socialModalIn .18s var(--ease) both;isolation:isolate}
 .story-viewer.open .story-panel-instagram::before,.story-viewer.open .story-panel-instagram::after{content:"";position:absolute;left:0;right:0;z-index:2;pointer-events:none}
 .story-viewer.open .story-panel-instagram::before{top:0;height:154px;background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.34),transparent)}
 .story-viewer.open .story-panel-instagram::after{bottom:0;height:210px;background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,.34),transparent)}
@@ -273,7 +274,7 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
   body[data-page="feed"] .social-post{border-left:0;border-right:0;border-radius:0;box-shadow:none;contain-intrinsic-size:660px}
   body[data-page="feed"] .composer-actions{padding-top:10px;margin-top:10px}
   body[data-page="feed"] .social-submit{width:auto;min-width:132px;padding-inline:18px}
-  .story-viewer{padding:0;background:#000;height:var(--story-vh,100dvh);max-height:var(--story-vh,100dvh)}
+  .story-viewer{top:0;left:0;right:0;bottom:0;padding:0;background:#000;height:100vh;min-height:100dvh;max-height:none}
   .story-viewer.open .story-panel-instagram{width:100vw;height:var(--story-vh,100dvh);min-height:min(100svh,var(--story-vh,100dvh));max-height:var(--story-vh,100dvh);border-radius:0;border:0;box-shadow:none}
   .story-viewer.open .story-progress-stack{top:calc(7px + env(safe-area-inset-top));left:8px;right:8px}
   .story-viewer.open .story-top-instagram{top:calc(17px + env(safe-area-inset-top));left:12px;right:8px}
