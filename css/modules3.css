@@ -7,6 +7,7 @@
 /* Permission Manager */
 body[data-page="permissoes"] .page-content {
   max-width: 1180px;
+  width: 100%;
 }
 
 .permissions-shell {
@@ -93,7 +94,7 @@ body[data-page="permissoes"] .page-content {
   background: rgba(12,12,16,.84);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .permissions-workspace-head {
@@ -129,7 +130,7 @@ body[data-page="permissoes"] .page-content {
   display: grid;
   grid-template-columns: 270px minmax(0,1fr);
   min-height: 680px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .perm-member-item:hover {
@@ -179,6 +180,7 @@ body[data-page="permissoes"] .page-content {
 body[data-page="permissoes"] #permsManagerBody {
   grid-template-columns: 270px minmax(0,1fr);
   min-height: 680px;
+  overflow: visible;
 }
 .pm-sidebar {
   background: #08080c; border-right: 1px solid rgba(255,255,255,.06);
@@ -218,7 +220,7 @@ body[data-page="permissoes"] #permsManagerBody {
 }
 .pm-member-count.has-perms { background: rgba(201,168,76,.15); color: var(--gold); border: 1px solid rgba(201,168,76,.25); }
 .pm-member-count.no-perms  { background: rgba(255,255,255,.05); color: var(--text-3); }
-.pm-panel { display: flex; flex-direction: column; overflow: hidden; background: #0d0d12; }
+.pm-panel { display: flex; flex-direction: column; overflow: hidden; background: #0d0d12; min-width: 0; }
 .pm-panel-head {
   padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,.06);
   display: flex; align-items: center; justify-content: space-between;
@@ -331,10 +333,30 @@ body[data-page="permissoes"] #permsManagerBody {
 }
 
 @media (max-width: 900px) {
+  body[data-page="permissoes"] .page-content {
+    padding-inline: 12px;
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+
+  .permissions-shell {
+    gap: 12px;
+  }
+
   .permissions-hero {
     align-items: stretch;
     flex-direction: column;
-    padding: 22px 18px;
+    gap: 16px;
+    padding: 20px 16px;
+    border-radius: 10px;
+  }
+
+  .permissions-title {
+    font-size: 1.85rem;
+  }
+
+  .permissions-subtitle {
+    font-size: .82rem;
   }
 
   .permissions-hero-grid {
@@ -342,23 +364,213 @@ body[data-page="permissoes"] #permsManagerBody {
     grid-template-columns: repeat(3, minmax(0,1fr));
   }
 
+  .permissions-stat {
+    padding: 10px 6px;
+    border-radius: 8px;
+  }
+
+  .permissions-stat strong {
+    font-size: 1.15rem;
+  }
+
+  .permissions-stat span {
+    font-size: .53rem;
+    letter-spacing: .06em;
+  }
+
+  .permissions-workspace {
+    border-radius: 10px;
+    overflow: visible;
+  }
+
+  .permissions-workspace-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 15px 14px;
+  }
+
+  .permissions-workspace-head .btn {
+    justify-content: center;
+    width: 100%;
+  }
+
   .permissions-manager-body,
   #permsManagerBody {
     grid-template-columns: 1fr;
+    min-height: 0 !important;
+    overflow: visible;
   }
 
   .pm-sidebar {
-    max-height: 260px;
+    max-height: none;
     border-right: 0;
     border-bottom: 1px solid rgba(255,255,255,.06);
+    overflow: visible;
+  }
+
+  .pm-sidebar-head {
+    padding: 12px 12px 8px;
+  }
+
+  .pm-sidebar-search {
+    padding: 8px 12px 10px;
+  }
+
+  .pm-sidebar-search input {
+    height: 42px;
+    font-size: 16px;
+  }
+
+  .pm-member-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 12px 12px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pm-member-item {
+    flex: 0 0 76%;
+    min-width: 230px;
+    max-width: 310px;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 10px;
+    background: rgba(255,255,255,.025);
+    scroll-snap-align: start;
+  }
+
+  .pm-member-item.active {
+    border-left: 1px solid rgba(201,168,76,.42);
+    padding-left: 14px;
+  }
+
+  .pm-panel {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .pm-panel-head {
+    align-items: stretch;
+    padding: 14px 12px;
+  }
+
+  .pm-panel-member-info {
+    min-width: 0;
+  }
+
+  .pm-panel-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .pm-active-count {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .pm-panel-actions .btn {
+    justify-content: center;
+    min-height: 38px;
+  }
+
+  .pm-scroll {
+    overflow: visible;
+    padding: 16px 12px 18px;
+  }
+
+  .pm-group {
+    margin-bottom: 18px;
+  }
+
+  .pm-group-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pm-group-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .pm-group-btn {
+    min-height: 32px;
+    justify-content: center;
   }
 
   .pm-perms-grid {
     grid-template-columns: 1fr;
+    gap: 9px;
   }
 
-  .permissions-workspace-head {
+  .pm-perm-card {
+    align-items: center;
+    min-height: 58px;
+    padding: 12px;
+  }
+
+  .pm-perm-left {
+    min-width: 0;
+  }
+
+  .pm-perm-label {
+    font-size: .82rem;
+    overflow-wrap: anywhere;
+  }
+
+  .pm-toggle {
+    width: 42px;
+    height: 24px;
+  }
+
+  .pm-toggle-track {
+    border-radius: 12px;
+  }
+
+  .pm-toggle-track::after {
+    width: 18px;
+    height: 18px;
+  }
+
+  .pm-toggle input:checked + .pm-toggle-track::after {
+    left: calc(100% - 20px);
+  }
+
+  .pm-footer {
     align-items: flex-start;
     flex-direction: column;
+    padding: 12px;
+  }
+
+  .pm-footer-hint {
+    align-items: flex-start;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 430px) {
+  body[data-page="permissoes"] .page-content {
+    padding-inline: 8px;
+  }
+
+  .permissions-hero-grid {
+    gap: 6px;
+  }
+
+  .permissions-stat span {
+    font-size: .48rem;
+  }
+
+  .pm-member-item {
+    flex-basis: 84%;
+  }
+
+  .pm-panel-actions {
+    grid-template-columns: 1fr;
   }
 }
