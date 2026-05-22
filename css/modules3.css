@@ -8,12 +8,15 @@
 body[data-page="permissoes"] .page-content {
   max-width: 1180px;
   width: 100%;
+  min-width: 0;
 }
 
 .permissions-shell {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  width: 100%;
+  min-width: 0;
 }
 
 .permissions-hero {
@@ -95,6 +98,7 @@ body[data-page="permissoes"] .page-content {
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
   overflow: clip;
+  min-width: 0;
 }
 
 .permissions-workspace-head {
@@ -128,9 +132,11 @@ body[data-page="permissoes"] .page-content {
 
 .permissions-manager-body {
   display: grid;
-  grid-template-columns: 270px minmax(0,1fr);
+  grid-template-columns: minmax(220px,270px) minmax(0,1fr);
   min-height: 680px;
   overflow: visible;
+  width: 100%;
+  min-width: 0;
 }
 
 .perm-member-item:hover {
@@ -178,13 +184,14 @@ body[data-page="permissoes"] .page-content {
 }
 
 body[data-page="permissoes"] #permsManagerBody {
-  grid-template-columns: 270px minmax(0,1fr);
+  grid-template-columns: minmax(220px,270px) minmax(0,1fr);
   min-height: 680px;
   overflow: visible;
 }
 .pm-sidebar {
   background: #08080c; border-right: 1px solid rgba(255,255,255,.06);
   display: flex; flex-direction: column; overflow: hidden;
+  min-width: 0;
 }
 .pm-sidebar-head {
   padding: 12px 14px 10px; border-bottom: 1px solid rgba(255,255,255,.05);
@@ -200,7 +207,7 @@ body[data-page="permissoes"] #permsManagerBody {
   outline: none; transition: border .2s; box-sizing: border-box;
 }
 .pm-sidebar-search input:focus { border-color: rgba(201,168,76,.4); }
-.pm-member-list { overflow-y: auto; flex: 1; }
+.pm-member-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-width: 0; }
 .pm-member-item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; cursor: pointer;
@@ -220,15 +227,16 @@ body[data-page="permissoes"] #permsManagerBody {
 }
 .pm-member-count.has-perms { background: rgba(201,168,76,.15); color: var(--gold); border: 1px solid rgba(201,168,76,.25); }
 .pm-member-count.no-perms  { background: rgba(255,255,255,.05); color: var(--text-3); }
-.pm-panel { display: flex; flex-direction: column; overflow: hidden; background: #0d0d12; min-width: 0; }
+.pm-panel { display: flex; flex-direction: column; overflow: hidden; background: #0d0d12; min-width: 0; width: 100%; }
 .pm-panel-head {
   padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,.06);
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; flex-shrink: 0;
   background: linear-gradient(135deg,rgba(201,168,76,.06),transparent);
 }
-.pm-panel-member-info { display: flex; align-items: center; gap: 12px; }
-.pm-panel-member-name { font-weight: 700; font-size: .95rem; color: var(--text-1); }
+.pm-panel-member-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pm-panel-member-info > div:last-child { min-width: 0; }
+.pm-panel-member-name { font-weight: 700; font-size: .95rem; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-panel-member-role { font-size: .72rem; color: var(--text-3); margin-top: 1px; }
 .pm-panel-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pm-active-count {
@@ -260,7 +268,7 @@ body[data-page="permissoes"] #permsManagerBody {
   color: var(--text-3); transition: all .15s; font-weight: 600; letter-spacing: .04em;
 }
 .pm-group-btn:hover { background: rgba(201,168,76,.1); color: var(--gold); border-color: rgba(201,168,76,.3); }
-.pm-perms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pm-perms-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
 .pm-perm-card {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 12px 14px; border-radius: 8px;
@@ -333,10 +341,15 @@ body[data-page="permissoes"] #permsManagerBody {
 }
 
 @media (max-width: 900px) {
+  body[data-page="permissoes"] {
+    overflow-x: hidden;
+  }
+
   body[data-page="permissoes"] .page-content {
     padding-inline: 12px;
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
     overflow-x: hidden;
+    max-width: 100%;
   }
 
   .permissions-shell {
@@ -394,18 +407,23 @@ body[data-page="permissoes"] #permsManagerBody {
     width: 100%;
   }
 
-  .permissions-manager-body,
-  #permsManagerBody {
+  body[data-page="permissoes"] .permissions-manager-body,
+  body[data-page="permissoes"] #permsManagerBody {
+    display: flex;
+    flex-direction: column;
     grid-template-columns: 1fr;
     min-height: 0 !important;
-    overflow: visible;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
   .pm-sidebar {
     max-height: none;
     border-right: 0;
     border-bottom: 1px solid rgba(255,255,255,.06);
-    overflow: visible;
+    overflow: hidden;
+    width: 100%;
   }
 
   .pm-sidebar-head {
@@ -422,23 +440,23 @@ body[data-page="permissoes"] #permsManagerBody {
   }
 
   .pm-member-list {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 300px;
     padding: 0 12px 12px;
-    scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
   }
 
   .pm-member-item {
-    flex: 0 0 76%;
-    min-width: 230px;
-    max-width: 310px;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
     border: 1px solid rgba(255,255,255,.07);
     border-radius: 10px;
     background: rgba(255,255,255,.025);
-    scroll-snap-align: start;
   }
 
   .pm-member-item.active {
@@ -448,7 +466,9 @@ body[data-page="permissoes"] #permsManagerBody {
 
   .pm-panel {
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
   .pm-panel-head {
@@ -478,7 +498,8 @@ body[data-page="permissoes"] #permsManagerBody {
   }
 
   .pm-scroll {
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: visible;
     padding: 16px 12px 18px;
   }
 
@@ -512,6 +533,7 @@ body[data-page="permissoes"] #permsManagerBody {
     align-items: center;
     min-height: 58px;
     padding: 12px;
+    min-width: 0;
   }
 
   .pm-perm-left {
@@ -567,7 +589,7 @@ body[data-page="permissoes"] #permsManagerBody {
   }
 
   .pm-member-item {
-    flex-basis: 84%;
+    padding: 10px 12px;
   }
 
   .pm-panel-actions {
