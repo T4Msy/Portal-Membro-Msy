@@ -312,7 +312,7 @@ function lockBodyScroll() {
 
   const blockDocumentScroll = (event) => {
     const modal = event.target.closest?.('.story-viewer.open,.profile-viewer.open,.story-composer-modal.open,.media-viewer.open,.post-comments-modal.open');
-    const scrollable = event.target.closest?.('.story-reactions-panel.open,.story-caption-instagram,.profile-panel,.story-compose-panel,.media-viewer-panel,.post-comments-panel');
+    const scrollable = event.target.closest?.('.story-panel-instagram,.story-panel-stable,.story-reactions-panel.open,.story-caption-instagram,.profile-panel,.story-compose-panel,.media-viewer-panel,.post-comments-panel');
     if (!modal || !scrollable) event.preventDefault();
   };
 
@@ -3283,6 +3283,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
         <div class="story-reactions-title">Atividade do story</div>
         <div id="storyReactionsContent" class="message-sub">Carregando...</div>
       </div>` : ''}
+      <div class="story-keyboard-scroll-spacer" aria-hidden="true"></div>
     </div>`;
 
   openModal(modal);
@@ -3398,6 +3399,7 @@ function bindStoryViewport(modal) {
     const height = viewport?.height || window.innerHeight;
     const keyboard = Math.max(0, window.innerHeight - height - (viewport?.offsetTop || 0));
     modal.style.setProperty('--story-vh', `${Math.round(height)}px`);
+    modal.style.setProperty('--story-keyboard', `${Math.round(keyboard)}px`);
     modal.classList.toggle('story-keyboard-open', keyboard > 80);
     modal.scrollTop = 0;
   };
@@ -3437,6 +3439,7 @@ function bindStoryViewport(modal) {
     modal.removeEventListener('focusout', onFocusOut);
     modal.classList.remove('story-keyboard-open');
     modal.style.removeProperty('--story-vh');
+    modal.style.removeProperty('--story-keyboard');
     delete modal.dataset.storyViewportBound;
   };
 }
@@ -3478,6 +3481,7 @@ async function openStoryFast(groupIndex, storyIndex) {
         <div class="story-reactions-title">Reacoes recebidas</div>
         <div id="storyReactionsContent" class="message-sub">Carregando...</div>
       </div>` : ''}
+      <div class="story-keyboard-scroll-spacer" aria-hidden="true"></div>
       <div class="story-reply-composer" id="storyReplyComposer" style="display:none">
         <textarea id="storyReplyInput" class="story-caption-input" maxlength="160" placeholder="Responder story..."></textarea>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
@@ -3709,6 +3713,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
             <em><i class="fa-regular fa-eye"></i></em>
           </div>`).join('') : '<div class="message-sub">Ninguem viu este story ainda.</div>'}
       </div>` : ''}
+      <div class="story-keyboard-scroll-spacer" aria-hidden="true"></div>
       <div class="story-reply-composer" id="storyReplyComposer" style="display:none">
         <textarea id="storyReplyInput" class="story-caption-input" maxlength="160" placeholder="Responder story..."></textarea>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">

@@ -262,6 +262,10 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
 .story-social-icon.active{color:#ff3040;animation:likePop .34s var(--ease)}
 .story-activity-icon{width:42px;height:42px;flex:0 0 42px;border-radius:50%;border:1px solid rgba(255,255,255,.26);background:rgba(0,0,0,.28);font-size:1rem;backdrop-filter:blur(8px)}
 .story-viewer.open .story-reactions-panel{left:12px;right:12px;bottom:86px;z-index:14;max-height:48%;border-radius:18px;background:rgba(6,7,10,.96)}
+.story-viewer.open .story-keyboard-scroll-spacer{display:none}
+.story-viewer.story-keyboard-open .story-panel-instagram,
+.story-viewer.story-keyboard-open .story-panel-stable{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;scroll-padding-bottom:calc(var(--story-keyboard,0px) + 96px)}
+.story-viewer.story-keyboard-open .story-keyboard-scroll-spacer{display:block;position:relative;z-index:0;height:calc(var(--story-keyboard,0px) + 96px);pointer-events:none}
 @media(max-width:640px){
   body[data-page="feed"] .page-content{padding:0 0 calc(78px + env(safe-area-inset-bottom));overflow-x:hidden}
   body[data-page="feed"] .social-shell{display:block;width:100%;max-width:100%;overflow:visible}
