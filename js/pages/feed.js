@@ -60,6 +60,7 @@ const state = {
   storyPreloadQueue: new Set(),
   storySoundMuted: false,
   storyViewportCleanup: null,
+  scrollLockCleanup: null,
   modalScrollY: 0,
   bodyLockTop: '',
   hasSocialTables: true,
@@ -306,13 +307,34 @@ function lockBodyScroll() {
   document.documentElement.classList.add('social-modal-locked');
   document.body.classList.add('social-modal-locked');
   document.body.style.top = state.bodyLockTop;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+
+  const blockDocumentScroll = (event) => {
+    const modal = event.target.closest?.('.story-viewer.open,.profile-viewer.open,.story-composer-modal.open,.media-viewer.open,.post-comments-modal.open');
+    const scrollable = event.target.closest?.('.story-reactions-panel.open,.story-caption-instagram,.profile-panel,.story-compose-panel,.media-viewer-panel,.post-comments-panel');
+    if (!modal || !scrollable) event.preventDefault();
+  };
+
+  document.addEventListener('touchmove', blockDocumentScroll, { passive: false });
+  document.addEventListener('wheel', blockDocumentScroll, { passive: false });
+  state.scrollLockCleanup = () => {
+    document.removeEventListener('touchmove', blockDocumentScroll);
+    document.removeEventListener('wheel', blockDocumentScroll);
+  };
 }
 
 function unlockBodyScroll() {
   if (!document.body.classList.contains('social-modal-locked')) return;
+  if (typeof state.scrollLockCleanup === 'function') {
+    state.scrollLockCleanup();
+    state.scrollLockCleanup = null;
+  }
   document.documentElement.classList.remove('social-modal-locked');
   document.body.classList.remove('social-modal-locked');
   document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
   window.scrollTo({ top: state.modalScrollY, behavior: 'auto' });
 }
 
