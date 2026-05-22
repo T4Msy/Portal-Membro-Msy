@@ -76,6 +76,7 @@ const state = {
   socialSearchActiveIndex: 0,
   feedScrollBeforeProfile: 0,
   pendingFollows: new Set(),
+  canModerateFeed: false,
 };
 
 function avatar(person, size = 42) {
@@ -110,19 +111,19 @@ function isFollowing(memberId) {
 }
 
 function canManage(post) {
-  return state.profile.tier === 'diretoria' || post.author_id === state.profile.id;
+  return state.profile.tier === 'diretoria' || state.canModerateFeed || post.author_id === state.profile.id;
 }
 
 function canEditPost(post) {
-  return state.profile.tier === 'diretoria' || post.author_id === state.profile.id;
+  return state.profile.tier === 'diretoria' || state.canModerateFeed || post.author_id === state.profile.id;
 }
 
 function canManageStory(story) {
-  return state.profile.tier === 'diretoria' || story.author_id === state.profile.id;
+  return state.profile.tier === 'diretoria' || state.canModerateFeed || story.author_id === state.profile.id;
 }
 
 function isAdminProfile(profile = state.profile) {
-  return profile?.tier === 'diretoria' || /admin|diretoria/i.test(profile?.role || '');
+  return profile?.tier === 'diretoria' || state.canModerateFeed || /admin|diretoria/i.test(profile?.role || '');
 }
 
 function canManageComment(comment) {
@@ -358,6 +359,7 @@ async function initFeed() {
   const profile = await renderSidebar('feed');
   if (!profile) return;
   state.profile = profile;
+  state.canModerateFeed = profile.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'moderar_feed');
   state.service = new SocialService(db, profile, Utils);
   await renderTopBar('Feed Social', profile);
 
@@ -652,7 +654,7 @@ function renderPost(post) {
           <button class="social-icon-btn post-more-btn" data-post-menu="${post.id}" aria-label="Mais opcoes"><i class="fa-solid fa-ellipsis"></i></button>
           <div class="post-menu">
             ${canEditPost(post) && !post.legacy ? `<button data-edit-post="${post.id}"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
-            ${state.profile.tier === 'diretoria' && !post.legacy ? `<button data-pin-post="${post.id}"><i class="fa-solid fa-thumbtack"></i> ${post.is_pinned ? 'Desfixar' : 'Fixar'}</button>` : ''}
+            ${(state.profile.tier === 'diretoria' || state.canModerateFeed) && !post.legacy ? `<button data-pin-post="${post.id}"><i class="fa-solid fa-thumbtack"></i> ${post.is_pinned ? 'Desfixar' : 'Fixar'}</button>` : ''}
             ${canManage(post) && !post.legacy ? `<button class="danger" data-delete-post="${post.id}"><i class="fa-solid fa-trash"></i> Excluir</button>` : ''}
             <button data-copy-post="${post.id}"><i class="fa-solid fa-link"></i> Copiar link</button>
           </div>

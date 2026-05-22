@@ -288,6 +288,10 @@
              <i class="fa-solid fa-shield-halved" style="color:var(--gold)"></i>
              <span>Administração</span>
            </a>
+           <a href="permissoes.html" class="nav-item ${activePage === 'permissoes' ? 'active' : ''}">
+             <i class="fa-solid fa-key" style="color:var(--gold)"></i>
+             <span>Permissões</span>
+           </a>
            <a href="desempenho.html" class="nav-item ${activePage === 'desempenho' ? 'active' : ''}">
              <i class="fa-solid fa-chart-line" style="color:var(--gold)"></i>
              <span>Desempenho</span>

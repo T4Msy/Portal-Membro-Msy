@@ -5,6 +5,133 @@
    ============================================================ */
 
 /* Permission Manager */
+body[data-page="permissoes"] .page-content {
+  max-width: 1180px;
+}
+
+.permissions-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.permissions-hero {
+  border: 1px solid rgba(201,168,76,.22);
+  border-radius: 14px;
+  padding: 28px 30px;
+  background:
+    linear-gradient(135deg, rgba(201,168,76,.12), rgba(127,29,29,.08) 42%, rgba(10,10,14,.96)),
+    #101014;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+}
+
+.permissions-kicker {
+  color: var(--gold);
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.permissions-title {
+  font-family: "Cinzel", serif;
+  color: var(--text-1);
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.permissions-subtitle {
+  color: var(--text-2);
+  font-size: .9rem;
+  line-height: 1.55;
+  margin-top: 10px;
+}
+
+.permissions-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  gap: 8px;
+  min-width: 330px;
+}
+
+.permissions-stat {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(4,4,7,.36);
+  padding: 12px;
+  text-align: center;
+}
+
+.permissions-stat strong {
+  color: var(--gold);
+  font-family: "Cinzel", serif;
+  font-size: 1.45rem;
+  line-height: 1;
+  display: block;
+}
+
+.permissions-stat span {
+  color: var(--text-3);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-top: 6px;
+  display: block;
+}
+
+.permissions-workspace {
+  background: rgba(12,12,16,.84);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.permissions-workspace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(135deg,rgba(201,168,76,.06),transparent);
+}
+
+.permissions-section-title {
+  color: var(--text-1);
+  font-weight: 800;
+  font-size: .95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permissions-section-title i {
+  color: var(--gold);
+}
+
+.permissions-section-sub {
+  color: var(--text-3);
+  font-size: .74rem;
+  margin-top: 3px;
+}
+
+.permissions-manager-body {
+  display: grid;
+  grid-template-columns: 270px minmax(0,1fr);
+  min-height: 680px;
+  overflow: hidden;
+}
+
 .perm-member-item:hover {
   background: var(--black-4) !important;
 }
@@ -27,11 +154,6 @@
   margin-bottom: 14px;
 }
 
-/* Permissions button in admin */
-#managePermsBtn:hover {
-  background: rgba(201,168,76,.08);
-}
-
 /* Permission Manager modal */
 #permsManagerModal .modal {
   max-width: 820px; max-height: 92vh;
@@ -52,6 +174,11 @@
 #permsManagerBody {
   display: grid; grid-template-columns: 230px 1fr;
   flex: 1; min-height: 0; overflow: hidden;
+}
+
+body[data-page="permissoes"] #permsManagerBody {
+  grid-template-columns: 270px minmax(0,1fr);
+  min-height: 680px;
 }
 .pm-sidebar {
   background: #08080c; border-right: 1px solid rgba(255,255,255,.06);
@@ -201,4 +328,37 @@
   position:absolute; border-radius:50%; background:rgba(201,168,76,.3);
   width:60px; height:60px; margin:-30px 0 0 -30px;
   animation:pm-ripple .45s linear; pointer-events:none;
+}
+
+@media (max-width: 900px) {
+  .permissions-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 22px 18px;
+  }
+
+  .permissions-hero-grid {
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+  }
+
+  .permissions-manager-body,
+  #permsManagerBody {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-sidebar {
+    max-height: 260px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+
+  .pm-perms-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permissions-workspace-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

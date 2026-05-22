@@ -169,7 +169,7 @@ async function initSuggestionPage() {
   const profile = await renderSidebar('sugestoes');
   if (!profile) return;
   state.profile = profile;
-  state.isDiretoria = profile.tier === 'diretoria';
+  state.isDiretoria = profile.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_sugestoes');
   state.view = state.isDiretoria ? 'admin' : 'minhas';
   await renderTopBar('Sugestões', profile);
   Utils.showLoading(document.getElementById('pageContent'));

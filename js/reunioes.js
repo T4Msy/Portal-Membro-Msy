@@ -8,7 +8,7 @@ async function initReunioes() {
   await renderTopBar('Reuniões', profile);
 
   const content     = document.getElementById('pageContent');
-  const isDiretoria = profile.tier === 'diretoria';
+  const isDiretoria = profile.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_reunioes');
 
   /* CSS movido para css/reunioes.css — linkado em reunioes.html */
 

@@ -46,6 +46,18 @@ const MSYPerms = {
     { key: 'gerenciar_biblioteca',  label: 'Gerenciar Biblioteca',   group: 'Biblioteca', icon: 'fa-book-open' },
     // ── Feed
     { key: 'publicar_feed',         label: 'Publicar no Feed',       group: 'Feed',       icon: 'fa-rss' },
+    { key: 'moderar_feed',          label: 'Moderar Feed',           group: 'Feed',       icon: 'fa-shield-virus' },
+    // ── Sugestões
+    { key: 'gerenciar_sugestoes',   label: 'Gerenciar Sugestões',    group: 'Sugestões',  icon: 'fa-lightbulb' },
+    // ── Mensalidade
+    { key: 'gerenciar_mensalidade', label: 'Gerenciar Mensalidade',  group: 'Mensalidade', icon: 'fa-credit-card' },
+    // ── Reuniões
+    { key: 'gerenciar_reunioes',    label: 'Gerenciar Reuniões',     group: 'Reuniões',   icon: 'fa-handshake' },
+    // ── Reconhecimento
+    { key: 'gerenciar_premiacoes',  label: 'Gerenciar Premiações',   group: 'Reconhecimento', icon: 'fa-trophy' },
+    // ── Portal
+    { key: 'gerenciar_tecnologias', label: 'Gerenciar Tecnologias',  group: 'Portal',     icon: 'fa-microchip' },
+    { key: 'gerenciar_icm',         label: 'Gerenciar ICM',          group: 'Portal',     icon: 'fa-brain' },
     // ── Administração
     { key: 'ver_desempenho',        label: 'Ver Painel de Desempenho', group: 'Admin',    icon: 'fa-chart-line' },
     { key: 'notificar_membros',     label: 'Enviar Notificações',    group: 'Admin',      icon: 'fa-bell' },
@@ -213,10 +225,15 @@ async function openPermissionsManager() {
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
     'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
     'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
-    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed'] },
+    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
+    'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
+    'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
+    'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
+    'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
+    'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
     'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes'] },
   };
-  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros']);
+  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade']);
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
@@ -398,6 +415,311 @@ async function openPermissionsManager() {
         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
       }
     });
+  }
+
+  mount();
+}
+
+function getPermissionsGroups() {
+  return {
+    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
+    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
+    'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
+    'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
+    'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
+    'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
+    'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
+    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
+    'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
+    'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
+    'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
+    'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
+    'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
+    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes'] },
+  };
+}
+
+async function initPermissoesPage() {
+  const profileRaw = await Auth.requireAuth();
+  if (!profileRaw) return;
+  if (ViewMode.isActive() || profileRaw.tier !== 'diretoria') {
+    window.location.href = 'dashboard.html';
+    return;
+  }
+
+  await renderSidebar('permissoes');
+  await renderTopBar('Permissões', profileRaw);
+
+  const content = document.getElementById('pageContent');
+  Utils.showLoading(content);
+
+  content.innerHTML = `
+    <div class="permissions-shell">
+      <section class="permissions-hero card-enter">
+        <div>
+          <div class="permissions-kicker"><i class="fa-solid fa-key"></i> Diretoria</div>
+          <h1 class="permissions-title">Permissões</h1>
+          <div class="permissions-subtitle">Controle individual do que cada membro pode operar no portal.</div>
+        </div>
+        <div class="permissions-hero-grid">
+          <div class="permissions-stat"><strong id="permMembersCount">0</strong><span>Membros</span></div>
+          <div class="permissions-stat"><strong id="permGrantedCount">0</strong><span>Ativas</span></div>
+          <div class="permissions-stat"><strong>${MSYPerms.ALL.length}</strong><span>Permissões</span></div>
+        </div>
+      </section>
+      <section class="permissions-workspace card-enter">
+        <div class="permissions-workspace-head">
+          <div>
+            <div class="permissions-section-title"><i class="fa-solid fa-shield-halved"></i> Gerenciador de acesso</div>
+            <div class="permissions-section-sub">Selecione um membro, marque as permissões e salve as alterações.</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="admin.html"><i class="fa-solid fa-arrow-left"></i> Administração</a>
+        </div>
+        <div id="permsManagerBody" class="permissions-manager-body"></div>
+      </section>
+    </div>`;
+
+  const body = document.getElementById('permsManagerBody');
+  await renderPermissionsWorkspace(body);
+}
+
+async function renderPermissionsWorkspace(body) {
+  if (!body) return;
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:320px;gap:12px;color:var(--text-3)"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);font-size:1.4rem"></i> Carregando permissões...</div>`;
+
+  let members = [];
+  let allPermsData = [];
+  try {
+    const { data: membersData, error: membersError } = await db.from('profiles')
+      .select('id,name,role,initials,color,avatar_url,tier')
+      .eq('status','ativo')
+      .neq('tier','diretoria')
+      .order('name');
+    if (membersError) throw membersError;
+    members = membersData || [];
+  } catch (err) {
+    console.error('[MSY][permissoes] Erro ao carregar membros:', err);
+    body.innerHTML = `<div class="empty-state" style="padding:40px"><div class="empty-state-text">Erro ao carregar membros.</div></div>`;
+    Utils.showToast?.('Erro ao carregar membros.', 'error');
+    return;
+  }
+
+  if (!members.length) {
+    body.innerHTML = `<div class="empty-state" style="padding:40px"><div class="empty-state-text">Nenhum membro ativo encontrado.</div></div>`;
+    return;
+  }
+
+  try {
+    const { data, error } = await db.from('member_permissions')
+      .select('user_id,permissions')
+      .in('user_id', members.map(m => m.id));
+    if (error) throw error;
+    allPermsData = data || [];
+  } catch (err) {
+    console.error('[MSY][permissoes] Erro ao carregar permissões:', err);
+    Utils.showToast?.('Erro ao carregar permissões.', 'error');
+  }
+
+  const permsMap = {};
+  allPermsData.forEach(p => { permsMap[p.user_id] = p.permissions || []; });
+
+  const GROUPS = getPermissionsGroups();
+  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade']);
+  const LABELS = {};
+  MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
+
+  let selectedId = members[0].id;
+  let filterQ = '';
+
+  const syncHeroStats = () => {
+    const granted = Object.values(permsMap).reduce((sum, list) => sum + (list?.length || 0), 0);
+    const membersEl = document.getElementById('permMembersCount');
+    const grantedEl = document.getElementById('permGrantedCount');
+    if (membersEl) membersEl.textContent = String(members.length);
+    if (grantedEl) grantedEl.textContent = String(granted);
+  };
+
+  function renderPanel(memberId, current) {
+    const member = members.find(m => m.id === memberId);
+    if (!member) return '';
+    const groupsHTML = Object.entries(GROUPS).map(([gName, meta]) => {
+      const gPerms = meta.keys.filter(k => LABELS[k]);
+      const activeInGroup = gPerms.filter(k => current.includes(k)).length;
+      return `<div class="pm-group" data-group="${Utils.escapeHtml(gName)}">
+        <div class="pm-group-header">
+          <div class="pm-group-title">
+            <div class="pm-group-icon" style="background:${meta.color}18;border-color:${meta.color}30;color:${meta.color}"><i class="fa-solid ${meta.icon}"></i></div>
+            <span>${gName}</span>
+            <span style="font-size:.6rem;color:var(--text-3);font-weight:400;letter-spacing:0">(${activeInGroup}/${gPerms.length})</span>
+          </div>
+          <div class="pm-group-toggle">
+            <button class="pm-group-btn pm-select-all" data-group="${Utils.escapeHtml(gName)}"><i class="fa-solid fa-check-double"></i> Todas</button>
+            <button class="pm-group-btn pm-clear-all" data-group="${Utils.escapeHtml(gName)}"><i class="fa-solid fa-xmark"></i> Limpar</button>
+          </div>
+        </div>
+        <div class="pm-perms-grid">
+          ${gPerms.map(key => {
+            const isActive = current.includes(key);
+            const isCrit = CRITICAL_KEYS.has(key);
+            const meta2 = LABELS[key] || { label: key, icon: 'fa-key' };
+            return `<div class="pm-perm-card ${isActive ? 'active' : ''} ${isCrit ? 'critical' : ''}" data-key="${key}">
+              <div class="pm-perm-left">
+                <div class="pm-perm-icon"><i class="fa-solid ${meta2.icon}"></i></div>
+                <div>
+                  <div class="pm-perm-label">${meta2.label}</div>
+                  ${isCrit ? `<div class="pm-perm-critical-badge">Crítico</div>` : ''}
+                </div>
+              </div>
+              <label class="pm-toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" class="pm-toggle-input" data-key="${key}" ${isActive ? 'checked' : ''}>
+                <span class="pm-toggle-track"></span>
+              </label>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="pm-panel-head">
+        <div class="pm-panel-member-info">
+          <div class="avatar" style="width:40px;height:40px;font-size:.75rem;background:linear-gradient(135deg,${member.color||'#7f1d1d'},#1a1a1a);border:2px solid var(--border-gold)">
+            ${member.avatar_url ? `<img src="${member.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (member.initials || Utils.getInitials(member.name))}
+          </div>
+          <div>
+            <div class="pm-panel-member-name">${Utils.escapeHtml(member.name)}</div>
+            <div class="pm-panel-member-role">${Utils.escapeHtml(member.role || 'Membro')}</div>
+          </div>
+        </div>
+        <div class="pm-panel-actions">
+          <div class="pm-active-count" id="pmActiveCount"><i class="fa-solid fa-shield-check" style="font-size:.7rem"></i> ${current.length} / ${MSYPerms.ALL.length}</div>
+          <button class="btn btn-ghost btn-sm pm-clear-member" style="font-size:.72rem;color:var(--text-3)"><i class="fa-solid fa-trash"></i> Limpar</button>
+          <button class="btn btn-primary btn-sm pm-save" style="font-size:.75rem"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
+        </div>
+      </div>
+      <div class="pm-scroll" id="pmScroll">${groupsHTML}</div>
+      <div class="pm-footer">
+        <div class="pm-footer-hint"><i class="fa-solid fa-circle-info" style="color:var(--gold)"></i> Permissões críticas liberam ações sensíveis e devem ser concedidas com cuidado.</div>
+      </div>`;
+  }
+
+  function updateActiveCount() {
+    const cnt = body.querySelectorAll('.pm-toggle-input:checked').length;
+    const el = document.getElementById('pmActiveCount');
+    if (el) el.innerHTML = `<i class="fa-solid fa-shield-check" style="font-size:.7rem"></i> ${cnt} / ${MSYPerms.ALL.length}`;
+    const sideItem = body.querySelector(`.pm-member-item[data-mid="${selectedId}"] .pm-member-count`);
+    if (sideItem) {
+      sideItem.className = `pm-member-count ${cnt > 0 ? 'has-perms' : 'no-perms'}`;
+      sideItem.textContent = cnt > 0 ? cnt + ' perm.' : 'Sem permissões';
+    }
+  }
+
+  function bindPanelEvents(memberId) {
+    body.querySelectorAll('.pm-perm-card').forEach(card => {
+      const toggle = card.querySelector('.pm-toggle-input');
+      if (!toggle) return;
+      card.addEventListener('click', e => {
+        if (e.target.closest('.pm-toggle')) return;
+        toggle.checked = !toggle.checked;
+        toggle.dispatchEvent(new Event('change'));
+      });
+      toggle.addEventListener('change', () => {
+        card.classList.toggle('active', toggle.checked);
+        updateActiveCount();
+      });
+    });
+    body.querySelectorAll('.pm-select-all').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        body.querySelectorAll(`.pm-group[data-group="${btn.dataset.group}"] .pm-toggle-input`).forEach(cb => {
+          cb.checked = true;
+          cb.closest('.pm-perm-card')?.classList.add('active');
+        });
+        updateActiveCount();
+      });
+    });
+    body.querySelectorAll('.pm-clear-all').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        body.querySelectorAll(`.pm-group[data-group="${btn.dataset.group}"] .pm-toggle-input`).forEach(cb => {
+          cb.checked = false;
+          cb.closest('.pm-perm-card')?.classList.remove('active');
+        });
+        updateActiveCount();
+      });
+    });
+    body.querySelector('.pm-clear-member')?.addEventListener('click', async () => {
+      const name = members.find(m => m.id === memberId)?.name || 'este membro';
+      if (!(await MSYConfirm.show(`Remover todas as permissões de ${name}?`, { title: 'Limpar permissões' }))) return;
+      body.querySelectorAll('.pm-toggle-input').forEach(cb => {
+        cb.checked = false;
+        cb.closest('.pm-perm-card')?.classList.remove('active');
+      });
+      updateActiveCount();
+    });
+    body.querySelector('.pm-save')?.addEventListener('click', async () => {
+      const checked = [...body.querySelectorAll('.pm-toggle-input:checked')].map(cb => cb.dataset.key);
+      const btn = body.querySelector('.pm-save');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+      const ok = await MSYPerms.save(memberId, checked);
+      if (ok) {
+        permsMap[memberId] = checked;
+        MSYPerms.invalidate();
+        syncHeroStats();
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvo';
+        Utils.showToast('Permissões salvas.');
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
+        }, 1400);
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
+        Utils.showToast('Erro ao salvar permissões.', 'error');
+      }
+    });
+  }
+
+  function mount() {
+    const current = permsMap[selectedId] || [];
+    const filtered = filterQ ? members.filter(m => m.name.toLowerCase().includes(filterQ.toLowerCase())) : members;
+    body.innerHTML = `
+      <div class="pm-sidebar">
+        <div class="pm-sidebar-head"><i class="fa-solid fa-users"></i> Membros da Ordem</div>
+        <div class="pm-sidebar-search"><input type="text" id="pmSearch" placeholder="Filtrar membro..." value="${Utils.escapeHtml(filterQ)}"></div>
+        <div class="pm-member-list" id="pmMemberList">
+          ${filtered.map(m => {
+            const cnt = (permsMap[m.id] || []).length;
+            return `<div class="pm-member-item ${m.id === selectedId ? 'active' : ''}" data-mid="${m.id}">
+              <div class="avatar" style="width:30px;height:30px;font-size:.6rem;flex-shrink:0;background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a);border-color:${m.id===selectedId?'var(--border-gold)':'var(--border-faint)'}">
+                ${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials || Utils.getInitials(m.name))}
+              </div>
+              <div style="flex:1;min-width:0">
+                <div class="pm-member-name">${Utils.escapeHtml(m.name)}</div>
+                <span class="pm-member-count ${cnt > 0 ? 'has-perms' : 'no-perms'}">${cnt > 0 ? cnt + ' perm.' : 'Sem permissões'}</span>
+              </div>
+              ${m.id === selectedId ? '<i class="fa-solid fa-chevron-right" style="color:var(--gold);font-size:.6rem;flex-shrink:0"></i>' : ''}
+            </div>`;
+          }).join('')}
+          ${filtered.length === 0 ? `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:.8rem">Nenhum resultado</div>` : ''}
+        </div>
+      </div>
+      <div class="pm-panel">${renderPanel(selectedId, current)}</div>`;
+
+    document.getElementById('pmSearch')?.addEventListener('input', e => {
+      filterQ = e.target.value;
+      mount();
+    });
+    body.querySelectorAll('.pm-member-item').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedId = el.dataset.mid;
+        mount();
+      });
+    });
+    bindPanelEvents(selectedId);
+    syncHeroStats();
   }
 
   mount();
@@ -1037,23 +1359,7 @@ async function patchAdminPage(profile) {
     const acoeCard = content.querySelector('.card');
     if (!acoeCard) return false;
 
-    // 1. Adicionar botão "Gerenciar Permissões" nas Ações Rápidas
-    const actionsRow = content.querySelector('.card .btn.btn-ghost, .card [id="notifyAllBtn"]');
-    if (actionsRow) {
-      const parent = actionsRow.closest('div');
-      if (parent && !parent.querySelector('#managePermsBtn')) {
-        const permsBtn = document.createElement('button');
-        permsBtn.id = 'managePermsBtn';
-        permsBtn.className = 'btn btn-outline';
-        permsBtn.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Gerenciar Permissões';
-        permsBtn.style.borderColor = 'var(--border-gold)';
-        permsBtn.style.color = 'var(--gold)';
-        permsBtn.addEventListener('click', openPermissionsManager);
-        parent.insertBefore(permsBtn, actionsRow);
-      }
-    }
-
-    // 2. Injetar card de alertas depois dos stats
+    // Injetar card de alertas depois dos stats
     if (!document.getElementById('systemAlertsCard')) {
       const alertsCard = document.createElement('div');
       alertsCard.id = 'systemAlertsCard';
@@ -1289,6 +1595,15 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
+
+  if (page === 'permissoes') {
+    initPermissoesPage().catch(err => {
+      console.error('[MSY][permissoes] Erro ao inicializar página:', err);
+      const content = document.getElementById('pageContent');
+      if (content) content.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="empty-state-text">Erro ao carregar permissões.</div></div>';
+      Utils.showToast?.('Erro ao carregar permissões.', 'error');
+    });
+  }
 
   // ── Admin: injeta Permissões + Alertas ──────────────────
   if (page === 'admin') {

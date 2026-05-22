@@ -405,7 +405,7 @@ async function initPremiacoes() {
   await renderTopBar('Premiações', profile);
 
   const content     = document.getElementById('pageContent');
-  const isDiretoria = profile.tier === 'diretoria';
+  const isDiretoria = profile.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_premiacoes');
 
   // Estado: null = lista geral | uuid = detalhe de premiação
   let viewState = null; // { mode: 'list' } | { mode: 'detail', id: uuid }
