@@ -59,6 +59,7 @@ const state = {
   storyMediaCache: new Map(),
   storyPreloadQueue: new Set(),
   storySoundMuted: false,
+  storyViewportCleanup: null,
   modalScrollY: 0,
   bodyLockTop: '',
   hasSocialTables: true,
@@ -340,6 +341,10 @@ function closeSocialModals() {
   if (typeof state.directViewportCleanup === 'function') {
     state.directViewportCleanup();
     state.directViewportCleanup = null;
+  }
+  if (typeof state.storyViewportCleanup === 'function') {
+    state.storyViewportCleanup();
+    state.storyViewportCleanup = null;
   }
   if (state.directMessagesChannel) {
     try { db.removeChannel(state.directMessagesChannel); } catch {}
@@ -3247,7 +3252,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
       ${story.caption ? `<div class="story-caption story-caption-instagram">${richText(story.caption)}</div>` : ''}
       <div class="story-bottom story-bottom-instagram">
         <form class="story-inline-reply" id="storyInlineReply">
-          <input id="storyReplyInput" maxlength="180" autocomplete="off" placeholder="Enviar mensagem...">
+          <input id="storyReplyInput" maxlength="180" autocomplete="off" inputmode="text" enterkeyhint="send" placeholder="Enviar mensagem...">
           <button type="submit" class="story-inline-send" aria-label="Enviar resposta"><i class="fa-regular fa-paper-plane"></i></button>
         </form>
         <button class="story-social-icon" data-story-reaction="heart" title="Curtir story"><i class="fa-regular fa-heart"></i><span></span></button>
@@ -3259,6 +3264,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
     </div>`;
 
   openModal(modal);
+  bindStoryViewport(modal);
   bindStorySoundControl(modal);
   mediaReady.finally(() => markStoryMediaReady(modal));
   markStoryMediaReady(modal);
@@ -3269,8 +3275,8 @@ async function openStoryPremium(groupIndex, storyIndex) {
   };
   modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
   modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
-  modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus());
-  modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus());
+  modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
+  modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-story-reaction]')?.addEventListener('click', async (e) => {
     e.currentTarget.classList.add('active');
     await state.service.reactToStory(story, 'heart');
@@ -3290,6 +3296,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
         author: group.author,
       }, text);
       input.value = '';
+      input.blur();
       Utils.showToast('Resposta enviada no Direct.');
     } catch (err) {
       console.error('[MSY Feed Error]', err);
@@ -3359,6 +3366,59 @@ function bindStoryGestures(modal, go) {
   }, { passive: true }));
 }
 
+function bindStoryViewport(modal) {
+  if (!modal || modal.dataset.storyViewportBound === 'true') return;
+  if (typeof state.storyViewportCleanup === 'function') state.storyViewportCleanup();
+  modal.dataset.storyViewportBound = 'true';
+
+  const sync = () => {
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight;
+    const keyboard = Math.max(0, window.innerHeight - height - (viewport?.offsetTop || 0));
+    modal.style.setProperty('--story-vh', `${Math.round(height)}px`);
+    modal.classList.toggle('story-keyboard-open', keyboard > 80);
+    modal.scrollTop = 0;
+  };
+
+  const settle = () => {
+    sync();
+    window.scrollTo({ top: state.modalScrollY, left: 0, behavior: 'auto' });
+    modal.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    modal.querySelector('.story-panel')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  };
+
+  const onFocusIn = (event) => {
+    if (!event.target.closest('#storyViewer input,#storyViewer textarea')) return;
+    pauseStoryPlayback(modal);
+    sync();
+  };
+
+  const onFocusOut = (event) => {
+    if (!event.target.closest('#storyViewer input,#storyViewer textarea')) return;
+    setTimeout(settle, 80);
+    setTimeout(settle, 280);
+    resumeStoryPlayback(modal);
+  };
+
+  sync();
+  window.visualViewport?.addEventListener('resize', sync, { passive: true });
+  window.visualViewport?.addEventListener('scroll', sync, { passive: true });
+  window.addEventListener('resize', sync, { passive: true });
+  modal.addEventListener('focusin', onFocusIn);
+  modal.addEventListener('focusout', onFocusOut);
+
+  state.storyViewportCleanup = () => {
+    window.visualViewport?.removeEventListener('resize', sync);
+    window.visualViewport?.removeEventListener('scroll', sync);
+    window.removeEventListener('resize', sync);
+    modal.removeEventListener('focusin', onFocusIn);
+    modal.removeEventListener('focusout', onFocusOut);
+    modal.classList.remove('story-keyboard-open');
+    modal.style.removeProperty('--story-vh');
+    delete modal.dataset.storyViewportBound;
+  };
+}
+
 async function openStory(groupIndex, storyIndex) {
   return openStoryPremium(groupIndex, storyIndex);
 }
@@ -3405,6 +3465,7 @@ async function openStoryFast(groupIndex, storyIndex) {
       </div>
     </div>`;
   openModal(modal);
+  bindStoryViewport(modal);
   requestAnimationFrame(() => {
     modal.scrollTop = 0;
     modal.querySelector('.story-panel')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -3431,8 +3492,7 @@ async function openStoryFast(groupIndex, storyIndex) {
   modal.querySelector('[data-story-reply]')?.addEventListener('click', () => {
     const composer = document.getElementById('storyReplyComposer');
     if (composer) composer.style.display = 'block';
-    composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    composer?.querySelector('#storyReplyInput')?.focus();
+    composer?.querySelector('#storyReplyInput')?.focus({ preventScroll: true });
   });
   modal.querySelector('[data-close-story-reply]')?.addEventListener('click', () => {
     const composer = document.getElementById('storyReplyComposer');
@@ -3451,6 +3511,7 @@ async function openStoryFast(groupIndex, storyIndex) {
         author: group.author,
       }, text);
       input.value = '';
+      input.blur();
       const composer = document.getElementById('storyReplyComposer');
       if (composer) composer.style.display = 'none';
       Utils.showToast('Resposta enviada no Direct.');
@@ -3635,6 +3696,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
       </div>
     </div>`;
   openModal(modal);
+  bindStoryViewport(modal);
   requestAnimationFrame(() => {
     modal.scrollTop = 0;
     const panel = modal.querySelector('.story-panel');
@@ -3663,9 +3725,8 @@ async function openStoryLegacy(groupIndex, storyIndex) {
   });
   modal.querySelector('[data-story-reply]')?.addEventListener('click', () => {
     const composer = document.getElementById('storyReplyComposer');
-    composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    composer?.querySelector('#storyReplyInput')?.focus();
     composer?.style && (composer.style.display = 'block');
+    composer?.querySelector('#storyReplyInput')?.focus({ preventScroll: true });
   });
   modal.querySelector('[data-close-story-reply]')?.addEventListener('click', () => {
     const composer = document.getElementById('storyReplyComposer');
@@ -3684,6 +3745,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
         author: group.author,
       }, text);
       input.value = '';
+      input.blur();
       const composer = document.getElementById('storyReplyComposer');
       if (composer) composer.style.display = 'none';
       Utils.showToast('Resposta enviada no Direct.');
