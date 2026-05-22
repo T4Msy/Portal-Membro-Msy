@@ -230,7 +230,7 @@ body[data-page="feed"] .page-content{animation:none}
 body[data-page="feed"] .social-main{min-width:0}
 body[data-page="feed"] .stories-strip{touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-size:720px}
-.story-viewer{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483000;display:none;align-items:center;justify-content:center;width:100vw;height:100vh;min-height:100dvh;max-height:none;padding:12px;background:#000;opacity:0;overflow:hidden;overscroll-behavior:contain;touch-action:none;transition:opacity .16s var(--ease);-webkit-text-size-adjust:100%;isolation:isolate}
+.story-viewer{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483000;display:none;align-items:center;justify-content:center;width:100vw;height:100vh;min-height:100dvh;max-height:none;padding:12px;background:#000;opacity:0;overflow:hidden;overscroll-behavior:contain;touch-action:pan-y;transition:opacity .16s var(--ease);-webkit-text-size-adjust:100%;isolation:isolate}
 .story-viewer::before{content:"";position:fixed;inset:-2px;z-index:0;background:#000;pointer-events:none}
 .story-viewer.open{display:flex;opacity:1}
 .story-viewer.open .story-panel-instagram{position:relative;z-index:1;width:min(430px,calc(100vw - 24px));height:min(780px,calc(var(--story-vh,100dvh) - 24px));max-height:calc(var(--story-vh,100dvh) - 24px);overflow:hidden;border-radius:14px;background:#030406;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 90px rgba(0,0,0,.78);animation:socialModalIn .18s var(--ease) both;isolation:isolate}
@@ -251,7 +251,7 @@ body[data-page="feed"] .social-post{content-visibility:auto;contain-intrinsic-si
 .story-viewer.open .story-bottom-instagram{left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:13;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
 .story-viewer.open .story-caption-instagram{z-index:13;left:18px;right:18px;bottom:92px;max-height:24dvh;overflow:auto}
 .story-viewer.open .story-caption-instagram,
-.story-viewer.open .story-reactions-panel{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.story-viewer.open .story-reactions-panel{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .story-viewer.open .story-tap-zone{top:68px;bottom:92px;width:42%;z-index:5}
 .story-inline-reply{height:52px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(255,255,255,.56);border-radius:999px;background:rgba(4,6,8,.34);backdrop-filter:blur(8px);overflow:hidden}
 .story-inline-reply input{min-width:0;width:100%;height:100%;border:0;background:transparent;color:#fff;outline:none;padding:0 0 0 18px;font-size:16px;font-weight:800}
