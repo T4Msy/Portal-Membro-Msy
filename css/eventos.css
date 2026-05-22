@@ -70,9 +70,9 @@ body[data-page="eventos"] .events-subtitle {
 
 body[data-page="eventos"] .events-hero-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  grid-template-columns: repeat(2, minmax(82px, 1fr));
   gap: 8px;
-  min-width: 300px;
+  min-width: 206px;
 }
 
 body[data-page="eventos"] .events-stat {
@@ -354,7 +354,7 @@ body[data-page="eventos"] .event-detail-desc {
   }
 
   body[data-page="eventos"] .events-hero-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   body[data-page="eventos"] .events-stat {

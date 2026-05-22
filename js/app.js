@@ -4241,7 +4241,6 @@
              <div class="events-hero-stats">
                <div class="events-stat"><div class="events-stat-value" id="eventsStatUpcoming">0</div><div class="events-stat-label">Proximos</div></div>
                <div class="events-stat"><div class="events-stat-value" id="eventsStatDone">0</div><div class="events-stat-label">Concluidos</div></div>
-               <div class="events-stat"><div class="events-stat-value" id="eventsStatPending">0</div><div class="events-stat-label">Pendencias</div></div>
              </div>
            </div>
          </section>
@@ -4783,8 +4782,6 @@
          </div>
          <div class="events-review-text">Registre quem realmente participou para atualizar o desempenho da Ordem.</div>
          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px">
-           <span class="ev-badge" style="background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.22);color:#10b981">${stats.expected} disseram que iam</span>
-           <span class="ev-badge" style="background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.22);color:var(--gold)">${stats.registered} registros reais</span>
            <span class="ev-badge" style="background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.22);color:#10b981">${stats.present} presentes</span>
            <span class="ev-badge" style="background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.22);color:#ef4444">${stats.absent} ausentes</span>
          </div>
