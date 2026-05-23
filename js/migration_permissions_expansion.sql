@@ -4,7 +4,7 @@
 -- ============================================================
 
 -- Garante helper usado pelas políticas novas.
-CREATE OR REPLACE FUNCTION public.has_permission(p_name text)
+CREATE OR REPLACE FUNCTION public.has_permission(perm text)
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -14,7 +14,7 @@ AS $$
     SELECT 1
     FROM public.member_permissions
     WHERE user_id = auth.uid()
-      AND p_name = ANY(permissions)
+      AND perm = ANY(permissions)
   ) OR public.is_diretoria();
 $$;
 

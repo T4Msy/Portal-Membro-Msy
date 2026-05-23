@@ -65,6 +65,7 @@ const state = {
   bodyLockTop: '',
   hasSocialTables: true,
   loadingMore: false,
+  refreshingFeed: false,
   hasMorePosts: true,
   postCursor: null,
   feedEventsBound: false,
@@ -134,6 +135,25 @@ function canManageComment(comment) {
 
 function displayUsername(member) {
   return state.service?.getDisplayUsername(member) || 'membro';
+}
+
+const CONTENT_TYPE_META = {
+  post: { label: 'Post', icon: 'fa-regular fa-message' },
+  story: { label: 'Story', icon: 'fa-regular fa-circle-play' },
+  aviso: { label: 'Aviso', icon: 'fa-solid fa-bullhorn' },
+  destaque: { label: 'Destaque', icon: 'fa-solid fa-star' },
+};
+
+function getPostContentType(post = {}) {
+  const marker = String(post.kind || post.type || post.category || '').toLowerCase();
+  if (post.is_pinned || marker.includes('destaque') || marker.includes('highlight')) return 'destaque';
+  if (post.legacy || post.is_notice || marker.includes('aviso') || marker.includes('notice')) return 'aviso';
+  return 'post';
+}
+
+function renderContentBadge(type = 'post') {
+  const meta = CONTENT_TYPE_META[type] || CONTENT_TYPE_META.post;
+  return `<span class="content-type-badge content-type-badge-${type}"><i class="${meta.icon}"></i>${meta.label}</span>`;
 }
 
 function setDirectConversations(conversations = []) {
@@ -397,6 +417,7 @@ async function initFeed() {
   bindFeedInteractions();
   bindSocialNotifications();
   bindMobileActionDock();
+  bindPullToRefresh();
   bindRouteNavigation();
   await loadInitial();
   subscribeSocialNotifications();
@@ -407,6 +428,7 @@ async function initFeed() {
 function layout() {
   return `
     <section id="socialProfileRoute" class="social-profile-route" hidden></section>
+    <div class="feed-pull-refresh" id="feedPullRefresh" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i><span>Puxe para atualizar</span></div>
     <div class="social-shell" id="feedRouteView">
       <section class="social-main">
         <div class="social-hero">
@@ -467,7 +489,7 @@ function layout() {
         </div>
 
         <div class="social-feed-list" id="feedList">
-          <div class="social-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando feed...</div>
+          ${renderFeedSkeleton()}
         </div>
       </section>
 
@@ -507,6 +529,24 @@ function layout() {
       </div>
       <button type="button" class="mobile-action-fab" id="mobileActionToggle" aria-label="Abrir ações do feed" aria-expanded="false"><i class="fa-solid fa-plus"></i></button>
     </div>`;
+}
+
+function renderFeedSkeleton(count = 3) {
+  return Array.from({ length: count }, () => `
+    <article class="social-post social-post-skeleton" aria-hidden="true">
+      <div class="post-head">
+        <span class="skeleton-avatar"></span>
+        <div class="post-author-copy">
+          <span class="skeleton-line" style="width:148px"></span>
+          <span class="skeleton-line" style="width:210px;margin-top:8px"></span>
+        </div>
+      </div>
+      <div class="post-content">
+        <span class="skeleton-line"></span>
+        <span class="skeleton-line" style="width:72%;margin-top:8px"></span>
+      </div>
+      <span class="skeleton-block"></span>
+    </article>`).join('');
 }
 
 async function loadInitial() {
@@ -618,11 +658,13 @@ function renderStories() {
     <div class="story-create" id="createStoryBubble">
       <div class="story-avatar"><div class="story-avatar-inner"><i class="fa-solid fa-plus"></i></div></div>
       <div class="story-label">Seu story</div>
+      ${renderContentBadge('story')}
     </div>`;
   const stories = state.stories.map((group, idx) => `
     <div class="story-bubble" data-story-index="${idx}">
       <div class="story-avatar"><div class="story-avatar-inner">${group.author?.social_avatar_url || group.author?.avatar_url ? `<img src="${Utils.escapeHtml(group.author.social_avatar_url || group.author.avatar_url)}">` : Utils.escapeHtml(group.author?.initials || Utils.getInitials(group.author?.name || 'MS'))}</div></div>
       <div class="story-label">${Utils.escapeHtml(group.author?.name || 'Membro')}</div>
+      ${renderContentBadge('story')}
     </div>`).join('');
   el.innerHTML = create + stories;
   document.getElementById('createStoryBubble')?.addEventListener('click', openStoryMediaPicker);
@@ -659,6 +701,7 @@ function renderFeedSentinel() {
 
 function renderPost(post) {
   const author = post.author || {};
+  const contentType = getPostContentType(post);
   const verified = author.tier === 'diretoria' ? '<span class="verified-dot"><i class="fa-solid fa-check"></i></span>' : '';
   const media = (post.media || []).length ? `
       <div class="post-media" data-media-post="${post.id}">
@@ -668,7 +711,7 @@ function renderPost(post) {
       ${post.media.length > 1 ? `<div class="post-media-dots">${post.media.map((_, i) => `<span class="post-media-dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>` : ''}
     </div>` : '';
   return `
-    <article class="social-post" id="post-${post.id}" data-post-id="${post.id}">
+    <article class="social-post social-post-${contentType}" id="post-${post.id}" data-post-id="${post.id}" data-content-type="${contentType}">
       <div class="post-head">
         <div class="post-author" data-profile-id="${author.id || post.author_id}">
           ${avatar(author, 44)}
@@ -677,6 +720,7 @@ function renderPost(post) {
             <div class="post-meta"><span>@${Utils.escapeHtml(displayUsername(author))}</span><span>·</span><span>${Utils.escapeHtml(author.role || 'Membro')}</span><span>·</span><span>${timeAgo(post.created_at)}</span>${post.edited_at ? '<span class="edited-badge">Editado</span>' : ''}</div>
           </div>
         </div>
+        ${renderContentBadge(contentType)}
         <div class="post-menu-wrap">
           <button class="social-icon-btn post-more-btn" data-post-menu="${post.id}" aria-label="Mais opcoes"><i class="fa-solid fa-ellipsis"></i></button>
           <div class="post-menu">
@@ -799,6 +843,76 @@ function bindMobileActionDock() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeMobileActions();
   });
+}
+
+function bindPullToRefresh() {
+  const surface = document.getElementById('pageContent');
+  const indicator = document.getElementById('feedPullRefresh');
+  if (!surface || !indicator) return;
+  let startY = 0;
+  let pullY = 0;
+  let tracking = false;
+
+  const canStart = () => isMobileSocial()
+    && !state.refreshingFeed
+    && !document.body.classList.contains('social-modal-locked')
+    && window.scrollY <= 1
+    && (surface.scrollTop || 0) <= 1;
+
+  surface.addEventListener('touchstart', (event) => {
+    if (!canStart()) return;
+    startY = event.touches[0].clientY;
+    pullY = 0;
+    tracking = true;
+    indicator.classList.remove('ready', 'refreshing');
+  }, { passive: true });
+
+  surface.addEventListener('touchmove', (event) => {
+    if (!tracking) return;
+    const delta = event.touches[0].clientY - startY;
+    if (delta <= 0) return;
+    pullY = Math.min(112, delta * .58);
+    indicator.style.setProperty('--pull-y', `${pullY}px`);
+    indicator.classList.toggle('visible', pullY > 12);
+    indicator.classList.toggle('ready', pullY > 72);
+    if (pullY > 18) event.preventDefault();
+  }, { passive: false });
+
+  surface.addEventListener('touchend', async () => {
+    if (!tracking) return;
+    tracking = false;
+    const shouldRefresh = pullY > 72;
+    pullY = 0;
+    indicator.style.setProperty('--pull-y', '0px');
+    if (!shouldRefresh) {
+      indicator.classList.remove('visible', 'ready');
+      return;
+    }
+    await refreshFeedFromPull(indicator);
+  }, { passive: true });
+}
+
+async function refreshFeedFromPull(indicator) {
+  if (state.refreshingFeed) return;
+  state.refreshingFeed = true;
+  indicator?.classList.add('visible', 'refreshing');
+  indicator?.querySelector('span') && (indicator.querySelector('span').textContent = 'Atualizando...');
+  Utils.haptic?.(20);
+  try {
+    await loadInitial();
+    Utils.showToast('Feed atualizado.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao atualizar feed:', err);
+    Utils.showToast('Erro ao atualizar feed.', 'error');
+  } finally {
+    state.refreshingFeed = false;
+    setTimeout(() => {
+      if (!indicator) return;
+      indicator.classList.remove('visible', 'ready', 'refreshing');
+      const label = indicator.querySelector('span');
+      if (label) label.textContent = 'Puxe para atualizar';
+    }, 260);
+  }
 }
 
 function handleFeedClick(e) {
@@ -1023,7 +1137,7 @@ async function submitPostCommentSheet(e) {
   if (!post || !body) return;
   const btn = e.currentTarget.querySelector('button[type="submit"]');
   try {
-    if (btn) btn.disabled = true;
+    Utils.setButtonLoading?.(btn, true);
     const comment = await state.service.addComment(post, body, modal.dataset.replyTo || null);
     post.comments.push(comment);
     post.comments_count += 1;
@@ -1037,30 +1151,8 @@ async function submitPostCommentSheet(e) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast(err.message || 'Erro ao comentar.', 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    Utils.setButtonLoading?.(btn, false);
   }
-}
-
-function bindPostEvents(root) {
-  root.querySelectorAll('.post-more-btn').forEach((btn) => btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    btn.nextElementSibling?.classList.toggle('open');
-  }));
-  document.addEventListener('click', () => document.querySelectorAll('.post-menu.open').forEach((m) => m.classList.remove('open')), { once: true });
-
-  root.querySelectorAll('[data-like-post]').forEach((btn) => btn.addEventListener('click', () => toggleLike(btn.dataset.likePost, btn)));
-  root.querySelectorAll('[data-save-post]').forEach((btn) => btn.addEventListener('click', () => toggleSave(btn.dataset.savePost)));
-  root.querySelectorAll('[data-focus-comment]').forEach((btn) => btn.addEventListener('click', () => document.querySelector(`[data-comment-form="${btn.dataset.focusComment}"] input`)?.focus()));
-  root.querySelectorAll('[data-message-post-author]').forEach((btn) => btn.addEventListener('click', () => openDirectInbox(btn.dataset.messagePostAuthor)));
-  root.querySelectorAll('[data-profile-id]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.profileId)));
-  root.querySelectorAll('[data-delete-post]').forEach((btn) => btn.addEventListener('click', () => deletePost(btn.dataset.deletePost)));
-  root.querySelectorAll('[data-edit-post]').forEach((btn) => btn.addEventListener('click', () => editPost(btn.dataset.editPost)));
-  root.querySelectorAll('[data-pin-post]').forEach((btn) => btn.addEventListener('click', () => pinPost(btn.dataset.pinPost)));
-  root.querySelectorAll('[data-copy-post]').forEach((btn) => btn.addEventListener('click', () => copyPost(btn.dataset.copyPost)));
-  root.querySelectorAll('[data-comment-form]').forEach((form) => {
-    form.addEventListener('submit', addComment);
-    bindMentionAutocomplete(form.elements.comment, { minChars: 1 });
-  });
 }
 
 function bindComposer() {
@@ -1314,11 +1406,10 @@ async function publishPost() {
     Utils.showToast('Aplique a migration social no Supabase antes de publicar no novo Feed.', 'error');
     return;
   }
-  const btn = document.getElementById('publishBtn');
+  const buttons = [document.getElementById('publishBtn'), document.querySelector('[data-mobile-publish]')].filter(Boolean);
   const content = document.getElementById('composerText').value.trim();
   if (!content && !state.previews.length) return Utils.showToast('Escreva algo ou adicione uma midia.', 'error');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...';
+  buttons.forEach((btn) => Utils.setButtonLoading?.(btn, true, '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...'));
   const uploadedPaths = [];
   try {
     const media = [];
@@ -1356,8 +1447,7 @@ async function publishPost() {
     }
     Utils.showToast(err.message || 'Erro ao publicar no feed.', 'error');
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Publicar';
+    buttons.forEach((btn) => Utils.setButtonLoading?.(btn, false));
   }
 }
 
@@ -1848,28 +1938,56 @@ async function publishStoryFromPreview() {
 async function toggleLike(postId, btn) {
   const post = state.posts.find((p) => p.id === postId);
   if (!post || post.legacy) return;
+  if (btn?.disabled) return;
+  const previousLiked = Boolean(post.liked_by_me);
+  const previousCount = Number(post.likes_count || 0);
+  const optimisticLiked = !previousLiked;
   try {
-    btn.disabled = true;
-    const liked = await state.service.toggleLike(post);
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.classList.toggle('active', optimisticLiked);
+      btn.innerHTML = `<i class="fa-${optimisticLiked ? 'solid' : 'regular'} fa-heart"></i>`;
+      btn.classList.add('like-pop');
+      setTimeout(() => btn.classList.remove('like-pop'), 380);
+    }
+    post.liked_by_me = optimisticLiked;
+    post.likes_count = Math.max(0, previousCount + (optimisticLiked ? 1 : -1));
+    updatePostStatsNode(post);
+    const liked = await state.service.toggleLike({ ...post, liked_by_me: previousLiked });
     post.liked_by_me = liked;
-    post.likes_count = Math.max(0, (post.likes_count || 0) + (liked ? 1 : -1));
-    btn.classList.toggle('active', liked);
-    btn.classList.add('like-pop');
-    setTimeout(() => btn.classList.remove('like-pop'), 380);
-    btn.innerHTML = `<i class="fa-${liked ? 'solid' : 'regular'} fa-heart"></i>`;
+    post.likes_count = Math.max(0, previousCount + (liked === previousLiked ? 0 : (liked ? 1 : -1)));
+    if (btn) {
+      btn.classList.toggle('active', liked);
+      btn.innerHTML = `<i class="fa-${liked ? 'solid' : 'regular'} fa-heart"></i>`;
+    }
     updatePostStatsNode(post);
   } catch {
+    post.liked_by_me = previousLiked;
+    post.likes_count = previousCount;
+    if (btn) {
+      btn.classList.toggle('active', previousLiked);
+      btn.innerHTML = `<i class="fa-${previousLiked ? 'solid' : 'regular'} fa-heart"></i>`;
+    }
+    updatePostStatsNode(post);
     Utils.showToast('Erro ao curtir.', 'error');
   } finally {
-    btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+    }
   }
 }
 
 async function toggleSave(postId, btn = null) {
   const post = state.posts.find((p) => p.id === postId);
   if (!post || post.legacy) return;
+  if (btn?.disabled) return;
   try {
-    if (btn) btn.disabled = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+    }
     const saved = await state.service.toggleSave(post);
     post.saved_by_me = saved;
     if (btn) {
@@ -1882,7 +2000,10 @@ async function toggleSave(postId, btn = null) {
   } catch {
     Utils.showToast('Erro ao salvar.', 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+    }
   }
 }
 
@@ -1892,7 +2013,9 @@ async function addComment(e) {
   const post = state.posts.find((p) => p.id === form.dataset.commentForm);
   const input = form.elements.comment;
   if (!post || !input.value.trim()) return;
+  const btn = form.querySelector('button[type="submit"]');
   try {
+    Utils.setButtonLoading?.(btn, true);
     const comment = await state.service.addComment(post, input.value);
     post.comments.push(comment);
     post.comments_count += 1;
@@ -1902,6 +2025,8 @@ async function addComment(e) {
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast('Erro ao comentar.', 'error');
+  } finally {
+    Utils.setButtonLoading?.(btn, false);
   }
 }
 
@@ -3266,6 +3391,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
           <strong>${Utils.escapeHtml(displayUsername(group.author || {}))}</strong>
           <span>${timeAgo(story.created_at)}</span>
         </div>
+        ${renderContentBadge('story')}
         ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
         ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Visualizacoes" aria-label="Visualizacoes do story"><i class="fa-regular fa-eye"></i></button>' : ''}
         ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}

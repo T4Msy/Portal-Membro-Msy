@@ -190,6 +190,34 @@
        d.textContent = String(text || '');
        return d.innerHTML;
      },
+     debounce(fn, wait = 250) {
+       let timer = null;
+       return function debounced(...args) {
+         clearTimeout(timer);
+         timer = setTimeout(() => fn.apply(this, args), wait);
+       };
+     },
+     haptic(pattern = 10) {
+       if (navigator.vibrate) navigator.vibrate(pattern);
+     },
+     setButtonLoading(btn, loading, label = '') {
+       if (!btn) return;
+       if (loading) {
+         if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+         btn.disabled = true;
+         btn.classList.add('is-loading');
+         btn.setAttribute('aria-busy', 'true');
+         if (label) btn.innerHTML = label;
+         return;
+       }
+       btn.disabled = false;
+       btn.classList.remove('is-loading');
+       btn.removeAttribute('aria-busy');
+       if (btn.dataset.originalHtml) {
+         btn.innerHTML = btn.dataset.originalHtml;
+         delete btn.dataset.originalHtml;
+       }
+     },
      showToast(msg, type = 'success') {
        let toast = document.getElementById('msy-toast');
        if (!toast) {
@@ -7900,3 +7928,60 @@
      renderSidebar,
      renderTopBar,
    };
+
+   /* ============================================================
+      INTERACTION POLISH — ripple, haptics, duplicate click guard
+      ============================================================ */
+   (function initInteractionPolish() {
+     const clickableSelector = [
+       'button',
+       '.btn',
+       '[role="button"]',
+       '.nav-item',
+       '.topbar-user',
+       '.topbar-search-btn',
+       '.notif-bell',
+       '.sidebar-user',
+       '.logout-btn',
+       '.social-action',
+       '.social-icon-btn',
+       '.follow-btn',
+       '.story-bubble',
+       '.story-create',
+     ].join(',');
+
+     function getClickable(target) {
+       const node = target?.closest?.(clickableSelector);
+       if (!node || node.closest('[disabled],[aria-disabled="true"]')) return null;
+       return node;
+     }
+
+     document.addEventListener('pointerdown', (event) => {
+       const node = getClickable(event.target);
+       if (!node || node.dataset.noRipple === 'true') return;
+       const rect = node.getBoundingClientRect();
+       const size = Math.max(rect.width, rect.height) * 1.8;
+       node.querySelectorAll(':scope > .msy-ripple').forEach((ripple) => ripple.remove());
+       const ripple = document.createElement('span');
+       ripple.className = 'msy-ripple';
+       ripple.style.setProperty('--ripple-x', `${event.clientX - rect.left}px`);
+       ripple.style.setProperty('--ripple-y', `${event.clientY - rect.top}px`);
+       ripple.style.setProperty('--ripple-size', `${size}px`);
+       ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+       node.appendChild(ripple);
+     }, { passive: true });
+
+     document.addEventListener('click', (event) => {
+       const node = getClickable(event.target);
+       if (!node) return;
+       const now = Date.now();
+       const last = Number(node.dataset.lastClickAt || 0);
+       if (now - last < 260) {
+         event.preventDefault();
+         event.stopImmediatePropagation();
+         return;
+       }
+       node.dataset.lastClickAt = String(now);
+       Utils.haptic(node.matches('.btn-primary,.mobile-action-fab,[data-story-reaction],[data-like-post]') ? 18 : 8);
+     }, true);
+   })();

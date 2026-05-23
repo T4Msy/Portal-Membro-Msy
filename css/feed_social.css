@@ -743,3 +743,189 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
 .social-edit-media-preview .media-editor-viewport{width:100%;height:100%;border:0}
 .social-edit-media-preview .media-editor-crop{height:100%}
 @media(max-width:640px){.composer-media-controls{grid-template-columns:1fr}.media-editor-viewport{width:min(100%,calc(58dvh * var(--editor-aspect,9 / 16)))}}
+
+/* ============================================================
+   Feed polish final layer — content types, mobile touch, states
+   ============================================================ */
+@keyframes socialItemIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes storyControlsIdle{0%,55%{opacity:1}100%{opacity:.62}}
+
+body[data-page="feed"] .feed-pull-refresh{
+  position:fixed;
+  left:50%;
+  top:calc(var(--topbar-h) + 8px);
+  z-index:58;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:0 14px;
+  border:1px solid rgba(201,168,76,.22);
+  border-radius:999px;
+  background:rgba(17,17,22,.92);
+  color:var(--text-2);
+  box-shadow:0 18px 44px rgba(0,0,0,.34);
+  backdrop-filter:blur(14px);
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,calc(-56px + var(--pull-y,0px)));
+  transition:opacity 180ms var(--ease),transform 180ms var(--ease),border-color 180ms var(--ease),color 180ms var(--ease);
+}
+body[data-page="feed"] .feed-pull-refresh.visible{opacity:1}
+body[data-page="feed"] .feed-pull-refresh.ready{border-color:var(--border-gold);color:var(--gold)}
+body[data-page="feed"] .feed-pull-refresh.refreshing i{animation:msySpin 760ms linear infinite}
+
+body[data-page="feed"] .social-post,
+body[data-page="feed"] .stories-strip,
+body[data-page="feed"] .social-composer,
+body[data-page="feed"] .social-card{
+  animation:socialItemIn 220ms var(--ease) both;
+}
+
+body[data-page="feed"] .content-type-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:28px;
+  padding:5px 9px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:999px;
+  background:rgba(255,255,255,.045);
+  color:var(--text-2);
+  font-size:.64rem;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+body[data-page="feed"] .content-type-badge-post{color:#d7d7dd}
+body[data-page="feed"] .content-type-badge-story{color:var(--gold);border-color:rgba(201,168,76,.25);background:rgba(201,168,76,.08)}
+body[data-page="feed"] .content-type-badge-aviso{color:#fca5a5;border-color:rgba(220,38,38,.32);background:rgba(185,28,28,.11)}
+body[data-page="feed"] .content-type-badge-destaque{color:var(--gold-bright);border-color:rgba(201,168,76,.44);background:linear-gradient(135deg,rgba(201,168,76,.16),rgba(185,28,28,.08))}
+
+body[data-page="feed"] .post-head{align-items:flex-start}
+body[data-page="feed"] .post-head > .content-type-badge{margin-left:auto}
+body[data-page="feed"] .post-head > .post-menu-wrap{margin-left:0}
+body[data-page="feed"] .social-post{border-left:3px solid rgba(255,255,255,.06)}
+body[data-page="feed"] .social-post-post{border-left-color:rgba(255,255,255,.08)}
+body[data-page="feed"] .social-post-aviso{
+  border-color:rgba(220,38,38,.24);
+  border-left-color:var(--red-bright);
+  background:linear-gradient(145deg,rgba(185,28,28,.10),rgba(17,17,22,.9) 36%,rgba(17,17,22,.88));
+}
+body[data-page="feed"] .social-post-aviso .post-content{font-size:.96rem;font-weight:650}
+body[data-page="feed"] .social-post-destaque{
+  border-color:rgba(201,168,76,.36);
+  border-left-color:var(--gold);
+  background:
+    linear-gradient(145deg,rgba(201,168,76,.11),rgba(17,17,22,.9) 38%,rgba(185,28,28,.04)),
+    var(--social-card);
+  box-shadow:0 12px 42px rgba(0,0,0,.42),0 0 0 1px rgba(201,168,76,.06);
+}
+body[data-page="feed"] .social-post-destaque .post-author-name{color:var(--gold-pale)}
+body[data-page="feed"] .social-post-skeleton{padding-bottom:14px;pointer-events:none}
+body[data-page="feed"] .social-post-skeleton .post-head{justify-content:flex-start}
+body[data-page="feed"] .social-post-skeleton .skeleton-block{margin:0 14px 14px}
+
+body[data-page="feed"] .story-bubble,
+body[data-page="feed"] .story-create{
+  position:relative;
+  min-height:96px;
+  padding-top:2px;
+  border-radius:14px;
+  transition:transform 180ms var(--ease),opacity 180ms var(--ease),filter 180ms var(--ease);
+}
+body[data-page="feed"] .story-bubble:active,
+body[data-page="feed"] .story-create:active{transform:scale(.98);opacity:.86}
+body[data-page="feed"] .story-bubble .content-type-badge,
+body[data-page="feed"] .story-create .content-type-badge{
+  position:absolute;
+  left:50%;
+  bottom:-3px;
+  min-height:18px;
+  padding:2px 6px;
+  font-size:.48rem;
+  transform:translateX(-50%);
+}
+
+body[data-page="feed"] .social-action,
+body[data-page="feed"] .social-icon-btn,
+body[data-page="feed"] .follow-btn,
+body[data-page="feed"] .post-comments-open,
+body[data-page="feed"] .comment-meta button,
+body[data-page="feed"] .social-mobile-action,
+body[data-page="feed"] .story-social-icon,
+body[data-page="feed"] .story-inline-send,
+body[data-page="feed"] .story-sound-toggle,
+body[data-page="feed"] .story-close{
+  min-width:44px;
+  min-height:44px;
+  touch-action:manipulation;
+}
+body[data-page="feed"] .social-action:disabled,
+body[data-page="feed"] .social-icon-btn:disabled{opacity:.58;cursor:wait}
+
+body[data-page="feed"] .comment-input,
+body[data-page="feed"] .direct-composer-input,
+body[data-page="feed"] .story-inline-reply input,
+body[data-page="feed"] .composer-input,
+body[data-page="feed"] .social-search input{font-size:16px}
+
+body[data-page="feed"] .story-viewer.open .story-panel-instagram::before{height:132px;background:linear-gradient(180deg,rgba(0,0,0,.58),rgba(0,0,0,.20),transparent)}
+body[data-page="feed"] .story-viewer.open .story-top-instagram{
+  animation:storyControlsIdle 4.2s 1.2s var(--ease) forwards;
+  transition:opacity 180ms var(--ease),transform 180ms var(--ease);
+}
+body[data-page="feed"] .story-viewer.open .story-panel-instagram:hover .story-top-instagram,
+body[data-page="feed"] .story-viewer.open .story-top-instagram:focus-within{opacity:1;animation:none}
+body[data-page="feed"] .story-viewer.open .story-top-instagram .content-type-badge{
+  min-height:24px;
+  padding:4px 8px;
+  background:rgba(0,0,0,.22);
+  border-color:rgba(255,255,255,.18);
+  color:rgba(255,255,255,.82);
+}
+body[data-page="feed"] .story-viewer.open .story-sound-toggle,
+body[data-page="feed"] .story-viewer.open .story-activity-icon,
+body[data-page="feed"] .story-viewer.open .story-close{
+  width:38px;
+  height:38px;
+  min-width:44px;
+  min-height:44px;
+  background:rgba(0,0,0,.22);
+  border-color:rgba(255,255,255,.18);
+  box-shadow:none;
+}
+body[data-page="feed"] .story-viewer.open .story-social-icon{font-size:1.45rem}
+body[data-page="feed"] .story-inline-reply{background:rgba(4,6,8,.24);border-color:rgba(255,255,255,.42)}
+
+@media(max-width:768px){
+  body[data-page="feed"] .feed-pull-refresh{top:12px}
+  body[data-page="feed"] .social-shell{grid-template-columns:1fr}
+  body[data-page="feed"] .post-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:start}
+  body[data-page="feed"] .post-author{min-width:0}
+  body[data-page="feed"] .post-head > .content-type-badge{align-self:center}
+}
+
+@media(max-width:412px){
+  body[data-page="feed"] .stories-strip{gap:10px}
+  body[data-page="feed"] .story-bubble,
+  body[data-page="feed"] .story-create{width:68px;flex-basis:68px}
+  body[data-page="feed"] .story-avatar{width:58px;height:58px}
+  body[data-page="feed"] .post-head{grid-template-columns:minmax(0,1fr) auto}
+  body[data-page="feed"] .post-head > .content-type-badge{grid-column:1;justify-self:start;margin:4px 0 0 54px}
+  body[data-page="feed"] .post-menu-wrap{grid-column:2;grid-row:1}
+}
+
+@media(max-width:390px){
+  body[data-page="feed"] .social-mobile-action span{font-size:.58rem}
+  body[data-page="feed"] .social-submit{min-width:116px!important;padding-inline:14px!important}
+  body[data-page="feed"] .post-actions{gap:6px}
+}
+
+@media(max-width:360px){
+  body[data-page="feed"] .post-meta{font-size:.68rem}
+  body[data-page="feed"] .content-type-badge{font-size:.56rem;padding-inline:7px}
+  body[data-page="feed"] .social-action{min-width:42px}
+}
