@@ -206,8 +206,8 @@ export function normalizeMediaEditState(editState = {}, mediaType = 'image') {
   return {
     ...base,
     ...editState,
-    zoom: clamp(Number(editState.zoom ?? base.zoom), 1, 5),
-    rotation: clamp(Number(editState.rotation ?? base.rotation), -180, 180),
+    zoom: clamp(Number(editState.zoom ?? base.zoom), 0.5, 3),
+    rotation: ((Number(editState.rotation ?? base.rotation) % 360) + 360) % 360,
     offsetX: clamp(Number(editState.offsetX ?? base.offsetX), -1, 1),
     offsetY: clamp(Number(editState.offsetY ?? base.offsetY), -1, 1),
     aspect: editState.aspect || base.aspect,
@@ -222,7 +222,7 @@ export async function exportStoryImageFile(file, editState = {}) {
   const image = await loadImage(file);
   const normalized = normalizeMediaEditState(editState, 'image');
   const aspect = normalized.aspect === 'original' ? image.width / image.height : getStoryAspectRatioValue(normalized.aspect);
-  const zoom = clamp(Number(normalized.zoom || 1), 1, 5);
+  const zoom = clamp(Number(normalized.zoom || 1), 0.5, 3);
   const rotation = Number(normalized.rotation || 0);
   const sourceAspect = image.width / image.height;
 

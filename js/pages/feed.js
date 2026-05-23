@@ -332,7 +332,7 @@ function lockBodyScroll() {
 
   const blockDocumentScroll = (event) => {
     const modal = event.target.closest?.('.story-viewer.open,.profile-viewer.open,.story-composer-modal.open,.media-viewer.open,.post-comments-modal.open');
-    const scrollable = event.target.closest?.('.story-reactions-panel.open,.story-caption-instagram,.profile-panel,.story-compose-panel,.media-viewer-panel,.post-comments-panel');
+    const scrollable = event.target.closest?.('.story-reactions-panel.open,.story-caption-instagram,.profile-panel,.story-compose-panel,.media-viewer-panel,.post-comments-panel,.direct-chat-body,.direct-list');
     if (!modal || !scrollable) event.preventDefault();
   };
 
@@ -753,7 +753,7 @@ function renderPost(post) {
           <form class="comment-form" data-comment-form="${post.id}">
             ${avatar(state.profile, 32)}
             <input class="comment-input" name="comment" placeholder="Adicionar comentario...">
-            <button class="social-icon-btn" type="submit" title="Enviar"><i class="fa-solid fa-arrow-up"></i></button>
+            <button class="social-icon-btn" type="submit" title="Enviar" disabled><i class="fa-solid fa-arrow-up"></i></button>
           </form>` : ''}
       </div>
     </article>`;
@@ -802,6 +802,11 @@ function bindFeedInteractions() {
   });
   root.addEventListener('focusin', (e) => {
     if (e.target.matches('.comment-input')) bindMentionAutocomplete(e.target, { minChars: 1 });
+  });
+  root.addEventListener('input', (e) => {
+    if (!e.target.matches('.comment-input')) return;
+    const form = e.target.closest('[data-comment-form]');
+    form?.querySelector('button[type="submit"]')?.toggleAttribute('disabled', !e.target.value.trim());
   });
 }
 
@@ -986,6 +991,26 @@ function updatePostStatsNode(post) {
     <span>${post.comments_count || 0} comentario${post.comments_count === 1 ? '' : 's'}</span>`;
 }
 
+function mergeCreatedComment(post, comment) {
+  if (!post || !comment) return;
+  const existed = (post.comments || []).some((item) => item.id === comment.id);
+  const comments = (post.comments || []).filter((item) => item.id !== comment.id);
+  comments.push(comment);
+  comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  post.comments = comments;
+  if (!existed) post.comments_count = Number(post.comments_count || 0) + 1;
+  post.comments_count = Math.max(Number(post.comments_count || 0), comments.length);
+}
+
+async function submitComment(postId, text, { parentId = null } = {}) {
+  const post = state.posts.find((p) => p.id === postId);
+  const body = String(text || '').trim();
+  if (!post || !body) return null;
+  const comment = await state.service.addComment(post, body, parentId);
+  mergeCreatedComment(post, comment);
+  return comment;
+}
+
 function openMediaViewer(post, startIndex = 0) {
   const modal = document.getElementById('mediaViewer');
   const media = post.media || [];
@@ -1027,7 +1052,7 @@ function openMediaViewer(post, startIndex = 0) {
 }
 
 function renderComments(post) {
-  const comments = (post.comments || []).slice(-4);
+  const comments = (post.comments || []).slice(-3);
   return comments.map((c) => `
     <div class="comment-item${c.parent_id ? ' reply' : ''}" id="comment-${c.id}">
       ${avatar(c.author || {}, 30)}
@@ -1044,7 +1069,7 @@ function renderComments(post) {
 }
 
 function renderCommentRows(post, { full = false } = {}) {
-  const comments = full ? (post.comments || []) : (post.comments || []).slice(-4);
+  const comments = full ? (post.comments || []) : (post.comments || []).slice(-3);
   return comments.map((c) => `
     <div class="comment-item${c.parent_id ? ' reply' : ''}" id="comment-${c.id}" data-comment-row="${c.id}">
       ${avatar(c.author || {}, 32)}
@@ -1090,7 +1115,7 @@ function openPostComments(postId, replyToCommentId = null) {
           </div>
           <input name="comment" class="comment-input" autocomplete="off" placeholder="Adicionar comentario...">
         </div>
-        <button class="social-icon-btn" type="submit" title="Enviar"><i class="fa-solid fa-arrow-up"></i></button>
+        <button class="social-icon-btn" type="submit" title="Enviar" disabled><i class="fa-solid fa-arrow-up"></i></button>
       </form>
     </div>`;
   modal.dataset.postId = postId;
@@ -1098,6 +1123,9 @@ function openPostComments(postId, replyToCommentId = null) {
   openModal(modal);
   const input = modal.querySelector('input[name="comment"]');
   bindMentionAutocomplete(input, { minChars: 1 });
+  input?.addEventListener('input', () => {
+    modal.querySelector('#postCommentsComposer button[type="submit"]')?.toggleAttribute('disabled', !input.value.trim());
+  });
   modal.querySelector('#postCommentsSheetList')?.addEventListener('click', (e) => {
     const deleteBtn = e.target.closest('[data-delete-comment]');
     if (deleteBtn) {
@@ -1138,15 +1166,18 @@ async function submitPostCommentSheet(e) {
   const btn = e.currentTarget.querySelector('button[type="submit"]');
   try {
     Utils.setButtonLoading?.(btn, true);
-    const comment = await state.service.addComment(post, body, modal.dataset.replyTo || null);
-    post.comments.push(comment);
-    post.comments_count += 1;
+    await submitComment(post.id, body, { parentId: modal.dataset.replyTo || null });
     input.value = '';
+    btn?.setAttribute('disabled', '');
     setPostCommentReply(post, null);
     const list = document.getElementById('postCommentsSheetList');
     if (list) list.innerHTML = renderCommentRows(post, { full: true });
     updatePostStatsNode(post);
     updatePostNode(post.id);
+    requestAnimationFrame(() => {
+      const nextList = document.getElementById('postCommentsSheetList');
+      if (nextList) nextList.scrollTop = nextList.scrollHeight;
+    });
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast(err.message || 'Erro ao comentar.', 'error');
@@ -1238,8 +1269,8 @@ function renderPreviews() {
         <select class="form-input form-select" data-composer-edit-field="aspect">
           ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
-        <input type="range" min="1" max="5" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-composer-edit-field="zoom" aria-label="Zoom">
-        <input type="range" min="-180" max="180" step="1" value="${Number(main.editState?.rotation || 0)}" data-composer-edit-field="rotation" aria-label="Rotação">
+        <input type="range" min="0.5" max="3" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-composer-edit-field="zoom" aria-label="Zoom">
+        <input type="range" min="0" max="360" step="1" value="${Number(main.editState?.rotation || 0)}" data-composer-edit-field="rotation" aria-label="Rotação">
       </div>
       <div class="composer-preview-info">
         <strong>Pronto para publicar</strong>
@@ -1599,8 +1630,8 @@ function bindMediaEditorGestures(root, item, onChange = () => {}) {
     if (values.length > 1 && start.points.length > 1) {
       const distance = pointDistance(values[0], values[1]);
       const angle = pointAngle(values[0], values[1]);
-      item.editState.zoom = Math.min(5, Math.max(1, start.zoom * (distance / Math.max(start.distance, 1))));
-      item.editState.rotation = Math.min(180, Math.max(-180, start.rotation + angle - start.angle));
+      item.editState.zoom = Math.min(3, Math.max(0.5, start.zoom * (distance / Math.max(start.distance, 1))));
+      item.editState.rotation = (start.rotation + angle - start.angle + 360) % 360;
     } else {
       const first = start.points[0];
       const current = values[0];
@@ -1633,11 +1664,11 @@ function renderStoryComposerControls(item) {
   const transformControls = `
     <div class="form-group" style="margin:0">
       <label class="form-label">Zoom <span data-story-zoom-label>${Number(item.editState?.zoom || 1).toFixed(2)}x</span></label>
-      <input type="range" min="1" max="5" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
+      <input type="range" min="0.5" max="3" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
     </div>
     <div class="form-group" style="margin:0">
       <label class="form-label">Rotação <span data-story-rotation-label>${Math.round(Number(item.editState?.rotation || 0))}°</span></label>
-      <input type="range" min="-180" max="180" step="1" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
+      <input type="range" min="0" max="360" step="1" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
     </div>
     <button type="button" class="follow-btn media-editor-reset" data-media-edit-reset><i class="fa-solid fa-rotate-left"></i> Resetar enquadramento</button>`;
   if (item.media_type === 'video') {
@@ -2009,16 +2040,15 @@ async function toggleSave(postId, btn = null) {
 
 async function addComment(e) {
   e.preventDefault();
-  const form = e.currentTarget;
+  const form = e.target.closest('[data-comment-form]');
+  if (!form) return;
   const post = state.posts.find((p) => p.id === form.dataset.commentForm);
   const input = form.elements.comment;
   if (!post || !input.value.trim()) return;
   const btn = form.querySelector('button[type="submit"]');
   try {
     Utils.setButtonLoading?.(btn, true);
-    const comment = await state.service.addComment(post, input.value);
-    post.comments.push(comment);
-    post.comments_count += 1;
+    await submitComment(post.id, input.value);
     input.value = '';
     closeMentionDropdown();
     updatePostNode(post.id);
@@ -2159,8 +2189,8 @@ function renderPostEditMediaList() {
         <select class="form-input form-select" data-post-media-edit-field="aspect">
           ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
-        <label>Zoom <input type="range" min="1" max="5" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-post-media-edit-field="zoom"></label>
-        <label>Rotação <input type="range" min="-180" max="180" step="1" value="${Number(item.editState?.rotation || 0)}" data-post-media-edit-field="rotation"></label>
+        <label>Zoom <input type="range" min="0.5" max="3" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-post-media-edit-field="zoom"></label>
+        <label>Rotação <input type="range" min="0" max="360" step="1" value="${Number(item.editState?.rotation || 0)}" data-post-media-edit-field="rotation"></label>
       </div>
       <div class="social-edit-media-actions">
         <span>${index + 1}</span>
@@ -4349,6 +4379,7 @@ async function handleDirectEdit(messageId) {
   if (!input) return;
   state.directEditingMessageId = messageId;
   input.value = message.body;
+  document.querySelector('.direct-composer-send')?.toggleAttribute('disabled', !input.value.trim());
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
   Utils.showToast('Editando mensagem.');
@@ -4583,7 +4614,7 @@ function renderDirectInbox() {
           <button type="button" class="direct-composer-icon" aria-label="Anexo"><i class="fa-regular fa-square-plus"></i></button>
           <input type="file" id="directMediaInput" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
           <input id="directMessageInput" class="direct-composer-input" placeholder="${state.directEditingMessageId ? 'Editar mensagem...' : 'Enviar mensagem...'}" ${activeConversation ? '' : 'disabled'}>
-          <button class="direct-composer-send" type="submit" ${activeConversation ? '' : 'disabled'}><i class="fa-solid fa-paper-plane"></i></button>
+          <button class="direct-composer-send" type="submit" disabled><i class="fa-solid fa-paper-plane"></i></button>
         </form>
       </section>
     </div>`;
@@ -4614,11 +4645,17 @@ function renderDirectInbox() {
     renderDirectInbox();
   });
   modal.querySelector('#directComposer')?.addEventListener('submit', sendDirectMessage);
+  const directInput = modal.querySelector('#directMessageInput');
+  const directSend = modal.querySelector('.direct-composer-send');
+  directInput?.addEventListener('input', () => {
+    directSend?.toggleAttribute('disabled', !directInput.value.trim() || !state.activeDirectConversationId);
+  });
   modal.querySelector('.direct-composer-icon[aria-label="Anexo"]')?.addEventListener('click', () => modal.querySelector('#directMediaInput')?.click());
   modal.querySelector('.direct-composer-icon[aria-label="Emoji"]')?.addEventListener('click', () => {
     const input = modal.querySelector('#directMessageInput');
     if (!input) return;
     input.value += input.value.endsWith(' ') || !input.value ? '✨ ' : ' ✨ ';
+    modal.querySelector('.direct-composer-send')?.toggleAttribute('disabled', !input.value.trim() || !state.activeDirectConversationId);
     input.focus();
   });
   modal.querySelector('#directMediaInput')?.addEventListener('change', async (e) => {
@@ -4630,6 +4667,7 @@ function renderDirectInbox() {
       const message = await state.service.sendDirectMessage(state.activeDirectConversationId, '', { kind: 'media', ...media });
       upsertDirectMessage(state.activeDirectConversationId, message);
       renderDirectInbox();
+      scrollDirectToBottom({ animated: true });
     } catch (err) {
       console.error('[MSY][feed-social] Erro ao enviar mídia no direct:', err);
       Utils.showToast(err.message || 'Erro ao enviar mídia no direct.', 'error');
@@ -4647,14 +4685,21 @@ function renderDirectInbox() {
   });
 
   requestAnimationFrame(() => {
-    const list = modal.querySelector('#directMessagesList');
-    if (list) list.scrollTop = list.scrollHeight;
+    scrollDirectToBottom({ animated: false });
     if (state.directEditingMessageId) {
       const input = document.getElementById('directMessageInput');
       input?.focus();
       input?.setSelectionRange(input.value.length, input.value.length);
+      modal.querySelector('.direct-composer-send')?.toggleAttribute('disabled', !input.value.trim());
     }
   });
+}
+
+function scrollDirectToBottom({ animated = true } = {}) {
+  const list = document.getElementById('directMessagesList');
+  if (!list) return;
+  list.scrollTo?.({ top: list.scrollHeight, behavior: animated ? 'smooth' : 'auto' });
+  if (!list.scrollTo) list.scrollTop = list.scrollHeight;
 }
 
 function bindDirectViewport(modal) {
@@ -4668,6 +4713,8 @@ function bindDirectViewport(modal) {
     shell.style.setProperty('--direct-vh', `${Math.round(height)}px`);
     const keyboard = Math.max(0, window.innerHeight - height - (viewport?.offsetTop || 0));
     shell.style.setProperty('--direct-keyboard', `${Math.round(keyboard)}px`);
+    shell.classList.toggle('keyboard-open', keyboard > 24);
+    requestAnimationFrame(() => scrollDirectToBottom({ animated: false }));
   };
   sync();
   window.visualViewport?.addEventListener('resize', sync, { passive: true });
@@ -4705,6 +4752,7 @@ async function sendDirectMessage(e) {
 
 function appendDirectMessageToDom() {
   renderDirectInbox();
+  requestAnimationFrame(() => scrollDirectToBottom({ animated: true }));
 }
 
 function bindModals() {
