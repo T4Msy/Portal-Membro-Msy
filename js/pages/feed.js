@@ -154,6 +154,7 @@ function getPostContentType(post = {}) {
 }
 
 function renderContentBadge(type = 'post') {
+  if (type === 'post' || type === 'story') return '';
   const meta = CONTENT_TYPE_META[type] || CONTENT_TYPE_META.post;
   return `<span class="content-type-badge content-type-badge-${type}"><i class="${meta.icon}"></i>${meta.label}</span>`;
 }
