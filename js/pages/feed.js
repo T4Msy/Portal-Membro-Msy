@@ -39,6 +39,8 @@ const state = {
   directUnreadCount: 0,
   activeDirectConversationId: null,
   directViewportCleanup: null,
+  directInitialScrollCleanup: null,
+  directScrollRequestId: 0,
   directContextMessageId: null,
   directEditingMessageId: null,
   directActivityRefreshTimer: null,
@@ -368,10 +370,7 @@ function openModal(modal) {
 function closeSocialModals() {
   closeMobileActions();
   const storyViewer = document.getElementById('storyViewer');
-  if (storyViewer?.dataset.storyTimer) {
-    clearTimeout(Number(storyViewer.dataset.storyTimer));
-    delete storyViewer.dataset.storyTimer;
-  }
+  clearStoryTimer(storyViewer);
   document.querySelectorAll('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal').forEach((m) => {
     m.querySelectorAll('video').forEach((video) => video.pause());
     m.classList.remove('open');
@@ -383,6 +382,10 @@ function closeSocialModals() {
   if (typeof state.directViewportCleanup === 'function') {
     state.directViewportCleanup();
     state.directViewportCleanup = null;
+  }
+  if (typeof state.directInitialScrollCleanup === 'function') {
+    state.directInitialScrollCleanup();
+    state.directInitialScrollCleanup = null;
   }
   if (typeof state.storyViewportCleanup === 'function') {
     state.storyViewportCleanup();
@@ -3405,7 +3408,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
 
   const modal = document.getElementById('storyViewer');
   const canViewReactions = canManageStory(story);
-  if (modal.dataset.storyTimer) clearTimeout(Number(modal.dataset.storyTimer));
+  clearStoryTimer(modal);
   modal.innerHTML = `
     <div class="story-panel story-panel-instagram">
       ${renderStoryProgress(group, storyIndex)}
@@ -3447,20 +3450,19 @@ async function openStoryPremium(groupIndex, storyIndex) {
   mediaReady.finally(() => markStoryMediaReady(modal));
   markStoryMediaReady(modal);
 
-  const go = (direction) => {
-    const next = getNextStoryCursor(groupIndex, storyIndex, direction);
-    if (next) openStoryPremium(next.groupIndex, next.storyIndex);
-  };
+  const go = (direction) => advanceStoryOrClose(groupIndex, storyIndex, direction, openStoryPremium);
   modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
   modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
   modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-story-reaction]')?.addEventListener('click', async (e) => {
+    stopStoryInteractiveEvent(e);
     e.currentTarget.classList.add('active');
     await state.service.reactToStory(story, 'heart');
     hydrateStoryMeta(story.id, canViewReactions);
   });
   modal.querySelector('#storyInlineReply')?.addEventListener('submit', async (e) => {
+    stopStoryInteractiveEvent(e);
     e.preventDefault();
     const input = modal.querySelector('#storyReplyInput');
     const text = input?.value.trim();
@@ -3481,17 +3483,19 @@ async function openStoryPremium(groupIndex, storyIndex) {
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
-  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
+  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     document.getElementById('storyReactionsPanel')?.classList.toggle('open');
   });
   modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
-    e.stopPropagation();
+    stopStoryInteractiveEvent(e);
     deleteStory(story.id);
   });
   modal.querySelector('[data-edit-story]')?.addEventListener('click', (e) => {
-    e.stopPropagation();
+    stopStoryInteractiveEvent(e);
     openStoryEditor(story.id);
   });
+  bindStoryInteractiveGuards(modal);
   bindStoryGestures(modal, go);
   startStoryProgress(modal, groupIndex, storyIndex, story, go);
   hydrateStoryMeta(story.id, canViewReactions);
@@ -3512,6 +3516,50 @@ function resumeStoryPlayback(modal) {
   if (video instanceof HTMLVideoElement) playStoryVideo(video, modal).catch(() => {});
   modal.dataset.storyTickAt = String(Date.now());
   delete modal.dataset.storyPaused;
+}
+
+function stopStoryInteractiveEvent(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  event?.stopImmediatePropagation?.();
+}
+
+function bindStoryInteractiveGuards(modal) {
+  const selectors = [
+    '.story-inline-reply',
+    '.story-inline-reply input',
+    '.story-inline-send',
+    '.story-social-icon',
+    '.story-sound-toggle',
+    '.story-close',
+    '.story-reactions-panel',
+  ].join(',');
+  modal.querySelectorAll(selectors).forEach((node) => {
+    ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach((eventName) => {
+      node.addEventListener(eventName, (event) => event.stopPropagation(), { passive: true });
+    });
+  });
+}
+
+function clearStoryTimer(modal = document.getElementById('storyViewer')) {
+  if (!modal?.dataset.storyTimer) return;
+  clearInterval(Number(modal.dataset.storyTimer));
+  delete modal.dataset.storyTimer;
+}
+
+function advanceStoryOrClose(groupIndex, storyIndex, direction = 1, opener = openStoryPremium) {
+  const next = getNextStoryCursor(groupIndex, storyIndex, direction);
+  if (next) {
+    clearStoryTimer();
+    opener(next.groupIndex, next.storyIndex);
+    return true;
+  }
+  if (direction > 0) {
+    clearStoryTimer();
+    closeSocialModals();
+    return true;
+  }
+  return false;
 }
 
 function bindStoryGestures(modal, go) {
@@ -3613,7 +3661,7 @@ async function openStoryFast(groupIndex, storyIndex) {
   state.service.markStoryViewed(story.id).catch((err) => console.warn('[MSY][feed-social] View do story indisponivel:', err));
   const canViewReactions = canManageStory(story);
   const modal = document.getElementById('storyViewer');
-  if (modal.dataset.storyTimer) clearTimeout(Number(modal.dataset.storyTimer));
+  clearStoryTimer(modal);
   modal.innerHTML = `
     <div class="story-panel story-panel-stable">
       <div class="story-progress"><span></span></div>
@@ -3650,7 +3698,8 @@ async function openStoryFast(groupIndex, storyIndex) {
     modal.scrollTop = 0;
     modal.querySelector('.story-panel')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   });
-  modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async () => {
+  modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async (e) => {
+    stopStoryInteractiveEvent(e);
     await state.service.reactToStory(story, btn.dataset.storyReaction);
     Utils.showToast('Reacao enviada.');
     hydrateStoryMeta(story.id, canViewReactions);
@@ -3665,20 +3714,21 @@ async function openStoryFast(groupIndex, storyIndex) {
   }));
   modal.querySelectorAll('[data-story-next]').forEach((node) => node.addEventListener('click', (e) => {
     e.stopPropagation();
-    const groupStories = group.stories || [];
-    if (storyIndex < groupStories.length - 1) openStoryFast(groupIndex, storyIndex + 1);
-    else if (groupIndex < state.stories.length - 1) openStoryFast(groupIndex + 1, 0);
+    advanceStoryOrClose(groupIndex, storyIndex, 1, openStoryFast);
   }));
-  modal.querySelector('[data-story-reply]')?.addEventListener('click', () => {
+  modal.querySelector('[data-story-reply]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     const composer = document.getElementById('storyReplyComposer');
     if (composer) composer.style.display = 'block';
     composer?.querySelector('#storyReplyInput')?.focus({ preventScroll: true });
   });
-  modal.querySelector('[data-close-story-reply]')?.addEventListener('click', () => {
+  modal.querySelector('[data-close-story-reply]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     const composer = document.getElementById('storyReplyComposer');
     if (composer) composer.style.display = 'none';
   });
-  modal.querySelector('[data-send-story-reply]')?.addEventListener('click', async () => {
+  modal.querySelector('[data-send-story-reply]')?.addEventListener('click', async (e) => {
+    stopStoryInteractiveEvent(e);
     const input = document.getElementById('storyReplyInput');
     const text = input?.value.trim();
     if (!text) return;
@@ -3700,20 +3750,21 @@ async function openStoryFast(groupIndex, storyIndex) {
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
-  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
+  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     document.getElementById('storyReactionsPanel')?.classList.toggle('open');
   });
   modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
-    e.stopPropagation();
+    stopStoryInteractiveEvent(e);
     deleteStory(story.id);
   });
   modal.querySelector('[data-edit-story]')?.addEventListener('click', (e) => {
-    e.stopPropagation();
+    stopStoryInteractiveEvent(e);
     openStoryEditor(story.id);
   });
+  bindStoryInteractiveGuards(modal);
   bindStoryGestures(modal, (direction) => {
-    const next = getNextStoryCursor(groupIndex, storyIndex, direction);
-    if (next) openStoryFast(next.groupIndex, next.storyIndex);
+    advanceStoryOrClose(groupIndex, storyIndex, direction, openStoryFast);
   });
   startStoryProgress(modal, groupIndex, storyIndex, story);
   hydrateStoryMeta(story.id, canViewReactions);
@@ -3739,6 +3790,7 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
     video.addEventListener('ended', () => {
       if (!modal.classList.contains('open')) return;
       if (go) go(1);
+      else advanceStoryOrClose(groupIndex, storyIndex, 1, openStoryFast);
     }, { once: true });
   }
   if (story.media_type !== 'image') return;
@@ -3755,8 +3807,7 @@ function startStoryProgress(modal, groupIndex, storyIndex, story, go = null) {
     if (elapsed < 6000) return;
     clearInterval(timer);
     if (go) return go(1);
-    const next = getNextStoryCursor(groupIndex, storyIndex, 1);
-    if (next) openStoryFast(next.groupIndex, next.storyIndex);
+    advanceStoryOrClose(groupIndex, storyIndex, 1, openStoryFast);
   }, 180);
   modal.dataset.storyTickAt = String(tickAt);
   modal.dataset.storyTimer = String(timer);
@@ -3884,7 +3935,8 @@ async function openStoryLegacy(groupIndex, storyIndex) {
     if (panel) panel.scrollTop = 0;
     if (media) media.scrollLeft = 0;
   });
-  modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async () => {
+  modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async (e) => {
+    stopStoryInteractiveEvent(e);
     await state.service.reactToStory(story, btn.dataset.storyReaction);
     Utils.showToast('Reacao enviada.');
     openStory(groupIndex, storyIndex);
@@ -3899,20 +3951,21 @@ async function openStoryLegacy(groupIndex, storyIndex) {
   });
   modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    const groupStories = group.stories || [];
-    if (storyIndex < groupStories.length - 1) openStory(groupIndex, storyIndex + 1);
-    else if (groupIndex < state.stories.length - 1) openStory(groupIndex + 1, 0);
+    advanceStoryOrClose(groupIndex, storyIndex, 1, openStory);
   });
-  modal.querySelector('[data-story-reply]')?.addEventListener('click', () => {
+  modal.querySelector('[data-story-reply]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     const composer = document.getElementById('storyReplyComposer');
     composer?.style && (composer.style.display = 'block');
     composer?.querySelector('#storyReplyInput')?.focus({ preventScroll: true });
   });
-  modal.querySelector('[data-close-story-reply]')?.addEventListener('click', () => {
+  modal.querySelector('[data-close-story-reply]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     const composer = document.getElementById('storyReplyComposer');
     if (composer) composer.style.display = 'none';
   });
-  modal.querySelector('[data-send-story-reply]')?.addEventListener('click', async () => {
+  modal.querySelector('[data-send-story-reply]')?.addEventListener('click', async (e) => {
+    stopStoryInteractiveEvent(e);
     const input = document.getElementById('storyReplyInput');
     const text = input?.value.trim();
     if (!text) return;
@@ -3934,29 +3987,47 @@ async function openStoryLegacy(groupIndex, storyIndex) {
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     }
   });
-  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', () => {
+  modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
     document.getElementById('storyReactionsPanel')?.classList.toggle('open');
   });
   modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
-    e.stopPropagation();
+    stopStoryInteractiveEvent(e);
     deleteStory(story.id);
   });
+  bindStoryInteractiveGuards(modal);
 }
 
 async function deleteStory(storyId) {
   const story = findStoryById(storyId);
   if (!story || !canManageStory(story)) return Utils.showToast('Sem permissao para excluir este story.', 'error');
-  if (!await MSYConfirm.show('Excluir este story?', { title: 'Excluir story', type: 'danger', confirmText: 'Excluir' })) return;
+  const modal = document.getElementById('storyViewer');
+  const wasViewerOpen = modal?.classList.contains('open');
+  const deletedCursor = findStoryCursorById(storyId);
+  const deletedFlatIndex = deletedCursor ? getStoryPosition(deletedCursor.groupIndex, deletedCursor.storyIndex) : -1;
+  if (wasViewerOpen) pauseStoryPlayback(modal);
+  const confirmed = await MSYConfirm.show('Excluir este story?', { title: 'Excluir story', type: 'danger', confirmText: 'Excluir' });
+  if (!confirmed) {
+    if (wasViewerOpen) resumeStoryPlayback(modal);
+    return;
+  }
   try {
     const paths = await state.service.deleteStory(storyId);
     if (paths.length) {
       await removeSocialMedia(db, paths).catch((err) => console.warn('[MSY][feed-social] Story excluido, mas storage manteve midias:', err));
     }
-    closeSocialModals();
     state.stories = await state.service.loadStories();
     renderStories();
+    if (wasViewerOpen) {
+      const nextCursor = deletedFlatIndex >= 0
+        ? (getStoryByFlatIndex(deletedFlatIndex) || getStoryByFlatIndex(deletedFlatIndex - 1))
+        : null;
+      if (nextCursor) openStory(nextCursor.groupIndex, nextCursor.storyIndex);
+      else closeSocialModals();
+    }
     Utils.showToast('Story excluido.');
   } catch (err) {
+    if (wasViewerOpen) resumeStoryPlayback(modal);
     console.error('[MSY][feed-social] Erro ao excluir story:', err);
     Utils.showToast(err.message || 'Erro ao excluir story.', 'error');
   }
@@ -4684,11 +4755,11 @@ function renderDirectInbox() {
     });
   });
 
+  scheduleDirectInitialScroll(activeConversation?.id || null);
   requestAnimationFrame(() => {
-    scrollDirectToBottom({ animated: false });
     if (state.directEditingMessageId) {
       const input = document.getElementById('directMessageInput');
-      input?.focus();
+      input?.focus({ preventScroll: true });
       input?.setSelectionRange(input.value.length, input.value.length);
       modal.querySelector('.direct-composer-send')?.toggleAttribute('disabled', !input.value.trim());
     }
@@ -4698,8 +4769,103 @@ function renderDirectInbox() {
 function scrollDirectToBottom({ animated = true } = {}) {
   const list = document.getElementById('directMessagesList');
   if (!list) return;
-  list.scrollTo?.({ top: list.scrollHeight, behavior: animated ? 'smooth' : 'auto' });
-  if (!list.scrollTo) list.scrollTop = list.scrollHeight;
+  const top = Math.max(0, list.scrollHeight - list.clientHeight);
+  if (!animated) {
+    const previousBehavior = list.style.scrollBehavior;
+    list.style.scrollBehavior = 'auto';
+    list.scrollTop = top;
+    list.scrollTo?.({ top, behavior: 'auto' });
+    list.style.scrollBehavior = previousBehavior;
+    return;
+  }
+  list.scrollTo?.({ top, behavior: 'smooth' });
+  if (!list.scrollTo) list.scrollTop = top;
+}
+
+function directMediaSettled(list, timeout = 420) {
+  const pendingMedia = [...list.querySelectorAll('img,video')]
+    .filter((media) => {
+      if (media instanceof HTMLImageElement) return !media.complete || media.naturalWidth === 0;
+      if (media instanceof HTMLVideoElement) return media.readyState < 1;
+      return false;
+    });
+  if (!pendingMedia.length) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    let remaining = pendingMedia.length;
+    const cleanupFns = [];
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanupFns.forEach((cleanup) => cleanup());
+      resolve();
+    };
+    const doneOne = () => {
+      remaining -= 1;
+      if (remaining <= 0) finish();
+    };
+    const timer = setTimeout(finish, timeout);
+    cleanupFns.push(() => clearTimeout(timer));
+    pendingMedia.forEach((media) => {
+      let mediaDone = false;
+      const events = media instanceof HTMLVideoElement
+        ? ['loadedmetadata', 'loadeddata', 'error']
+        : ['load', 'error'];
+      const settleMedia = () => {
+        if (mediaDone) return;
+        mediaDone = true;
+        doneOne();
+      };
+      events.forEach((eventName) => media.addEventListener(eventName, settleMedia, { once: true }));
+      cleanupFns.push(() => events.forEach((eventName) => media.removeEventListener(eventName, settleMedia)));
+    });
+  });
+}
+
+function scheduleDirectInitialScroll(conversationId) {
+  if (typeof state.directInitialScrollCleanup === 'function') {
+    state.directInitialScrollCleanup();
+    state.directInitialScrollCleanup = null;
+  }
+  const list = document.getElementById('directMessagesList');
+  if (!list || !conversationId) return;
+  const requestId = ++state.directScrollRequestId;
+  let cancelled = false;
+  let resizeObserver = null;
+  let settleTimer = null;
+  const isCurrent = () => !cancelled
+    && requestId === state.directScrollRequestId
+    && state.activeDirectConversationId === conversationId
+    && document.getElementById('directMessagesList') === list;
+  const forceBottom = () => {
+    if (isCurrent()) scrollDirectToBottom({ animated: false });
+  };
+  const raf = (callback) => requestAnimationFrame(() => {
+    if (isCurrent()) callback();
+  });
+
+  state.directInitialScrollCleanup = () => {
+    cancelled = true;
+    resizeObserver?.disconnect();
+    if (settleTimer) clearTimeout(settleTimer);
+  };
+
+  raf(() => {
+    forceBottom();
+    raf(async () => {
+      forceBottom();
+      await directMediaSettled(list);
+      forceBottom();
+      if (!isCurrent() || typeof ResizeObserver === 'undefined') return;
+      resizeObserver = new ResizeObserver(forceBottom);
+      resizeObserver.observe(list);
+      list.querySelectorAll('img,video,.direct-message-row').forEach((node) => resizeObserver.observe(node));
+      settleTimer = setTimeout(() => {
+        resizeObserver?.disconnect();
+        if (state.directInitialScrollCleanup && isCurrent()) state.directInitialScrollCleanup = null;
+      }, 900);
+    });
+  });
 }
 
 function bindDirectViewport(modal) {

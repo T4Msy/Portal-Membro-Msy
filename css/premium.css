@@ -451,7 +451,7 @@ table {
 #msy-confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9990;
+  z-index: 2147483600;
   background: rgba(0,0,0,0.78);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
