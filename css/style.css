@@ -2496,6 +2496,18 @@ select option:hover,
   color: var(--gold);
   margin-bottom: 8px;
 }
+
+.member-card-text {
+  min-width: 0;
+}
+
+.member-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
 .member-join {
   font-size: 0.72rem;
   color: var(--text-3);
@@ -5232,27 +5244,131 @@ textarea:invalid:not(:placeholder-shown),
 
 /* Cards na lista de membros — layout horizontal limpo no mobile */
 @media (max-width: 500px) {
-  .members-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .members-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .filters-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .filters-bar::-webkit-scrollbar { display: none; }
+
+  .members-search {
+    flex: 0 0 min(260px, 72vw);
+    width: min(260px, 72vw);
+    max-width: none !important;
+  }
+
+  .filters-bar .filter-btn {
+    flex: 0 0 auto;
+    min-height: 42px;
+    white-space: nowrap;
+  }
+
   .member-card {
-    display: flex !important;
-    flex-direction: row !important;
+    display: grid !important;
+    grid-template-columns: 50px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "avatar info primary"
+      "avatar info admin";
     align-items: center !important;
     text-align: left !important;
     padding: 12px 14px !important;
     gap: 12px !important;
   }
+
   .member-card .avatar {
-    width: 50px !important; height: 50px !important;
-    font-size: .9rem !important;
+    grid-area: avatar;
+    width: 50px !important;
+    height: 50px !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
   }
+
   .member-card-text {
-    flex: 1; min-width: 0;
-    display: flex; flex-direction: column; gap: 1px;
+    grid-area: info;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
   }
-  .member-name       { font-size: .84rem !important; margin-bottom: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .member-join       { font-size: .64rem !important; margin-bottom: 1px !important; }
-  .member-role-text  { font-size: .72rem !important; margin-bottom: 3px !important; }
-  .member-tier-badge { margin-top: 3px !important; }
+
+  .member-name {
+    font-size: .84rem !important;
+    margin-bottom: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .member-join {
+    font-size: .64rem !important;
+    margin-bottom: 1px !important;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .member-role-text {
+    font-size: .72rem !important;
+    margin-bottom: 3px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .member-tier-badge {
+    margin-top: 3px !important;
+  }
+
+  .member-card-actions {
+    display: flex !important;
+    margin-top: 0 !important;
+  }
+
+  .member-card-actions-primary {
+    grid-area: primary;
+    justify-content: flex-start !important;
+    align-self: end;
+  }
+
+  .member-card-actions-primary .btn {
+    min-height: 34px;
+    padding: 8px 10px;
+    font-size: .64rem;
+  }
+
+  .member-card-actions-admin {
+    grid-area: admin;
+    display: grid !important;
+    grid-template-columns: repeat(2, 48px);
+    gap: 8px;
+    justify-content: end !important;
+    align-self: start;
+  }
+
+  .member-card-actions-admin .btn {
+    width: 48px;
+    min-width: 48px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .member-card-actions-admin .btn i {
+    margin: 0;
+  }
 }

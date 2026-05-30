@@ -2604,7 +2604,7 @@
        </div>
        <div style="margin-bottom:18px">
          <div class="filters-bar">
-           <input type="text" class="form-input" id="memberSearch" placeholder="🔍  Pesquisar membro..." style="max-width:260px">
+           <input type="text" class="form-input members-search" id="memberSearch" placeholder="🔍  Pesquisar membro..." style="max-width:260px">
            <button class="filter-btn active" data-filter="todos">Todos</button>
            <button class="filter-btn" data-filter="diretoria">Diretoria</button>
            <button class="filter-btn" data-filter="membro">Membros</button>
@@ -2625,11 +2625,11 @@
                <div class="member-role-text">${Utils.escapeHtml(m.role)}</div>
                <div class="member-tier-badge">${Utils.tierBadge(m.tier)}</div>
              </div>
-             <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center" onclick="event.stopPropagation()">
+             <div class="member-card-actions member-card-actions-primary" onclick="event.stopPropagation()">
                ${m.status === 'ativo' ? `<a class="btn btn-sm btn-outline" href="feed.html?profile=${m.id}" title="Abrir perfil social"><i class="fa-solid fa-user-plus"></i> Perfil Social</a>` : ''}
              </div>
              ${canGerenciarMembros ? `
-               <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center" onclick="event.stopPropagation()">
+               <div class="member-card-actions member-card-actions-admin" onclick="event.stopPropagation()">
                  ${m.status === 'pendente' && canAprovar ? `<button class="btn btn-sm btn-primary approve-btn" data-id="${m.id}"><i class="fa-solid fa-check"></i> Aprovar</button>` : ''}
                  ${m.tier !== 'diretoria' && m.status === 'ativo' ? `
                    <button class="btn btn-sm btn-outline promote-btn" data-id="${m.id}" title="Elevar à Diretoria">
@@ -2637,7 +2637,7 @@
                    </button>` : ''}
                  ${m.tier === 'diretoria' && m.id !== profile.id ? `
                    <button class="btn btn-sm btn-ghost demote-btn" data-id="${m.id}" style="color:#eab308;border-color:rgba(234,179,8,.3)">
-                     <i class="fa-solid fa-arrow-down"></i> Rebaixar
+                     <i class="fa-solid fa-user-minus"></i>
                    </button>` : ''}
                  ${m.status === 'ativo' ? `
                    <button class="btn btn-sm btn-ghost edit-role-btn" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}" data-role="${Utils.escapeHtml(m.role)}" title="Editar cargo">
