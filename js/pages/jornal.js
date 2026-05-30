@@ -124,12 +124,26 @@ function renderPage() {
         </aside>
       </div>
     </div>
-    <div class="journal-modal" id="journalPostModal"></div>
-    <div class="journal-modal" id="journalEditorModal"></div>
-    <div class="journal-modal" id="journalLightbox"></div>
   `;
+  ensureModalRoots();
   bindPage();
   updateVisibleSections();
+}
+
+function ensureModalRoots() {
+  const root = document.body;
+  if (!root) return;
+  ['journalPostModal', 'journalEditorModal', 'journalLightbox'].forEach((id) => {
+    let modal = document.getElementById(id);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = id;
+      modal.className = 'journal-modal';
+    }
+    if (modal.parentElement !== root) {
+      root.appendChild(modal);
+    }
+  });
 }
 
 function renderHero(post) {
@@ -137,7 +151,7 @@ function renderHero(post) {
   return `
     <section class="journal-hero" style="${image}">
       <div class="journal-hero-content">
-        <div class="journal-kicker">Edição interna</div>
+        <div class="journal-kicker">Edição especial</div>
         <h1 class="journal-title">Jornal da Masayoshi</h1>
         <p class="journal-subtitle">${post ? Utils.escapeHtml(post.subtitle || post.summary || 'Comunicação oficial, memoria editorial e midia propria da Ordem.') : 'A central editorial da Ordem: videos, materias, tirinhas, especiais e arquivo historico em uma experiencia propria.'}</p>
         <div class="journal-hero-meta">
@@ -674,6 +688,11 @@ function canManageComment(comment) {
 
 function openModal(modal) {
   modal?.classList.add('open');
+  if (modal) modal.scrollTop = 0;
+  const panel = modal?.querySelector('.journal-modal-panel');
+  const body = modal?.querySelector('.journal-modal-body');
+  if (panel) panel.scrollTop = 0;
+  if (body) body.scrollTop = 0;
   document.body.classList.add('social-modal-locked');
 }
 
