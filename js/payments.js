@@ -228,13 +228,18 @@ const Payments = {
       }
 
       // Notificação interna
-      await db.rpc('notify_member', {
-        p_user_id: userId,
-        p_message: `✅ Mensalidade de ${this.formatMes(mesRef)} confirmada!`,
-        p_type:    'success',
-        p_icon:    '💳',
-        p_link:    'mensalidade.html',
-      }).catch(err => console.error('[MSY][payments] Erro ao enviar notificação de mensalidade:', err));
+      try {
+        const { error: notifyError } = await db.rpc('notify_member', {
+          p_user_id: userId,
+          p_message: `✅ Mensalidade de ${this.formatMes(mesRef)} confirmada!`,
+          p_type:    'success',
+          p_icon:    '💳',
+          p_link:    'mensalidade.html',
+        });
+        if (notifyError) throw notifyError;
+      } catch (notifyErr) {
+        console.error('[MSY][payments] Erro ao enviar notificação de mensalidade:', notifyErr);
+      }
     } catch (err) {
       console.error('[MSY][payments] Erro ao confirmar pagamento:', err);
       throw err;
