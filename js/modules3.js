@@ -44,6 +44,8 @@ const MSYPerms = {
     { key: 'gerenciar_ranking',     label: 'Gerenciar Rankings',     group: 'Ranking',    icon: 'fa-ranking-star' },
     // ── Biblioteca
     { key: 'gerenciar_biblioteca',  label: 'Gerenciar Biblioteca',   group: 'Biblioteca', icon: 'fa-book-open' },
+    // ── Jornal
+    { key: 'gerenciar_jornal',      label: 'Gerenciar Jornal',       group: 'Jornal',     icon: 'fa-newspaper' },
     // ── Feed
     { key: 'publicar_feed',         label: 'Publicar no Feed',       group: 'Feed',       icon: 'fa-rss' },
     { key: 'moderar_feed',          label: 'Moderar Feed',           group: 'Feed',       icon: 'fa-shield-virus' },
@@ -225,6 +227,7 @@ async function openPermissionsManager() {
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
     'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
     'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
+    'Jornal':      { icon:'fa-newspaper',     color:'#c9a84c', keys:['gerenciar_jornal'] },
     'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
@@ -233,7 +236,7 @@ async function openPermissionsManager() {
     'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
     'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes'] },
   };
-  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade']);
+  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
@@ -524,7 +527,7 @@ async function renderPermissionsWorkspace(body) {
   allPermsData.forEach(p => { permsMap[p.user_id] = p.permissions || []; });
 
   const GROUPS = getPermissionsGroups();
-  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade']);
+  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 

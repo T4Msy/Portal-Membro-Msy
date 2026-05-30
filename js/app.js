@@ -284,6 +284,7 @@
        { page: 'eventos',     icon: 'fa-solid fa-calendar-days', label: 'Eventos' },
        { page: 'reunioes',    icon: 'fa-solid fa-handshake',     label: 'Reuniões' },
        { page: 'ranking',     icon: 'fa-solid fa-ranking-star',  label: 'Ranking' },
+       { page: 'jornal',      icon: 'fa-solid fa-newspaper',     label: 'Jornal da Masayoshi' },
        { page: 'feed',        icon: 'fa-solid fa-rss',           label: 'Feed' },
        { page: 'sugestoes',   icon: 'fa-solid fa-lightbulb',     label: 'Sugestões' },
        { page: 'biblioteca',  icon: 'fa-solid fa-book-open',     label: 'Biblioteca' },
@@ -839,8 +840,8 @@
          </div>
        </div>
    
-       <!-- Jornal MSY -->
-       <div id="jornalContainer" class="card-enter" style="margin-bottom:8px"></div>
+       <!-- Jornal da Masayoshi -->
+       <div id="jornalTeaserContainer" class="card-enter" style="margin-bottom:8px"></div>
    
        <!-- Top 3 da Semana -->
        <div class="card card-enter" id="top3Card" style="overflow:hidden;padding:0;margin-bottom:8px">
@@ -944,8 +945,7 @@
        </div>
      `;
    
-     // Inicializar Jornal MSY (definido ao final deste arquivo)
-     _initJornalMSY(profile);
+     _initJornalTeaser();
    
      // Inicializar sistema de notificações com limpeza
      _initNotifsDash(profile);
@@ -6755,6 +6755,56 @@
       JORNAL MSY — Sistema de Notícias da Dashboard
       ============================================================ */
    
+   async function _initJornalTeaser() {
+     const container = document.getElementById('jornalTeaserContainer');
+     if (!container) return;
+
+     const fallback = () => {
+       container.innerHTML = `
+         <a class="jornal-teaser-card" href="jornal.html" style="display:block;text-decoration:none;position:relative;overflow:hidden;border:1px solid rgba(201,168,76,.2);border-radius:18px;background:linear-gradient(135deg,rgba(24,7,10,.96),rgba(10,10,14,.96));padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.28)">
+           <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(201,168,76,.08),transparent 48%,rgba(127,29,29,.16));pointer-events:none"></div>
+           <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap">
+             <div>
+               <div style="font-size:.68rem;color:var(--gold);letter-spacing:.18em;text-transform:uppercase;font-weight:900;margin-bottom:7px">Edição interna</div>
+               <div style="font-family:Georgia,serif;color:var(--text-1);font-size:1.45rem;font-weight:900;line-height:1.08">Jornal da Masayoshi</div>
+               <div style="color:var(--text-3);font-size:.86rem;margin-top:7px;max-width:620px">A nova central editorial da Ordem: vídeos, matérias, tirinhas, especiais e arquivo histórico.</div>
+             </div>
+             <span class="btn btn-primary" style="pointer-events:none"><i class="fa-solid fa-newspaper"></i> Abrir Jornal</span>
+           </div>
+         </a>`;
+     };
+
+     try {
+       const { data, error } = await db
+         .from('jornal_posts')
+         .select('id,title,subtitle,cover_url,post_type,section,published_at,created_at,author:author_id(name)')
+         .eq('status', 'published')
+         .order('is_featured', { ascending: false })
+         .order('published_at', { ascending: false })
+         .limit(1);
+       if (error) throw error;
+       const post = data?.[0];
+       if (!post) return fallback();
+       const cover = post.cover_url ? `background-image:linear-gradient(90deg,rgba(7,7,10,.94),rgba(7,7,10,.62),rgba(7,7,10,.94)),url('${Utils.escapeHtml(post.cover_url)}')` : '';
+       container.innerHTML = `
+         <a class="jornal-teaser-card" href="jornal.html#post-${post.id}" style="display:block;text-decoration:none;position:relative;overflow:hidden;border:1px solid rgba(201,168,76,.22);border-radius:18px;background:linear-gradient(135deg,rgba(24,7,10,.96),rgba(10,10,14,.96));${cover};background-size:cover;background-position:center;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+           <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(201,168,76,.08),transparent 50%,rgba(127,29,29,.18));pointer-events:none"></div>
+           <div style="position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap">
+             <div>
+               <div style="font-size:.68rem;color:var(--gold);letter-spacing:.18em;text-transform:uppercase;font-weight:900;margin-bottom:7px">Jornal da Masayoshi · ${Utils.escapeHtml(post.post_type || 'editorial')}</div>
+               <div style="font-family:Georgia,serif;color:var(--text-1);font-size:1.45rem;font-weight:900;line-height:1.08">${Utils.escapeHtml(post.title)}</div>
+               ${post.subtitle ? `<div style="color:var(--text-3);font-size:.86rem;margin-top:7px;max-width:620px">${Utils.escapeHtml(post.subtitle)}</div>` : ''}
+               <div style="color:rgba(201,168,76,.8);font-size:.72rem;margin-top:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em">${Utils.escapeHtml(post.author?.name || 'Editorial MSY')} · ${Utils.formatDate(post.published_at || post.created_at)}</div>
+             </div>
+             <span class="btn btn-primary" style="pointer-events:none"><i class="fa-solid fa-arrow-right"></i> Ler edição</span>
+           </div>
+         </a>`;
+     } catch (err) {
+       console.warn('[MSY][jornal] Teaser indisponível:', err);
+       fallback();
+     }
+   }
+
    (function injectJornalCSS() {
      if (document.getElementById('msy-jornal-css')) return;
      const s = document.createElement('style');

@@ -2,7 +2,7 @@
    Cache-first para assets estaticos | Network-first para paginas
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v29-story-keyboard-lift';
+const CACHE_VERSION  = 'msy-v30-jornal-masayoshi';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
@@ -11,6 +11,7 @@ const PRECACHE_ASSETS = [
   '/css/style.css',
   '/css/modules3.css',
   '/css/premium.css',
+  '/css/jornal.css',
   '/js/config.js',
   '/js/core/theme.js',
   '/js/core/cache.js',
@@ -22,6 +23,7 @@ const PRECACHE_ASSETS = [
   '/js/modules.js',
   '/js/modules2.js',
   '/js/modules3.js',
+  '/js/pages/jornal.js',
   '/js/push.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -30,6 +32,7 @@ const PRECACHE_ASSETS = [
   '/manifest.json',
   '/offline.html',
   '/dashboard.html',
+  '/jornal.html',
   '/permissoes.html',
   '/login.html',
 ];
