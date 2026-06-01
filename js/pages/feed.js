@@ -267,6 +267,13 @@ function renderPostMediaElement(media, attrs = '') {
     : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs}>`;
 }
 
+function renderPostMediaViewerElement(media, attrs = '') {
+  const url = Utils.escapeHtml(media?.url || '');
+  return media?.media_type === 'video'
+    ? `<video src="${url}" ${attrs} playsinline></video>`
+    : `<img src="${url}" ${attrs}>`;
+}
+
 function getActiveDirectConversation() {
   return state.directConversations.find((conversation) => conversation.id === state.activeDirectConversationId) || null;
 }
@@ -1032,7 +1039,7 @@ function openMediaViewer(post, startIndex = 0) {
       </div>
       <div class="media-viewer-track">
         ${media.map((item, idx) => `<div class="media-viewer-slide${idx === index ? ' active' : ''}" data-media-view-slide="${idx}">
-          ${renderPostMediaElement(item, item.media_type === 'video' ? 'controls preload="metadata"' : 'alt="Midia do post" decoding="async"')}
+          ${renderPostMediaViewerElement(item, item.media_type === 'video' ? 'controls preload="metadata"' : 'alt="Midia do post" decoding="async"')}
         </div>`).join('')}
       </div>
       ${media.length > 1 ? `
