@@ -63,6 +63,58 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.delete_social_post(uuid) TO authenticated;
 
+DROP FUNCTION IF EXISTS public.delete_social_comment(uuid);
+CREATE OR REPLACE FUNCTION public.delete_social_comment(p_comment_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_author uuid;
+BEGIN
+  SELECT author_id INTO v_author
+  FROM public.social_comments
+  WHERE id = p_comment_id
+    AND deleted_at IS NULL;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Comentário não encontrado.';
+  END IF;
+
+  IF auth.uid() IS NULL OR (
+    auth.uid() <> v_author
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.profiles
+      WHERE id = auth.uid()
+        AND (
+          tier = 'diretoria'
+          OR role ILIKE '%diretoria%'
+          OR role ILIKE '%admin%'
+        )
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.member_permissions
+      WHERE user_id = auth.uid()
+        AND 'moderar_feed' = ANY(permissions)
+    )
+  ) THEN
+    RAISE EXCEPTION 'Sem permissão para excluir este comentário.';
+  END IF;
+
+  UPDATE public.social_comments
+  SET deleted_at = now(),
+      updated_at = now()
+  WHERE id = p_comment_id;
+
+  RETURN true;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.delete_social_comment(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.get_social_liked_post_ids(
   p_profile_id uuid,
   p_limit integer DEFAULT 24

@@ -14,6 +14,14 @@ const STORY_ASPECT_RATIOS = {
   original: null,
 };
 
+function safeRandomId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const random = globalThis.crypto?.getRandomValues
+    ? Array.from(globalThis.crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(16).padStart(8, '0')).join('')
+    : Math.random().toString(36).slice(2);
+  return `${Date.now().toString(36)}-${random}`;
+}
+
 export async function compressImage(file, options = {}) {
   const {
     maxWidth = 1600,
@@ -118,7 +126,7 @@ export async function uploadSocialMedia(db, userId, file, folder = 'posts', opti
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 42) || 'media';
-  const path = `${ownerId}/${folder}/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
+  const path = `${ownerId}/${folder}/${Date.now()}-${safeRandomId()}-${safeName}.${ext}`;
 
   const { error } = await db.storage.from(SOCIAL_BUCKET).upload(path, uploadFile, {
     cacheControl: '31536000',
@@ -150,7 +158,7 @@ export async function removeSocialMedia(db, paths = []) {
 
 export function filePreview(file) {
   return {
-    id: crypto.randomUUID(),
+    id: safeRandomId(),
     file,
     url: URL.createObjectURL(file),
     media_type: getMediaType(file),

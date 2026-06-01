@@ -16,6 +16,7 @@
 
   async function init() {
     if (typeof db === 'undefined') return;
+    destroy();
 
     const { data: { session } } = await db.auth.getSession();
     if (!session?.user) return;
@@ -67,6 +68,7 @@
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
           console.warn('[MSY Realtime] Erro no canal — reconectando em 10s...');
+          destroy();
           setTimeout(init, 10_000);
         }
       });

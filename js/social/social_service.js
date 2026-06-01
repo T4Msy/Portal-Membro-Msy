@@ -641,10 +641,7 @@ export class SocialService {
   }
 
   async deleteComment(commentId) {
-    const { error } = await this.db
-      .from('social_comments')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', commentId);
+    const { error } = await this.db.rpc('delete_social_comment', { p_comment_id: commentId });
     if (error) throw error;
   }
 

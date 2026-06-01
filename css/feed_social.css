@@ -1101,3 +1101,207 @@ body[data-page="feed"] .social-edit-media-controls input[type="range"]{
     -webkit-overflow-scrolling:touch;
   }
 }
+
+/* Feed interaction polish: progressive reveal, gestures and motion safety. */
+@keyframes feedPostReveal{
+  from{opacity:0;transform:translateY(18px) scale(.985)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes postCreatedPulse{
+  0%{box-shadow:0 0 0 0 rgba(201,168,76,.0)}
+  22%{box-shadow:0 0 0 2px rgba(201,168,76,.44),0 20px 54px rgba(201,168,76,.16)}
+  100%{box-shadow:var(--shadow-card)}
+}
+@keyframes gestureHeartPop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.45)}
+  24%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}
+  72%{opacity:.92;transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1.34)}
+}
+@keyframes commentIn{
+  from{opacity:0;transform:translateY(10px);background:rgba(201,168,76,.12)}
+  to{opacity:1;transform:translateY(0);background:transparent}
+}
+@keyframes mediaSlideFromNext{
+  from{opacity:.35;transform:translateX(18px) scale(.985)}
+  to{opacity:1;transform:translateX(0) scale(1)}
+}
+@keyframes mediaSlideFromPrev{
+  from{opacity:.35;transform:translateX(-18px) scale(.985)}
+  to{opacity:1;transform:translateX(0) scale(1)}
+}
+
+body[data-page="feed"] .feed-reveal-pending{
+  opacity:.001;
+  transform:translateY(18px) scale(.985);
+}
+body[data-page="feed"] .feed-reveal-pending.feed-revealed{
+  animation:feedPostReveal 320ms var(--ease) both;
+  animation-delay:var(--feed-reveal-delay,0ms);
+}
+body[data-page="feed"] .post-just-created{
+  animation:postCreatedPulse 2.1s var(--ease) both;
+}
+body[data-page="feed"] .post-media::after{
+  content:"Toque duas vezes para curtir";
+  position:absolute;
+  left:50%;
+  bottom:14px;
+  z-index:2;
+  max-width:calc(100% - 28px);
+  padding:7px 10px;
+  border-radius:999px;
+  background:rgba(0,0,0,.44);
+  color:rgba(255,255,255,.84);
+  font-size:.68rem;
+  font-weight:900;
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,6px);
+  transition:opacity 180ms var(--ease),transform 180ms var(--ease);
+  backdrop-filter:blur(8px);
+  white-space:nowrap;
+}
+body[data-page="feed"] .post-media:hover::after,
+body[data-page="feed"] .post-media:focus-within::after{
+  opacity:1;
+  transform:translate(-50%,0);
+}
+body[data-page="feed"] .post-gesture-heart{
+  position:absolute;
+  left:50%;
+  top:50%;
+  z-index:6;
+  width:92px;
+  height:92px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  color:#fff;
+  font-size:4rem;
+  text-shadow:0 12px 38px rgba(0,0,0,.62);
+  pointer-events:none;
+  animation:gestureHeartPop 760ms var(--ease) both;
+}
+body[data-page="feed"] .save-pop{animation:likePop .34s var(--ease)}
+body[data-page="feed"] .comment-just-created{animation:commentIn 460ms var(--ease) both}
+body[data-page="feed"] .media-viewer-slide.from-next{animation:mediaSlideFromNext 220ms var(--ease) both}
+body[data-page="feed"] .media-viewer-slide.from-prev{animation:mediaSlideFromPrev 220ms var(--ease) both}
+body[data-page="feed"] .media-viewer-track{touch-action:pan-y pinch-zoom}
+body[data-page="feed"] .media-viewer-nav:disabled{opacity:.36;cursor:not-allowed}
+body[data-page="feed"] .social-action:active,
+body[data-page="feed"] .social-icon-btn:active,
+body[data-page="feed"] .follow-btn:active,
+body[data-page="feed"] .mobile-action-fab:active{
+  transform:scale(.96);
+}
+
+@media(hover:none){
+  body[data-page="feed"] .post-media::after{display:none}
+}
+
+@media(prefers-reduced-motion:reduce){
+  body[data-page="feed"] *,
+  body[data-page="feed"] *::before,
+  body[data-page="feed"] *::after{
+    animation-duration:1ms!important;
+    animation-iteration-count:1!important;
+    scroll-behavior:auto!important;
+    transition-duration:1ms!important;
+  }
+  body[data-page="feed"] .feed-reveal-pending{
+    opacity:1!important;
+    transform:none!important;
+  }
+  body[data-page="feed"] .post-gesture-heart,
+  body[data-page="feed"] .post-media::after{
+    display:none!important;
+  }
+}
+
+/* Story media must preserve the uploaded aspect ratio instead of cropping text or faces. */
+body[data-page="feed"] .story-viewer.open .story-media-premium img,
+body[data-page="feed"] .story-viewer.open .story-media-premium video{
+  object-fit:contain!important;
+}
+body[data-page="feed"] .story-viewer.open .story-media-premium .post-media-edited{
+  width:auto!important;
+  height:auto!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  aspect-ratio:auto!important;
+  object-fit:contain!important;
+}
+
+/* Desktop member discovery search in the right rail. */
+body[data-page="feed"] .social-discover-card{
+  padding:14px;
+}
+body[data-page="feed"] .side-member-search{
+  position:relative;
+  margin-bottom:10px;
+}
+body[data-page="feed"] .side-member-search i{
+  position:absolute;
+  left:13px;
+  top:50%;
+  transform:translateY(-50%);
+  color:var(--text-3);
+  font-size:.78rem;
+}
+body[data-page="feed"] .side-member-search input{
+  width:100%;
+  min-height:42px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:999px;
+  background:rgba(255,255,255,.045);
+  color:var(--text-1);
+  outline:none;
+  padding:10px 12px 10px 36px;
+  font-size:16px;
+  font-weight:800;
+}
+body[data-page="feed"] .side-member-search input:focus{
+  border-color:rgba(201,168,76,.42);
+  background:rgba(255,255,255,.065);
+}
+body[data-page="feed"] .side-member-results{
+  max-height:430px;
+  overflow:auto;
+  padding-right:2px;
+  scrollbar-width:thin;
+}
+body[data-page="feed"] .side-member-results .member-suggestion{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:9px 0;
+}
+body[data-page="feed"] .side-member-results .member-name{
+  font-size:.84rem;
+}
+body[data-page="feed"] .side-member-results .member-role{
+  font-size:.7rem;
+}
+body[data-page="feed"] .side-member-empty{
+  min-height:92px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  color:var(--text-3);
+  text-align:center;
+  font-size:.76rem;
+}
+body[data-page="feed"] .side-member-empty i{
+  color:var(--gold);
+  font-size:1.2rem;
+}
+@media(min-width:641px){
+  body[data-page="feed"] .mobile-member-search-card{
+    display:none!important;
+  }
+}

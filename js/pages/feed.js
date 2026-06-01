@@ -17,7 +17,7 @@ import {
   supportsVideoEditing,
   uploadSocialMedia,
   validateMediaFile,
-} from '../social/social_media.js';
+} from '../social/social_media.js?v=20260601-story-contain';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -73,6 +73,9 @@ const state = {
   feedEventsBound: false,
   feedObserver: null,
   mediaObserver: null,
+  postRevealObserver: null,
+  mediaViewerCleanup: null,
+  lastPostTap: null,
   mentionDropdown: null,
   mentionTarget: null,
   mentionItems: [],
@@ -219,6 +222,10 @@ function findMember(memberId) {
 
 function isMobileSocial() {
   return window.matchMedia('(max-width: 640px)').matches;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function openPostMediaPicker() {
@@ -399,6 +406,10 @@ function closeSocialModals() {
     state.storyViewportCleanup();
     state.storyViewportCleanup = null;
   }
+  if (typeof state.mediaViewerCleanup === 'function') {
+    state.mediaViewerCleanup();
+    state.mediaViewerCleanup = null;
+  }
   if (state.directMessagesChannel) {
     try { db.removeChannel(state.directMessagesChannel); } catch {}
     state.directMessagesChannel = null;
@@ -448,7 +459,6 @@ function layout() {
             <div class="social-subtitle">Posts, stories, perfis e interacoes da comunidade.</div>
           </div>
           <div class="social-top-actions">
-            <button class="social-icon-btn social-top-icon" id="openSearchBtn" title="Pesquisar membros"><i class="fa-solid fa-magnifying-glass"></i></button>
             <button class="social-icon-btn social-top-icon" id="openActivityBtn" title="Atividade"><i class="fa-regular fa-heart"></i><span class="social-notification-badge" id="socialNotificationBadge" hidden></span></button>
             <button class="social-icon-btn social-top-icon" id="openDirectBtn" title="Direct"><i class="fa-regular fa-paper-plane"></i><span class="social-notification-badge direct" id="directUnreadBadge" hidden></span></button>
             <button class="social-profile-chip" id="openMyProfileBtn" type="button" title="Meu perfil">${avatar(state.profile, 34)}<span>Meu perfil</span></button>
@@ -463,7 +473,7 @@ function layout() {
           <button class="social-mobile-action" id="openMyProfileMobileBtn"><i class="fa-regular fa-user"></i><span>Perfil</span></button>
         </div>
 
-        <div class="social-card social-member-search-card">
+        <div class="social-card social-member-search-card mobile-member-search-card">
           <div class="social-search-mobile-head">
             <strong>Pesquisar</strong>
             <button type="button" class="social-icon-btn" id="closeSocialSearchBtn"><i class="fa-solid fa-xmark"></i></button>
@@ -506,9 +516,13 @@ function layout() {
 
       <aside class="social-rail">
         <div class="social-card my-social-card" id="mySocialProfileCard"></div>
-        <div class="social-card">
+        <div class="social-card social-discover-card">
           <div class="side-title"><i class="fa-solid fa-user-plus"></i>Descobrir membros</div>
-          <div id="suggestionsList"></div>
+          <div class="side-member-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="sideMemberSearchInput" autocomplete="off" placeholder="Pesquisar @username">
+          </div>
+          <div id="suggestionsList" class="side-member-results"></div>
         </div>
       </aside>
     </div>
@@ -771,12 +785,81 @@ function renderPost(post) {
 }
 
 function hydrateFeedEnhancements(root = document) {
+  decorateFeedItems(root);
   root.querySelectorAll('.post-media-track:not([data-media-bound])').forEach((track) => {
     track.dataset.mediaBound = 'true';
     track.addEventListener('scroll', () => syncMediaDots(track), { passive: true });
   });
+  root.querySelectorAll('.post-media:not([data-doubletap-bound])').forEach((media) => {
+    media.dataset.doubletapBound = 'true';
+    media.addEventListener('pointerup', handlePostMediaTap, { passive: true });
+    media.addEventListener('dblclick', handlePostMediaDoubleClick);
+  });
   ensureMediaObserver();
   root.querySelectorAll('.post-media-slide video').forEach((video) => state.mediaObserver?.observe(video));
+}
+
+function decorateFeedItems(root = document) {
+  const posts = [...root.querySelectorAll('.social-post:not(.social-post-skeleton)')];
+  posts.forEach((post, index) => {
+    post.style.setProperty('--feed-item-index', String(Math.min(index, 10)));
+    post.style.setProperty('--feed-reveal-delay', `${Math.min(index, 8) * 34}ms`);
+    post.classList.add('feed-reveal-pending');
+  });
+  if (prefersReducedMotion()) {
+    posts.forEach((post) => post.classList.add('feed-revealed'));
+    return;
+  }
+  ensurePostRevealObserver();
+  if (!state.postRevealObserver) {
+    posts.forEach((post) => post.classList.add('feed-revealed'));
+    return;
+  }
+  posts.forEach((post) => state.postRevealObserver?.observe(post));
+}
+
+function ensurePostRevealObserver() {
+  if (state.postRevealObserver || !('IntersectionObserver' in window)) return;
+  state.postRevealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('feed-revealed');
+      state.postRevealObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+}
+
+function handlePostMediaTap(event) {
+  if (event.pointerType === 'mouse') return;
+  const media = event.currentTarget;
+  const postId = media?.dataset.mediaPost;
+  const now = Date.now();
+  const samePost = state.lastPostTap?.postId === postId;
+  const quickTap = samePost && now - state.lastPostTap.time < 320;
+  state.lastPostTap = { postId, time: now };
+  if (!quickTap || !postId) return;
+  const likeBtn = document.getElementById(`post-${postId}`)?.querySelector('[data-like-post]');
+  if (likeBtn && !likeBtn.classList.contains('active')) toggleLike(postId, likeBtn);
+  showPostGestureHeart(media);
+}
+
+function handlePostMediaDoubleClick(event) {
+  event.preventDefault();
+  const media = event.currentTarget;
+  const postId = media?.dataset.mediaPost;
+  if (!postId) return;
+  const likeBtn = document.getElementById(`post-${postId}`)?.querySelector('[data-like-post]');
+  if (likeBtn && !likeBtn.classList.contains('active')) toggleLike(postId, likeBtn);
+  showPostGestureHeart(media);
+}
+
+function showPostGestureHeart(media) {
+  if (!media || prefersReducedMotion()) return;
+  const pulse = document.createElement('span');
+  pulse.className = 'post-gesture-heart';
+  pulse.innerHTML = '<i class="fa-solid fa-heart"></i>';
+  media.appendChild(pulse);
+  pulse.addEventListener('animationend', () => pulse.remove(), { once: true });
 }
 
 function syncMediaDots(track) {
@@ -1026,6 +1109,10 @@ function openMediaViewer(post, startIndex = 0) {
   const modal = document.getElementById('mediaViewer');
   const media = post.media || [];
   if (!modal || !media.length) return;
+  if (typeof state.mediaViewerCleanup === 'function') {
+    state.mediaViewerCleanup();
+    state.mediaViewerCleanup = null;
+  }
   const index = Math.max(0, Math.min(startIndex, media.length - 1));
   modal.innerHTML = `
     <div class="media-viewer-panel">
@@ -1047,19 +1134,60 @@ function openMediaViewer(post, startIndex = 0) {
         <button class="media-viewer-nav next" data-media-view-next><i class="fa-solid fa-chevron-right"></i></button>` : ''}
     </div>`;
   openModal(modal);
-  const show = (nextIndex) => {
+  const show = (nextIndex, direction = 0) => {
     const safeIndex = Math.max(0, Math.min(nextIndex, media.length - 1));
     modal.querySelectorAll('video').forEach((video) => video.pause());
     modal.querySelectorAll('[data-media-view-slide]').forEach((slide) => {
-      slide.classList.toggle('active', Number(slide.dataset.mediaViewSlide) === safeIndex);
+      const active = Number(slide.dataset.mediaViewSlide) === safeIndex;
+      slide.classList.toggle('active', active);
+      slide.classList.remove('from-next', 'from-prev');
+      if (active && direction && !prefersReducedMotion()) {
+        slide.classList.add(direction > 0 ? 'from-next' : 'from-prev');
+        slide.addEventListener('animationend', () => slide.classList.remove('from-next', 'from-prev'), { once: true });
+      }
     });
     const count = modal.querySelector('.media-viewer-copy span');
     if (count) count.textContent = `${safeIndex + 1} de ${media.length}`;
     modal.dataset.mediaIndex = String(safeIndex);
   };
   modal.dataset.mediaIndex = String(index);
-  modal.querySelector('[data-media-view-prev]')?.addEventListener('click', () => show(Number(modal.dataset.mediaIndex || 0) - 1));
-  modal.querySelector('[data-media-view-next]')?.addEventListener('click', () => show(Number(modal.dataset.mediaIndex || 0) + 1));
+  const go = (direction) => show(Number(modal.dataset.mediaIndex || 0) + direction, direction);
+  modal.querySelector('[data-media-view-prev]')?.addEventListener('click', () => go(-1));
+  modal.querySelector('[data-media-view-next]')?.addEventListener('click', () => go(1));
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const track = modal.querySelector('.media-viewer-track');
+  const onTouchStart = (event) => {
+    const point = event.touches?.[0];
+    touchStartX = point?.clientX || 0;
+    touchStartY = point?.clientY || 0;
+  };
+  const onTouchEnd = (event) => {
+    const point = event.changedTouches?.[0];
+    const dx = (point?.clientX || 0) - touchStartX;
+    const dy = (point?.clientY || 0) - touchStartY;
+    if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.35) go(dx < 0 ? 1 : -1);
+  };
+  const onKeyDown = (event) => {
+    if (!modal.classList.contains('open')) return;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      go(-1);
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      go(1);
+    }
+  };
+  track?.addEventListener('touchstart', onTouchStart, { passive: true });
+  track?.addEventListener('touchend', onTouchEnd, { passive: true });
+  document.addEventListener('keydown', onKeyDown);
+  state.mediaViewerCleanup = () => {
+    track?.removeEventListener('touchstart', onTouchStart);
+    track?.removeEventListener('touchend', onTouchEnd);
+    document.removeEventListener('keydown', onKeyDown);
+  };
 }
 
 function renderComments(post) {
@@ -1178,11 +1306,13 @@ async function submitPostCommentSheet(e) {
   try {
     Utils.setButtonLoading?.(btn, true);
     await submitComment(post.id, body, { parentId: modal.dataset.replyTo || null });
+    const createdId = post.comments.at(-1)?.id;
     input.value = '';
     btn?.setAttribute('disabled', '');
     setPostCommentReply(post, null);
     const list = document.getElementById('postCommentsSheetList');
     if (list) list.innerHTML = renderCommentRows(post, { full: true });
+    document.getElementById(`comment-${createdId}`)?.classList.add('comment-just-created');
     updatePostStatsNode(post);
     updatePostNode(post.id);
     requestAnimationFrame(() => {
@@ -1479,6 +1609,12 @@ async function publishPost() {
     state.posts = await state.service.loadPosts();
     syncPostPaginationState();
     renderPosts();
+    const newest = state.posts[0]?.id;
+    if (newest) {
+      const node = document.getElementById(`post-${newest}`);
+      node?.classList.add('post-just-created');
+      setTimeout(() => node?.classList.remove('post-just-created'), 2200);
+    }
     Utils.showToast('Publicado no Feed!');
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao publicar post:', err);
@@ -1521,6 +1657,10 @@ async function createStoryFromFile(e = null) {
         try {
           const image = await loadImage(file);
           preview.editState.originalAspect = image.width / image.height;
+          preview.editState.aspect = 'original';
+          preview.editState.zoom = 1;
+          preview.editState.offsetX = 0;
+          preview.editState.offsetY = 0;
         } catch (imageErr) {
           console.warn('[MSY][feed-social] Proporcao original da imagem indisponivel:', imageErr);
         }
@@ -1832,6 +1972,10 @@ function renderStoryComposerBody() {
       } else {
         const image = await loadImage(file);
         nextPreview.editState.originalAspect = image.width / image.height;
+        nextPreview.editState.aspect = 'original';
+        nextPreview.editState.zoom = 1;
+        nextPreview.editState.offsetX = 0;
+        nextPreview.editState.offsetY = 0;
       }
       const current = activeStoryComposerItem();
       if (current) revokePreviews([current]);
@@ -2035,6 +2179,8 @@ async function toggleSave(postId, btn = null) {
     if (btn) {
       btn.classList.toggle('active', saved);
       btn.innerHTML = `<i class="fa-${saved ? 'solid' : 'regular'} fa-bookmark"></i>`;
+      btn.classList.add('save-pop');
+      setTimeout(() => btn.classList.remove('save-pop'), 360);
     } else {
       updatePostNode(postId);
     }
@@ -2060,9 +2206,11 @@ async function addComment(e) {
   try {
     Utils.setButtonLoading?.(btn, true);
     await submitComment(post.id, input.value);
+    const createdId = post.comments.at(-1)?.id;
     input.value = '';
     closeMentionDropdown();
     updatePostNode(post.id);
+    document.getElementById(`comment-${createdId}`)?.classList.add('comment-just-created');
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao comentar:', err);
     Utils.showToast('Erro ao comentar.', 'error');
@@ -2663,22 +2811,47 @@ function subscribeStoriesRealtime() {
   }
 }
 
-function renderSuggestions() {
+function renderSuggestions(query = '') {
   const el = document.getElementById('suggestionsList');
   if (!el) return;
   const followedIds = new Set(state.follows.filter((f) => f.follower_id === state.profile.id).map((f) => f.following_id));
+  const cleanQuery = String(query || '').trim().toLowerCase().replace(/^@+/, '');
+  if (!cleanQuery) {
+    el.innerHTML = '<div class="side-member-empty"><i class="fa-solid fa-magnifying-glass"></i>Pesquise um @username para encontrar membros.</div>';
+    bindSideMemberSearch();
+    return;
+  }
   const items = state.members
     .filter((m) => m.id !== state.profile.id)
+    .filter((m) => {
+      return displayUsername(m).includes(cleanQuery)
+        || String(m.name || '').toLowerCase().includes(cleanQuery)
+        || String(m.role || '').toLowerCase().includes(cleanQuery);
+    })
     .sort((a, b) => Number(followedIds.has(a.id)) - Number(followedIds.has(b.id)))
-    .slice(0, 6);
+    .sort((a, b) => memberSearchScore(b, cleanQuery) - memberSearchScore(a, cleanQuery))
+    .slice(0, 10);
   el.innerHTML = items.length ? items.map((m) => `
     <div class="member-suggestion">
       <div data-open-member-profile="${m.id}" style="cursor:pointer">${avatar(m, 36)}</div>
       <div class="member-copy"><div class="member-name">${Utils.escapeHtml(m.name)}</div><div class="member-role">@${Utils.escapeHtml(displayUsername(m))} · ${Utils.escapeHtml(m.role || 'Membro')}</div></div>
       <button class="follow-btn ${isFollowing(m.id) ? 'following' : ''}" data-follow="${m.id}">${isFollowing(m.id) ? 'Seguindo' : 'Seguir'}</button>
-    </div>`).join('') : '<div class="message-sub">Sugestoes aparecem depois da migration social.</div>';
+    </div>`).join('') : '<div class="side-member-empty"><i class="fa-regular fa-user"></i>Nenhum membro encontrado.</div>';
   el.querySelectorAll('[data-follow]').forEach((btn) => btn.addEventListener('click', () => toggleFollow(btn.dataset.follow)));
   el.querySelectorAll('[data-open-member-profile]').forEach((node) => node.addEventListener('click', () => openProfile(node.dataset.openMemberProfile)));
+  bindSideMemberSearch();
+}
+
+function bindSideMemberSearch() {
+  const input = document.getElementById('sideMemberSearchInput');
+  if (!input || input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const value = input.value;
+    timer = setTimeout(() => renderSuggestions(value), 90);
+  });
 }
 
 async function toggleFollow(memberId) {
@@ -2695,7 +2868,7 @@ async function toggleFollow(memberId) {
     const nowFollowing = await state.service.toggleFollow(memberId, wasFollowing);
     state.follows = await state.service.loadFollows();
     const syncedFollowing = isFollowing(memberId) || nowFollowing;
-    renderSuggestions();
+    renderSuggestions(document.getElementById('sideMemberSearchInput')?.value || '');
     renderMyProfileCard();
     const btn = document.querySelector(`[data-profile-follow="${memberId}"]`);
     if (btn) {
