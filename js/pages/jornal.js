@@ -1009,9 +1009,10 @@ function clampNumber(value, min, max) {
 
 function renderArticleEditorBlock(block = { type: 'paragraph', text: '' }) {
   const isHeading = block.type === 'heading';
+  const label = isHeading ? 'Subtítulo' : 'Texto do jornal';
   return `
     <div class="journal-article-editor-block" data-article-block="${isHeading ? 'heading' : 'paragraph'}">
-      <label>${isHeading ? 'Subtítulo' : 'Texto'}</label>
+      <label>${label}</label>
       <textarea data-article-block-text class="${isHeading ? 'is-heading' : ''}">${Utils.escapeHtml(block.text || '')}</textarea>
       <button type="button" class="social-icon-btn danger" data-remove-article-block title="Remover"><i class="fa-solid fa-trash"></i></button>
     </div>`;
