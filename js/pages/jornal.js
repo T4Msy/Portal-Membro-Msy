@@ -24,18 +24,15 @@ const SECTION_LABELS = {
   arquivo: 'Arquivo',
 };
 
-const EDITOR_SECTION_LABELS = {
-  principal: 'Destaques',
-  videos: 'Videos',
-  tirinha: 'Tirinhas',
-  especiais: 'Especiais',
-  arquivo: 'Arquivo',
-};
-
 const FORMAT_LABELS = {
   all: ['fa-layer-group', 'Tudo'],
   video: ['fa-circle-play', 'Vídeo'],
   written: ['fa-newspaper', 'Jornal escrito'],
+};
+const EDITOR_FORMATS = {
+  video: ['fa-circle-play', 'Vídeo'],
+  article: ['fa-newspaper', 'Jornal escrito'],
+  tirinha: ['fa-table-cells-large', 'Tirinha'],
 };
 
 const state = {
@@ -112,14 +109,14 @@ function renderPage() {
       <div class="journal-grid">
         <main class="journal-main">
           ${renderSection('principal', 'Destaques da edição', 'A linha editorial principal da Ordem.', getSectionPosts('principal'))}
-          ${renderSection('videos', 'Jornal em video', 'Edições semanais, mensais e registros audiovisuais.', getSectionPosts('videos'))}
+          ${renderSection('videos', 'Jornal em video', 'Edições semanais, mensais e registros audiovisuais.', getVideoPosts())}
           ${renderSection('escrito', 'Jornal escrito', 'Matérias editoriais, reportagens internas e textos longos da Masayoshi.', getWrittenPosts())}
           ${renderSection('tirinha', 'Tirinhas e quadros visuais', 'Publicações ilustradas, humor interno e pequenas narrativas.', getSectionPosts('tirinha'))}
           ${renderSection('especiais', 'Publicações especiais', 'Matérias marcantes, editoriais e conteúdos de maior peso.', getSectionPosts('especiais'))}
           ${renderSection('arquivo', 'Arquivo editorial', 'Histórico completo das publicações preservadas.', getArchivePosts())}
         </main>
         <aside class="journal-side">
-          ${renderSidePanel('Ultimos videos', getTypePosts('video').slice(0, 4))}
+          ${renderSidePanel('Ultimos videos', getVideoPosts().slice(0, 4))}
           ${renderSidePanel('Leituras recentes', state.posts.filter((p) => p.post_type === 'article' || p.post_type === 'special').slice(0, 4))}
         </aside>
       </div>
@@ -133,7 +130,7 @@ function renderPage() {
 function ensureModalRoots() {
   const root = document.body;
   if (!root) return;
-  ['journalPostModal', 'journalEditorModal', 'journalLightbox'].forEach((id) => {
+  ['journalPostModal', 'journalEditorModal', 'journalLightbox', 'journalCropModal'].forEach((id) => {
     let modal = document.getElementById(id);
     if (!modal) {
       modal = document.createElement('div');
@@ -147,9 +144,8 @@ function ensureModalRoots() {
 }
 
 function renderHero(post) {
-  const image = post?.cover_url ? `--hero-image:url('${Utils.escapeHtml(post.cover_url)}')` : '';
   return `
-    <section class="journal-hero" style="${image}">
+    <section class="journal-hero">
       <div class="journal-hero-content">
         <div class="journal-kicker">Edição especial</div>
         <h1 class="journal-title">Jornal da Masayoshi</h1>
@@ -196,6 +192,7 @@ function renderFormatFilters() {
 
 function renderSection(key, title, subtitle, posts) {
   const gridClass = key === 'videos' ? 'journal-video-grid'
+    : key === 'escrito' ? 'journal-newspaper-grid'
     : key === 'tirinha' ? 'journal-gallery-grid'
       : key === 'arquivo' ? 'journal-archive-grid'
         : 'journal-feature-grid';
@@ -208,7 +205,7 @@ function renderSection(key, title, subtitle, posts) {
         </div>
         <span class="journal-chip">${posts.length} item${posts.length === 1 ? '' : 's'}</span>
       </div>
-      ${posts.length ? `<div class="${gridClass}">${posts.map((post, index) => renderCard(post, index === 0 && key === 'principal')).join('')}</div>` : renderEmpty('Nenhuma publicação nesta seção ainda.')}
+      ${posts.length ? `<div class="${gridClass}">${posts.map((post, index) => key === 'escrito' ? renderNewspaperCard(post, index === 0) : renderCard(post, index === 0 && key === 'principal')).join('')}</div>` : renderEmpty('Nenhuma publicação nesta seção ainda.')}
     </section>`;
 }
 
@@ -224,13 +221,14 @@ function renderSidePanel(title, posts) {
 
 function renderCard(post, large = false) {
   const [icon, label] = TYPE_LABELS[post.post_type] || TYPE_LABELS.article;
-  const media = post.cover_url || post.media?.find((item) => item.media_type === 'image')?.url || '';
+  const media = getPostCoverImage(post);
+  const videoUrl = getPostVideoUrl(post);
   const status = state.canManage && post.status !== 'published' ? `<span class="journal-chip">${post.status === 'draft' ? 'Rascunho' : 'Arquivado'}</span>` : '';
   return `
     <button class="journal-card ${large ? 'large' : ''}" data-open-journal-post="${post.id}" id="post-${post.id}">
       <div class="journal-card-media">
-        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
-        ${post.post_type === 'video' ? '<span class="journal-play-badge"><i class="fa-solid fa-play"></i></span>' : ''}
+        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" muted playsinline preload="metadata"></video>` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
+        ${post.post_type === 'video' || videoUrl ? '<span class="journal-play-badge"><i class="fa-solid fa-play"></i></span>' : ''}
       </div>
       <div class="journal-card-body">
         <div class="journal-card-type"><i class="fa-solid ${icon}"></i>${label}${status}</div>
@@ -240,6 +238,29 @@ function renderCard(post, large = false) {
           <span>${Utils.escapeHtml(post.author?.name || 'Editorial MSY')}</span>
           <span>·</span>
           <span>${Utils.formatDate(post.published_at || post.created_at)}</span>
+        </div>
+      </div>
+    </button>`;
+}
+
+function renderNewspaperCard(post, lead = false) {
+  const status = state.canManage && post.status !== 'published' ? `<span>${post.status === 'draft' ? 'Rascunho' : 'Arquivado'}</span>` : '';
+  const cover = getPostCoverImage(post);
+  const summary = post.summary || post.subtitle || getPlainBlockExcerpt(post);
+  return `
+    <button class="journal-paper-card ${lead ? 'lead' : ''}" data-open-journal-post="${post.id}" id="post-${post.id}">
+      <div class="journal-paper-mast">
+        <span>Jornal escrito</span>
+        <span>${Utils.formatDate(post.published_at || post.created_at)}</span>
+        ${status}
+      </div>
+      <div class="journal-paper-layout">
+        ${cover ? `<div class="journal-paper-photo"><img src="${Utils.escapeHtml(cover)}" loading="lazy" decoding="async" alt=""></div>` : ''}
+        <div class="journal-paper-copy">
+          <div class="journal-paper-kicker">${post.post_type === 'special' ? 'Especial' : 'Matéria'}</div>
+          <h3>${Utils.escapeHtml(post.title)}</h3>
+          ${summary ? `<p>${Utils.escapeHtml(summary)}</p>` : ''}
+          <div class="journal-paper-byline">${Utils.escapeHtml(post.author?.name || 'Editorial MSY')}</div>
         </div>
       </div>
     </button>`;
@@ -299,7 +320,6 @@ function openPost(postId) {
         <div>
           <div class="journal-kicker" style="margin-bottom:6px"><i class="fa-solid ${icon}"></i>${label}</div>
           <div class="journal-modal-title">${Utils.escapeHtml(post.title)}</div>
-          ${post.subtitle ? `<div class="journal-section-sub">${Utils.escapeHtml(post.subtitle)}</div>` : ''}
         </div>
         <button class="social-icon-btn" data-close-journal-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -319,29 +339,70 @@ function openPost(postId) {
 }
 
 function renderPostBody(post) {
-  if (post.post_type === 'video') {
-    const videoUrl = post.video_url || post.media?.find((item) => item.media_type === 'video')?.url;
+  const videoUrl = getPostVideoUrl(post);
+  if (post.post_type === 'video' || videoUrl) {
+    const poster = getPostCoverImage(post);
     return `
       <div class="journal-player">
-        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls preload="metadata" poster="${Utils.escapeHtml(post.cover_url || '')}"></video>` : renderEmpty('Video indisponivel.')}
+        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
       </div>
       ${post.summary ? `<div class="journal-article"><p>${Utils.escapeHtml(post.summary)}</p></div>` : ''}`;
   }
+  if (post.post_type === 'tirinha') {
+    return renderComicPost(post);
+  }
   return `<article class="journal-article">${renderBlocks(post)}</article>`;
+}
+
+function renderComicPost(post) {
+  const images = post.media?.filter((item) => item.media_type === 'image') || [];
+  return `
+    <article class="journal-comic-page">
+      <div class="journal-comic-mast">
+        <span>Tirinha Masayoshi</span>
+        <span>${Utils.formatDate(post.published_at || post.created_at)}</span>
+      </div>
+      <h3>${Utils.escapeHtml(post.title)}</h3>
+      ${post.summary ? `<p class="journal-comic-caption">${Utils.escapeHtml(post.summary)}</p>` : ''}
+      <div class="journal-comic-grid">
+        ${images.length ? images.map((item, index) => `
+          <button class="journal-comic-panel" data-open-journal-image="${Utils.escapeHtml(item.url)}">
+            <img src="${Utils.escapeHtml(item.url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(item.caption || `Cena ${index + 1}`)}">
+            <span>${index + 1}</span>
+          </button>
+        `).join('') : renderEmpty('Nenhuma cena enviada para esta tirinha.')}
+      </div>
+    </article>`;
 }
 
 function renderBlocks(post) {
   const blocks = Array.isArray(post.content_blocks) ? post.content_blocks : [];
   const gallery = post.media?.filter((item) => item.media_type === 'image') || [];
-  const body = blocks.length ? blocks.map((block) => {
-    if (block.type === 'heading') return `<h3>${Utils.escapeHtml(block.text || '')}</h3>`;
-    if (block.type === 'quote') return `<blockquote>${Utils.escapeHtml(block.text || '')}</blockquote>`;
-    if (block.type === 'image') return renderFigure(block.url, block.caption);
-    return `<p>${Utils.escapeHtml(block.text || '')}</p>`;
-  }).join('') : (post.summary ? `<p>${Utils.escapeHtml(post.summary)}</p>` : '');
+  const leadImage = gallery[0];
+  const leadMeta = getArticleImageMeta(leadImage);
+  const body = blocks.length ? blocks.map(renderArticleBlock).join('') : (post.summary ? `<p>${Utils.escapeHtml(post.summary)}</p>` : '');
 
-  const images = gallery.length ? gallery.map((item) => renderFigure(item.url, item.caption, true)).join('') : '';
-  return `${post.cover_url ? renderFigure(post.cover_url, post.subtitle) : ''}${body}${images}`;
+  return `
+    ${leadImage ? renderArticlePhoto(leadImage.url, leadImage.caption || post.title, leadMeta) : ''}
+    <div class="journal-article-flow">${body}</div>
+    ${gallery.length > 1 ? gallery.slice(1).map((item) => renderFigure(item.url, item.caption, true)).join('') : ''}
+  `;
+}
+
+function renderArticleBlock(block) {
+  if (block.type === 'heading') return `<h3>${Utils.escapeHtml(block.text || '')}</h3>`;
+  if (block.type === 'quote') return `<blockquote>${Utils.escapeHtml(block.text || '')}</blockquote>`;
+  if (block.type === 'image') return renderFigure(block.url, block.caption);
+  return `<p>${Utils.escapeHtml(block.text || '')}</p>`;
+}
+
+function renderArticlePhoto(url, caption = '', meta = getArticleImageMeta()) {
+  const crop = meta.crop;
+  return `
+    <figure class="journal-article-photo photo-${Utils.escapeHtml(meta.position || 'right')}">
+      <img src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${meta.cropActive ? `transform:translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})` : 'transform:translate(-50%, -50%) scale(1)'}">
+      ${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}
+    </figure>`;
 }
 
 function renderFigure(url, caption = '', lightbox = false) {
@@ -424,7 +485,12 @@ function openEditor(post = null) {
   state.editingPostId = post?.id || null;
   const modal = document.getElementById('journalEditorModal');
   if (!modal) return;
-  const blocks = Array.isArray(post?.content_blocks) && post.content_blocks.length ? post.content_blocks : [{ type: 'paragraph', text: '' }];
+  const editorType = normalizeEditorPostType(post?.post_type);
+  const articleBlocks = normalizeArticleBlocks(post?.content_blocks);
+  const articlePhotoItem = post?.media?.find((item) => item.media_type === 'image') || null;
+  const articlePhoto = articlePhotoItem?.url || '';
+  const articlePhotoMeta = getArticleImageMeta(articlePhotoItem);
+  const hasArticlePhoto = Boolean(articlePhoto);
   modal.innerHTML = `
     <div class="journal-modal-panel">
       <div class="journal-modal-head">
@@ -433,35 +499,92 @@ function openEditor(post = null) {
       </div>
       <form class="journal-modal-body" id="journalEditorForm">
         <div class="journal-editor">
+          <input type="hidden" name="post_type" value="${editorType}">
+          <div class="journal-format-picker" role="radiogroup" aria-label="Formato da publicação">
+            ${Object.entries(EDITOR_FORMATS).map(([key, [icon, label]]) => `
+              <button type="button" class="journal-format-choice ${editorType === key ? 'active' : ''}" data-editor-type="${key}">
+                <i class="fa-solid ${icon}"></i>
+                <span>${label}</span>
+              </button>
+            `).join('')}
+          </div>
+
           <div class="journal-editor-grid">
             ${field('Título', 'title', post?.title || '', 'text', true)}
-            ${field('Subtítulo', 'subtitle', post?.subtitle || '')}
-            ${selectField('Tipo', 'post_type', post?.post_type || 'article', TYPE_LABELS)}
-            ${selectField('Seção', 'section', post?.section || 'principal', Object.fromEntries(Object.entries(EDITOR_SECTION_LABELS).map(([k, v]) => [k, ['', v]])))}
             ${selectStatus(post?.status || 'draft')}
-            ${field('Resumo', 'summary', post?.summary || '', 'textarea')}
-            <div class="journal-field full">
-              <label>Blocos da matéria</label>
-              <div class="journal-blocks" id="journalBlocks">${blocks.map(renderBlockEditor).join('')}</div>
-              <button type="button" class="btn btn-ghost btn-sm" id="journalAddBlock"><i class="fa-solid fa-plus"></i> Adicionar bloco</button>
+
+            <section class="journal-editor-panel" data-editor-panel="video">
+              <div class="journal-field full">
+                <label>Vídeo</label>
+                <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime">
+                <div class="journal-file-note">${getPostVideoUrl(post) ? 'Vídeo atual preservado. Envie outro apenas se quiser substituir.' : 'Envie o arquivo principal do vídeo.'}</div>
+              </div>
+              ${field('Resumo', 'summary', post?.summary || '', 'textarea')}
+            </section>
+
+            <section class="journal-editor-panel" data-editor-panel="article">
+              <div class="journal-photo-controls full">
+                <input type="hidden" name="article_photo_enabled" value="${hasArticlePhoto ? '1' : '0'}">
+                <input type="file" name="article_photo" accept="image/*" hidden>
+                <button type="button" class="btn btn-ghost" data-add-article-photo><i class="fa-solid fa-image"></i> ${hasArticlePhoto ? 'Trocar foto' : 'Adicionar foto'}</button>
+                <button type="button" class="btn btn-ghost" data-open-article-crop data-photo-option><i class="fa-solid fa-crop-simple"></i> Recortar</button>
+                <button type="button" class="btn btn-ghost" data-remove-article-photo data-photo-option><i class="fa-solid fa-xmark"></i> Remover foto</button>
+                <div class="journal-field" data-photo-option>
+                  <label>Posição</label>
+                  <select name="article_photo_position">
+                    <option value="right" ${articlePhotoMeta.position === 'right' ? 'selected' : ''}>Direita</option>
+                    <option value="left" ${articlePhotoMeta.position === 'left' ? 'selected' : ''}>Esquerda</option>
+                    <option value="top" ${articlePhotoMeta.position === 'top' ? 'selected' : ''}>Topo</option>
+                  </select>
+                </div>
+                <input type="hidden" name="article_photo_x" value="${articlePhotoMeta.crop.x}">
+                <input type="hidden" name="article_photo_y" value="${articlePhotoMeta.crop.y}">
+                <input type="hidden" name="article_photo_zoom" value="${articlePhotoMeta.crop.zoom}">
+                <input type="hidden" name="article_photo_crop_active" value="${articlePhotoMeta.cropActive ? '1' : '0'}">
+                <div class="journal-photo-pick full" data-photo-option>
+                  <figure class="journal-photo-pick-preview ${articlePhoto ? '' : 'is-empty'}" id="journalArticlePhotoPickPreview">
+                    ${articlePhoto ? `<img src="${Utils.escapeHtml(articlePhoto)}" alt="">` : '<span>Nenhuma foto escolhida</span>'}
+                  </figure>
+                  <div class="journal-photo-pick-actions">
+                    <span>Escolha a foto e o recorte abre automaticamente, igual fluxo de postagem.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="journal-article-builder full" id="journalArticleBuilder">
+                ${articleBlocks.map(renderArticleEditorBlock).join('')}
+              </div>
+              <div class="journal-builder-actions full">
+                <button type="button" class="btn btn-ghost btn-sm" data-add-article-block="heading"><i class="fa-solid fa-plus"></i> Subtítulo</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-add-article-block="paragraph"><i class="fa-solid fa-plus"></i> Texto</button>
+              </div>
+              <div class="journal-editor-paper" id="journalArticlePreview">
+                <div class="journal-paper-mast"><span>Jornal escrito</span><span>Prévia</span></div>
+                <h3>${Utils.escapeHtml(post?.title || 'Manchete da edição')}</h3>
+                <div class="journal-editor-paper-layout" id="journalArticlePaperLayout">
+                  <figure class="journal-editor-paper-photo ${articlePhoto ? '' : 'is-empty'}" id="journalArticlePhotoPreview">
+                    ${articlePhoto ? `<img src="${Utils.escapeHtml(articlePhoto)}" alt="">` : '<span>Foto</span>'}
+                  </figure>
+                  <div class="journal-editor-paper-flow" id="journalArticleTextPreview"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="journal-editor-panel" data-editor-panel="tirinha">
+              ${field('Legenda', 'comic_caption', post?.summary || '', 'textarea')}
+              <div class="journal-field full">
+                <label>Cenas da tirinha</label>
+                <input type="file" name="gallery" accept="image/*" multiple>
+                <div class="journal-file-note">${post?.media?.some((item) => item.media_type === 'image') ? 'Cenas atuais preservadas. Envie novas imagens para adicionar quadros.' : 'Envie as imagens dos quadros na ordem da história.'}</div>
+              </div>
+              <div class="journal-comic-editor-preview" id="journalComicPreview" data-existing-count="${post?.media?.filter((item) => item.media_type === 'image').length || 0}">
+                ${renderComicEditorPreview(post)}
+              </div>
+            </section>
+
+            <div class="journal-editor-options full">
+              <label class="journal-chip"><input type="checkbox" name="comments_enabled" ${post?.comments_enabled !== false ? 'checked' : ''}> Comentários</label>
+              <label class="journal-chip"><input type="checkbox" name="is_featured" ${post?.is_featured ? 'checked' : ''}> Destaque</label>
             </div>
-            <div class="journal-field">
-              <label>Capa/thumbnail</label>
-              <input type="file" name="cover" accept="image/*">
-              <div class="journal-file-note">${post?.cover_url ? 'Uma capa já existe. Envie outra apenas se quiser substituir.' : 'Imagem principal para cards, hero e poster de vídeo.'}</div>
-            </div>
-            <div class="journal-field">
-              <label>Vídeo principal</label>
-              <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime">
-              <div class="journal-file-note">${post?.video_url ? 'Um vídeo já existe. Envie outro apenas se quiser substituir.' : 'Obrigatório para publicações do tipo vídeo.'}</div>
-            </div>
-            <div class="journal-field full">
-              <label>Galeria/imagens internas</label>
-              <input type="file" name="gallery" accept="image/*" multiple>
-              <div class="journal-file-note">Use para tirinhas, galerias e imagens complementares de matérias.</div>
-            </div>
-            <label class="journal-chip"><input type="checkbox" name="comments_enabled" ${post?.comments_enabled !== false ? 'checked' : ''}> Comentários</label>
-            <label class="journal-chip"><input type="checkbox" name="is_featured" ${post?.is_featured ? 'checked' : ''}> Destaque</label>
           </div>
         </div>
       </form>
@@ -472,12 +595,25 @@ function openEditor(post = null) {
     </div>`;
   openModal(modal);
   modal.querySelectorAll('[data-close-journal-modal]').forEach((btn) => btn.addEventListener('click', () => closeModal(modal)));
-  modal.querySelector('#journalAddBlock')?.addEventListener('click', addBlockEditor);
-  modal.querySelector('#journalBlocks')?.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-remove-block]');
-    if (btn) btn.closest('.journal-block-row')?.remove();
+  modal.querySelectorAll('[data-editor-type]').forEach((btn) => btn.addEventListener('click', () => setEditorType(btn.dataset.editorType)));
+  modal.querySelector('[name="title"]')?.addEventListener('input', updateEditorPreview);
+  modal.querySelector('#journalArticleBuilder')?.addEventListener('input', updateEditorPreview);
+  modal.querySelector('#journalArticleBuilder')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-remove-article-block]');
+    if (btn) {
+      btn.closest('.journal-article-editor-block')?.remove();
+      updateEditorPreview();
+    }
   });
+  modal.querySelectorAll('[data-add-article-block]').forEach((btn) => btn.addEventListener('click', () => addArticleEditorBlock(btn.dataset.addArticleBlock)));
+  modal.querySelector('[data-add-article-photo]')?.addEventListener('click', chooseArticlePhoto);
+  modal.querySelector('[data-remove-article-photo]')?.addEventListener('click', removeArticlePhoto);
+  modal.querySelector('[name="article_photo"]')?.addEventListener('change', handleArticlePhotoSelected);
+  modal.querySelector('[name="article_photo_position"]')?.addEventListener('change', updateEditorPreview);
+  modal.querySelector('[data-open-article-crop]')?.addEventListener('click', openArticleCropModal);
+  modal.querySelector('[name="gallery"]')?.addEventListener('change', updateEditorPreview);
   modal.querySelector('#journalEditorForm')?.addEventListener('submit', savePost);
+  updateEditorMode();
 }
 
 function field(label, name, value = '', type = 'text', required = false) {
@@ -487,33 +623,12 @@ function field(label, name, value = '', type = 'text', required = false) {
   return `<div class="journal-field ${type === 'textarea' ? 'full' : ''}"><label>${label}</label>${input}</div>`;
 }
 
-function selectField(label, name, value, options) {
-  return `<div class="journal-field"><label>${label}</label><select name="${name}">${Object.entries(options).map(([key, data]) => `<option value="${key}" ${key === value ? 'selected' : ''}>${data[1]}</option>`).join('')}</select></div>`;
-}
-
 function selectStatus(value) {
-  return `<div class="journal-field"><label>Status</label><select name="status">
+  return `<div class="journal-field"><label>Publicação</label><select name="status">
     <option value="draft" ${value === 'draft' ? 'selected' : ''}>Rascunho</option>
     <option value="published" ${value === 'published' ? 'selected' : ''}>Publicado</option>
     <option value="archived" ${value === 'archived' ? 'selected' : ''}>Arquivado</option>
   </select></div>`;
-}
-
-function renderBlockEditor(block = { type: 'paragraph', text: '' }) {
-  return `
-    <div class="journal-block-row">
-      <select data-block-type>
-        <option value="paragraph" ${block.type === 'paragraph' ? 'selected' : ''}>Parágrafo</option>
-        <option value="heading" ${block.type === 'heading' ? 'selected' : ''}>Subtítulo</option>
-        <option value="quote" ${block.type === 'quote' ? 'selected' : ''}>Citação</option>
-      </select>
-      <textarea data-block-text>${Utils.escapeHtml(block.text || '')}</textarea>
-      <button type="button" class="social-icon-btn danger" data-remove-block title="Remover"><i class="fa-solid fa-trash"></i></button>
-    </div>`;
-}
-
-function addBlockEditor() {
-  document.getElementById('journalBlocks')?.insertAdjacentHTML('beforeend', renderBlockEditor());
 }
 
 async function savePost(event) {
@@ -524,29 +639,40 @@ async function savePost(event) {
     Utils.setButtonLoading?.(submit, true);
     const existing = state.posts.find((post) => post.id === state.editingPostId);
     const status = form.elements.status.value;
-    const coverFile = form.elements.cover.files?.[0] || null;
+    const postType = form.elements.post_type.value;
     const videoFile = form.elements.video.files?.[0] || null;
     const galleryFiles = [...(form.elements.gallery.files || [])];
+    const articlePhotoEnabled = form.elements.article_photo_enabled?.value === '1';
+    const articlePhotoFile = articlePhotoEnabled ? (form.elements.article_photo.files?.[0] || null) : null;
+    const summary = postType === 'tirinha'
+      ? form.elements.comic_caption.value.trim()
+      : form.elements.summary?.value.trim() || null;
 
-    if (form.elements.post_type.value === 'video' && !videoFile && !existing?.video_url) {
+    if (postType === 'video' && !videoFile && !getPostVideoUrl(existing)) {
       throw new Error('Envie um vídeo principal para publicações de vídeo.');
     }
+    if (postType === 'article' && !getArticleEditorBlocks().some((block) => block.text)) {
+      throw new Error('Escreva o texto do jornal antes de salvar.');
+    }
+    if (postType === 'tirinha' && !galleryFiles.length && !existing?.media?.some((item) => item.media_type === 'image')) {
+      throw new Error('Envie ao menos uma cena para a tirinha.');
+    }
 
-    const cover = coverFile ? await uploadJornalFile(coverFile, 'covers', { imageOnly: true }) : null;
     const video = videoFile ? await uploadJornalFile(videoFile, 'videos', { videoOnly: true }) : null;
+    const articlePhoto = articlePhotoFile ? await uploadJornalFile(articlePhotoFile, 'article', { imageOnly: true }) : null;
     const payload = {
       title: form.elements.title.value.trim(),
-      subtitle: form.elements.subtitle.value.trim() || null,
-      summary: form.elements.summary.value.trim() || null,
-      post_type: form.elements.post_type.value,
-      section: form.elements.section.value,
+      subtitle: null,
+      summary,
+      post_type: postType,
+      section: getEditorSection(postType),
       status,
       content_blocks: getEditorBlocks(),
       comments_enabled: form.elements.comments_enabled.checked,
       is_featured: form.elements.is_featured.checked,
       author_id: existing?.author_id || state.profile.id,
-      cover_url: cover?.url || existing?.cover_url || null,
-      cover_storage_path: cover?.storage_path || existing?.cover_storage_path || null,
+      cover_url: existing?.cover_url || null,
+      cover_storage_path: existing?.cover_storage_path || null,
       video_url: video?.url || existing?.video_url || null,
       video_storage_path: video?.storage_path || existing?.video_storage_path || null,
       published_at: status === 'published' ? (existing?.published_at || new Date().toISOString()) : existing?.published_at || null,
@@ -563,8 +689,36 @@ async function savePost(event) {
       postId = data.id;
     }
 
+    if (postType === 'article' && existing && (articlePhoto || !articlePhotoEnabled)) {
+      const oldImages = (existing.media || []).filter((item) => item.media_type === 'image');
+      const oldPaths = oldImages.map((item) => item.storage_path).filter(Boolean);
+      if (oldImages.length) {
+        const { error } = await db.from('jornal_media').delete().eq('post_id', postId).eq('media_type', 'image');
+        if (error) throw error;
+      }
+      if (oldPaths.length) {
+        await db.storage.from(BUCKET).remove([...new Set(oldPaths)]).catch((err) => console.warn('[MSY][jornal] Fotos antigas não removidas:', err));
+      }
+    }
+
     const mediaRows = [];
     if (video) mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'video', url: video.url, storage_path: video.storage_path, position: 0 });
+    if (articlePhoto) {
+      mediaRows.push({
+        post_id: postId,
+        author_id: state.profile.id,
+        media_type: 'image',
+        url: articlePhoto.url,
+        storage_path: articlePhoto.storage_path,
+        position: -Date.now(),
+        alt_text: JSON.stringify({
+          kind: 'article_photo',
+          position: form.elements.article_photo_position?.value || 'right',
+          crop: getArticleCropState(form),
+          cropActive: form.elements.article_photo_crop_active?.value === '1',
+        }),
+      });
+    }
     for (let index = 0; index < galleryFiles.length; index += 1) {
       const uploaded = await uploadJornalFile(galleryFiles[index], 'gallery', { imageOnly: true });
       mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'image', url: uploaded.url, storage_path: uploaded.storage_path, position: index + 1 });
@@ -586,13 +740,344 @@ async function savePost(event) {
   }
 }
 
-function getEditorBlocks() {
-  return [...document.querySelectorAll('.journal-block-row')]
+function updateEditorMode() {
+  const form = document.getElementById('journalEditorForm');
+  if (!form) return;
+  const type = form.elements.post_type?.value || 'article';
+  document.querySelectorAll('[data-editor-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.editorPanel !== type;
+  });
+  document.querySelectorAll('[data-editor-type]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.editorType === type);
+  });
+  updateEditorPreview();
+}
+
+function setEditorType(type) {
+  const form = document.getElementById('journalEditorForm');
+  if (!form || !EDITOR_FORMATS[type]) return;
+  form.elements.post_type.value = type;
+  updateEditorMode();
+}
+
+function updateEditorPreview() {
+  const form = document.getElementById('journalEditorForm');
+  if (!form) return;
+  const title = form.elements.title?.value.trim() || 'Manchete da edição';
+  const articlePreview = document.getElementById('journalArticlePreview');
+  if (articlePreview) {
+    articlePreview.querySelector('h3').textContent = title;
+    const flow = document.getElementById('journalArticleTextPreview');
+    if (flow) flow.innerHTML = renderArticlePreviewBlocks(getArticleEditorBlocks());
+    updateArticlePhotoPreview(form);
+    updatePhotoControls(form);
+  }
+
+  const comicPreview = document.getElementById('journalComicPreview');
+  if (comicPreview) {
+    const count = Math.max(1, form.elements.gallery?.files?.length || comicPreview.dataset.existingCount || 4);
+    comicPreview.innerHTML = renderComicEditorPreview(null, Number(count));
+  }
+}
+
+function updateArticlePhotoPreview(form) {
+  const photo = document.getElementById('journalArticlePhotoPreview');
+  const pickPreview = document.getElementById('journalArticlePhotoPickPreview');
+  const layout = document.getElementById('journalArticlePaperLayout');
+  if (!photo) return;
+  const enabled = form.elements.article_photo_enabled?.value === '1';
+  const position = form.elements.article_photo_position?.value || 'right';
+  layout?.classList.toggle('no-photo', !enabled);
+  layout?.classList.remove('photo-left', 'photo-right', 'photo-top');
+  layout?.classList.add(`photo-${position}`);
+  document.querySelectorAll('[data-photo-option]').forEach((option) => {
+    option.hidden = !enabled;
+  });
+  if (!enabled) return;
+
+  const file = form.elements.article_photo?.files?.[0];
+  if (file) {
+    const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+    if (photo.dataset.previewFileKey !== fileKey) {
+      const previous = photo.dataset.previewUrl;
+      if (previous) URL.revokeObjectURL(previous);
+      const url = URL.createObjectURL(file);
+      photo.dataset.previewUrl = url;
+      photo.dataset.previewFileKey = fileKey;
+      photo.innerHTML = `<img src="${url}" alt="">`;
+      if (pickPreview) {
+        pickPreview.classList.remove('is-empty');
+        pickPreview.innerHTML = `<img src="${url}" alt="">`;
+      }
+    }
+  }
+  photo.classList.remove('is-empty');
+  const img = photo.querySelector('img');
+  const pickImg = pickPreview?.querySelector('img');
+  const crop = getArticleCropState(form);
+  if (img) {
+    applyArticleCropStyle(img, crop);
+  }
+  if (pickImg) applyArticleCropStyle(pickImg, crop);
+}
+
+function updatePhotoControls(form) {
+  const enabled = form.elements.article_photo_enabled?.value === '1';
+  document.querySelectorAll('[data-photo-option]').forEach((option) => {
+    option.hidden = !enabled;
+  });
+  const addBtn = document.querySelector('[data-add-article-photo]');
+  if (addBtn) addBtn.innerHTML = `<i class="fa-solid fa-image"></i> ${enabled ? 'Trocar foto' : 'Adicionar foto'}`;
+}
+
+function chooseArticlePhoto() {
+  document.querySelector('#journalEditorForm [name="article_photo"]')?.click();
+}
+
+function handleArticlePhotoSelected() {
+  const form = document.getElementById('journalEditorForm');
+  if (!form?.elements.article_photo?.files?.[0]) return;
+  form.elements.article_photo_enabled.value = '1';
+  form.elements.article_photo_crop_active.value = '0';
+  resetArticleCrop(false);
+  updateEditorPreview();
+  setTimeout(openArticleCropModal, 0);
+}
+
+function removeArticlePhoto() {
+  const form = document.getElementById('journalEditorForm');
+  if (!form) return;
+  form.elements.article_photo_enabled.value = '0';
+  form.elements.article_photo_crop_active.value = '0';
+  form.elements.article_photo.value = '';
+  const photo = document.getElementById('journalArticlePhotoPreview');
+  const pickPreview = document.getElementById('journalArticlePhotoPickPreview');
+  if (photo) {
+    photo.classList.add('is-empty');
+    photo.innerHTML = '<span>Foto</span>';
+  }
+  if (pickPreview) {
+    pickPreview.classList.add('is-empty');
+    pickPreview.innerHTML = '<span>Nenhuma foto escolhida</span>';
+  }
+  updateEditorPreview();
+}
+
+function getArticlePhotoSrc() {
+  const photo = document.getElementById('journalArticlePhotoPreview')?.querySelector('img');
+  return photo?.src || '';
+}
+
+function openArticleCropModal() {
+  const form = document.getElementById('journalEditorForm');
+  const src = getArticlePhotoSrc();
+  if (form?.elements.article_photo_enabled?.value !== '1') {
+    Utils.showToast('Adicione uma foto antes de recortar.', 'error');
+    return;
+  }
+  if (!src) {
+    Utils.showToast('Escolha uma foto antes de recortar.', 'error');
+    return;
+  }
+  const modal = document.getElementById('journalCropModal');
+  if (!modal) return;
+  modal.innerHTML = `
+    <div class="journal-crop-modal-panel">
+      <div class="journal-crop-modal-head">
+        <strong>Recortar foto</strong>
+        <button type="button" class="social-icon-btn" data-close-journal-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="journal-crop-modal-body">
+        <div class="journal-crop-frame journal-crop-frame-large" id="journalArticleCropFrame">
+          <img src="${Utils.escapeHtml(src)}" alt="">
+          <div class="journal-crop-grid" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="journal-crop-modal-foot">
+        <div class="journal-crop-tools">
+          <button type="button" class="social-icon-btn" data-photo-zoom="-"><i class="fa-solid fa-minus"></i></button>
+          <button type="button" class="social-icon-btn" data-photo-reset><i class="fa-solid fa-rotate-left"></i></button>
+          <button type="button" class="social-icon-btn" data-photo-zoom="+"><i class="fa-solid fa-plus"></i></button>
+          <span>Arraste a imagem dentro da moldura para enquadrar.</span>
+        </div>
+        <button type="button" class="btn btn-primary" data-apply-article-crop><i class="fa-solid fa-check"></i> Aplicar recorte</button>
+      </div>
+    </div>`;
+  openModal(modal);
+  const crop = getArticleCropState(form);
+  const img = modal.querySelector('#journalArticleCropFrame img');
+  if (img) applyArticleCropStyle(img, crop);
+  bindArticleCropEditor(modal);
+  modal.querySelectorAll('[data-photo-zoom]').forEach((btn) => btn.addEventListener('click', () => adjustArticleCropZoom(btn.dataset.photoZoom)));
+  modal.querySelector('[data-photo-reset]')?.addEventListener('click', resetArticleCrop);
+  modal.querySelector('[data-apply-article-crop]')?.addEventListener('click', () => {
+    form.elements.article_photo_crop_active.value = '1';
+    updateEditorPreview();
+    closeModal(modal);
+  });
+  modal.querySelector('[data-close-journal-modal]')?.addEventListener('click', () => closeModal(modal));
+  modal.onclick = (event) => { if (event.target === modal) closeModal(modal); };
+}
+
+function getArticleCropState(form = document.getElementById('journalEditorForm')) {
+  return {
+    x: clampNumber(Number(form?.elements.article_photo_x?.value || 0), -28, 28),
+    y: clampNumber(Number(form?.elements.article_photo_y?.value || 0), -28, 28),
+    zoom: clampNumber(Number(form?.elements.article_photo_zoom?.value || 1), 1, 2.4),
+  };
+}
+
+function setArticleCropState(crop) {
+  const form = document.getElementById('journalEditorForm');
+  if (!form) return;
+  const nextCrop = {
+    x: clampNumber(crop.x, -28, 28),
+    y: clampNumber(crop.y, -28, 28),
+    zoom: clampNumber(crop.zoom, 1, 2.4),
+  };
+  form.elements.article_photo_x.value = String(nextCrop.x);
+  form.elements.article_photo_y.value = String(nextCrop.y);
+  form.elements.article_photo_zoom.value = String(nextCrop.zoom);
+  form.elements.article_photo_crop_active.value = '1';
+  const modalImg = document.querySelector('#journalCropModal #journalArticleCropFrame img');
+  if (modalImg) applyArticleCropStyle(modalImg, nextCrop);
+  updateEditorPreview();
+}
+
+function applyArticleCropStyle(img, crop) {
+  const form = document.getElementById('journalEditorForm');
+  const active = form?.elements.article_photo_crop_active?.value === '1';
+  img.classList.remove('crop-active');
+  img.style.objectPosition = 'center';
+  img.style.transform = active
+    ? `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})`
+    : 'translate(-50%, -50%) scale(1)';
+}
+
+function adjustArticleCropZoom(direction) {
+  const crop = getArticleCropState();
+  const delta = direction === '+' ? 0.12 : -0.12;
+  setArticleCropState({ ...crop, zoom: crop.zoom + delta });
+}
+
+function resetArticleCrop(refresh = true) {
+  const form = document.getElementById('journalEditorForm');
+  if (!form) return;
+  form.elements.article_photo_x.value = '0';
+  form.elements.article_photo_y.value = '0';
+  form.elements.article_photo_zoom.value = '1';
+  form.elements.article_photo_crop_active.value = '0';
+  if (refresh) updateEditorPreview();
+}
+
+function bindArticleCropEditor(root) {
+  const frame = root.querySelector('#journalArticleCropFrame');
+  if (!frame) return;
+  let start = null;
+  frame.addEventListener('pointerdown', (event) => {
+    if (!frame.querySelector('img')) return;
+    event.preventDefault();
+    frame.setPointerCapture?.(event.pointerId);
+    const crop = getArticleCropState();
+    start = { clientX: event.clientX, clientY: event.clientY, crop };
+  });
+  frame.addEventListener('pointermove', (event) => {
+    if (!start) return;
+    const rect = frame.getBoundingClientRect();
+    const next = {
+      ...start.crop,
+      x: start.crop.x + ((event.clientX - start.clientX) / Math.max(rect.width, 1)) * 84,
+      y: start.crop.y + ((event.clientY - start.clientY) / Math.max(rect.height, 1)) * 84,
+    };
+    setArticleCropState(next);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((name) => frame.addEventListener(name, () => {
+    start = null;
+  }));
+  frame.addEventListener('wheel', (event) => {
+    if (!frame.querySelector('img')) return;
+    event.preventDefault();
+    const crop = getArticleCropState();
+    setArticleCropState({ ...crop, zoom: crop.zoom + (event.deltaY > 0 ? -0.08 : 0.08) });
+  }, { passive: false });
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function renderArticleEditorBlock(block = { type: 'paragraph', text: '' }) {
+  const isHeading = block.type === 'heading';
+  return `
+    <div class="journal-article-editor-block" data-article-block="${isHeading ? 'heading' : 'paragraph'}">
+      <label>${isHeading ? 'Subtítulo' : 'Texto'}</label>
+      <textarea data-article-block-text class="${isHeading ? 'is-heading' : ''}">${Utils.escapeHtml(block.text || '')}</textarea>
+      <button type="button" class="social-icon-btn danger" data-remove-article-block title="Remover"><i class="fa-solid fa-trash"></i></button>
+    </div>`;
+}
+
+function addArticleEditorBlock(type = 'paragraph') {
+  const builder = document.getElementById('journalArticleBuilder');
+  if (!builder) return;
+  builder.insertAdjacentHTML('beforeend', renderArticleEditorBlock({ type, text: '' }));
+  builder.querySelector('.journal-article-editor-block:last-child textarea')?.focus();
+  updateEditorPreview();
+}
+
+function getArticleEditorBlocks() {
+  return [...document.querySelectorAll('.journal-article-editor-block')]
     .map((row) => ({
-      type: row.querySelector('[data-block-type]')?.value || 'paragraph',
-      text: row.querySelector('[data-block-text]')?.value.trim() || '',
+      type: row.dataset.articleBlock === 'heading' ? 'heading' : 'paragraph',
+      text: row.querySelector('[data-article-block-text]')?.value.trim() || '',
     }))
     .filter((block) => block.text);
+}
+
+function renderArticlePreviewBlocks(blocks = []) {
+  if (!blocks.length) return '<p>Escreva a matéria para ver o texto diagramado como jornal.</p>';
+  return blocks.map((block) => block.type === 'heading'
+    ? `<h4>${Utils.escapeHtml(block.text)}</h4>`
+    : `<p>${Utils.escapeHtml(block.text)}</p>`).join('');
+}
+
+function renderComicEditorPreview(post = null, count = null) {
+  const existingImages = post?.media?.filter((item) => item.media_type === 'image') || [];
+  const panelCount = count || existingImages.length || 4;
+  return Array.from({ length: Math.min(Math.max(panelCount, 1), 8) }, (_, index) => {
+    const image = existingImages[index]?.url;
+    return `
+      <div class="journal-comic-preview-panel">
+        ${image ? `<img src="${Utils.escapeHtml(image)}" alt="">` : `<span>Cena ${index + 1}</span>`}
+      </div>`;
+  }).join('');
+}
+
+function getEditorBlocks() {
+  const form = document.getElementById('journalEditorForm');
+  if (!form || form.elements.post_type.value !== 'article') return [];
+  return getArticleEditorBlocks();
+}
+
+function normalizeEditorPostType(type = 'article') {
+  if (type === 'video' || type === 'tirinha') return type;
+  return 'article';
+}
+
+function getEditorSection(type) {
+  if (type === 'video') return 'videos';
+  if (type === 'tirinha') return 'tirinha';
+  return 'principal';
+}
+
+function normalizeArticleBlocks(blocks = []) {
+  const valid = Array.isArray(blocks)
+    ? blocks.filter((block) => block?.text).map((block) => ({
+      type: block.type === 'heading' ? 'heading' : 'paragraph',
+      text: block.text,
+    }))
+    : [];
+  return valid.length ? valid : [{ type: 'paragraph', text: '' }];
 }
 
 async function uploadJornalFile(file, folder, options = {}) {
@@ -664,8 +1149,59 @@ function getTypePosts(type) {
   return state.posts.filter((post) => post.status !== 'archived' && post.post_type === type);
 }
 
+function getVideoPosts() {
+  return state.posts.filter((post) => post.status !== 'archived' && (post.post_type === 'video' || Boolean(getPostVideoUrl(post))));
+}
+
 function getWrittenPosts() {
   return state.posts.filter((post) => post.status !== 'archived' && ['article', 'special'].includes(post.post_type));
+}
+
+function getPostCoverImage(post) {
+  const cover = post?.cover_url || '';
+  if (cover && !isLikelyVideoUrl(cover)) return cover;
+  const image = post?.media?.find((item) => item.media_type === 'image' && item.url && !isLikelyVideoUrl(item.url));
+  return image?.url || '';
+}
+
+function getPostVideoUrl(post) {
+  if (post?.video_url) return post.video_url;
+  const mediaVideo = post?.media?.find((item) => item.media_type === 'video' && item.url);
+  if (mediaVideo?.url) return mediaVideo.url;
+  if (post?.cover_url && isLikelyVideoUrl(post.cover_url)) return post.cover_url;
+  const videoLikeMedia = post?.media?.find((item) => item.url && isLikelyVideoUrl(item.url));
+  return videoLikeMedia?.url || '';
+}
+
+function getArticleImageMeta(media = null) {
+  const fallback = { position: 'right', cropActive: false, crop: { x: 0, y: 0, zoom: 1 } };
+  if (!media?.alt_text) return fallback;
+  try {
+    const meta = JSON.parse(media.alt_text);
+    const crop = meta?.crop || {};
+    return {
+      position: ['left', 'right', 'top'].includes(meta?.position) ? meta.position : 'right',
+      cropActive: Boolean(meta?.cropActive),
+      crop: {
+        x: clampNumber(Number(crop.x ?? 0), -42, 42),
+        y: clampNumber(Number(crop.y ?? 0), -42, 42),
+        zoom: clampNumber(Number(crop.zoom ?? 1), 1, 2.4),
+      },
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function isLikelyVideoUrl(url = '') {
+  const clean = String(url).split('?')[0].toLowerCase();
+  return /\.(mp4|webm|mov|m4v|quicktime)$/.test(clean) || clean.includes('/videos/');
+}
+
+function getPlainBlockExcerpt(post) {
+  const blocks = Array.isArray(post?.content_blocks) ? post.content_blocks : [];
+  const text = blocks.map((block) => block?.text || '').join(' ').replace(/\s+/g, ' ').trim();
+  return text.length > 170 ? `${text.slice(0, 167)}...` : text;
 }
 
 function groupBy(items, key) {
@@ -699,7 +1235,9 @@ function openModal(modal) {
 function closeModal(modal) {
   modal?.classList.remove('open');
   modal?.querySelectorAll('video').forEach((video) => video.pause());
-  document.body.classList.remove('social-modal-locked');
+  if (!document.querySelector('.journal-modal.open')) {
+    document.body.classList.remove('social-modal-locked');
+  }
 }
 
 async function confirmAction(message) {
