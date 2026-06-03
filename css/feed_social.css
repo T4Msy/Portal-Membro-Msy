@@ -2608,3 +2608,216 @@ body[data-page="feed"] #storyViewer .story-top-instagram{
 body[data-page="feed"] #storyViewer .story-tap-zone{
   z-index:5!important;
 }
+
+/* Story activity and share-sheet responsive polish. */
+body[data-page="feed"] #storyViewer .story-activity-icon{
+  min-width:44px!important;
+  width:auto!important;
+  padding:0 8px!important;
+  border-radius:999px!important;
+  background:rgba(0,0,0,.30)!important;
+}
+body[data-page="feed"] #storyViewer .story-activity-icon span{
+  max-width:128px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:.62rem!important;
+  line-height:1.1;
+}
+body[data-page="feed"] #storyViewer .story-reactions-panel{
+  display:none;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden!important;
+}
+body[data-page="feed"] #storyViewer .story-reactions-panel.open{
+  display:flex!important;
+}
+body[data-page="feed"] #storyViewer #storyReactionsContent{
+  min-height:0;
+  overflow:auto!important;
+  white-space:normal!important;
+  text-overflow:clip!important;
+  -webkit-overflow-scrolling:touch;
+}
+body[data-page="feed"] #storyViewer .story-activity-tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:10px;
+}
+body[data-page="feed"] #storyViewer .story-activity-tabs button{
+  min-width:0;
+  min-height:38px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:999px;
+  background:rgba(255,255,255,.055);
+  color:rgba(255,255,255,.72);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  font-size:.72rem;
+  font-weight:900;
+  cursor:pointer;
+}
+body[data-page="feed"] #storyViewer .story-activity-tabs button.active{
+  border-color:rgba(255,255,255,.28);
+  background:rgba(255,255,255,.16);
+  color:#fff;
+}
+body[data-page="feed"] #storyViewer .story-activity-tabs button span{
+  min-width:20px;
+  height:20px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 6px;
+  background:#ff3040;
+  color:#fff;
+  font-size:.64rem;
+}
+body[data-page="feed"] #storyViewer .story-activity-pane{
+  display:none;
+}
+body[data-page="feed"] #storyViewer .story-activity-pane.active{
+  display:block;
+}
+body[data-page="feed"] #storyViewer .story-reaction-row{
+  grid-template-columns:auto minmax(0,1fr) auto;
+  min-width:0;
+}
+body[data-page="feed"] #storyViewer .story-reaction-row strong,
+body[data-page="feed"] #storyViewer .story-reaction-row span{
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+body[data-page="feed"] #postShareModal.post-share-modal{
+  z-index:2147483001;
+}
+body[data-page="feed"] #postShareModal.post-share-modal .post-comments-head{
+  min-width:0;
+}
+body[data-page="feed"] #postShareModal.post-share-modal .post-comments-head strong,
+body[data-page="feed"] #postShareModal.post-share-modal .post-comments-head span,
+body[data-page="feed"] #postShareModal.post-share-modal .post-share-context strong,
+body[data-page="feed"] #postShareModal.post-share-modal .post-share-member-copy strong,
+body[data-page="feed"] #postShareModal.post-share-modal .post-share-member-copy span{
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+body[data-page="feed"] #postShareModal.post-share-modal .post-share-context > div{
+  min-width:0;
+}
+@media(max-width:640px){
+  body[data-page="feed"] #storyViewer .story-panel-instagram .story-reactions-panel{
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    max-height:min(58dvh,440px)!important;
+    border-radius:24px 24px 0 0!important;
+    border-left:0!important;
+    border-right:0!important;
+    border-bottom:0!important;
+    padding:12px 12px calc(14px + env(safe-area-inset-bottom))!important;
+    background:rgba(8,8,12,.98)!important;
+    box-shadow:0 -24px 70px rgba(0,0,0,.62)!important;
+  }
+  body[data-page="feed"] #storyViewer .story-activity-icon span{
+    display:none;
+  }
+  body[data-page="feed"] #storyViewer .story-activity-tabs{
+    position:sticky;
+    top:0;
+    z-index:2;
+    padding-bottom:8px;
+    background:rgba(8,8,12,.98);
+  }
+  body[data-page="feed"] #storyViewer .story-reaction-row{
+    gap:10px;
+    padding:10px 0;
+  }
+  body[data-page="feed"] #storyViewer .story-reaction-row .social-avatar{
+    width:38px!important;
+    height:38px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal{
+    align-items:flex-end!important;
+    justify-content:center!important;
+    padding:0!important;
+    background:rgba(0,0,0,.72)!important;
+    backdrop-filter:none!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-panel{
+    width:100%!important;
+    height:min(88dvh,var(--direct-vh,88dvh))!important;
+    max-height:min(88dvh,var(--direct-vh,88dvh))!important;
+    grid-template-rows:auto minmax(0,64px) 66px minmax(0,1fr) auto!important;
+    border-radius:24px 24px 0 0!important;
+    border-left:0!important;
+    border-right:0!important;
+    border-bottom:0!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-comments-head{
+    padding:8px 12px 10px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-comments-head .social-icon-btn{
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    flex:0 0 auto;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-context{
+    grid-template-columns:44px minmax(0,1fr)!important;
+    gap:9px!important;
+    padding:8px 12px!important;
+    min-height:0;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-context-thumb{
+    width:44px!important;
+    height:44px!important;
+    border-radius:12px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-context p{
+    -webkit-line-clamp:1!important;
+    font-size:.72rem!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-search{
+    min-height:66px!important;
+    height:66px!important;
+    padding:10px 12px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-search i{
+    left:26px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-member-list{
+    padding:8px 10px 10px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-member{
+    grid-template-columns:auto minmax(0,1fr) 28px!important;
+    gap:9px!important;
+    padding:9px!important;
+    border-radius:15px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-member .social-avatar{
+    width:40px!important;
+    height:40px!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-footer{
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+    padding:10px 12px calc(12px + env(safe-area-inset-bottom))!important;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-footer span{
+    text-align:center;
+  }
+  body[data-page="feed"] #postShareModal.post-share-modal .post-share-footer .social-submit{
+    width:100%;
+    min-height:48px;
+  }
+}

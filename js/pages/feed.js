@@ -3825,7 +3825,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
         </div>
         ${renderContentBadge('story')}
         ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
-        ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Visualizacoes" aria-label="Visualizacoes do story"><i class="fa-regular fa-eye"></i></button>' : ''}
+        ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Atividade do story" aria-label="Curtidas e visualizacoes do story"><i class="fa-regular fa-eye"></i><span id="storyReactionsCount"></span></button>' : ''}
         ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
         <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -4273,26 +4273,39 @@ async function hydrateStoryMeta(storyId, canViewReactions) {
   } catch (err) {
     console.warn('[MSY][feed-social] Views do story indisponiveis:', err);
   }
+  const likes = reactions.filter((row) => row.reaction === 'heart' || row.reaction === '❤️');
   const counter = document.getElementById('storyReactionsCount');
-  if (counter) counter.textContent = `${reactions.length} reacao${reactions.length === 1 ? '' : 'es'}`;
+  if (counter) counter.textContent = `${likes.length} curtida${likes.length === 1 ? '' : 's'} · ${views.length} view${views.length === 1 ? '' : 's'}`;
   const content = document.getElementById('storyReactionsContent');
   if (!content) return;
   content.innerHTML = `
-    <div class="story-reactions-summary">${Object.entries(reactionSummary).map(([reaction, count]) => `<span>${Utils.escapeHtml(reaction)} ${count}</span>`).join('') || '<span>Nenhuma ainda</span>'}</div>
-    ${reactions.length ? reactions.map((r) => `
+    <div class="story-activity-tabs" role="tablist" aria-label="Atividade do story">
+      <button type="button" class="active" data-story-activity-tab="likes"><i class="fa-solid fa-heart"></i><span>${likes.length}</span> Curtidas</button>
+      <button type="button" data-story-activity-tab="views"><i class="fa-regular fa-eye"></i><span>${views.length}</span> Visualizacoes</button>
+    </div>
+    <div class="story-activity-pane active" data-story-activity-pane="likes">
+      <div class="story-reactions-summary">${likes.length ? `<span>${likes.length} curtida${likes.length === 1 ? '' : 's'}</span>` : '<span>Nenhuma curtida ainda</span>'}</div>
+      ${likes.length ? likes.map((r) => `
+        <div class="story-reaction-row">
+          ${avatar(r.user || {}, 34)}
+          <div><strong>${Utils.escapeHtml(r.user?.name || 'Membro')}</strong><span>${timeAgo(r.created_at)}</span></div>
+          <em><i class="fa-solid fa-heart"></i></em>
+        </div>`).join('') : '<div class="message-sub">Ninguem curtiu este story ainda.</div>'}
+    </div>
+    <div class="story-activity-pane" data-story-activity-pane="views">
+      <div class="story-reactions-summary">${views.length ? `<span>${views.length} visualizacao${views.length === 1 ? '' : 'es'}</span>` : '<span>Nenhuma visualizacao ainda</span>'}</div>
+      ${views.length ? views.map((view) => `
       <div class="story-reaction-row">
-        ${avatar(r.user || {}, 30)}
-        <div><strong>${Utils.escapeHtml(r.user?.name || 'Membro')}</strong><span>${timeAgo(r.created_at)}</span></div>
-        <em>${Utils.escapeHtml(r.reaction)}</em>
-      </div>`).join('') : '<div class="message-sub">Nenhuma reacao ainda.</div>'}
-    <div class="story-reactions-title" style="margin-top:14px">Visualizacoes</div>
-    <div class="story-reactions-summary">${views.length ? `<span>${views.length} visualizacao${views.length === 1 ? '' : 'es'}</span>` : '<span>Nenhuma visualizacao ainda</span>'}</div>
-    ${views.length ? views.map((view) => `
-      <div class="story-reaction-row">
-        ${avatar(view.user || {}, 30)}
+        ${avatar(view.user || {}, 34)}
         <div><strong>${Utils.escapeHtml(view.user?.name || 'Membro')}</strong><span>${timeAgo(view.viewed_at)}</span></div>
         <em><i class="fa-regular fa-eye"></i></em>
-      </div>`).join('') : '<div class="message-sub">Ninguem viu este story ainda.</div>'}`;
+      </div>`).join('') : '<div class="message-sub">Ninguem viu este story ainda.</div>'}
+    </div>`;
+  content.querySelectorAll('[data-story-activity-tab]').forEach((tab) => tab.addEventListener('click', () => {
+    const target = tab.dataset.storyActivityTab;
+    content.querySelectorAll('[data-story-activity-tab]').forEach((node) => node.classList.toggle('active', node === tab));
+    content.querySelectorAll('[data-story-activity-pane]').forEach((pane) => pane.classList.toggle('active', pane.dataset.storyActivityPane === target));
+  }));
 }
 
 async function openStoryLegacy(groupIndex, storyIndex) {
