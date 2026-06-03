@@ -4653,58 +4653,79 @@ async function handleDirectDeleteForAll(messageId) {
 }
 
 function bindDirectMessageActions(modal) {
+  if (!modal) return;
+  if (modal.dataset.directActionsBound === 'true') return;
+  modal.dataset.directActionsBound = 'true';
   const holdTimers = new Map();
   const openMenu = (messageId) => {
     const menu = modal.querySelector(`[data-direct-message-menu="${messageId}"]`);
     modal.querySelectorAll('.direct-message-menu.open').forEach((node) => { if (node !== menu) node.classList.remove('open'); });
     menu?.classList.toggle('open');
   };
-  modal.querySelectorAll('[data-open-direct-message-menu]').forEach((btn) => btn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    openMenu(btn.dataset.openDirectMessageMenu);
-  }));
-  modal.querySelectorAll('[data-direct-message-row]').forEach((row) => {
-    const messageId = row.dataset.directMessageRow;
-    const startHold = () => {
-      clearTimeout(holdTimers.get(messageId));
-      holdTimers.set(messageId, setTimeout(() => openMenu(messageId), 420));
-    };
-    const stopHold = () => {
-      clearTimeout(holdTimers.get(messageId));
-      holdTimers.delete(messageId);
-    };
-    row.addEventListener('pointerdown', (event) => {
-      if (event.target.closest('button,input,textarea,video,a')) return;
-      startHold();
-    });
-    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => row.addEventListener(eventName, stopHold));
+  const stopHold = (messageId) => {
+    if (!messageId) return;
+    clearTimeout(holdTimers.get(messageId));
+    holdTimers.delete(messageId);
+  };
+
+  modal.addEventListener('click', async (event) => {
+    const menuBtn = event.target.closest('[data-open-direct-message-menu]');
+    if (menuBtn) {
+      event.stopPropagation();
+      openMenu(menuBtn.dataset.openDirectMessageMenu);
+      return;
+    }
+    const storyBtn = event.target.closest('[data-open-story-reference]');
+    if (storyBtn) {
+      await openDirectStoryReference(storyBtn.dataset.openStoryReference);
+      return;
+    }
+    const copyBtn = event.target.closest('[data-direct-copy]');
+    if (copyBtn) {
+      try {
+        await handleDirectCopy(copyBtn.dataset.directCopy);
+      } catch (err) {
+        console.error('[MSY][feed-social] Erro ao copiar mensagem direct:', err);
+        Utils.showToast(err.message || 'Erro ao copiar mensagem.', 'error');
+      }
+      return;
+    }
+    const editBtn = event.target.closest('[data-direct-edit]');
+    if (editBtn) {
+      handleDirectEdit(editBtn.dataset.directEdit);
+      return;
+    }
+    const deleteMeBtn = event.target.closest('[data-direct-delete-me]');
+    if (deleteMeBtn) {
+      try {
+        await handleDirectDeleteForMe(deleteMeBtn.dataset.directDeleteMe);
+      } catch (err) {
+        console.error('[MSY][feed-social] Erro ao apagar mensagem para mim:', err);
+        Utils.showToast(err.message || 'Erro ao apagar mensagem.', 'error');
+      }
+      return;
+    }
+    const deleteAllBtn = event.target.closest('[data-direct-delete-all]');
+    if (deleteAllBtn) {
+      try {
+        await handleDirectDeleteForAll(deleteAllBtn.dataset.directDeleteAll);
+      } catch (err) {
+        console.error('[MSY][feed-social] Erro ao apagar mensagem para todos:', err);
+        Utils.showToast(err.message || 'Erro ao apagar mensagem para todos.', 'error');
+      }
+    }
   });
-  modal.querySelectorAll('[data-direct-copy]').forEach((btn) => btn.addEventListener('click', async () => {
-    try {
-      await handleDirectCopy(btn.dataset.directCopy);
-    } catch (err) {
-      console.error('[MSY][feed-social] Erro ao copiar mensagem direct:', err);
-      Utils.showToast(err.message || 'Erro ao copiar mensagem.', 'error');
-    }
+
+  modal.addEventListener('pointerdown', (event) => {
+    const row = event.target.closest('[data-direct-message-row]');
+    if (!row || event.target.closest('button,input,textarea,video,a')) return;
+    const messageId = row.dataset.directMessageRow;
+    clearTimeout(holdTimers.get(messageId));
+    holdTimers.set(messageId, setTimeout(() => openMenu(messageId), 420));
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => modal.addEventListener(eventName, (event) => {
+    stopHold(event.target.closest('[data-direct-message-row]')?.dataset.directMessageRow);
   }));
-  modal.querySelectorAll('[data-direct-edit]').forEach((btn) => btn.addEventListener('click', () => handleDirectEdit(btn.dataset.directEdit)));
-  modal.querySelectorAll('[data-direct-delete-me]').forEach((btn) => btn.addEventListener('click', async () => {
-    try {
-      await handleDirectDeleteForMe(btn.dataset.directDeleteMe);
-    } catch (err) {
-      console.error('[MSY][feed-social] Erro ao apagar mensagem para mim:', err);
-      Utils.showToast(err.message || 'Erro ao apagar mensagem.', 'error');
-    }
-  }));
-  modal.querySelectorAll('[data-direct-delete-all]').forEach((btn) => btn.addEventListener('click', async () => {
-    try {
-      await handleDirectDeleteForAll(btn.dataset.directDeleteAll);
-    } catch (err) {
-      console.error('[MSY][feed-social] Erro ao apagar mensagem para todos:', err);
-      Utils.showToast(err.message || 'Erro ao apagar mensagem para todos.', 'error');
-    }
-  }));
-  modal.querySelectorAll('[data-open-story-reference]').forEach((btn) => btn.addEventListener('click', () => openDirectStoryReference(btn.dataset.openStoryReference)));
 }
 
 async function subscribeDirectConversation(conversationId) {
@@ -5080,8 +5101,9 @@ async function sendDirectMessage(e) {
   const body = input?.value?.trim() || '';
   if (!body || !state.activeDirectConversationId) return;
   try {
-    const message = state.directEditingMessageId
-      ? await state.service.updateDirectMessage(state.directEditingMessageId, body)
+    const editingMessageId = state.directEditingMessageId;
+    const message = editingMessageId
+      ? await state.service.updateDirectMessage(editingMessageId, body)
       : await state.service.sendDirectMessage(state.activeDirectConversationId, body);
     const conversation = upsertDirectMessage(state.activeDirectConversationId, message);
     if (conversation) {
@@ -5089,7 +5111,11 @@ async function sendDirectMessage(e) {
     }
     input.value = '';
     state.directEditingMessageId = null;
-    appendDirectMessageToDom(message);
+    if (editingMessageId) {
+      renderDirectInbox();
+    } else {
+      appendDirectMessageToDom(message);
+    }
     Utils.showToast(message.edited_at ? 'Mensagem atualizada.' : 'Mensagem enviada.');
   } catch (err) {
     console.error('[MSY][feed-social] Erro ao enviar mensagem direct:', err);
@@ -5097,8 +5123,25 @@ async function sendDirectMessage(e) {
   }
 }
 
-function appendDirectMessageToDom() {
-  renderDirectInbox();
+function appendDirectMessageToDom(message) {
+  const list = document.getElementById('directMessagesList');
+  const activeConversation = getActiveDirectConversation();
+  if (!list || !message || message.conversation_id !== state.activeDirectConversationId) {
+    renderDirectInbox();
+    requestAnimationFrame(() => scrollDirectToBottom({ animated: true }));
+    return;
+  }
+  const previous = [...(activeConversation?.messages || [])]
+    .filter((item) => item.id !== message.id && item.created_at <= message.created_at)
+    .at(-1);
+  const showDate = !previous || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString();
+  list.querySelector('.social-empty')?.remove();
+  list.querySelector(`[data-direct-message-row="${message.id}"]`)?.remove();
+  list.insertAdjacentHTML('beforeend', renderDirectMessageBubble(message, {
+    mine: message.sender_id === state.profile.id,
+    showDate,
+  }));
+  bindDirectMessageActions(document.getElementById('directViewer'));
   requestAnimationFrame(() => scrollDirectToBottom({ animated: true }));
 }
 

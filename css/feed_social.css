@@ -745,6 +745,348 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
 .social-edit-media-preview .media-editor-crop{height:100%}
 @media(max-width:640px){.composer-media-controls{grid-template-columns:1fr}.media-editor-viewport{width:min(100%,calc(58dvh * var(--editor-aspect,9 / 16)))}}
 
+/* Premium Direct final layer */
+@keyframes directPanelIn{from{opacity:.35;transform:translateY(14px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes directMessageIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+body[data-page="feed"] #directViewer.profile-viewer.open{
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:
+    radial-gradient(circle at 18% 0,rgba(255,48,64,.18),transparent 32%),
+    radial-gradient(circle at 86% 12%,rgba(201,168,76,.14),transparent 28%),
+    rgba(0,0,0,.82);
+  backdrop-filter:blur(14px);
+}
+body[data-page="feed"] .direct-shell{
+  width:min(1180px,calc(100vw - 36px));
+  height:min(860px,calc(100dvh - 36px));
+  max-height:calc(var(--direct-vh,100dvh) - 36px);
+  grid-template-columns:minmax(310px,360px) minmax(0,1fr);
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:26px;
+  background:rgba(8,8,11,.96);
+  box-shadow:0 34px 100px rgba(0,0,0,.68),0 0 0 1px rgba(201,168,76,.05) inset;
+  animation:directPanelIn 220ms var(--ease) both;
+  isolation:isolate;
+}
+body[data-page="feed"] .direct-sidebar{
+  padding:18px 14px 14px;
+  border-right:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg,rgba(20,20,26,.98),rgba(10,10,14,.98));
+}
+body[data-page="feed"] .direct-sidebar-header{padding:0 4px 2px}
+body[data-page="feed"] .direct-title{color:#fff;font-size:1.28rem;letter-spacing:0}
+body[data-page="feed"] .direct-subtitle{color:rgba(255,255,255,.52);font-size:.76rem}
+body[data-page="feed"] .direct-search{margin:10px 2px 12px}
+body[data-page="feed"] .direct-search input{
+  height:46px;
+  border-color:rgba(255,255,255,.09);
+  background:rgba(255,255,255,.055);
+  color:#fff;
+  font-weight:800;
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset;
+}
+body[data-page="feed"] .direct-search input:focus{
+  border-color:rgba(201,168,76,.46);
+  background:rgba(255,255,255,.075);
+  box-shadow:0 0 0 3px rgba(201,168,76,.10);
+}
+body[data-page="feed"] .direct-list{
+  gap:4px;
+  padding:2px 3px 2px 0;
+  scrollbar-width:thin;
+}
+body[data-page="feed"] .direct-thread{
+  min-height:76px;
+  padding:10px;
+  border-radius:18px;
+  border-color:transparent;
+  background:transparent;
+  transition:background .16s var(--ease),border-color .16s var(--ease),transform .16s var(--ease),box-shadow .16s var(--ease);
+}
+body[data-page="feed"] .direct-thread:hover{
+  transform:translateY(-1px);
+  background:rgba(255,255,255,.055);
+  border-color:rgba(255,255,255,.08);
+  box-shadow:none;
+}
+body[data-page="feed"] .direct-thread.active{
+  background:linear-gradient(135deg,rgba(255,48,64,.16),rgba(201,168,76,.10),rgba(255,255,255,.04));
+  border-color:rgba(255,255,255,.13);
+  box-shadow:0 16px 42px rgba(0,0,0,.28);
+}
+body[data-page="feed"] .direct-thread.unread{
+  background:rgba(255,48,64,.10);
+  border-color:rgba(255,48,64,.24);
+}
+body[data-page="feed"] .direct-thread .social-avatar{
+  border:1px solid rgba(255,255,255,.13);
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+}
+body[data-page="feed"] .direct-thread-top strong{color:#fff;font-size:.92rem}
+body[data-page="feed"] .direct-thread-top span{font-size:.68rem;color:rgba(255,255,255,.44)}
+body[data-page="feed"] .direct-thread-handle{color:rgba(201,168,76,.74);font-weight:800}
+body[data-page="feed"] .direct-thread-preview{font-size:.78rem;color:rgba(255,255,255,.62)}
+body[data-page="feed"] .direct-unread{
+  min-width:20px;
+  height:20px;
+  background:#ff3040;
+  border:2px solid rgba(8,8,11,.96);
+  box-shadow:0 0 18px rgba(255,48,64,.28);
+}
+body[data-page="feed"] .direct-chat{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.035),transparent 24%),
+    radial-gradient(circle at 50% 0,rgba(201,168,76,.08),transparent 38%),
+    #08080b;
+}
+body[data-page="feed"] .direct-chat-header{
+  min-height:74px;
+  padding:13px 16px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background:rgba(9,9,13,.88);
+  backdrop-filter:blur(18px);
+}
+body[data-page="feed"] .direct-chat-header .social-avatar{border:1px solid rgba(255,255,255,.14)}
+body[data-page="feed"] .direct-back-btn{display:none}
+body[data-page="feed"] .direct-chat-name{color:#fff;font-size:1.02rem}
+body[data-page="feed"] .direct-chat-handle{color:rgba(255,255,255,.48)}
+body[data-page="feed"] .direct-streak{
+  min-width:174px;
+  border-radius:999px;
+  border-color:rgba(201,168,76,.18);
+  background:rgba(201,168,76,.07);
+}
+body[data-page="feed"] .direct-chat-body{
+  gap:8px;
+  padding:20px 18px 16px;
+  background:
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+body[data-page="feed"] .direct-date-divider span{
+  background:rgba(17,17,22,.86);
+  border-color:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.54);
+  backdrop-filter:blur(10px);
+}
+body[data-page="feed"] .direct-message-row{animation:directMessageIn 180ms var(--ease) both}
+body[data-page="feed"] .direct-message-bubble{
+  max-width:min(68%,560px);
+  padding:11px 13px 9px;
+  border-radius:20px;
+  box-shadow:0 14px 36px rgba(0,0,0,.24);
+}
+body[data-page="feed"] .direct-message-row.mine .direct-message-bubble{
+  color:#fff;
+  background:linear-gradient(135deg,#ff3040,#b91c1c 64%,#8f1515);
+  border-color:rgba(255,255,255,.13);
+  border-bottom-right-radius:6px;
+}
+body[data-page="feed"] .direct-message-row.theirs .direct-message-bubble{
+  background:rgba(255,255,255,.075);
+  border-color:rgba(255,255,255,.10);
+  border-bottom-left-radius:6px;
+}
+body[data-page="feed"] .direct-message-bubble.is-deleted{
+  background:rgba(255,255,255,.045)!important;
+  color:rgba(255,255,255,.5);
+  box-shadow:none;
+}
+body[data-page="feed"] .direct-message-media{
+  border-radius:15px;
+  border-color:rgba(255,255,255,.12);
+  background:#020203;
+}
+body[data-page="feed"] .direct-message-media img,
+body[data-page="feed"] .direct-message-media video{
+  max-height:360px;
+}
+body[data-page="feed"] .direct-message-text{font-size:.94rem;line-height:1.46}
+body[data-page="feed"] .direct-message-meta-line{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+  margin-top:5px;
+}
+body[data-page="feed"] .direct-message-status,
+body[data-page="feed"] .direct-message-time{
+  color:rgba(255,255,255,.56);
+  font-size:.66rem;
+}
+body[data-page="feed"] .direct-message-menu-btn{
+  position:absolute;
+  top:50%;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  opacity:0;
+  transform:translateY(-50%);
+  border-radius:50%;
+  background:rgba(17,17,22,.92);
+  border-color:rgba(255,255,255,.12);
+}
+body[data-page="feed"] .direct-message-row.mine .direct-message-menu-btn{left:-42px}
+body[data-page="feed"] .direct-message-row.theirs .direct-message-menu-btn{right:-42px}
+body[data-page="feed"] .direct-message-bubble:hover .direct-message-menu-btn,
+body[data-page="feed"] .direct-message-menu.open + .direct-message-menu-btn,
+body[data-page="feed"] .direct-message-menu-btn:focus-visible{opacity:1}
+body[data-page="feed"] .direct-message-menu{
+  top:calc(100% + 8px);
+  right:0;
+  min-width:204px;
+  border-radius:16px;
+  background:rgba(15,15,20,.98);
+  border-color:rgba(255,255,255,.10);
+  backdrop-filter:blur(18px);
+}
+body[data-page="feed"] .direct-message-row.theirs .direct-message-menu{left:0;right:auto}
+body[data-page="feed"] .direct-message-menu button{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:12px 13px;
+}
+body[data-page="feed"] .direct-composer{
+  grid-template-columns:auto auto minmax(0,1fr) auto;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top:1px solid rgba(255,255,255,.08);
+  background:rgba(9,9,13,.92);
+  backdrop-filter:blur(20px);
+}
+body[data-page="feed"] .direct-composer-input{
+  height:48px;
+  min-height:48px;
+  border-color:rgba(255,255,255,.10);
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  font-weight:750;
+}
+body[data-page="feed"] .direct-composer-input:focus{
+  border-color:rgba(201,168,76,.42);
+  background:rgba(255,255,255,.08);
+  box-shadow:0 0 0 3px rgba(201,168,76,.10);
+}
+body[data-page="feed"] .direct-composer-icon,
+body[data-page="feed"] .direct-composer-send,
+body[data-page="feed"] .direct-back-btn{
+  width:46px;
+  height:46px;
+  border-radius:50%;
+}
+body[data-page="feed"] .direct-composer-send{
+  background:linear-gradient(135deg,#ff3040,#b91c1c);
+  border-color:rgba(255,255,255,.14);
+  box-shadow:0 14px 34px rgba(255,48,64,.28);
+}
+body[data-page="feed"] .direct-composer-send:not(:disabled):hover{
+  transform:translateY(-1px);
+  box-shadow:0 18px 44px rgba(255,48,64,.36);
+}
+body[data-page="feed"] .direct-shell .social-empty{
+  border-color:rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);
+}
+
+@media(max-width:760px){
+  body[data-page="feed"] #directViewer.profile-viewer.open{
+    padding:0;
+    align-items:stretch;
+    justify-content:stretch;
+    background:#07070a;
+    backdrop-filter:none;
+  }
+  body[data-page="feed"] .direct-shell{
+    width:100%;
+    height:var(--direct-vh,100dvh)!important;
+    max-height:var(--direct-vh,100dvh)!important;
+    border:0;
+    border-radius:0;
+    grid-template-columns:1fr;
+    box-shadow:none;
+    animation:none;
+  }
+  body[data-page="feed"] .direct-sidebar{
+    height:var(--direct-vh,100dvh);
+    padding:calc(12px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
+    border-right:0;
+  }
+  body[data-page="feed"] .direct-sidebar-header{padding:0 2px}
+  body[data-page="feed"] .direct-mobile-close{display:inline-flex}
+  body[data-page="feed"] .direct-thread{
+    min-height:74px;
+    border-radius:17px;
+  }
+  body[data-page="feed"] .direct-chat{
+    height:var(--direct-vh,100dvh)!important;
+    max-height:var(--direct-vh,100dvh)!important;
+  }
+  body[data-page="feed"] .direct-chat-header{
+    min-height:64px;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 8px;
+  }
+  body[data-page="feed"] .direct-back-btn{display:inline-flex}
+  body[data-page="feed"] .direct-chat-header .social-avatar{width:40px!important;height:40px!important}
+  body[data-page="feed"] .direct-chat-name{font-size:.94rem}
+  body[data-page="feed"] .direct-chat-handle{font-size:.7rem}
+  body[data-page="feed"] .direct-streak{display:none}
+  body[data-page="feed"] .direct-chat-body{
+    padding:12px 10px 12px!important;
+    gap:7px;
+    background-size:36px 36px;
+  }
+  body[data-page="feed"] .direct-message-bubble{
+    max-width:84%;
+    border-radius:19px;
+  }
+  body[data-page="feed"] .direct-message-menu-btn{
+    opacity:1;
+    top:-9px;
+    width:32px;
+    height:32px;
+    min-width:32px;
+    min-height:32px;
+    transform:none;
+  }
+  body[data-page="feed"] .direct-message-row.mine .direct-message-menu-btn{left:-8px}
+  body[data-page="feed"] .direct-message-row.theirs .direct-message-menu-btn{right:-8px}
+  body[data-page="feed"] .direct-message-menu{
+    position:fixed;
+    left:12px!important;
+    right:12px!important;
+    top:auto!important;
+    bottom:calc(12px + env(safe-area-inset-bottom));
+    border-radius:22px;
+    animation:mobileSheetIn .18s var(--ease) both;
+  }
+  body[data-page="feed"] .direct-message-menu button{
+    justify-content:center;
+    padding:15px 16px;
+    font-size:.94rem;
+  }
+  body[data-page="feed"] .direct-composer{
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    padding:9px 10px calc(9px + env(safe-area-inset-bottom))!important;
+  }
+  body[data-page="feed"] .direct-composer-icon[aria-label="Emoji"]{display:none!important}
+  body[data-page="feed"] .direct-composer-icon,
+  body[data-page="feed"] .direct-composer-send{
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+  }
+  body[data-page="feed"] .direct-composer-input{
+    height:44px;
+    min-height:44px;
+  }
+}
+
 /* ============================================================
    Feed polish final layer — content types, mobile touch, states
    ============================================================ */
@@ -2152,4 +2494,26 @@ body[data-page="feed"] .mobile-action-fab{
     font-size:.76rem!important;
     font-weight:950!important;
   }
+}
+
+/* Direct premium lock: final rules must win over feed mobile passes. */
+body[data-page="feed"] #directViewer.profile-viewer.open{background:radial-gradient(circle at 18% 0,rgba(255,48,64,.18),transparent 32%),radial-gradient(circle at 86% 12%,rgba(201,168,76,.14),transparent 28%),rgba(0,0,0,.82)!important}
+body[data-page="feed"] .direct-shell{width:min(1180px,calc(100vw - 36px))!important;height:min(860px,calc(var(--direct-vh,100dvh) - 36px))!important;max-height:calc(var(--direct-vh,100dvh) - 36px)!important;border-radius:26px!important;border:1px solid rgba(255,255,255,.11)!important;background:rgba(8,8,11,.96)!important;box-shadow:0 34px 100px rgba(0,0,0,.68),0 0 0 1px rgba(201,168,76,.05) inset!important}
+body[data-page="feed"] .direct-sidebar{background:linear-gradient(180deg,rgba(20,20,26,.98),rgba(10,10,14,.98))!important}
+body[data-page="feed"] .direct-chat{background:linear-gradient(180deg,rgba(255,255,255,.035),transparent 24%),radial-gradient(circle at 50% 0,rgba(201,168,76,.08),transparent 38%),#08080b!important}
+body[data-page="feed"] .direct-thread.active{background:linear-gradient(135deg,rgba(255,48,64,.16),rgba(201,168,76,.10),rgba(255,255,255,.04))!important;border-color:rgba(255,255,255,.13)!important}
+body[data-page="feed"] .direct-chat-body{background:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px)!important;background-size:44px 44px!important}
+body[data-page="feed"] .direct-message-bubble{max-width:min(68%,560px)!important;box-shadow:0 14px 36px rgba(0,0,0,.24)!important}
+body[data-page="feed"] .direct-message-row.mine .direct-message-bubble{background:linear-gradient(135deg,#ff3040,#b91c1c 64%,#8f1515)!important;border-color:rgba(255,255,255,.13)!important}
+body[data-page="feed"] .direct-message-row.theirs .direct-message-bubble{background:rgba(255,255,255,.075)!important;border-color:rgba(255,255,255,.10)!important}
+body[data-page="feed"] .direct-composer{background:rgba(9,9,13,.92)!important;backdrop-filter:blur(20px)!important}
+body[data-page="feed"] .direct-composer-input{height:48px!important;min-height:48px!important;background:rgba(255,255,255,.06)!important;border-color:rgba(255,255,255,.10)!important;color:#fff!important}
+body[data-page="feed"] .direct-composer-send{background:linear-gradient(135deg,#ff3040,#b91c1c)!important;border-color:rgba(255,255,255,.14)!important;box-shadow:0 14px 34px rgba(255,48,64,.28)!important}
+@media(max-width:760px){
+  body[data-page="feed"] #directViewer.profile-viewer.open{padding:0!important;background:#07070a!important}
+  body[data-page="feed"] .direct-shell{width:100%!important;height:var(--direct-vh,100dvh)!important;max-height:var(--direct-vh,100dvh)!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+  body[data-page="feed"] .direct-chat-body{background-size:36px 36px!important}
+  body[data-page="feed"] .direct-message-bubble{max-width:84%!important}
+  body[data-page="feed"] .direct-composer{grid-template-columns:auto minmax(0,1fr) auto!important}
+  body[data-page="feed"] .direct-composer-input{height:44px!important;min-height:44px!important}
 }
