@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "supabase:login": "bash scripts/supabase-login.sh",
+    "supabase:fix-story-likes": "bash scripts/apply-story-reaction-policy.sh"
+  },
+  "devDependencies": {
+    "supabase": "^2.104.0"
+  }
+}

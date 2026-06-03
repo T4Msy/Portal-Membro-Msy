@@ -38,6 +38,8 @@ const state = {
   directConversations: [],
   directUnreadCount: 0,
   activeDirectConversationId: null,
+  directConversationMenu: null,
+  directThreadMenuSuppressClickId: null,
   directViewportCleanup: null,
   directInitialScrollCleanup: null,
   directScrollRequestId: 0,
@@ -178,6 +180,41 @@ function renderDirectUnreadBadges() {
   });
 }
 
+function closeDirectConversationMenu() {
+  if (!state.directConversationMenu) return;
+  state.directConversationMenu = null;
+  state.directThreadMenuSuppressClickId = null;
+  document.querySelector('.direct-thread-menu')?.remove();
+}
+
+function getDirectConversationNode(target) {
+  return target?.closest?.('[data-open-direct-conversation]') || null;
+}
+
+function openDirectConversationMenu(conversationId, anchor = null) {
+  if (!conversationId) return;
+  const pad = 12;
+  const menuWidth = 230;
+  const menuHeight = 72;
+  const rect = anchor?.getBoundingClientRect?.() || null;
+  const sidebar = document.getElementById('directViewer')?.querySelector('.direct-sidebar');
+  const sidebarRect = sidebar?.getBoundingClientRect?.() || null;
+  const maxLeft = sidebarRect ? Math.max(pad, sidebarRect.width - menuWidth - pad) : Math.max(pad, window.innerWidth - menuWidth - pad);
+  const maxTop = sidebarRect ? Math.max(pad, sidebarRect.height - menuHeight - pad) : Math.max(pad, window.innerHeight - menuHeight - pad);
+  const left = rect && sidebarRect
+    ? Math.min(Math.max(pad, rect.right - sidebarRect.left - menuWidth), maxLeft)
+    : maxLeft;
+  const top = rect && sidebarRect
+    ? Math.min(Math.max(pad, rect.top - sidebarRect.top + (rect.height / 2) - (menuHeight / 2)), maxTop)
+    : Math.max(pad, pad + 44);
+  state.directConversationMenu = {
+    conversationId,
+    left,
+    top,
+  };
+  if (document.getElementById('directViewer')?.classList.contains('open')) renderDirectInbox();
+}
+
 function showFeedRoute() {
   const feed = document.getElementById('feedRouteView');
   const route = document.getElementById('socialProfileRoute');
@@ -279,6 +316,30 @@ function renderPostMediaViewerElement(media, attrs = '') {
   return media?.media_type === 'video'
     ? `<video src="${url}" ${attrs} playsinline></video>`
     : `<img src="${url}" ${attrs}>`;
+}
+
+function getPostPermalink(postId) {
+  const url = new URL(window.location.href);
+  url.pathname = url.pathname.replace(/[^/]*$/, 'feed.html');
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('post', postId);
+  return url.toString();
+}
+
+function getPostShareAttachment(post) {
+  const firstMedia = post?.media?.[0] || null;
+  return {
+    kind: 'post_share',
+    post_id: post.id,
+    post_author_id: post.author_id || post.author?.id || null,
+    post_author_name: post.author?.name || 'Membro MSY',
+    post_author_username: displayUsername(post.author || {}),
+    content_excerpt: (post.content || '').trim().slice(0, 220),
+    media_url: firstMedia?.url || null,
+    media_type: firstMedia?.media_type || null,
+    url: getPostPermalink(post.id),
+  };
 }
 
 function getActiveDirectConversation() {
@@ -391,6 +452,7 @@ function closeSocialModals() {
     m.classList.remove('open');
     m.classList.remove('follow-list-viewer');
     m.classList.remove('social-profile-editor-viewer');
+    m.classList.remove('post-share-modal');
     ['align-items', 'justify-content', 'padding', 'background'].forEach((prop) => m.style.removeProperty(prop));
   });
   state.notificationPanelOpen = false;
@@ -402,6 +464,7 @@ function closeSocialModals() {
     state.directInitialScrollCleanup();
     state.directInitialScrollCleanup = null;
   }
+  closeDirectConversationMenu();
   if (typeof state.storyViewportCleanup === 'function') {
     state.storyViewportCleanup();
     state.storyViewportCleanup = null;
@@ -530,6 +593,7 @@ function layout() {
     <div class="story-viewer" id="storyViewer"></div>
     <div class="media-viewer" id="mediaViewer"></div>
     <div class="post-comments-modal" id="postCommentsModal"></div>
+    <div class="post-comments-modal" id="postShareModal"></div>
     <div class="story-composer-modal" id="postEditorModal"></div>
     <div class="story-composer-modal" id="storyComposerModal"></div>
     <div class="story-composer-modal" id="mobilePostComposerModal"></div>
@@ -763,7 +827,7 @@ function renderPost(post) {
         <div class="post-actions-left">
           <button class="social-action ${post.liked_by_me ? 'active' : ''}" data-like-post="${post.id}" title="Curtir"><i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-heart"></i></button>
           <button class="social-action" data-open-comments="${post.id}" title="Comentar"><i class="fa-regular fa-comment"></i></button>
-          <button class="social-action" data-message-post-author="${author.id || post.author_id}" title="Enviar direct"><i class="fa-regular fa-paper-plane"></i></button>
+          <button class="social-action" data-share-post="${post.id}" title="Compartilhar no Direct"><i class="fa-regular fa-paper-plane"></i></button>
         </div>
         <button class="social-action ${post.saved_by_me ? 'active' : ''}" data-save-post="${post.id}" title="Salvar"><i class="fa-${post.saved_by_me ? 'solid' : 'regular'} fa-bookmark"></i></button>
       </div>
@@ -1044,8 +1108,8 @@ function handleFeedClick(e) {
   if (deleteCommentBtn) return deleteComment(deleteCommentBtn.dataset.postId, deleteCommentBtn.dataset.deleteComment);
   const replyBtn = e.target.closest('[data-reply-comment]');
   if (replyBtn) return openPostComments(replyBtn.dataset.postId, replyBtn.dataset.replyComment);
-  const directBtn = e.target.closest('[data-message-post-author]');
-  if (directBtn) return openDirectInbox(directBtn.dataset.messagePostAuthor);
+  const shareBtn = e.target.closest('[data-share-post]');
+  if (shareBtn) return openPostShareSheet(shareBtn.dataset.sharePost);
   const profileNode = e.target.closest('[data-profile-id]');
   if (profileNode) return openProfile(profileNode.dataset.profileId);
   const deleteBtn = e.target.closest('[data-delete-post]');
@@ -1083,6 +1147,160 @@ function updatePostStatsNode(post) {
   stats.innerHTML = `
     <span>${post.likes_count || 0} curtida${post.likes_count === 1 ? '' : 's'}</span>
     <span>${post.comments_count || 0} comentario${post.comments_count === 1 ? '' : 's'}</span>`;
+}
+
+async function sharePostToDirect(postId, targetUserId, button = null, { openAfterSend = true, quiet = false } = {}) {
+  const post = state.posts.find((item) => item.id === postId);
+  if (!post) return Utils.showToast('Publicacao indisponivel.', 'error');
+  if (!targetUserId || targetUserId === state.profile.id) {
+    copyPost(postId);
+    return true;
+  }
+  try {
+    Utils.setButtonLoading?.(button, true);
+    const conversationId = await state.service.ensureDirectConversation(targetUserId);
+    state.activeDirectConversationId = conversationId;
+    setDirectConversations(await state.service.loadDirectConversations());
+    const conversation = getActiveDirectConversation();
+    if (conversation) {
+      conversation.messages = await state.service.loadDirectMessages(conversation.id);
+      await state.service.markDirectConversationRead(conversation.id);
+      conversation.unread_count = 0;
+    }
+    const message = await state.service.sendDirectMessage(conversationId, '', getPostShareAttachment(post));
+    upsertDirectMessage(conversationId, message);
+    state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+    renderDirectUnreadBadges();
+    if (openAfterSend) {
+      await subscribeDirectConversation(conversationId);
+      document.getElementById('postShareModal')?.classList.remove('open');
+      renderDirectInbox();
+    }
+    if (!quiet) Utils.showToast('Publicacao compartilhada no Direct.');
+    return true;
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao compartilhar publicacao no Direct:', err);
+    Utils.showToast(err.message || 'Erro ao compartilhar publicacao.', 'error');
+    return false;
+  } finally {
+    Utils.setButtonLoading?.(button, false);
+  }
+}
+
+function postShareMembers(query = '') {
+  const cleanQuery = String(query || '').trim().toLowerCase().replace(/^@+/, '');
+  const following = new Set(state.follows.filter((f) => f.follower_id === state.profile.id).map((f) => f.following_id));
+  return state.members
+    .filter((member) => member.id !== state.profile.id)
+    .filter((member) => {
+      if (!cleanQuery) return true;
+      return String(member.name || '').toLowerCase().includes(cleanQuery)
+        || String(member.role || '').toLowerCase().includes(cleanQuery)
+        || displayUsername(member).includes(cleanQuery);
+    })
+    .sort((a, b) => {
+      const scoreA = (following.has(a.id) ? 4 : 0) + (a.tier === 'diretoria' ? 2 : 0) + memberSearchScore(a, cleanQuery);
+      const scoreB = (following.has(b.id) ? 4 : 0) + (b.tier === 'diretoria' ? 2 : 0) + memberSearchScore(b, cleanQuery);
+      return scoreB - scoreA || String(a.name || '').localeCompare(String(b.name || ''));
+    });
+}
+
+function renderPostShareMembers(modal, postId, query = '') {
+  const list = modal.querySelector('#postShareMemberList');
+  if (!list) return;
+  const selected = new Set((modal.dataset.selectedMembers || '').split(',').filter(Boolean));
+  const members = postShareMembers(query);
+  list.innerHTML = members.length ? members.map((member) => `
+    <button type="button" class="post-share-member${selected.has(member.id) ? ' selected' : ''}" data-toggle-post-share-member="${member.id}">
+      ${avatar(member, 44)}
+      <span class="post-share-member-copy">
+        <strong>${Utils.escapeHtml(member.name || 'Membro')}</strong>
+        <span>@${Utils.escapeHtml(displayUsername(member))} · ${Utils.escapeHtml(member.role || 'Membro')}</span>
+      </span>
+      <span class="post-share-check"><i class="fa-solid fa-check"></i></span>
+    </button>`).join('') : '<div class="social-empty activity-empty"><i class="fa-regular fa-user"></i>Nenhum membro encontrado.</div>';
+  list.querySelectorAll('[data-toggle-post-share-member]').forEach((btn) => btn.addEventListener('click', () => {
+    const nextSelected = new Set((modal.dataset.selectedMembers || '').split(',').filter(Boolean));
+    const memberId = btn.dataset.togglePostShareMember;
+    if (nextSelected.has(memberId)) nextSelected.delete(memberId);
+    else nextSelected.add(memberId);
+    modal.dataset.selectedMembers = [...nextSelected].join(',');
+    syncPostShareSelection(modal);
+    renderPostShareMembers(modal, postId, modal.querySelector('#postShareSearchInput')?.value || '');
+  }));
+}
+
+function syncPostShareSelection(modal) {
+  const selected = (modal.dataset.selectedMembers || '').split(',').filter(Boolean);
+  const count = selected.length;
+  const submit = modal.querySelector('#postShareSendBtn');
+  const label = modal.querySelector('#postShareSelectionLabel');
+  submit?.toggleAttribute('disabled', count === 0);
+  if (label) label.textContent = count ? `${count} selecionado${count === 1 ? '' : 's'}` : 'Selecione um ou mais membros';
+  if (submit) submit.innerHTML = `<i class="fa-regular fa-paper-plane"></i> Enviar${count ? ` (${count})` : ''}`;
+}
+
+async function sendSelectedPostShares(modal, postId) {
+  const selected = (modal.dataset.selectedMembers || '').split(',').filter(Boolean);
+  if (!selected.length) return;
+  const button = modal.querySelector('#postShareSendBtn');
+  let sent = 0;
+  try {
+    Utils.setButtonLoading?.(button, true);
+    for (const memberId of selected) {
+      const ok = await sharePostToDirect(postId, memberId, null, { openAfterSend: memberId === selected.at(-1), quiet: true });
+      if (ok) sent += 1;
+    }
+    if (sent) Utils.showToast(`Publicacao enviada para ${sent} membro${sent === 1 ? '' : 's'}.`);
+  } finally {
+    Utils.setButtonLoading?.(button, false);
+  }
+}
+
+function openPostShareSheet(postId) {
+  const post = state.posts.find((item) => item.id === postId);
+  const modal = document.getElementById('postShareModal');
+  if (!post || !modal) return;
+  modal.classList.add('post-share-modal');
+  modal.dataset.selectedMembers = '';
+  const firstMedia = post.media?.[0] || null;
+  const media = firstMedia?.url
+    ? `<span class="post-share-context-thumb">${firstMedia.media_type === 'video' ? `<video src="${Utils.escapeHtml(firstMedia.url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(firstMedia.url)}" alt="">`}</span>`
+    : '<span class="post-share-context-thumb"><i class="fa-regular fa-newspaper"></i></span>';
+  modal.innerHTML = `
+    <div class="post-share-panel">
+      <div class="post-comments-grabber"></div>
+      <div class="post-comments-head">
+        <div>
+          <strong>Compartilhar</strong>
+          <span>Enviar publicacao no Direct</span>
+        </div>
+        <button class="social-icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="post-share-context">
+        ${media}
+        <div>
+          <strong>${Utils.escapeHtml(post.author?.name || 'Membro MSY')}</strong>
+          <p>${Utils.escapeHtml((post.content || 'Publicacao com midia').slice(0, 140))}</p>
+        </div>
+      </div>
+      <div class="post-share-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input id="postShareSearchInput" autocomplete="off" placeholder="Buscar membro">
+      </div>
+      <div class="post-share-member-list" id="postShareMemberList"></div>
+      <div class="post-share-footer">
+        <span id="postShareSelectionLabel">Selecione um ou mais membros</span>
+        <button type="button" class="btn btn-primary social-submit" id="postShareSendBtn" disabled><i class="fa-regular fa-paper-plane"></i> Enviar</button>
+      </div>
+    </div>`;
+  openModal(modal);
+  renderPostShareMembers(modal, postId);
+  syncPostShareSelection(modal);
+  const input = modal.querySelector('#postShareSearchInput');
+  input?.addEventListener('input', () => renderPostShareMembers(modal, postId, input.value));
+  modal.querySelector('#postShareSendBtn')?.addEventListener('click', () => sendSelectedPostShares(modal, postId));
+  requestAnimationFrame(() => input?.focus({ preventScroll: true }));
 }
 
 function mergeCreatedComment(post, comment) {
@@ -3638,10 +3856,12 @@ async function openStoryPremium(groupIndex, storyIndex) {
   modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-story-reaction]')?.addEventListener('click', async (e) => {
     stopStoryInteractiveEvent(e);
-    e.currentTarget.classList.add('active');
-    await state.service.reactToStory(story, 'heart');
-    hydrateStoryMeta(story.id, canViewReactions);
+    await toggleStoryReaction(story, 'heart', e.currentTarget, canViewReactions);
   });
+  modal.querySelectorAll('[data-close-modal]').forEach((btn) => btn.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
+    closeSocialModals();
+  }));
   modal.querySelector('#storyInlineReply')?.addEventListener('submit', async (e) => {
     stopStoryInteractiveEvent(e);
     e.preventDefault();
@@ -3703,6 +3923,32 @@ function stopStoryInteractiveEvent(event) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
   event?.stopImmediatePropagation?.();
+}
+
+async function toggleStoryReaction(story, reaction, button, canViewReactions = false) {
+  const wasActive = button?.classList.contains('active');
+  button?.classList.toggle('active', !wasActive);
+  const icon = button?.querySelector('i');
+  if (icon && reaction === 'heart') {
+    icon.classList.toggle('fa-solid', !wasActive);
+    icon.classList.toggle('fa-regular', wasActive);
+  }
+  try {
+    if (wasActive) {
+      await state.service.removeStoryReaction(story.id);
+    } else {
+      await state.service.reactToStory(story, reaction);
+    }
+    hydrateStoryMeta(story.id, canViewReactions);
+  } catch (err) {
+    button?.classList.toggle('active', wasActive);
+    if (icon && reaction === 'heart') {
+      icon.classList.toggle('fa-solid', wasActive);
+      icon.classList.toggle('fa-regular', !wasActive);
+    }
+    console.error('[MSY][feed-social] Erro ao alternar reacao do story:', err);
+    Utils.showToast(err.message || 'Erro ao atualizar curtida.', 'error');
+  }
 }
 
 function bindStoryInteractiveGuards(modal) {
@@ -3881,9 +4127,11 @@ async function openStoryFast(groupIndex, storyIndex) {
   });
   modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async (e) => {
     stopStoryInteractiveEvent(e);
-    await state.service.reactToStory(story, btn.dataset.storyReaction);
-    Utils.showToast('Reacao enviada.');
-    hydrateStoryMeta(story.id, canViewReactions);
+    await toggleStoryReaction(story, btn.dataset.storyReaction, btn, canViewReactions);
+  }));
+  modal.querySelectorAll('[data-close-modal]').forEach((btn) => btn.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
+    closeSocialModals();
   }));
   modal.querySelectorAll('[data-story-prev]').forEach((node) => node.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -4007,7 +4255,15 @@ async function hydrateStoryMeta(storyId, canViewReactions) {
     acc[row.reaction] = (acc[row.reaction] || 0) + 1;
     return acc;
   }, {});
+  const myReaction = reactions.find((row) => row.user?.id === state.profile?.id)?.reaction || null;
   modal.querySelectorAll('[data-story-reaction]').forEach((btn) => {
+    const isMine = Boolean(myReaction && btn.dataset.storyReaction === myReaction);
+    btn.classList.toggle('active', isMine);
+    const icon = btn.querySelector('i');
+    if (icon && btn.dataset.storyReaction === 'heart') {
+      icon.classList.toggle('fa-solid', isMine);
+      icon.classList.toggle('fa-regular', !isMine);
+    }
     const span = btn.querySelector('span');
     if (span) span.textContent = reactionSummary[btn.dataset.storyReaction] || '';
   });
@@ -4118,9 +4374,7 @@ async function openStoryLegacy(groupIndex, storyIndex) {
   });
   modal.querySelectorAll('[data-story-reaction]').forEach((btn) => btn.addEventListener('click', async (e) => {
     stopStoryInteractiveEvent(e);
-    await state.service.reactToStory(story, btn.dataset.storyReaction);
-    Utils.showToast('Reacao enviada.');
-    openStory(groupIndex, storyIndex);
+    await toggleStoryReaction(story, btn.dataset.storyReaction, btn, canViewReactions);
   }));
   modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -4556,6 +4810,30 @@ function renderDirectMessageAttachment(message) {
   if (message.attachment?.kind === 'media') {
     return `<div class="direct-message-media">${message.attachment.media_type === 'video' ? `<video src="${Utils.escapeHtml(message.attachment.url)}" controls playsinline></video>` : `<img src="${Utils.escapeHtml(message.attachment.url)}" alt="Anexo do Direct">`}</div>`;
   }
+  if (message.attachment?.kind === 'post_share') {
+    const attachment = message.attachment || {};
+    const post = state.posts.find((item) => item.id === attachment.post_id);
+    const authorName = post?.author?.name || attachment.post_author_name || 'Membro MSY';
+    const username = post?.author ? displayUsername(post.author) : (attachment.post_author_username || 'membro');
+    const excerpt = post?.content || attachment.content_excerpt || 'Abrir publicacao compartilhada';
+    const firstMedia = post?.media?.[0] || null;
+    const mediaUrl = firstMedia?.url || attachment.media_url || '';
+    const mediaType = firstMedia?.media_type || attachment.media_type || 'image';
+    const thumb = mediaUrl
+      ? (mediaType === 'video'
+        ? `<video src="${Utils.escapeHtml(mediaUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
+        : `<img src="${Utils.escapeHtml(mediaUrl)}" alt="Preview da publicacao" loading="lazy" decoding="async">`)
+      : '<i class="fa-regular fa-newspaper"></i>';
+    return `
+      <button type="button" class="direct-post-share-card" data-open-post-reference="${Utils.escapeHtml(attachment.post_id || '')}" data-post-url="${Utils.escapeHtml(attachment.url || '')}">
+        <div class="direct-post-share-thumb">${thumb}</div>
+        <div class="direct-post-share-copy">
+          <strong>${Utils.escapeHtml(authorName)}</strong>
+          <span>@${Utils.escapeHtml(username)}</span>
+          <p>${Utils.escapeHtml(excerpt.slice(0, 180))}</p>
+        </div>
+      </button>`;
+  }
   if (message.attachment?.kind === 'story_reply') {
     const reply = resolveStoryReplyState(message);
     const previewUrl = reply.story?.thumbnail_url || reply.story?.media_url || reply.attachment.thumbnail_url || reply.attachment.story_url || reply.attachment.media_url || '';
@@ -4615,6 +4893,37 @@ async function openDirectStoryReference(storyId) {
   }
   closeSocialModals();
   await openStory(cursor.groupIndex, cursor.storyIndex);
+}
+
+function openDirectPostReference(postId, fallbackUrl = '') {
+  closeSocialModals();
+  const node = postId ? document.getElementById(`post-${postId}`) : null;
+  if (node) {
+    focusPost(postId);
+    return;
+  }
+  if (fallbackUrl) window.location.href = fallbackUrl;
+}
+
+async function handleDirectArchiveConversation(conversationId) {
+  if (!conversationId) return;
+  try {
+    await state.service.setDirectConversationArchived(conversationId, true);
+    if (state.activeDirectConversationId === conversationId) {
+      state.activeDirectConversationId = null;
+      state.directEditingMessageId = null;
+      await subscribeDirectConversation(null);
+    }
+    state.directConversations = state.directConversations.filter((conversation) => conversation.id !== conversationId);
+    state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
+    renderDirectUnreadBadges();
+    closeDirectConversationMenu();
+    renderDirectInbox();
+    Utils.showToast('Conversa apagada da sua lista.');
+  } catch (err) {
+    console.error('[MSY][feed-social] Erro ao apagar conversa do direct:', err);
+    Utils.showToast(err.message || 'Erro ao apagar conversa.', 'error');
+  }
 }
 
 async function handleDirectCopy(messageId) {
@@ -4678,6 +4987,11 @@ function bindDirectMessageActions(modal) {
     const storyBtn = event.target.closest('[data-open-story-reference]');
     if (storyBtn) {
       await openDirectStoryReference(storyBtn.dataset.openStoryReference);
+      return;
+    }
+    const postBtn = event.target.closest('[data-open-post-reference]');
+    if (postBtn) {
+      openDirectPostReference(postBtn.dataset.openPostReference, postBtn.dataset.postUrl || '');
       return;
     }
     const copyBtn = event.target.closest('[data-direct-copy]');
@@ -4768,6 +5082,7 @@ async function openDirectInbox(targetId = null) {
     Utils.showToast('Aplique as migrations sociais antes de usar o Direct.', 'error');
     return;
   }
+  closeDirectConversationMenu();
 
   const maybeUuid = typeof targetId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)
     ? targetId
@@ -4818,6 +5133,12 @@ function renderDirectInbox() {
   const peer = activeConversation?.otherParticipants?.[0]?.profile || {};
   const streak = activeConversation?.streak || { days: 0, active: false, level: 'apagado' };
   const streakMeta = directStreakMeta(streak);
+  const directMenuConversation = state.directConversationMenu
+    ? state.directConversations.find((conversation) => conversation.id === state.directConversationMenu.conversationId)
+    : null;
+  const directMenuStyle = directMenuConversation && !window.matchMedia('(max-width: 640px)').matches
+    ? ` style="left:${state.directConversationMenu.left}px;top:${state.directConversationMenu.top}px"`
+    : '';
   const shellClass = `direct-shell${activeConversation ? ' show-chat' : ''}`;
 
   modal.innerHTML = `
@@ -4857,6 +5178,10 @@ function renderDirectInbox() {
               </button>`;
           }).join('') : '<div class="social-empty"><i class="fa-regular fa-paper-plane"></i>Nenhuma conversa ainda.</div>'}
         </div>
+        ${directMenuConversation ? `
+          <div class="post-menu direct-thread-menu open"${directMenuStyle}>
+            <button type="button" class="danger" data-archive-direct-conversation="${directMenuConversation.id}"><i class="fa-solid fa-trash"></i> Apagar conversa</button>
+          </div>` : ''}
       </aside>
       <section class="direct-chat">
         <div class="direct-chat-header">
@@ -4895,7 +5220,51 @@ function renderDirectInbox() {
   openModal(modal);
   bindDirectViewport(modal);
   bindDirectMessageActions(modal);
+  if (modal.dataset.directThreadActionsBound !== 'true') {
+    modal.dataset.directThreadActionsBound = 'true';
+    const longPressTimers = new WeakMap();
+    modal.addEventListener('contextmenu', (event) => {
+      const thread = getDirectConversationNode(event.target);
+      if (!thread) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openDirectConversationMenu(thread.dataset.openDirectConversation, thread);
+    }, true);
+    modal.addEventListener('pointerdown', (event) => {
+      const thread = getDirectConversationNode(event.target);
+      if (!thread || event.pointerType === 'mouse') return;
+      const stateEntry = { x: event.clientX, y: event.clientY, timer: null };
+      longPressTimers.set(thread, stateEntry);
+      stateEntry.timer = setTimeout(() => {
+        state.directThreadMenuSuppressClickId = thread.dataset.openDirectConversation;
+        openDirectConversationMenu(thread.dataset.openDirectConversation, thread);
+      }, 440);
+    }, true);
+    modal.addEventListener('pointermove', (event) => {
+      const thread = getDirectConversationNode(event.target);
+      const stateEntry = thread ? longPressTimers.get(thread) : null;
+      if (!thread || !stateEntry || event.pointerType === 'mouse') return;
+      if (Math.abs(event.clientX - stateEntry.x) > 10 || Math.abs(event.clientY - stateEntry.y) > 10) {
+        clearTimeout(stateEntry.timer);
+        longPressTimers.delete(thread);
+      }
+    }, true);
+    ['pointerup', 'pointercancel', 'pointerleave', 'pointerout'].forEach((eventName) => {
+      modal.addEventListener(eventName, (event) => {
+        const thread = getDirectConversationNode(event.target);
+        const stateEntry = thread ? longPressTimers.get(thread) : null;
+        if (!thread || !stateEntry) return;
+        clearTimeout(stateEntry.timer);
+        longPressTimers.delete(thread);
+      }, true);
+    });
+  }
   modal.querySelectorAll('[data-open-direct-conversation]').forEach((node) => node.addEventListener('click', async () => {
+    if (state.directThreadMenuSuppressClickId === node.dataset.openDirectConversation) {
+      state.directThreadMenuSuppressClickId = null;
+      return;
+    }
+    closeDirectConversationMenu();
     state.activeDirectConversationId = node.dataset.openDirectConversation;
     const conversation = getActiveDirectConversation();
     if (conversation) {
@@ -4911,10 +5280,15 @@ function renderDirectInbox() {
     }
     renderDirectInbox();
   }));
+  modal.querySelector('[data-archive-direct-conversation]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleDirectArchiveConversation(e.currentTarget.dataset.archiveDirectConversation);
+  });
   modal.querySelector('[data-direct-back]')?.addEventListener('click', async () => {
     state.activeDirectConversationId = null;
     state.directEditingMessageId = null;
     await subscribeDirectConversation(null);
+    closeDirectConversationMenu();
     renderDirectInbox();
   });
   modal.querySelector('#directComposer')?.addEventListener('submit', sendDirectMessage);
@@ -5147,6 +5521,9 @@ function appendDirectMessageToDom(message) {
 
 function bindModals() {
   document.addEventListener('click', (e) => {
+    if (state.directConversationMenu && !e.target.closest('.direct-thread-menu')) {
+      closeDirectConversationMenu();
+    }
     if (e.target.matches('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
       closeSocialModals();
     }

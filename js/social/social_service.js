@@ -755,6 +755,15 @@ export class SocialService {
     });
   }
 
+  async removeStoryReaction(storyId) {
+    const { error } = await this.db
+      .from('social_story_reactions')
+      .delete()
+      .eq('story_id', storyId)
+      .eq('user_id', this.profile.id);
+    if (error) throw error;
+  }
+
   async deleteStory(storyId) {
     const { data, error } = await this.db.rpc('delete_social_story', { p_story_id: storyId });
     if (error) throw error;
@@ -1052,6 +1061,7 @@ export class SocialService {
   getDirectMessagePreview(message = {}) {
     if (message.deleted_at || message.attachment?.kind === 'deleted') return 'Mensagem apagada';
     if (message.attachment?.kind === 'story_reply') return 'Respondeu um story';
+    if (message.attachment?.kind === 'post_share') return 'Compartilhou uma publicação';
     if (message.attachment?.kind === 'media') return message.attachment?.media_type === 'video' ? 'Video' : 'Imagem';
     return message.body || 'Nova conversa';
   }
@@ -1120,7 +1130,18 @@ export class SocialService {
       p_other_user_id: otherUserId,
     });
     if (error) throw error;
+    await this.setDirectConversationArchived(data, false).catch(() => {});
     return data;
+  }
+
+  async setDirectConversationArchived(conversationId, archived = true) {
+    const { error } = await this.db
+      .from('direct_participants')
+      .update({ is_archived: Boolean(archived) })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', this.profile.id);
+
+    if (error) throw error;
   }
 
   async loadDirectMessages(conversationId, { limit = this.directPageSize } = {}) {
@@ -1149,7 +1170,9 @@ export class SocialService {
         attachment: payloadAttachment || {},
         metadata: payloadAttachment?.kind === 'story_reply'
           ? { event: 'story_reply', story_id: payloadAttachment.story_id || null }
-          : {},
+          : (payloadAttachment?.kind === 'post_share'
+            ? { event: 'post_share', post_id: payloadAttachment.post_id || null }
+            : {}),
       })
       .select('id,conversation_id,sender_id,body,attachment,metadata,edited_at,deleted_at,created_at,sender:sender_id(id,name,username,initials,color,avatar_url)')
       .single();
