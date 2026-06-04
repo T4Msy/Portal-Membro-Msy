@@ -3,7 +3,7 @@
    Nova experiencia social interna.
    ============================================================ */
 
-import { SocialService } from '../social/social_service.js';
+import { SocialService } from '../social/social_service.js?v=20260604-author-only-edit';
 import {
   captureStoryVideoThumbnail,
   createStoryMediaEditState,
@@ -125,7 +125,7 @@ function canManage(post) {
 }
 
 function canEditPost(post) {
-  return state.profile.tier === 'diretoria' || state.canModerateFeed || post.author_id === state.profile.id;
+  return post?.author_id === state.profile?.id;
 }
 
 function canManageStory(story) {
@@ -797,7 +797,11 @@ function renderPost(post) {
         <div class="post-media-track">
         ${post.media.map((m, index) => `<div class="post-media-slide" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? 'controls preload="metadata"' : 'loading="lazy" decoding="async"')}</div>`).join('')}
       </div>
-      ${post.media.length > 1 ? `<div class="post-media-dots">${post.media.map((_, i) => `<span class="post-media-dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>` : ''}
+      ${post.media.length > 1 ? `
+        <button type="button" class="post-media-nav post-media-prev" data-media-nav="${post.id}" data-media-direction="-1" aria-label="Foto anterior"><i class="fa-solid fa-chevron-left"></i></button>
+        <button type="button" class="post-media-nav post-media-next" data-media-nav="${post.id}" data-media-direction="1" aria-label="Proxima foto"><i class="fa-solid fa-chevron-right"></i></button>
+        <div class="post-media-dots">${post.media.map((_, i) => `<button type="button" class="post-media-dot${i === 0 ? ' active' : ''}" data-media-dot="${post.id}" data-media-index="${i}" aria-label="Ir para foto ${i + 1}"></button>`).join('')}</div>
+      ` : ''}
     </div>` : '';
   return `
     <article class="social-post social-post-${contentType}" id="post-${post.id}" data-post-id="${post.id}" data-content-type="${contentType}">
@@ -934,6 +938,27 @@ function syncMediaDots(track) {
   dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
 }
 
+function goToPostMedia(postId, nextIndex) {
+  const safePostId = window.CSS?.escape ? CSS.escape(postId) : String(postId).replace(/"/g, '\\"');
+  const wrap = document.querySelector(`.post-media[data-media-post="${safePostId}"]`);
+  const track = wrap?.querySelector('.post-media-track');
+  if (!track) return;
+  const slides = track.querySelectorAll('.post-media-slide');
+  if (!slides.length) return;
+  const index = Math.min(slides.length - 1, Math.max(0, Number(nextIndex) || 0));
+  track.scrollTo({ left: index * track.clientWidth, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  wrap.querySelectorAll('.post-media-dot').forEach((dot, i) => dot.classList.toggle('active', i === index));
+}
+
+function movePostMedia(postId, direction) {
+  const safePostId = window.CSS?.escape ? CSS.escape(postId) : String(postId).replace(/"/g, '\\"');
+  const wrap = document.querySelector(`.post-media[data-media-post="${safePostId}"]`);
+  const track = wrap?.querySelector('.post-media-track');
+  if (!track) return;
+  const current = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
+  goToPostMedia(postId, current + Number(direction || 0));
+}
+
 function ensureMediaObserver() {
   if (state.mediaObserver || !('IntersectionObserver' in window)) return;
   state.mediaObserver = new IntersectionObserver((entries) => {
@@ -950,6 +975,12 @@ function bindFeedInteractions() {
   if (!root) return;
   root.addEventListener('click', handleFeedClick);
   root.addEventListener('keydown', (e) => {
+    const media = e.target.closest('.post-media');
+    if (media && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      movePostMedia(media.dataset.mediaPost, e.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-open-media]')) {
       e.preventDefault();
       handleFeedClick(e);
@@ -1084,6 +1115,20 @@ function handleFeedClick(e) {
   if (menuBtn) {
     e.stopPropagation();
     menuBtn.nextElementSibling?.classList.toggle('open');
+    return;
+  }
+  const mediaNav = e.target.closest('[data-media-nav]');
+  if (mediaNav) {
+    e.preventDefault();
+    e.stopPropagation();
+    movePostMedia(mediaNav.dataset.mediaNav, mediaNav.dataset.mediaDirection);
+    return;
+  }
+  const mediaDot = e.target.closest('[data-media-dot]');
+  if (mediaDot) {
+    e.preventDefault();
+    e.stopPropagation();
+    goToPostMedia(mediaDot.dataset.mediaDot, mediaDot.dataset.mediaIndex);
     return;
   }
   const mediaBtn = e.target.closest('[data-open-media]');
@@ -2609,6 +2654,7 @@ async function savePostEditor() {
   const postId = state.activePostEditId;
   const post = state.posts.find((p) => p.id === postId);
   if (!post) return;
+  if (!canEditPost(post)) return Utils.showToast('Apenas quem publicou pode editar esta publicacao.', 'error');
   const btn = document.getElementById('postEditSave');
   const content = document.getElementById('postEditContent')?.value.trim() || '';
   if (!content && !state.postEditPreviews.length) return Utils.showToast('Mantenha uma legenda ou ao menos uma midia.', 'error');
@@ -3311,10 +3357,10 @@ function openProfileModal(memberId) {
     e.stopPropagation();
     toggleFollow(memberId);
   });
-  modal.querySelector('[data-start-direct]')?.addEventListener('click', (e) => {
+  modal.querySelectorAll('[data-start-direct]').forEach((btn) => btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    openDirectInbox(memberId);
-  });
+    openDirectInbox(btn.dataset.startDirect || memberId);
+  }));
   modal.querySelector('[data-open-followers]')?.addEventListener('click', (e) => {
     e.stopPropagation();
     openFollowList(memberId, 'followers');
@@ -3530,7 +3576,11 @@ function bindProfileRoute(route) {
   }
   route.querySelector('[data-back-feed]')?.addEventListener('click', closeProfileRoute);
   route.querySelector('[data-profile-follow]')?.addEventListener('click', () => toggleFollow(state.activeProfileId));
-  route.querySelector('[data-start-direct]')?.addEventListener('click', (e) => openDirectInbox(e.currentTarget.dataset.startDirect));
+  route.querySelectorAll('[data-start-direct]').forEach((btn) => btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openDirectInbox(btn.dataset.startDirect);
+  }));
   route.querySelector('[data-edit-social-profile]')?.addEventListener('click', openSocialProfileEditor);
   route.querySelectorAll('[data-profile-tab]').forEach((btn) => btn.addEventListener('click', () => switchProfileTab(btn.dataset.profileTab)));
   route.querySelectorAll('[data-open-followers]').forEach((btn) => btn.addEventListener('click', () => openFollowList(btn.dataset.openFollowers, 'followers')));
@@ -3808,6 +3858,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
   const modal = document.getElementById('storyViewer');
   const canViewReactions = canManageStory(story);
   clearStoryTimer(modal);
+  delete modal.dataset.storyActivityOpen;
   modal.innerHTML = `
     <div class="story-panel story-panel-instagram">
       ${renderStoryProgress(group, storyIndex)}
@@ -3818,16 +3869,20 @@ async function openStoryPremium(groupIndex, storyIndex) {
         ${renderStoryMediaElement(story, story.media_type === 'video' ? 'preload="auto"' : 'decoding="async" fetchpriority="high"')}
       </div>
       <div class="story-top story-top-instagram">
-        ${avatar(group.author, 38)}
-        <div class="story-author-copy">
-          <strong>${Utils.escapeHtml(displayUsername(group.author || {}))}</strong>
-          <span>${timeAgo(story.created_at)}</span>
+        <div class="story-top-identity">
+          ${avatar(group.author, 38)}
+          <div class="story-author-copy">
+            <strong>${Utils.escapeHtml(displayUsername(group.author || {}))}</strong>
+            <span>${timeAgo(story.created_at)}</span>
+          </div>
+          ${renderContentBadge('story')}
         </div>
-        ${renderContentBadge('story')}
-        ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
-        ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Atividade do story" aria-label="Curtidas e visualizacoes do story"><i class="fa-regular fa-eye"></i><span id="storyReactionsCount"></span></button>' : ''}
-        ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
-        <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        <div class="story-top-actions">
+          ${story.media_type === 'video' ? '<button type="button" class="story-sound-toggle" data-story-sound-toggle aria-label="Ativar som do story"><i class="fa-solid fa-volume-high"></i></button>' : ''}
+          ${canViewReactions ? '<button class="story-social-icon story-activity-icon" data-toggle-story-reactions title="Atividade do story" aria-label="Curtidas e visualizacoes do story"><i class="fa-regular fa-eye"></i><span id="storyReactionsCount"></span></button>' : ''}
+          ${canManageStory(story) ? `<button class="social-icon-btn story-close" data-edit-story="${story.id}" title="Editar story"><i class="fa-solid fa-pen"></i></button><button class="social-icon-btn story-close" data-delete-story="${story.id}" title="Excluir story"><i class="fa-solid fa-trash"></i></button>` : ''}
+          <button class="social-icon-btn story-close" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+        </div>
       </div>
       ${story.caption ? `<div class="story-caption story-caption-instagram">${richText(story.caption)}</div>` : ''}
       <div class="story-bottom story-bottom-instagram">
@@ -3837,8 +3892,14 @@ async function openStoryPremium(groupIndex, storyIndex) {
         </form>
         <button class="story-social-icon" data-story-reaction="heart" title="Curtir story"><i class="fa-regular fa-heart"></i><span></span></button>
       </div>
-      ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel">
-        <div class="story-reactions-title">Atividade do story</div>
+      ${canViewReactions ? `<div class="story-reactions-panel" id="storyReactionsPanel" aria-hidden="true">
+        <div class="story-activity-head">
+          <div>
+            <strong>Atividade</strong>
+            <span>Curtidas e visualizacoes</span>
+          </div>
+          <button type="button" class="story-activity-close" data-close-story-activity aria-label="Fechar atividade"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div id="storyReactionsContent" class="message-sub">Carregando...</div>
       </div>` : ''}
     </div>`;
@@ -3886,7 +3947,11 @@ async function openStoryPremium(groupIndex, storyIndex) {
   });
   modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', (e) => {
     stopStoryInteractiveEvent(e);
-    document.getElementById('storyReactionsPanel')?.classList.toggle('open');
+    toggleStoryActivityPanel(modal);
+  });
+  modal.querySelector('[data-close-story-activity]')?.addEventListener('click', (e) => {
+    stopStoryInteractiveEvent(e);
+    closeStoryActivityPanel(modal);
   });
   modal.querySelector('[data-delete-story]')?.addEventListener('click', (e) => {
     stopStoryInteractiveEvent(e);
@@ -3902,6 +3967,31 @@ async function openStoryPremium(groupIndex, storyIndex) {
   hydrateStoryMeta(story.id, canViewReactions);
 }
 
+function openStoryActivityPanel(modal = document.getElementById('storyViewer')) {
+  const panel = modal?.querySelector('#storyReactionsPanel');
+  if (!modal || !panel) return;
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden', 'false');
+  modal.dataset.storyActivityOpen = 'true';
+  pauseStoryPlayback(modal);
+}
+
+function closeStoryActivityPanel(modal = document.getElementById('storyViewer')) {
+  const panel = modal?.querySelector('#storyReactionsPanel');
+  if (!modal || !panel) return;
+  panel.classList.remove('open');
+  panel.setAttribute('aria-hidden', 'true');
+  delete modal.dataset.storyActivityOpen;
+  resumeStoryPlayback(modal);
+}
+
+function toggleStoryActivityPanel(modal = document.getElementById('storyViewer')) {
+  const panel = modal?.querySelector('#storyReactionsPanel');
+  if (!panel) return;
+  if (panel.classList.contains('open')) closeStoryActivityPanel(modal);
+  else openStoryActivityPanel(modal);
+}
+
 function pauseStoryPlayback(modal) {
   const bar = modal.querySelector('.story-progress-stack .active i, .story-progress span');
   const video = modal.querySelector('.story-media video');
@@ -3911,6 +4001,7 @@ function pauseStoryPlayback(modal) {
 }
 
 function resumeStoryPlayback(modal) {
+  if (modal?.dataset.storyActivityOpen === 'true') return;
   const bar = modal.querySelector('.story-progress-stack .active i, .story-progress span');
   const video = modal.querySelector('.story-media video');
   if (bar) bar.style.animationPlayState = 'running';

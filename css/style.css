@@ -5242,6 +5242,442 @@ textarea:invalid:not(:placeholder-shown),
   }
 }
 
+/* Activity creation modal: compact, non-overflowing mobile layout. */
+body[data-page="atividades"] #activityModal.modal-overlay.open {
+  align-items: flex-start !important;
+}
+
+body[data-page="atividades"] #activityModal .modal {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px) !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden !important;
+}
+
+body[data-page="atividades"] #activityModal .modal-body {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body[data-page="atividades"] #activityModal .form-group,
+body[data-page="atividades"] #activityModal .form-input,
+body[data-page="atividades"] #activityModal .form-select,
+body[data-page="atividades"] #activityModal .form-textarea {
+  min-width: 0;
+}
+
+body[data-page="atividades"] #activityModal .form-input,
+body[data-page="atividades"] #activityModal .form-select,
+body[data-page="atividades"] #activityModal .form-textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+body[data-page="atividades"] #activityModal .form-label {
+  line-height: 1.25;
+}
+
+body[data-page="atividades"] #activityModal .activity-modal-grid {
+  min-width: 0;
+}
+
+body[data-page="atividades"] #activityModal .activity-modal-notif {
+  min-width: 0;
+  flex: 1 1 180px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+@media (max-width: 600px) {
+  body[data-page="atividades"] #activityModal.modal-overlay {
+    padding: 10px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal {
+    width: 100% !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: 14px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-header {
+    padding: 14px 18px !important;
+    align-items: center;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-close {
+    width: 38px;
+    height: 38px;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-body {
+    padding: 18px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-footer {
+    padding: 12px 18px calc(14px + env(safe-area-inset-bottom)) !important;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-footer .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-type-toggle {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-type-toggle .btn {
+    min-width: 0;
+    height: 44px;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-section {
+    padding-top: 16px !important;
+    margin-top: 2px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-section-title {
+    font-size: .72rem !important;
+    line-height: 1.25;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-help {
+    line-height: 1.45;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-notif-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-notif {
+    flex: none;
+    width: 100%;
+    padding: 10px 8px !important;
+    font-size: .78rem !important;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 390px) {
+  body[data-page="atividades"] #activityModal.modal-overlay {
+    padding: 6px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal {
+    max-height: calc(100dvh - 12px) !important;
+    border-radius: 12px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-header {
+    padding: 12px 14px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-body {
+    padding: 14px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .modal-footer {
+    padding-inline: 14px !important;
+  }
+
+  body[data-page="atividades"] #activityModal .activity-modal-notif-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Member profile modal: keep actions visible and content scrollable on phones. */
+body[data-page="membros"] #memberProfileModal.modal-overlay.open {
+  align-items: flex-start !important;
+}
+
+body[data-page="membros"] #memberProfileModal .modal {
+  width: min(520px, calc(100vw - 24px)) !important;
+  max-height: calc(100dvh - 24px) !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden !important;
+}
+
+body[data-page="membros"] #memberProfileModal .member-profile-modal-body {
+  display: block;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body[data-page="membros"] #memberProfileModal .mcard-hero,
+body[data-page="membros"] #memberProfileModal .mcard-details,
+body[data-page="membros"] #memberProfileModal .member-profile-stats-row,
+body[data-page="membros"] #memberProfileModal .mpb-section {
+  flex: none;
+}
+
+body[data-page="membros"] #memberProfileModal .modal-footer {
+  flex-wrap: wrap;
+  background: var(--black-3);
+}
+
+body[data-page="membros"] #memberProfileModal .modal-footer .btn,
+body[data-page="membros"] #memberProfileModal #modalPreviewNivel {
+  min-width: 0;
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-select {
+  position: relative;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 130px;
+  color: var(--gold);
+  z-index: 5;
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-toggle {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(201,168,76,.25);
+  border-radius: var(--radius);
+  background: var(--black-4);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: .7rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-options {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: none;
+  overflow: hidden;
+  border: 1px solid rgba(201,168,76,.28);
+  border-radius: var(--radius);
+  background: #111118;
+  box-shadow: 0 -14px 36px rgba(0,0,0,.48);
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-select.open .member-preview-options {
+  display: block;
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-options button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: transparent;
+  color: var(--text-1);
+  padding: 9px 10px;
+  text-align: left;
+  font-size: .75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+body[data-page="membros"] #memberProfileModal .member-preview-options button:hover {
+  background: rgba(201,168,76,.12);
+  color: var(--gold);
+}
+
+@media (max-width: 600px) {
+  body[data-page="membros"] #memberProfileModal.modal-overlay {
+    padding: 10px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal {
+    width: 100% !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: 14px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-header {
+    padding: 14px 18px !important;
+    align-items: center;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-close {
+    width: 38px;
+    height: 38px;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-modal-body {
+    padding: 14px 18px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-hero {
+    padding: 14px 16px !important;
+    gap: 12px !important;
+    min-height: 86px;
+    margin: 0 0 12px !important;
+    border-radius: 10px;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-hero-avatar {
+    width: 58px !important;
+    height: 58px !important;
+    min-width: 58px !important;
+    min-height: 58px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-name {
+    font-size: .86rem !important;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-role {
+    font-size: .72rem !important;
+    margin-bottom: 6px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-badges-row {
+    gap: 5px;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-badges-row .badge {
+    font-size: .58rem;
+    padding: 3px 8px;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-details {
+    padding: 0 !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-detail-row {
+    grid-template-columns: 18px minmax(90px, .8fr) minmax(0, 1fr);
+    display: grid;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 !important;
+    font-size: .77rem !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-detail-label {
+    min-width: 0 !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-detail-val {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-stats-row {
+    margin-top: 12px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-stat {
+    padding: 10px 4px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-stat-lbl {
+    font-size: .55rem !important;
+    letter-spacing: .03em;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mpb-section {
+    margin-top: 12px !important;
+    padding-top: 12px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mpb-grid {
+    gap: 7px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mpb-item {
+    padding: 9px 12px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-footer {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px !important;
+    padding: 12px 18px calc(14px + env(safe-area-inset-bottom)) !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-footer .btn,
+  body[data-page="membros"] #memberProfileModal #modalPreviewNivel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 42px;
+    justify-content: center;
+  }
+
+  body[data-page="membros"] #memberProfileModal #modalPreviewNivel {
+    order: -1;
+    margin-right: 0 !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-preview-toggle {
+    height: 42px;
+    font-size: .78rem;
+  }
+
+  body[data-page="membros"] #memberProfileModal #editMemberProfileBtn {
+    order: 1;
+  }
+
+  body[data-page="membros"] #memberProfileModal #closeMemberProfile {
+    order: 2;
+  }
+}
+
+@media (max-width: 390px) {
+  body[data-page="membros"] #memberProfileModal.modal-overlay {
+    padding: 6px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal {
+    max-height: calc(100dvh - 12px) !important;
+    border-radius: 12px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-header {
+    padding: 12px 14px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .member-profile-modal-body {
+    padding: 12px 14px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .modal-footer {
+    padding-inline: 14px !important;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-hero {
+    padding: 12px !important;
+    min-height: 78px;
+  }
+
+  body[data-page="membros"] #memberProfileModal .mcard-hero-avatar {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
+    min-height: 52px !important;
+  }
+}
+
 /* Cards na lista de membros — layout horizontal limpo no mobile */
 @media (max-width: 500px) {
   .members-grid {

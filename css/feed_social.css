@@ -130,6 +130,85 @@ body[data-page="feed"] .page-content{animation:none}
   .direct-composer-icon[aria-label="Emoji"]{display:none}
 }
 
+body[data-page="feed"] .post-media-nav{
+  position:absolute;
+  top:50%;
+  z-index:4;
+  width:38px;
+  height:38px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:50%;
+  background:rgba(0,0,0,.46);
+  color:#fff;
+  display:grid;
+  place-items:center;
+  transform:translateY(-50%);
+  cursor:pointer;
+  opacity:0;
+  transition:opacity .16s var(--ease),background .16s var(--ease),transform .16s var(--ease);
+  backdrop-filter:blur(12px);
+}
+
+body[data-page="feed"] .post-media-prev{left:10px}
+body[data-page="feed"] .post-media-next{right:10px}
+body[data-page="feed"] .post-media:hover .post-media-nav,
+body[data-page="feed"] .post-media:focus-within .post-media-nav{
+  opacity:1;
+}
+
+body[data-page="feed"] .post-media-nav:hover{
+  background:rgba(0,0,0,.68);
+  transform:translateY(-50%) scale(1.04);
+}
+
+body[data-page="feed"] .post-media-dots{
+  left:50%;
+  right:auto;
+  bottom:12px;
+  z-index:3;
+  align-items:center;
+  gap:5px;
+  width:auto;
+  max-width:calc(100% - 32px);
+  padding:5px 7px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;
+  background:rgba(0,0,0,.34);
+  box-shadow:0 8px 22px rgba(0,0,0,.22);
+  transform:translateX(-50%);
+  backdrop-filter:blur(10px);
+}
+
+body[data-page="feed"] .post-media-dot{
+  appearance:none;
+  flex:0 0 auto;
+  min-width:0!important;
+  min-height:0!important;
+  width:5px!important;
+  height:5px!important;
+  border:0;
+  border-radius:999px;
+  padding:0!important;
+  background:rgba(255,255,255,.44);
+  box-shadow:none;
+  cursor:pointer;
+  transition:width .16s var(--ease),background .16s var(--ease),opacity .16s var(--ease);
+}
+
+body[data-page="feed"] .post-media-dot.active{
+  width:14px!important;
+  background:var(--gold-pale);
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] .post-media-nav{
+    opacity:1;
+    width:34px;
+    height:34px;
+    background:rgba(0,0,0,.34);
+  }
+}
+
 @media(max-width:640px){
   body[data-page="feed"] #directViewer.profile-viewer{padding:0;align-items:stretch;justify-content:stretch;background:#050507}
   body[data-page="feed"] .direct-shell{width:100%;height:var(--direct-vh,100dvh);max-height:var(--direct-vh,100dvh);border:0;border-radius:0}
@@ -1922,14 +2001,11 @@ body[data-page="feed"] .post-media-slide{
     #020203;
 }
 body[data-page="feed"] .post-media-dot{
-  width:7px;
-  height:7px;
-  background:rgba(255,255,255,.38);
-  box-shadow:0 0 0 1px rgba(0,0,0,.3);
+  background:rgba(255,255,255,.42);
 }
 body[data-page="feed"] .post-media-dot.active{
   background:var(--gold-pale);
-  box-shadow:0 0 14px rgba(201,168,76,.45);
+  box-shadow:0 0 10px rgba(201,168,76,.28);
 }
 body[data-page="feed"] .post-actions{
   padding:13px 16px 8px;
@@ -2630,6 +2706,8 @@ body[data-page="feed"] #storyViewer .story-reactions-panel{
   flex-direction:column;
   min-height:0;
   overflow:hidden!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  box-shadow:0 22px 70px rgba(0,0,0,.58)!important;
 }
 body[data-page="feed"] #storyViewer .story-reactions-panel.open{
   display:flex!important;
@@ -2640,12 +2718,49 @@ body[data-page="feed"] #storyViewer #storyReactionsContent{
   white-space:normal!important;
   text-overflow:clip!important;
   -webkit-overflow-scrolling:touch;
+  padding:0 2px 2px;
+}
+body[data-page="feed"] #storyViewer .story-activity-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:2px 0 12px;
+  margin-bottom:10px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+body[data-page="feed"] #storyViewer .story-activity-head strong,
+body[data-page="feed"] #storyViewer .story-activity-head span{
+  display:block;
+}
+body[data-page="feed"] #storyViewer .story-activity-head strong{
+  color:#fff;
+  font-size:.98rem;
+  line-height:1.1;
+}
+body[data-page="feed"] #storyViewer .story-activity-head span{
+  color:rgba(255,255,255,.56);
+  font-size:.7rem;
+  margin-top:2px;
+}
+body[data-page="feed"] #storyViewer .story-activity-close{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.075);
+  color:#fff;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
 }
 body[data-page="feed"] #storyViewer .story-activity-tabs{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:8px;
-  margin-bottom:10px;
+  margin-bottom:12px;
 }
 body[data-page="feed"] #storyViewer .story-activity-tabs button{
   min-width:0;
@@ -2663,8 +2778,8 @@ body[data-page="feed"] #storyViewer .story-activity-tabs button{
   cursor:pointer;
 }
 body[data-page="feed"] #storyViewer .story-activity-tabs button.active{
-  border-color:rgba(255,255,255,.28);
-  background:rgba(255,255,255,.16);
+  border-color:rgba(255,48,64,.36);
+  background:linear-gradient(135deg,rgba(255,48,64,.22),rgba(255,255,255,.09));
   color:#fff;
 }
 body[data-page="feed"] #storyViewer .story-activity-tabs button span{
@@ -2688,6 +2803,11 @@ body[data-page="feed"] #storyViewer .story-activity-pane.active{
 body[data-page="feed"] #storyViewer .story-reaction-row{
   grid-template-columns:auto minmax(0,1fr) auto;
   min-width:0;
+  border-top:0!important;
+  border-radius:14px;
+  padding:9px 8px;
+  background:rgba(255,255,255,.035);
+  margin-top:6px;
 }
 body[data-page="feed"] #storyViewer .story-reaction-row strong,
 body[data-page="feed"] #storyViewer .story-reaction-row span{
@@ -2819,5 +2939,137 @@ body[data-page="feed"] #postShareModal.post-share-modal .post-share-context > di
   body[data-page="feed"] #postShareModal.post-share-modal .post-share-footer .social-submit{
     width:100%;
     min-height:48px;
+  }
+}
+
+/* Final story header layout: keep activity/manage controls out of the author block. */
+body[data-page="feed"] #storyViewer.story-viewer.open .story-top-instagram{
+  left:12px!important;
+  right:12px!important;
+  top:18px!important;
+  z-index:90!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:start!important;
+  gap:8px!important;
+  pointer-events:none!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity{
+  min-width:0;
+  max-width:100%;
+  height:42px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  padding-right:2px;
+  pointer-events:auto;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .social-avatar{
+  width:38px!important;
+  height:38px!important;
+  min-width:38px!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .story-author-copy{
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  gap:1px!important;
+  line-height:1.08!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .story-author-copy strong,
+body[data-page="feed"] #storyViewer .story-top-identity .story-author-copy span{
+  display:block!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .story-author-copy strong{
+  font-size:.9rem!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .story-author-copy span{
+  font-size:.68rem!important;
+}
+body[data-page="feed"] #storyViewer .story-top-identity .content-type-badge{
+  max-width:86px!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+}
+body[data-page="feed"] #storyViewer .story-top-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  pointer-events:auto;
+}
+body[data-page="feed"] #storyViewer .story-top-actions .story-close,
+body[data-page="feed"] #storyViewer .story-top-actions .story-sound-toggle,
+body[data-page="feed"] #storyViewer .story-top-actions .story-activity-icon{
+  width:38px!important;
+  min-width:38px!important;
+  height:38px!important;
+  flex:0 0 38px!important;
+  margin-left:0!important;
+  padding:0!important;
+  border-radius:50%!important;
+  font-size:.96rem!important;
+  background:rgba(0,0,0,.42)!important;
+  border:1px solid rgba(255,255,255,.24)!important;
+  backdrop-filter:blur(10px);
+}
+body[data-page="feed"] #storyViewer .story-top-actions .story-activity-icon span{
+  display:none!important;
+}
+body[data-page="feed"] #storyViewer .story-panel-instagram .story-reactions-panel,
+body[data-page="feed"] #storyViewer.story-viewer.open .story-reactions-panel{
+  z-index:80!important;
+}
+@media(min-width:641px){
+  body[data-page="feed"] #storyViewer.story-viewer.open .story-top-instagram{
+    left:16px!important;
+    right:16px!important;
+    top:22px!important;
+    gap:12px!important;
+  }
+  body[data-page="feed"] #storyViewer .story-top-actions .story-close,
+  body[data-page="feed"] #storyViewer .story-top-actions .story-sound-toggle,
+  body[data-page="feed"] #storyViewer .story-top-actions .story-activity-icon{
+    width:42px!important;
+    min-width:42px!important;
+    height:42px!important;
+    flex-basis:42px!important;
+  }
+}
+@media(max-width:640px){
+  body[data-page="feed"] #storyViewer.story-viewer.open .story-top-instagram{
+    top:calc(16px + env(safe-area-inset-top))!important;
+  }
+  body[data-page="feed"] #storyViewer .story-top-identity{
+    grid-template-columns:34px minmax(0,1fr);
+    height:38px;
+    gap:7px;
+  }
+  body[data-page="feed"] #storyViewer .story-top-identity .social-avatar{
+    width:34px!important;
+    height:34px!important;
+    min-width:34px!important;
+  }
+  body[data-page="feed"] #storyViewer .story-top-identity .content-type-badge{
+    display:none!important;
+  }
+  body[data-page="feed"] #storyViewer .story-top-actions{
+    gap:5px;
+  }
+  body[data-page="feed"] #storyViewer .story-top-actions .story-close,
+  body[data-page="feed"] #storyViewer .story-top-actions .story-sound-toggle,
+  body[data-page="feed"] #storyViewer .story-top-actions .story-activity-icon{
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    flex-basis:34px!important;
+    font-size:.86rem!important;
   }
 }

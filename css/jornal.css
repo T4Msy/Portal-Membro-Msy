@@ -4,6 +4,13 @@
    ============================================================ */
 
 body[data-page="jornal"] {
+  --journal-gold: #d5b15b;
+  --journal-wine: #991b1f;
+  --journal-red: #dc2626;
+  --journal-ink: #09090c;
+  --journal-paper: #f4efe2;
+  --journal-paper-muted: #d8cdb6;
+  --journal-paper-ink: #18120f;
   background:
     radial-gradient(circle at 18% 0%, rgba(127,29,29,.18), transparent 34%),
     radial-gradient(circle at 82% 12%, rgba(201,168,76,.12), transparent 32%),
@@ -15,13 +22,6 @@ body[data-page="jornal"] .page-content {
 }
 
 .journal-shell {
-  --journal-gold: #d5b15b;
-  --journal-wine: #991b1f;
-  --journal-red: #dc2626;
-  --journal-ink: #09090c;
-  --journal-paper: #f4efe2;
-  --journal-paper-muted: #d8cdb6;
-  --journal-paper-ink: #18120f;
   display: grid;
   gap: 18px;
   color: var(--text-1);
@@ -592,6 +592,93 @@ body[data-page="jornal"] .page-content {
   object-fit: contain;
 }
 
+.journal-video-description {
+  width: 100%;
+  max-width: none;
+  margin: 2px auto 2px;
+  padding: 14px 16px 16px;
+  min-height: 94px;
+  border: 1px solid rgba(244,239,226,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.055);
+  color: rgba(244,239,226,.88);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: .96rem;
+  line-height: 1.6;
+}
+
+.journal-video-description-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.journal-video-description-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: rgba(244,239,226,.9);
+  font-size: .86rem;
+  line-height: 1.3;
+}
+
+.journal-video-description-meta strong {
+  font-weight: 900;
+}
+
+.journal-video-description-meta span::before {
+  content: "•";
+  margin-right: 8px;
+  color: rgba(244,239,226,.45);
+}
+
+.journal-like-btn {
+  min-width: 72px;
+  height: 38px;
+  border: 1px solid rgba(244,239,226,.12);
+  border-radius: 999px;
+  background: rgba(244,239,226,.08);
+  color: rgba(244,239,226,.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: .84rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease), transform .16s var(--ease);
+}
+
+.journal-like-btn:hover {
+  background: rgba(244,239,226,.13);
+  transform: translateY(-1px);
+}
+
+.journal-like-btn.active {
+  border-color: rgba(201,168,76,.42);
+  background: rgba(201,168,76,.18);
+  color: var(--journal-gold);
+}
+
+.journal-video-description-title {
+  margin-bottom: 4px;
+  color: rgba(244,239,226,.72);
+  font-size: .76rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.journal-video-description p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .journal-article {
   max-width: 880px;
   margin: 0 auto;
@@ -608,6 +695,41 @@ body[data-page="jornal"] .page-content {
   box-shadow: 0 18px 46px rgba(0,0,0,.28);
 }
 
+.journal-article-page {
+  max-width: 920px;
+}
+
+.journal-article-page .journal-paper-mast {
+  margin-bottom: 16px;
+}
+
+.journal-article-kicker {
+  color: #9b111e;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: .72rem;
+  font-weight: 950;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.journal-article h1 {
+  margin: 7px 0 10px;
+  color: #17110d;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.2rem, 5vw, 4.35rem);
+  line-height: .92;
+  font-weight: 950;
+}
+
+.journal-article-deck {
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(24,18,15,.26);
+  color: rgba(24,18,15,.78);
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+
 .journal-article h3 {
   margin: 26px 0 8px;
   font-family: Georgia, "Times New Roman", serif;
@@ -621,6 +743,26 @@ body[data-page="jornal"] .page-content {
 
 .journal-article-flow {
   min-width: 0;
+}
+
+.journal-article-page .journal-article-flow {
+  column-count: 2;
+  column-gap: 28px;
+}
+
+.journal-article-page .journal-article-flow h3 {
+  break-after: avoid;
+  color: #9b111e;
+  font-size: 1.08rem;
+  line-height: 1.12;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.journal-article-page .journal-article-flow p,
+.journal-article-page .journal-article-flow blockquote,
+.journal-article-page .journal-article-flow figure {
+  break-inside: avoid;
 }
 
 .journal-article-photo {
@@ -1527,6 +1669,10 @@ body[data-page="jornal"] .page-content {
     float: none;
     width: 100%;
     margin: 18px 0;
+  }
+
+  .journal-article-page .journal-article-flow {
+    column-count: 1;
   }
 
   .journal-modal {

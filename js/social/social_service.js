@@ -472,6 +472,7 @@ export class SocialService {
       .from('social_posts')
       .update({ content: content || null, edited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', postId)
+      .eq('author_id', this.profile.id)
       .select('id,author_id')
       .maybeSingle();
     if (error) throw error;

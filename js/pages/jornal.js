@@ -42,6 +42,8 @@ const state = {
   activeSection: 'principal',
   activeFormat: 'all',
   editingPostId: null,
+  jornalLikesAvailable: true,
+  jornalViewsAvailable: true,
 };
 
 async function initJornal() {
@@ -76,24 +78,48 @@ async function loadPosts() {
 
   const posts = data || [];
   const ids = posts.map((post) => post.id);
-  const [mediaRes, commentsRes] = ids.length ? await Promise.all([
+  const [mediaRes, commentsRes, likesRes, viewsRes] = ids.length ? await Promise.all([
     db.from('jornal_media').select('*').in('post_id', ids).order('position'),
     db.from('jornal_comments')
       .select('*, author:author_id(id,name,role,tier,initials,color,avatar_url)')
       .in('post_id', ids)
       .is('deleted_at', null)
       .order('created_at'),
-  ]) : [{ data: [] }, { data: [] }];
+    db.from('jornal_likes').select('post_id,user_id').in('post_id', ids),
+    db.from('jornal_views').select('post_id,user_id').in('post_id', ids),
+  ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
   if (mediaRes.error) throw mediaRes.error;
   if (commentsRes.error) throw commentsRes.error;
+  if (likesRes.error) {
+    state.jornalLikesAvailable = false;
+    console.warn('[MSY][jornal] Likes do Jornal indisponiveis:', likesRes.error.message);
+  } else {
+    state.jornalLikesAvailable = true;
+  }
+  if (viewsRes.error) {
+    state.jornalViewsAvailable = false;
+    console.warn('[MSY][jornal] Views do Jornal indisponiveis:', viewsRes.error.message);
+  } else {
+    state.jornalViewsAvailable = true;
+  }
 
   const mediaByPost = groupBy(mediaRes.data || [], 'post_id');
   const commentsByPost = groupBy(commentsRes.data || [], 'post_id');
+  const likes = likesRes.error ? [] : (likesRes.data || []);
+  const views = viewsRes.error ? [] : (viewsRes.data || []);
+  const likesByPost = countBy(likes, 'post_id');
+  const viewsByPost = countBy(views, 'post_id');
+  const myLiked = new Set(likes.filter((like) => like.user_id === state.profile.id).map((like) => like.post_id));
+  const myViewed = new Set(views.filter((view) => view.user_id === state.profile.id).map((view) => view.post_id));
   state.posts = posts.map((post) => ({
     ...post,
     media: mediaByPost[post.id] || [],
     comments: commentsByPost[post.id] || [],
+    likes_count: likesByPost[post.id] || Number(getLocalJornalLiked(post.id)),
+    liked_by_me: myLiked.has(post.id) || getLocalJornalLiked(post.id),
+    views_count: viewsByPost[post.id] || Number(getLocalJornalViewed(post.id)),
+    viewed_by_me: myViewed.has(post.id) || getLocalJornalViewed(post.id),
   }));
 }
 
@@ -205,7 +231,7 @@ function renderSection(key, title, subtitle, posts) {
         </div>
         <span class="journal-chip">${posts.length} item${posts.length === 1 ? '' : 's'}</span>
       </div>
-      ${posts.length ? `<div class="${gridClass}">${posts.map((post, index) => key === 'escrito' ? renderNewspaperCard(post, index === 0) : renderCard(post, index === 0 && key === 'principal')).join('')}</div>` : renderEmpty('Nenhuma publicação nesta seção ainda.')}
+      ${posts.length ? `<div class="${gridClass}">${posts.map((post, index) => renderListingCard(post, index === 0 && (key === 'principal' || key === 'escrito'))).join('')}</div>` : renderEmpty('Nenhuma publicação nesta seção ainda.')}
     </section>`;
 }
 
@@ -217,6 +243,10 @@ function renderSidePanel(title, posts) {
       </div>
       ${posts.length ? `<div class="journal-archive-grid" style="grid-template-columns:1fr">${posts.map((post) => renderCard(post, false)).join('')}</div>` : renderEmpty('Sem itens por enquanto.')}
     </section>`;
+}
+
+function renderListingCard(post, lead = false) {
+  return isWrittenPost(post) ? renderNewspaperCard(post, lead) : renderCard(post, lead);
 }
 
 function renderCard(post, large = false) {
@@ -336,6 +366,7 @@ function openPost(postId) {
     </div>`;
   openModal(modal);
   bindPostModal(modal, post);
+  recordJournalView(post, modal);
 }
 
 function renderPostBody(post) {
@@ -346,12 +377,54 @@ function renderPostBody(post) {
       <div class="journal-player">
         ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
       </div>
-      ${post.summary ? `<div class="journal-article"><p>${Utils.escapeHtml(post.summary)}</p></div>` : ''}`;
+      ${renderVideoDescription(post)}`;
   }
   if (post.post_type === 'tirinha') {
     return renderComicPost(post);
   }
-  return `<article class="journal-article">${renderBlocks(post)}</article>`;
+  return renderArticlePost(post);
+}
+
+function renderVideoDescription(post) {
+  const views = Number(post.views_count ?? post.view_count ?? post.views ?? 0);
+  const viewsLabel = `${views.toLocaleString('pt-BR')} visualizaç${views === 1 ? 'ão' : 'ões'}`;
+  const dateLabel = Utils.formatDate(post.published_at || post.created_at);
+  const description = post.summary || 'Sem descrição.';
+  const likes = Number(post.likes_count || 0);
+  return `
+    <section class="journal-video-description">
+      <div class="journal-video-description-top">
+        <div class="journal-video-description-meta">
+          <strong data-journal-views="${post.id}">${viewsLabel}</strong>
+          <span>${dateLabel}</span>
+        </div>
+        <button type="button" class="journal-like-btn ${post.liked_by_me ? 'active' : ''}" data-like-journal-post="${post.id}" aria-pressed="${post.liked_by_me ? 'true' : 'false'}">
+          <i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-thumbs-up"></i>
+          <span>${likes.toLocaleString('pt-BR')}</span>
+        </button>
+      </div>
+      <div class="journal-video-description-title">Descrição</div>
+      <p>${Utils.escapeHtml(description)}</p>
+    </section>`;
+}
+
+function renderArticlePost(post) {
+  const status = state.canManage && post.status !== 'published'
+    ? `<span>${post.status === 'draft' ? 'Rascunho' : 'Arquivado'}</span>`
+    : '';
+  return `
+    <article class="journal-article journal-article-page">
+      <div class="journal-paper-mast">
+        <span>Jornal escrito</span>
+        <span>${Utils.formatDate(post.published_at || post.created_at)}</span>
+        ${status}
+      </div>
+      <div class="journal-article-kicker">${post.post_type === 'special' ? 'Especial' : 'Matéria'}</div>
+      <h1>${Utils.escapeHtml(post.title)}</h1>
+      ${post.summary || post.subtitle ? `<p class="journal-article-deck">${Utils.escapeHtml(post.summary || post.subtitle)}</p>` : ''}
+      ${renderBlocks(post)}
+      <div class="journal-paper-byline">${Utils.escapeHtml(post.author?.name || 'Editorial MSY')}</div>
+    </article>`;
 }
 
 function renderComicPost(post) {
@@ -443,12 +516,72 @@ function bindPostModal(modal, post) {
   modal.querySelector('[data-journal-comment-form]')?.addEventListener('submit', submitComment);
   modal.querySelectorAll('[data-delete-journal-comment]').forEach((btn) => btn.addEventListener('click', () => deleteComment(post.id, btn.dataset.deleteJournalComment)));
   modal.querySelectorAll('[data-open-journal-image]').forEach((btn) => btn.addEventListener('click', () => openLightbox(btn.dataset.openJournalImage)));
+  modal.querySelector('[data-like-journal-post]')?.addEventListener('click', () => toggleJournalLike(post.id, modal));
   modal.querySelector('[data-edit-journal-post]')?.addEventListener('click', () => {
     closeModal(modal);
     openEditor(post);
   });
   modal.querySelector('[data-archive-journal-post]')?.addEventListener('click', () => toggleArchive(post));
   modal.querySelector('[data-delete-journal-post]')?.addEventListener('click', () => deletePost(post));
+}
+
+async function toggleJournalLike(postId, root = document) {
+  const post = state.posts.find((item) => item.id === postId);
+  const btn = root.querySelector(`[data-like-journal-post="${postId}"]`);
+  if (!post || !btn) return;
+  const previousLiked = Boolean(post.liked_by_me);
+  const previousCount = Number(post.likes_count || 0);
+  const nextLiked = !previousLiked;
+  const nextCount = Math.max(0, previousCount + (nextLiked ? 1 : -1));
+  applyJournalLikeState(post, btn, nextLiked, nextCount);
+  try {
+    if (state.jornalLikesAvailable) {
+      const request = nextLiked
+        ? db.from('jornal_likes').insert({ post_id: postId, user_id: state.profile.id })
+        : db.from('jornal_likes').delete().eq('post_id', postId).eq('user_id', state.profile.id);
+      const { error } = await request;
+      if (error) throw error;
+    } else {
+      setLocalJornalLiked(postId, nextLiked);
+    }
+  } catch (err) {
+    state.jornalLikesAvailable = false;
+    setLocalJornalLiked(postId, nextLiked);
+    applyJournalLikeState(post, btn, nextLiked, nextCount);
+    console.warn('[MSY][jornal] Like local aplicado:', err.message);
+  }
+}
+
+function applyJournalLikeState(post, btn, liked, count) {
+  post.liked_by_me = liked;
+  post.likes_count = count;
+  btn.classList.toggle('active', liked);
+  btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+  btn.innerHTML = `<i class="fa-${liked ? 'solid' : 'regular'} fa-thumbs-up"></i><span>${count.toLocaleString('pt-BR')}</span>`;
+}
+
+async function recordJournalView(post, root = document) {
+  if (!post || post.viewed_by_me) return;
+  const nextCount = Number(post.views_count || 0) + 1;
+  post.viewed_by_me = true;
+  post.views_count = nextCount;
+  setLocalJornalViewed(post.id, true);
+  updateJournalViewsLabel(post, root);
+  try {
+    if (!state.jornalViewsAvailable) return;
+    const { error } = await db.from('jornal_views').insert({ post_id: post.id, user_id: state.profile.id });
+    if (error && error.code !== '23505') throw error;
+  } catch (err) {
+    state.jornalViewsAvailable = false;
+    console.warn('[MSY][jornal] View local aplicada:', err.message);
+  }
+}
+
+function updateJournalViewsLabel(post, root = document) {
+  const label = root.querySelector(`[data-journal-views="${post.id}"]`);
+  if (!label) return;
+  const views = Number(post.views_count || 0);
+  label.textContent = `${views.toLocaleString('pt-BR')} visualizaç${views === 1 ? 'ão' : 'ões'}`;
 }
 
 async function submitComment(event) {
@@ -1081,6 +1214,19 @@ function normalizeArticleBlocks(blocks = []) {
   return valid.length ? valid : [{ type: 'paragraph', text: '' }];
 }
 
+function createUploadId() {
+  const webCrypto = globalThis.crypto;
+  if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID();
+  if (typeof webCrypto?.getRandomValues === 'function') {
+    const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
+    return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 async function uploadJornalFile(file, folder, options = {}) {
   const { imageOnly = false, videoOnly = false } = options;
   validateMediaFile(file, { maxImageMB: 12, maxVideoMB: 50 });
@@ -1091,7 +1237,7 @@ async function uploadJornalFile(file, folder, options = {}) {
     : file;
   const ext = (uploadFile.name.split('.').pop() || 'bin').toLowerCase();
   const safe = uploadFile.name.replace(/\.[^.]+$/, '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 42) || 'jornal';
-  const path = `${state.profile.id}/${folder}/${Date.now()}-${crypto.randomUUID()}-${safe}.${ext}`;
+  const path = `${state.profile.id}/${folder}/${Date.now()}-${createUploadId()}-${safe}.${ext}`;
   const { error } = await db.storage.from(BUCKET).upload(path, uploadFile, {
     cacheControl: '31536000',
     upsert: false,
@@ -1205,6 +1351,10 @@ function getPlainBlockExcerpt(post) {
   return text.length > 170 ? `${text.slice(0, 167)}...` : text;
 }
 
+function isWrittenPost(post) {
+  return ['article', 'special'].includes(post?.post_type);
+}
+
 function groupBy(items, key) {
   return items.reduce((acc, item) => {
     const value = item[key];
@@ -1212,6 +1362,56 @@ function groupBy(items, key) {
     acc[value].push(item);
     return acc;
   }, {});
+}
+
+function countBy(items, key) {
+  return items.reduce((acc, item) => {
+    const value = item[key];
+    acc[value] = (acc[value] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function localJornalLikeKey(postId) {
+  return `msy_jornal_like_${postId}`;
+}
+
+function getLocalJornalLiked(postId) {
+  try {
+    return localStorage.getItem(localJornalLikeKey(postId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setLocalJornalLiked(postId, liked) {
+  try {
+    if (liked) localStorage.setItem(localJornalLikeKey(postId), '1');
+    else localStorage.removeItem(localJornalLikeKey(postId));
+  } catch {
+    /* localStorage pode estar indisponivel em alguns webviews. */
+  }
+}
+
+function localJornalViewKey(postId) {
+  return `msy_jornal_view_${postId}`;
+}
+
+function getLocalJornalViewed(postId) {
+  try {
+    return localStorage.getItem(localJornalViewKey(postId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setLocalJornalViewed(postId, viewed) {
+  try {
+    if (viewed) localStorage.setItem(localJornalViewKey(postId), '1');
+    else localStorage.removeItem(localJornalViewKey(postId));
+  } catch {
+    /* localStorage pode estar indisponivel em alguns webviews. */
+  }
 }
 
 function avatar(profile = {}, size = 36) {

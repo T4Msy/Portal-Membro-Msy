@@ -1939,7 +1939,7 @@
          <input class="form-input" id="na-title" placeholder="Nome da atividade">
        </div>
        <!-- Tipo de atividade: individual ou colaborativa -->
-       <div style="display:flex;gap:8px;margin-bottom:14px">
+       <div class="activity-modal-type-toggle" style="display:flex;gap:8px;margin-bottom:14px">
          <button type="button" id="na-type-individual" class="btn btn-sm btn-outline" style="flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)">
            <i class="fa-solid fa-user"></i> Individual
          </button>
@@ -1970,7 +1970,7 @@
            ${_buildMemberDropdown(members, 'na-collab-ids', 'na-collab-wrap', 'na-collab-tags', 'na-collab-placeholder', 'na-collab-dropdown', 'na-collab-opt')}
          </div>
        </div>
-       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+       <div class="activity-modal-grid activity-modal-grid-main" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
          <div class="form-group">
            <label class="form-label">Prazo *</label>
            <input class="form-input" type="date" id="na-deadline" min="${new Date().toISOString().split('T')[0]}">
@@ -1988,9 +1988,9 @@
          <label class="form-label">Descrição *</label>
          <textarea class="form-input form-textarea" id="na-desc" placeholder="Instruções detalhadas..."></textarea>
        </div>
-       <div style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
-         <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-calendar-clock"></i> Agendamento (opcional)</div>
-         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+       <div class="activity-modal-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
+         <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-calendar-clock"></i> Agendamento (opcional)</div>
+         <div class="activity-modal-grid activity-modal-grid-schedule" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
            <div class="form-group">
              <label class="form-label">Disponível a partir de</label>
              <input class="form-input" type="datetime-local" id="na-opens">
@@ -2002,15 +2002,15 @@
          </div>
          <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Se preenchido, a atividade só aceita envios dentro deste período.</div>
        </div>
-       <div style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
-         <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-bell"></i> Canais de Notificação</div>
-         <div style="font-size:.75rem;color:var(--text-3);margin-bottom:10px">Escolha como o membro será notificado. O sistema respeita as preferências salvas do membro.</div>
-         <div style="display:flex;gap:12px;flex-wrap:wrap">
-           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
+       <div class="activity-modal-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
+         <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-bell"></i> Canais de Notificação</div>
+         <div class="activity-modal-help" style="font-size:.75rem;color:var(--text-3);margin-bottom:10px">Escolha como o membro será notificado. O sistema respeita as preferências salvas do membro.</div>
+         <div class="activity-modal-notif-grid" style="display:flex;gap:12px;flex-wrap:wrap">
+           <label class="activity-modal-notif" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
              <input type="checkbox" id="na-notif-push" checked style="accent-color:var(--red-bright);width:15px;height:15px">
              <i class="fa-solid fa-mobile-screen" style="color:var(--red-bright)"></i> Push no Dispositivo
            </label>
-           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
+           <label class="activity-modal-notif" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
              <input type="checkbox" id="na-notif-email" style="accent-color:#60a5fa;width:15px;height:15px">
              <i class="fa-solid fa-envelope" style="color:#60a5fa"></i> Email
            </label>
@@ -3087,14 +3087,19 @@
      `;
 
      // Prévia de nível no modal (só Diretoria)
-     const previewSel = isDiretoria
-       ? `<select id="modalPreviewNivel" class="form-input form-select" style="font-size:.7rem;padding:4px 6px;border-color:rgba(201,168,76,.25);color:var(--gold);flex:0 0 auto;width:auto;max-width:130px;height:34px" title="Prévia visual — não altera dados">
-           <option value="${nivel}">👁 Prévia</option>
-           <option value="comum"${nivel==='comum'?' selected':''}>◻ Comum</option>
-           <option value="raro"${nivel==='raro'?' selected':''}>🟥 Raro</option>
-           <option value="epico"${nivel==='epico'?' selected':''}>🔶 Épico</option>
-           <option value="lendario"${nivel==='lendario'?' selected':''}>⭐ Lendário</option>
-         </select>` : '';
+    const previewSel = isDiretoria
+      ? `<div id="modalPreviewNivel" class="member-preview-select" data-value="${nivel}" title="Prévia visual — não altera dados">
+          <button type="button" class="member-preview-toggle" data-preview-toggle>
+            <span data-preview-label>Prévia: ${NIVEL_LABELS[nivel] || 'Comum'}</span>
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+          <div class="member-preview-options" data-preview-options>
+            <button type="button" data-preview-value="comum">Comum</button>
+            <button type="button" data-preview-value="raro">Raro</button>
+            <button type="button" data-preview-value="epico">Épico</button>
+            <button type="button" data-preview-value="lendario">Lendário</button>
+          </div>
+        </div>` : '';
 
      const socialProfileBtn = m.status === 'ativo'
        ? `<a class="btn btn-outline" href="feed.html?profile=${m.id}"><i class="fa-solid fa-user-plus"></i> Perfil Social / Seguir</a>`
@@ -3110,14 +3115,12 @@
      // ── Raios Lendários (canvas ao redor do modal, só desktop) ──
      _startLendarioLightning(modalEl, nivel);
 
-     // Prévia: troca o nível visual do modal ao mudar o select
-     document.getElementById('modalPreviewNivel')?.addEventListener('change', e => {
-       if (!modalEl) return;
-       modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
-       const v = e.target.value;
-       if (v && v !== 'comum') modalEl.classList.add(`mcard-${v}`);
-       _startLendarioLightning(modalEl, v);
-       // Atualiza hero e tag também
+    const applyPreviewLevel = (v) => {
+      if (!modalEl) return;
+      modalEl.className = modalEl.className.replace(/\s*mcard-\S+/g, '');
+      if (v && v !== 'comum') modalEl.classList.add(`mcard-${v}`);
+      _startLendarioLightning(modalEl, v);
+      // Atualiza hero e tag também
        const hero = body.querySelector('.mcard-hero');
        if (hero) {
          hero.className = `mcard-hero mcard-hero--${v || 'comum'}`;
@@ -3132,10 +3135,28 @@
            const newTag = document.createElement('div');
            newTag.className = `mcard-nivel-tag mcard-nivel-tag--${v}`;
            newTag.textContent = LABELS[v];
-           hero?.appendChild(newTag);
-         }
-       }
-     });
+          hero?.appendChild(newTag);
+        }
+      }
+    };
+
+    // Prévia: dropdown customizado abre para cima no mobile.
+    const previewControl = document.getElementById('modalPreviewNivel');
+    previewControl?.querySelector('[data-preview-toggle]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      previewControl.classList.toggle('open');
+    });
+    previewControl?.querySelectorAll('[data-preview-value]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const v = btn.dataset.previewValue;
+        previewControl.dataset.value = v;
+        const label = previewControl.querySelector('[data-preview-label]');
+        if (label) label.textContent = `Prévia: ${NIVEL_LABELS[v] || 'Comum'}`;
+        previewControl.classList.remove('open');
+        applyPreviewLevel(v);
+      });
+    });
 
      document.getElementById('closeMemberProfile').addEventListener('click', () => {
        modal.classList.remove('open');
