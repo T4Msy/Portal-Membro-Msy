@@ -64,6 +64,7 @@ const MSYPerms = {
     { key: 'ver_desempenho',        label: 'Ver Painel de Desempenho', group: 'Admin',    icon: 'fa-chart-line' },
     { key: 'notificar_membros',     label: 'Enviar Notificações',    group: 'Admin',      icon: 'fa-bell' },
     { key: 'gerenciar_permissoes',  label: 'Gerenciar Permissões',   group: 'Admin',      icon: 'fa-shield-halved' },
+    { key: 'gerenciar_abas',        label: 'Gerenciar Abas',         group: 'Admin',      icon: 'fa-table-columns' },
   ],
 
   // Cache de permissões do usuário atual
@@ -480,10 +481,136 @@ async function initPermissoesPage() {
         </div>
         <div id="permsManagerBody" class="permissions-manager-body"></div>
       </section>
+      <section class="permissions-workspace card-enter">
+        <div class="permissions-workspace-head">
+          <div>
+            <div class="permissions-section-title"><i class="fa-solid fa-table-columns"></i> Visibilidade de abas</div>
+            <div class="permissions-section-sub">Controle quais abas aparecem e quais páginas exigem cargo, grupo ou permissão.</div>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="tabAccessReload"><i class="fa-solid fa-rotate"></i> Recarregar</button>
+        </div>
+        <div id="tabAccessBody" class="permissions-manager-body"></div>
+      </section>
     </div>`;
 
   const body = document.getElementById('permsManagerBody');
   await renderPermissionsWorkspace(body);
+  await renderTabAccessWorkspace(document.getElementById('tabAccessBody'));
+  document.getElementById('tabAccessReload')?.addEventListener('click', () => renderTabAccessWorkspace(document.getElementById('tabAccessBody')));
+}
+
+const MSY_TAB_CATALOG = [
+  ['dashboard', 'Dashboard'], ['atividades', 'Atividades'], ['comunicados', 'Comunicados'],
+  ['membros', 'Membros'], ['eventos', 'Eventos'], ['reunioes', 'Reuniões'],
+  ['ranking', 'Ranking'], ['jornal', 'Jornal da Masayoshi'], ['feed', 'Feed'],
+  ['sugestoes', 'Sugestões'], ['biblioteca', 'Biblioteca'], ['premiacoes', 'Premiações'],
+  ['ordem', 'Estrutura'], ['tecnologias', 'Tecnologias'], ['mensalidade', 'Mensalidade'],
+  ['icm', 'ICM'], ['perfil', 'Meu Perfil'], ['admin', 'Administração'],
+  ['permissoes', 'Permissões'], ['desempenho', 'Desempenho'],
+];
+
+async function renderTabAccessWorkspace(body) {
+  if (!body) return;
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:180px;gap:12px;color:var(--text-3)"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);font-size:1.3rem"></i> Carregando abas...</div>`;
+
+  let rules = [];
+  try {
+    const { data, error } = await db.from('tab_permissions').select('*').order('label');
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach((row) => { map[row.page_key] = row; });
+    rules = MSY_TAB_CATALOG.map(([page_key, label]) => ({
+      page_key,
+      label,
+      visible: true,
+      allowed_tiers: [],
+      allowed_roles: [],
+      required_permissions: [],
+      ...(map[page_key] || {}),
+    }));
+  } catch (err) {
+    console.error('[MSY][abas] Erro ao carregar configuração:', err);
+    body.innerHTML = `<div class="empty-state" style="padding:28px"><div class="empty-state-text">Aplique a migration de permissões de abas para habilitar este painel.</div></div>`;
+    return;
+  }
+
+  const permissionOptions = MSYPerms.ALL.map((perm) => `<option value="${perm.key}">${Utils.escapeHtml(perm.label)}</option>`).join('');
+
+  body.innerHTML = `
+    <div class="tab-access-toolbar">
+      <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="show"><i class="fa-solid fa-eye"></i> Mostrar todas</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="hide"><i class="fa-solid fa-eye-slash"></i> Ocultar todas</button>
+      <button type="button" class="btn btn-primary btn-sm" id="saveAllTabs"><i class="fa-solid fa-floppy-disk"></i> Salvar alterações</button>
+    </div>
+    <div class="tab-access-list">
+      ${rules.map((rule) => `
+        <div class="tab-access-row" data-tab-row="${Utils.escapeHtml(rule.page_key)}">
+          <div class="tab-access-main">
+            <label class="pm-toggle" title="Mostrar aba">
+              <input type="checkbox" class="pm-toggle-input" data-tab-field="visible" ${rule.visible !== false ? 'checked' : ''}>
+              <span class="pm-toggle-track"></span>
+            </label>
+            <div>
+              <strong>${Utils.escapeHtml(rule.label)}</strong>
+              <span>${Utils.escapeHtml(rule.page_key)}.html</span>
+            </div>
+          </div>
+          <div class="tab-access-fields">
+            <label>Cargos
+              <input class="form-input" data-tab-field="allowed_tiers" placeholder="membro,diretoria" value="${Utils.escapeHtml((rule.allowed_tiers || []).join(','))}">
+            </label>
+            <label>Grupos/Funções
+              <input class="form-input" data-tab-field="allowed_roles" placeholder="Admin,Editor" value="${Utils.escapeHtml((rule.allowed_roles || []).join(','))}">
+            </label>
+            <label>Permissões
+              <select class="form-input" data-tab-field="required_permissions" multiple>
+                ${permissionOptions}
+              </select>
+            </label>
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  rules.forEach((rule) => {
+    const row = body.querySelector(`[data-tab-row="${CSS.escape(rule.page_key)}"]`);
+    const select = row?.querySelector('[data-tab-field="required_permissions"]');
+    [...(rule.required_permissions || [])].forEach((key) => {
+      const option = select?.querySelector(`option[value="${CSS.escape(key)}"]`);
+      if (option) option.selected = true;
+    });
+  });
+
+  body.querySelectorAll('[data-tabs-bulk]').forEach((btn) => btn.addEventListener('click', () => {
+    const show = btn.dataset.tabsBulk === 'show';
+    body.querySelectorAll('[data-tab-field="visible"]').forEach((input) => { input.checked = show; });
+  }));
+
+  body.querySelector('#saveAllTabs')?.addEventListener('click', async () => {
+    const btn = body.querySelector('#saveAllTabs');
+    const rows = [...body.querySelectorAll('[data-tab-row]')].map((row) => ({
+      page_key: row.dataset.tabRow,
+      label: rules.find((rule) => rule.page_key === row.dataset.tabRow)?.label || row.dataset.tabRow,
+      visible: row.querySelector('[data-tab-field="visible"]')?.checked !== false,
+      allowed_tiers: splitCsv(row.querySelector('[data-tab-field="allowed_tiers"]')?.value),
+      allowed_roles: splitCsv(row.querySelector('[data-tab-field="allowed_roles"]')?.value),
+      required_permissions: [...row.querySelector('[data-tab-field="required_permissions"]')?.selectedOptions || []].map((opt) => opt.value),
+      updated_at: new Date().toISOString(),
+    }));
+    Utils.setButtonLoading?.(btn, true, '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...');
+    const { error } = await db.from('tab_permissions').upsert(rows, { onConflict: 'page_key' });
+    Utils.setButtonLoading?.(btn, false);
+    if (error) {
+      console.error('[MSY][abas] Erro ao salvar:', error);
+      Utils.showToast('Erro ao salvar abas.', 'error');
+      return;
+    }
+    MSYTabAccess?.invalidate?.();
+    Utils.showToast('Permissões de abas salvas.');
+  });
+}
+
+function splitCsv(value = '') {
+  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 async function renderPermissionsWorkspace(body) {

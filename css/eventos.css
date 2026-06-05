@@ -378,3 +378,41 @@ body[data-page="eventos"] .event-detail-desc {
     display: none;
   }
 }
+
+[data-theme="light"] body[data-page="eventos"] .events-hero,
+[data-theme="light"] body[data-page="eventos"] .ev-card,
+[data-theme="light"] body[data-page="eventos"] .events-stat,
+[data-theme="light"] body[data-page="eventos"] .event-detail-stat {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,250,240,.84)),
+    #fffaf0;
+  border-color: rgba(120,77,20,.22);
+  box-shadow: 0 16px 42px rgba(120,77,20,.10);
+}
+
+[data-theme="light"] body[data-page="eventos"] .events-title,
+[data-theme="light"] body[data-page="eventos"] .ev-card-title,
+[data-theme="light"] body[data-page="eventos"] .event-detail-stat-value,
+[data-theme="light"] body[data-page="eventos"] .ev-card strong {
+  color: #2b1f18;
+}
+
+[data-theme="light"] body[data-page="eventos"] .events-subtitle,
+[data-theme="light"] body[data-page="eventos"] .events-stat-label,
+[data-theme="light"] body[data-page="eventos"] .ev-card-desc,
+[data-theme="light"] body[data-page="eventos"] .ev-card-crew,
+[data-theme="light"] body[data-page="eventos"] .event-detail-desc,
+[data-theme="light"] body[data-page="eventos"] .event-detail-stat-label {
+  color: #5f5145;
+}
+
+[data-theme="light"] body[data-page="eventos"] .events-tab {
+  background: rgba(255,255,255,.72);
+  border-color: rgba(120,77,20,.18);
+  color: #5f5145;
+}
+
+[data-theme="light"] body[data-page="eventos"] .events-tab.active {
+  background: rgba(185,28,28,.10);
+  color: #8f1418;
+}

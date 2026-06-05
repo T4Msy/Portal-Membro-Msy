@@ -596,3 +596,92 @@ body[data-page="permissoes"] #permsManagerBody {
     grid-template-columns: 1fr;
   }
 }
+
+.tab-access-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.tab-access-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.tab-access-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  border: 1px solid var(--border-faint);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  padding: 12px;
+}
+
+.tab-access-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tab-access-main strong,
+.tab-access-main span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-access-main strong {
+  color: var(--text-1);
+  font-size: .9rem;
+}
+
+.tab-access-main span {
+  color: var(--text-3);
+  font-size: .72rem;
+  margin-top: 2px;
+}
+
+.tab-access-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.tab-access-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--gold);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  min-width: 0;
+}
+
+.tab-access-fields select[multiple] {
+  min-height: 82px;
+  font-size: .78rem;
+}
+
+@media (max-width: 860px) {
+  .tab-access-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-access-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-access-toolbar .btn {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+}

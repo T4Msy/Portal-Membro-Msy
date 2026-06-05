@@ -435,7 +435,7 @@ async function initPremiacoes() {
     }
 
     modal.innerHTML = `
-      <div class="modal-box" style="max-width:500px">
+      <div class="modal modal-box" style="max-width:500px">
         <div class="modal-header">
           <h3 class="font-cinzel">
             <i class="fa-solid fa-${isEdit ? 'pen' : 'plus'}" style="color:var(--gold);margin-right:8px"></i>
@@ -688,7 +688,7 @@ async function initPremiacoes() {
           <div class="page-header-sub">Histórico de conquistas e premiações da Masayoshi Order</div>
         </div>
         ${isDiretoria ? `
-          <button class="btn btn-gold" id="premAddBtn" style="display:none">
+          <button class="btn btn-gold" id="premAddBtn" data-open-prem-modal style="display:none">
             <i class="fa-solid fa-plus"></i> Nova Premiação
           </button>
         ` : ''}
@@ -710,11 +710,17 @@ async function initPremiacoes() {
           <div style="text-align:center;padding:80px 20px;color:var(--text-3)">
             <div style="font-size:3rem;margin-bottom:16px">🏆</div>
             <p>Nenhuma premiação cadastrada ainda.</p>
-            ${isDiretoria ? `<button class="btn btn-gold" id="premAddBtnEmpty" style="margin-top:16px"><i class="fa-solid fa-plus"></i> Criar primeira premiação</button>` : ''}
+            ${isDiretoria ? `<button class="btn btn-gold" data-open-prem-modal style="margin-top:16px"><i class="fa-solid fa-plus"></i> Criar primeira premiação</button>` : ''}
           </div>
         ` : gruposHtml}
       `;
-      document.getElementById('premAddBtnEmpty')?.addEventListener('click', () => renderModalPremiacao());
+      document.querySelectorAll('[data-open-prem-modal]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          renderModalPremiacao();
+        });
+      });
       sub.querySelectorAll('.prem-detail-btn').forEach(btn => {
         btn.addEventListener('click', () => renderDetalhe(btn.dataset.id));
       });

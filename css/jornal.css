@@ -916,11 +916,11 @@ body[data-page="jornal"] .page-content {
 
 .journal-modal-panel {
   width: min(980px, 100%);
-  max-height: calc(100dvh - 36px);
-  overflow: auto;
+  max-height: min(920px, calc(100dvh - 36px));
+  overflow: hidden;
   border-radius: 8px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
 }
 
@@ -932,6 +932,7 @@ body[data-page="jornal"] .page-content {
   gap: 12px;
   padding: 16px 18px;
   border-bottom: 1px solid rgba(201,168,76,.14);
+  flex: 0 0 auto;
 }
 
 .journal-modal-head > div:first-child,
@@ -943,6 +944,7 @@ body[data-page="jornal"] .page-content {
   border-top: 1px solid rgba(201,168,76,.14);
   border-bottom: 0;
   flex-wrap: wrap;
+  background: rgba(9,9,12,.96);
 }
 
 .journal-modal-title {
@@ -954,6 +956,9 @@ body[data-page="jornal"] .page-content {
 .journal-modal-body {
   padding: 18px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .journal-editor {
@@ -1737,16 +1742,23 @@ body[data-page="jornal"] .page-content {
     justify-content: center;
   }
 
-  .journal-crop-modal-panel {
-    width: 100vw;
-    height: 100dvh;
-    border-radius: 0;
-    border: 0;
-  }
+.journal-crop-modal-panel {
+  width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
 
-  .journal-crop-modal-body {
-    padding: 14px;
-  }
+.journal-crop-modal-body {
+  padding: 14px;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
   .journal-crop-modal-foot .btn {
     width: 100%;
@@ -1760,4 +1772,38 @@ body[data-page="jornal"] .page-content {
     flex-wrap: wrap;
     white-space: normal;
   }
+}
+
+.journal-crop-frame {
+  touch-action: none;
+}
+
+.journal-crop-frame img,
+.journal-editor-paper-photo img.crop-active,
+.journal-photo-pick-preview img.crop-active,
+.journal-article-photo img.crop-active {
+  object-fit: cover;
+}
+
+[data-theme="light"] .journal-shell,
+[data-theme="light"] .journal-section-sub,
+[data-theme="light"] .journal-card-summary,
+[data-theme="light"] .journal-card-meta {
+  color: #4f4032;
+}
+
+[data-theme="light"] .journal-chip {
+  background: rgba(120,77,20,.08);
+  border-color: rgba(120,77,20,.22);
+  color: #3b2b20;
+}
+
+[data-theme="light"] .journal-card {
+  background: rgba(255,250,240,.82);
+  border-color: rgba(120,77,20,.18);
+}
+
+[data-theme="light"] .journal-modal-head,
+[data-theme="light"] .journal-modal-foot {
+  background: rgba(255,250,240,.96);
 }

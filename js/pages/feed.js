@@ -1286,11 +1286,13 @@ function syncPostShareSelection(modal) {
 }
 
 async function sendSelectedPostShares(modal, postId) {
+  if (modal.dataset.shareSending === 'true') return;
   const selected = (modal.dataset.selectedMembers || '').split(',').filter(Boolean);
   if (!selected.length) return;
   const button = modal.querySelector('#postShareSendBtn');
   let sent = 0;
   try {
+    modal.dataset.shareSending = 'true';
     Utils.setButtonLoading?.(button, true);
     for (const memberId of selected) {
       const ok = await sharePostToDirect(postId, memberId, null, { openAfterSend: memberId === selected.at(-1), quiet: true });
@@ -1298,7 +1300,9 @@ async function sendSelectedPostShares(modal, postId) {
     }
     if (sent) Utils.showToast(`Publicacao enviada para ${sent} membro${sent === 1 ? '' : 's'}.`);
   } finally {
+    delete modal.dataset.shareSending;
     Utils.setButtonLoading?.(button, false);
+    syncPostShareSelection(modal);
   }
 }
 
@@ -3926,10 +3930,15 @@ async function openStoryPremium(groupIndex, storyIndex) {
   modal.querySelector('#storyInlineReply')?.addEventListener('submit', async (e) => {
     stopStoryInteractiveEvent(e);
     e.preventDefault();
+    if (modal.dataset.storyReplySending === 'true') return;
     const input = modal.querySelector('#storyReplyInput');
+    const button = modal.querySelector('.story-inline-send');
     const text = input?.value.trim();
     if (!text) return;
     try {
+      modal.dataset.storyReplySending = 'true';
+      if (input) input.disabled = true;
+      Utils.setButtonLoading?.(button, true, '<i class="fa-solid fa-circle-notch fa-spin"></i>');
       const targetUserId = group?.author?.id;
       if (!targetUserId) throw new Error('Nao foi possivel identificar o autor do story.');
       const conversationId = await state.service.ensureDirectConversation(targetUserId);
@@ -3943,6 +3952,10 @@ async function openStoryPremium(groupIndex, storyIndex) {
     } catch (err) {
       console.error('[MSY Feed Error]', err);
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
+    } finally {
+      delete modal.dataset.storyReplySending;
+      if (input) input.disabled = false;
+      Utils.setButtonLoading?.(button, false);
     }
   });
   modal.querySelector('[data-toggle-story-reactions]')?.addEventListener('click', (e) => {

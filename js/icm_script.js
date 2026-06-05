@@ -1694,7 +1694,9 @@ function _icmInit() {
 
   // Previne scroll em mobile fora do result-scroll
   document.body.addEventListener('touchmove', e => {
-    if (!e.target.closest('.result-scroll')) e.preventDefault();
+    if (!e.target.closest('#icm-app')) return;
+    if (e.target.closest('.result-scroll,.screen.active,.option-btn,button,input,select,textarea')) return;
+    e.preventDefault();
   }, { passive: false });
 }
 

@@ -34,6 +34,8 @@ const EDITOR_FORMATS = {
   article: ['fa-newspaper', 'Jornal escrito'],
   tirinha: ['fa-table-cells-large', 'Tirinha'],
 };
+const ARTICLE_PHOTO_POSITION = 0;
+const GALLERY_POSITION_START = 10;
 
 const state = {
   profile: null,
@@ -843,7 +845,7 @@ async function savePost(event) {
         media_type: 'image',
         url: articlePhoto.url,
         storage_path: articlePhoto.storage_path,
-        position: -Date.now(),
+        position: ARTICLE_PHOTO_POSITION,
         alt_text: JSON.stringify({
           kind: 'article_photo',
           position: form.elements.article_photo_position?.value || 'right',
@@ -854,7 +856,7 @@ async function savePost(event) {
     }
     for (let index = 0; index < galleryFiles.length; index += 1) {
       const uploaded = await uploadJornalFile(galleryFiles[index], 'gallery', { imageOnly: true });
-      mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'image', url: uploaded.url, storage_path: uploaded.storage_path, position: index + 1 });
+      mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'image', url: uploaded.url, storage_path: uploaded.storage_path, position: GALLERY_POSITION_START + index });
     }
     if (mediaRows.length) {
       const { error } = await db.from('jornal_media').insert(mediaRows);
@@ -1080,7 +1082,7 @@ function setArticleCropState(crop) {
 function applyArticleCropStyle(img, crop) {
   const form = document.getElementById('journalEditorForm');
   const active = form?.elements.article_photo_crop_active?.value === '1';
-  img.classList.remove('crop-active');
+  img.classList.toggle('crop-active', active);
   img.style.objectPosition = 'center';
   img.style.transform = active
     ? `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})`

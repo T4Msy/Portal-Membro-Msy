@@ -124,6 +124,73 @@
        return profile?.tier === 'diretoria';
      }
    };
+
+   const MSYTabAccess = {
+     ALWAYS_ALLOWED: new Set(['login', 'offline', 'onboarding', 'busca']),
+     ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho']),
+     _rules: null,
+
+     async rules() {
+       if (this._rules) return this._rules;
+       try {
+         const { data, error } = await db.from('tab_permissions').select('*');
+         if (error) throw error;
+         this._rules = {};
+         (data || []).forEach((rule) => { this._rules[rule.page_key] = rule; });
+       } catch (err) {
+         console.warn('[MSY][tabs] Configuração de abas indisponível, usando fallback local:', err.message);
+         this._rules = {};
+       }
+       return this._rules;
+     },
+
+     async canAccess(pageKey, profile) {
+       if (!pageKey || this.ALWAYS_ALLOWED.has(pageKey)) return true;
+       if (profile?.tier === 'diretoria') return true;
+       if (this.ADMIN_ONLY.has(pageKey)) return false;
+
+       const rules = await this.rules();
+       const rule = rules[pageKey];
+       if (rule) {
+         try {
+           const { data, error } = await db.rpc('can_access_tab', { p_page_key: pageKey });
+           if (!error && typeof data === 'boolean') return data;
+         } catch (err) {
+           console.warn('[MSY][tabs] RPC de autorização indisponível:', err.message);
+         }
+       }
+       if (!rule) {
+         return typeof Features !== 'undefined' ? Features.isEnabled(pageKey, profile) : true;
+       }
+       if (rule.visible === false) return false;
+       if (Array.isArray(rule.allowed_tiers) && rule.allowed_tiers.length && !rule.allowed_tiers.includes(profile?.tier)) return false;
+       if (Array.isArray(rule.allowed_roles) && rule.allowed_roles.length && !rule.allowed_roles.includes(profile?.role)) return false;
+       if (Array.isArray(rule.required_permissions) && rule.required_permissions.length) {
+         if (typeof MSYPerms === 'undefined') return false;
+         return MSYPerms.checkAny(profile.id, profile.tier, rule.required_permissions);
+       }
+       return true;
+     },
+
+     async filterNav(navItems, profile) {
+       const allowed = [];
+       for (const item of navItems) {
+         if (await this.canAccess(item.page, profile)) allowed.push(item);
+       }
+       return allowed;
+     },
+
+     async guardPage(pageKey, profile, redirectTo = 'dashboard.html') {
+       const ok = await this.canAccess(pageKey, profile);
+       if (!ok) {
+         Utils.showToast?.('Você não tem permissão para acessar esta página.', 'error');
+         window.location.href = redirectTo;
+       }
+       return ok;
+     },
+
+     invalidate() { this._rules = null; },
+   };
    
    /* ============================================================
       UTILS
@@ -251,6 +318,7 @@
      /* Aplicar ViewMode: mascara tier se admin estiver em modo visualizacao */
      const profile = ViewMode.maskProfile(profileRaw);
      const isRealAdmin = profileRaw.tier === 'diretoria';
+     if (!await MSYTabAccess.guardPage(activePage, profile)) return null;
 
      /* Injetar banner de ViewMode se ativo */
      if (ViewMode.isActive()) ViewMode.injectBanner();
@@ -276,7 +344,7 @@
        .in('status', ['Pendente', 'Em andamento']);
      const actBadge = actBadgeCount > 0 ? actBadgeCount : '';
    
-     const nav = [
+     const nav = await MSYTabAccess.filterNav([
        { page: 'dashboard',   icon: 'fa-solid fa-gauge',         label: 'Dashboard' },
        { page: 'atividades',  icon: 'fa-solid fa-list-check',    label: 'Atividades', badge: actBadge },
        { page: 'comunicados', icon: 'fa-solid fa-bullhorn',      label: 'Comunicados' },
@@ -294,7 +362,7 @@
        { page: 'mensalidade', icon: 'fa-solid fa-credit-card',   label: 'Mensalidade' },
        { page: 'icm',         icon: 'fa-solid fa-brain',         label: 'ICM' },
        { page: 'perfil',      icon: 'fa-solid fa-circle-user',   label: 'Meu Perfil' },
-     ].filter(item => item.page === 'perfil' || (typeof Features !== 'undefined' ? Features.isEnabled(item.page, profile) : true));
+     ], profile);
    
      sidebar.innerHTML = `
        <div class="sidebar-logo">
