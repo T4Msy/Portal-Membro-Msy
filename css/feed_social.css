@@ -3073,3 +3073,253 @@ body[data-page="feed"] #storyViewer.story-viewer.open .story-reactions-panel{
     font-size:.86rem!important;
   }
 }
+
+/* Final mobile resilience for Direct, post editor and story editor. */
+body[data-page="feed"] .direct-shell,
+body[data-page="feed"] .direct-sidebar,
+body[data-page="feed"] .direct-chat,
+body[data-page="feed"] .direct-chat-header,
+body[data-page="feed"] .direct-chat-body,
+body[data-page="feed"] .direct-composer,
+body[data-page="feed"] .direct-message-bubble,
+body[data-page="feed"] .direct-thread,
+body[data-page="feed"] .social-edit-post-panel,
+body[data-page="feed"] .social-edit-post-body,
+body[data-page="feed"] .social-edit-media-item,
+body[data-page="feed"] .story-compose-panel,
+body[data-page="feed"] .story-compose-side {
+  min-width: 0;
+}
+
+body[data-page="feed"] .direct-message-bubble,
+body[data-page="feed"] .direct-thread,
+body[data-page="feed"] .direct-chat-name,
+body[data-page="feed"] .direct-chat-handle,
+body[data-page="feed"] .story-caption-input {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+body[data-page="feed"] .social-edit-post-head,
+body[data-page="feed"] .social-edit-post-actions,
+body[data-page="feed"] .social-edit-media-toolbar,
+body[data-page="feed"] .story-compose-actions {
+  flex-wrap: wrap;
+}
+
+body[data-page="feed"] .social-edit-media-actions {
+  grid-template-columns: minmax(0, 1fr) repeat(3, 38px);
+}
+
+body[data-page="feed"] .social-edit-media-actions span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media(max-width:760px){
+  body[data-page="feed"] #directViewer.profile-viewer.open {
+    overflow: hidden;
+  }
+
+  body[data-page="feed"] .direct-chat-header {
+    grid-template-columns: auto minmax(0,1fr) auto;
+  }
+
+  body[data-page="feed"] .direct-composer {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body[data-page="feed"] .direct-composer-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  body[data-page="feed"] .direct-message-bubble {
+    max-width: min(84%, calc(100vw - 76px))!important;
+  }
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] #postEditorModal.story-composer-modal.open,
+  body[data-page="feed"] #storyComposerModal.story-composer-modal.open {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+  }
+
+  body[data-page="feed"] .social-edit-post-panel {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  body[data-page="feed"] .social-edit-post-head {
+    align-items: flex-start;
+    padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+  }
+
+  body[data-page="feed"] .social-edit-post-head > div {
+    min-width: 0;
+  }
+
+  body[data-page="feed"] .social-edit-post-head strong,
+  body[data-page="feed"] .social-edit-post-head span {
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="feed"] .social-edit-post-body {
+    padding: 14px;
+  }
+
+  body[data-page="feed"] .social-edit-media-toolbar {
+    align-items: stretch;
+  }
+
+  body[data-page="feed"] .social-edit-media-toolbar .follow-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  body[data-page="feed"] .social-edit-media-list {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="feed"] .social-edit-media-actions {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 36px);
+    gap: 5px;
+  }
+
+  body[data-page="feed"] .social-edit-post-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  body[data-page="feed"] .social-edit-post-actions .btn,
+  body[data-page="feed"] .social-edit-post-actions .follow-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-side {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions .btn,
+  body[data-page="feed"] #storyComposerModal .story-compose-actions .follow-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Auditoria responsiva final do feed social. */
+body[data-page="feed"] .social-shell,
+body[data-page="feed"] .social-main,
+body[data-page="feed"] .social-rail,
+body[data-page="feed"] .social-hero,
+body[data-page="feed"] .social-card,
+body[data-page="feed"] .social-post,
+body[data-page="feed"] .post-head,
+body[data-page="feed"] .post-author,
+body[data-page="feed"] .post-author-copy,
+body[data-page="feed"] .post-content,
+body[data-page="feed"] .post-actions,
+body[data-page="feed"] .post-comments-panel,
+body[data-page="feed"] .post-comments-body,
+body[data-page="feed"] .profile-panel,
+body[data-page="feed"] .profile-modal-body,
+body[data-page="feed"] .media-viewer-panel,
+body[data-page="feed"] .post-share-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page="feed"] .social-title,
+body[data-page="feed"] .social-subtitle,
+body[data-page="feed"] .post-content,
+body[data-page="feed"] .comment-text,
+body[data-page="feed"] .reply-text,
+body[data-page="feed"] .profile-modal-bio,
+body[data-page="feed"] .post-author-name,
+body[data-page="feed"] .post-meta,
+body[data-page="feed"] .member-name,
+body[data-page="feed"] .member-role,
+body[data-page="feed"] .message-name,
+body[data-page="feed"] .message-sub {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+body[data-page="feed"] .social-pill,
+body[data-page="feed"] .follow-btn,
+body[data-page="feed"] .social-submit,
+body[data-page="feed"] .post-menu button,
+body[data-page="feed"] .post-action-count {
+  max-width: 100%;
+  white-space: normal;
+}
+
+body[data-page="feed"] .post-media-slide img,
+body[data-page="feed"] .post-media-slide video {
+  max-width: 100%;
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] .post-head {
+    gap: 8px;
+  }
+
+  body[data-page="feed"] .post-author-name,
+  body[data-page="feed"] .post-meta span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  body[data-page="feed"] .post-actions {
+    flex-wrap: wrap;
+  }
+
+  body[data-page="feed"] .post-menu {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+
+  body[data-page="feed"] .media-viewer,
+  body[data-page="feed"] .post-comments-modal {
+    padding: 0;
+  }
+}
+
+body[data-page="feed"] .story-viewer {
+  width: 100%;
+  max-width: 100%;
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] .story-viewer.open .story-panel-instagram {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body[data-page="feed"] .direct-thread-top span,
+  body[data-page="feed"] .direct-thread-handle,
+  body[data-page="feed"] .direct-thread-preview,
+  body[data-page="feed"] .activity-copy span,
+  body[data-page="feed"] .activity-item time,
+  body[data-page="feed"] .post-share-footer span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}

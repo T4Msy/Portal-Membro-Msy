@@ -356,6 +356,12 @@ table {
   min-width: 720px;
 }
 
+@media (max-width: 640px) {
+  .table-scroll-wrap table {
+    min-width: min(620px, 160vw);
+  }
+}
+
 /* Mobile table: hide less important columns via classes */
 @media (max-width: 640px) {
   .col-hide-xs { display: none !important; }
@@ -577,6 +583,34 @@ table {
   color: var(--text-2);
   font-size: 0.94rem;
   max-width: 360px;
+}
+
+.offline-shell,
+.offline-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.offline-card h1,
+.offline-card p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
+  .offline-shell {
+    padding: max(14px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .offline-card {
+    padding: 26px 18px;
+    border-radius: 16px;
+  }
+
+  .offline-mark {
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+  }
 }
 
 /* ============================================================

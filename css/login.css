@@ -11,3 +11,59 @@
 .orb { position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none; }
 .orb-1 { width:350px;height:350px;background:radial-gradient(circle,rgba(185,28,28,.08),transparent 70%);top:-80px;left:-80px; }
 .orb-2 { width:280px;height:280px;background:radial-gradient(circle,rgba(201,168,76,.06),transparent 70%);bottom:-60px;right:-60px; }
+
+body[data-page="login"],
+body[data-page="login"] .login-page,
+body[data-page="login"] .login-container,
+body[data-page="login"] .login-card {
+  max-width: 100%;
+  min-width: 0;
+}
+
+body[data-page="login"] .login-page {
+  min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+}
+
+body[data-page="login"] .login-logo-sep span,
+body[data-page="login"] .login-logo-sub,
+body[data-page="login"] .login-title,
+body[data-page="login"] .login-btn {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
+  body[data-page="login"] .login-card {
+    padding: 28px 18px;
+    border-radius: 16px;
+  }
+
+  body[data-page="login"] .login-logo-mark {
+    font-size: 2.45rem;
+  }
+
+  body[data-page="login"] .login-logo-sep span,
+  body[data-page="login"] .login-logo-sub {
+    letter-spacing: .16em;
+  }
+
+  body[data-page="login"] .login-title,
+  body[data-page="login"] .login-btn {
+    letter-spacing: .08em;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  body[data-page="login"] .login-page {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  body[data-page="login"] .login-card {
+    padding-block: 22px;
+  }
+
+  body[data-page="login"] .login-logo {
+    margin-bottom: 18px;
+  }
+}

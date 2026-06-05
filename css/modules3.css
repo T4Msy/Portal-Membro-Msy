@@ -64,7 +64,7 @@ body[data-page="permissoes"] .page-content {
   display: grid;
   grid-template-columns: repeat(3, minmax(96px, 1fr));
   gap: 8px;
-  min-width: 330px;
+  min-width: 0;
 }
 
 .permissions-stat {

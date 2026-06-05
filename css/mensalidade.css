@@ -14,6 +14,16 @@
   margin-bottom: 28px;
 }
 
+body[data-page="mensalidade"] .page-content,
+.mens-hero,
+.mens-status-card,
+.mens-manifesto,
+.mens-ordem-section,
+.mens-membro-item,
+.mens-membro-info {
+  min-width: 0;
+}
+
 .mens-hero::before {
   content: '';
   position: absolute;
@@ -373,6 +383,7 @@
 .mens-membro-role {
   font-size: 0.75rem;
   color: var(--text-3);
+  overflow-wrap: anywhere;
 }
 
 .mens-badge {
@@ -424,9 +435,72 @@
 /* ── Responsivo ───────────────────────────────────────────── */
 @media (max-width: 640px) {
   .mens-hero { padding: 28px 20px; }
+  .mens-hero::after {
+    font-size: 4.2rem;
+    right: 12px;
+    bottom: -10px;
+  }
   .mens-hero-title { font-size: 1.4rem; }
   .mens-manifesto { padding: 24px 18px; }
   .mens-status-card { padding: 20px 18px; flex-direction: column; align-items: flex-start; }
-  #btnPagarMensalidade { width: 100%; }
+  #btnPagarMensalidade {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 14px;
+    white-space: normal;
+  }
   .mens-ordem-header { flex-direction: column; align-items: flex-start; }
+  .mens-ordem-title {
+    align-items: flex-start;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .mens-ordem-stats {
+    width: 100%;
+  }
+  .mens-stat-pill {
+    flex: 1 1 130px;
+    justify-content: center;
+    min-width: 0;
+    text-align: center;
+  }
+  .mens-membro-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    padding: 14px 16px;
+  }
+  .mens-membro-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+  .mens-badge {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .mens-alerta {
+    align-items: flex-start;
+    padding: 13px 14px;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 380px) {
+  .mens-hero,
+  .mens-manifesto {
+    padding-inline: 14px;
+  }
+  .mens-status-icon {
+    width: 52px;
+    height: 52px;
+  }
+  .mens-pillars {
+    grid-template-columns: 1fr;
+  }
 }
