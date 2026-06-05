@@ -343,9 +343,16 @@ function openPost(postId) {
   const post = state.posts.find((item) => item.id === postId);
   const modal = document.getElementById('journalPostModal');
   if (!post || !modal) return;
+  const [icon, label] = TYPE_LABELS[post.post_type] || TYPE_LABELS.article;
   modal.innerHTML = `
-    <div class="journal-modal-panel ${isVideoPost(post) ? 'journal-video-modal-panel' : ''}">
-      ${renderPostHeader(post)}
+    <div class="journal-modal-panel">
+      <div class="journal-modal-head">
+        <div>
+          <div class="journal-kicker" style="margin-bottom:6px"><i class="fa-solid ${icon}"></i>${label}</div>
+          <div class="journal-modal-title">${Utils.escapeHtml(post.title)}</div>
+        </div>
+        <button class="social-icon-btn" data-close-journal-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
       <div class="journal-modal-body">
         ${renderPostBody(post)}
         ${renderComments(post)}
@@ -362,36 +369,14 @@ function openPost(postId) {
   recordJournalView(post, modal);
 }
 
-function renderPostHeader(post) {
-  const [icon, label] = TYPE_LABELS[post.post_type] || TYPE_LABELS.article;
-  if (isVideoPost(post)) {
-    return `
-      <div class="journal-modal-head journal-video-head">
-        <div>
-          <div class="journal-kicker" style="margin-bottom:0"><i class="fa-solid ${icon}"></i>${label}</div>
-        </div>
-        <button class="social-icon-btn" data-close-journal-modal aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-      </div>`;
-  }
-  return `
-    <div class="journal-modal-head">
-      <div>
-        <div class="journal-kicker" style="margin-bottom:6px"><i class="fa-solid ${icon}"></i>${label}</div>
-        <div class="journal-modal-title">${Utils.escapeHtml(post.title)}</div>
-      </div>
-      <button class="social-icon-btn" data-close-journal-modal aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-    </div>`;
-}
-
 function renderPostBody(post) {
   const videoUrl = getPostVideoUrl(post);
-  if (isVideoPost(post)) {
+  if (post.post_type === 'video' || videoUrl) {
     const poster = getPostCoverImage(post);
     return `
       <div class="journal-player">
         ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
       </div>
-      ${renderVideoTitleBlock(post)}
       ${renderVideoDescription(post)}`;
   }
   if (post.post_type === 'tirinha') {
@@ -400,26 +385,10 @@ function renderPostBody(post) {
   return renderArticlePost(post);
 }
 
-function renderVideoTitleBlock(post) {
-  const author = post.author?.name || 'Editorial MSY';
-  const dateLabel = Utils.formatDate(post.published_at || post.created_at);
-  const status = state.canManage && post.status !== 'published'
-    ? `<span>${post.status === 'draft' ? 'Rascunho' : 'Arquivado'}</span>`
-    : '';
-  return `
-    <section class="journal-video-title-block">
-      <h1>${Utils.escapeHtml(post.title)}</h1>
-      <div class="journal-video-byline">
-        <span><i class="fa-solid fa-user-pen"></i>${Utils.escapeHtml(author)}</span>
-        <span><i class="fa-regular fa-calendar"></i>${dateLabel}</span>
-        ${status}
-      </div>
-    </section>`;
-}
-
 function renderVideoDescription(post) {
   const views = Number(post.views_count ?? post.view_count ?? post.views ?? 0);
   const viewsLabel = `${views.toLocaleString('pt-BR')} visualizaç${views === 1 ? 'ão' : 'ões'}`;
+  const dateLabel = Utils.formatDate(post.published_at || post.created_at);
   const description = post.summary || 'Sem descrição.';
   const likes = Number(post.likes_count || 0);
   return `
@@ -427,7 +396,7 @@ function renderVideoDescription(post) {
       <div class="journal-video-description-top">
         <div class="journal-video-description-meta">
           <strong data-journal-views="${post.id}">${viewsLabel}</strong>
-          <span>${Utils.escapeHtml(post.author?.name || 'Editorial MSY')}</span>
+          <span>${dateLabel}</span>
         </div>
         <button type="button" class="journal-like-btn ${post.liked_by_me ? 'active' : ''}" data-like-journal-post="${post.id}" aria-pressed="${post.liked_by_me ? 'true' : 'false'}">
           <i class="fa-${post.liked_by_me ? 'solid' : 'regular'} fa-thumbs-up"></i>
@@ -1329,10 +1298,6 @@ function getTypePosts(type) {
 
 function getVideoPosts() {
   return state.posts.filter((post) => post.status !== 'archived' && (post.post_type === 'video' || Boolean(getPostVideoUrl(post))));
-}
-
-function isVideoPost(post) {
-  return post?.post_type === 'video' || Boolean(getPostVideoUrl(post));
 }
 
 function getWrittenPosts() {

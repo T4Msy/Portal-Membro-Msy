@@ -7091,8 +7091,7 @@
          background:none; border:1px solid rgba(239,68,68,.22);
          border-radius:7px; color:rgba(239,68,68,.55); cursor:pointer;
          font-size:.65rem; font-weight:600; letter-spacing:.04em;
-         padding:4px 10px; transition:all .2s; white-space:normal;
-         min-width:0; text-align:center; justify-content:center;
+         padding:4px 10px; transition:all .2s; white-space:nowrap;
        }
        .notif-clear-all-btn:hover {
          background:rgba(239,68,68,.1); color:#ef4444;
@@ -7107,26 +7106,6 @@
        .notif-del-btn:hover { background:rgba(239,68,68,.12); color:#ef4444; }
        .notif-item-dash { position:relative; transition:opacity .2s; }
        .notif-item-dash.removing { opacity:0; pointer-events:none; }
-       .notif-item-dash .small-list-title,
-       .notif-item-dash .small-list-sub {
-         white-space:normal; overflow:visible; text-overflow:clip;
-         overflow-wrap:anywhere; word-break:normal;
-       }
-       @media(max-width:768px){
-         .notif-clear-all-btn { width:100%; min-height:38px; }
-         .notif-item-dash {
-           display:grid; grid-template-columns:36px minmax(0,1fr) auto;
-           align-items:start; gap:10px;
-         }
-         .notif-item-dash .small-list-icon { grid-column:1; }
-         .notif-item-dash .small-list-info { grid-column:2; min-width:0; }
-         .notif-item-dash .badge { grid-column:2; justify-self:start; }
-         .notif-item-dash .notif-view-btn {
-           grid-column:2 / -1; width:100%; min-height:38px;
-           white-space:normal; text-align:center;
-         }
-         .notif-item-dash .notif-del-btn { grid-column:3; grid-row:1; margin-left:0; }
-       }
        .notif-empty-state {
          display:flex; align-items:center; justify-content:center;
          gap:9px; padding:22px 16px; color:var(--text-3); font-size:.78rem;

@@ -92,9 +92,6 @@
       if (table.closest('.table-scroll-wrap')) return;
       const wrap = document.createElement('div');
       wrap.className = 'table-scroll-wrap';
-      wrap.setAttribute('role', 'region');
-      wrap.setAttribute('aria-label', 'Tabela com rolagem horizontal');
-      wrap.setAttribute('tabindex', '0');
       table.parentNode.insertBefore(wrap, table);
       wrap.appendChild(table);
     });
