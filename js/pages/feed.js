@@ -4168,7 +4168,6 @@ function resumeStoryPlayback(modal) {
 function stopStoryInteractiveEvent(event) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
-  event?.stopImmediatePropagation?.();
 }
 
 function isStoryReplyInteractionLocked(modal = document.getElementById('storyViewer')) {
@@ -4237,10 +4236,6 @@ function bindStoryInteractiveGuards(modal) {
     ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach((eventName) => {
       node.addEventListener(eventName, (event) => {
         event.stopPropagation();
-      }, { capture: true, passive: true });
-      node.addEventListener(eventName, (event) => {
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
       }, { passive: true });
     });
   });
