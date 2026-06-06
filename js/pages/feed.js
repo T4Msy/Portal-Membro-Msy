@@ -1645,7 +1645,22 @@ function addFiles(files) {
       if (state.previews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
       const preview = filePreview(file);
       preview.editState = normalizeMediaEditState(createStoryMediaEditState(file), preview.media_type);
+      preview.editState.aspect = 'original';
+      preview.editState.zoom = 1;
+      preview.editState.offsetX = 0;
+      preview.editState.offsetY = 0;
       state.previews.push(preview);
+      if (preview.media_type === 'image') {
+        loadImage(file).then((image) => {
+          preview.editState.originalAspect = image.width / image.height;
+          preview.editState.originalWidth = image.width;
+          preview.editState.originalHeight = image.height;
+          preview.editState.detectedFormat = detectMediaFormat(image.width, image.height);
+          renderPreviews();
+        }).catch((imageErr) => {
+          console.warn('[MSY][feed-social] Dimensoes da imagem indisponiveis:', imageErr);
+        });
+      }
     });
     renderPreviews();
     if (isMobileSocial()) openMobilePostComposer();
@@ -1663,17 +1678,20 @@ function renderPreviews() {
     return;
   }
   const main = state.previews[0];
+  const mainEditState = ensureMediaEditState(main, 'original');
+  const mainAspect = mediaAspectCss(mainEditState.aspect, mainEditState.originalAspect);
   const mediaNode = (item, attrs = '') => item.media_type === 'video'
     ? `<video src="${item.url}" muted playsinline ${attrs}></video>`
     : `<img src="${item.url}" alt="Preview da publicacao" ${attrs}>`;
   el.innerHTML = `
     <div class="composer-preview-stage">
-      <div class="composer-preview-main" data-preview-id="${main.id}">
+      <div class="composer-preview-main" data-preview-id="${main.id}" style="--editor-aspect:${mainAspect}">
         ${renderEditableMediaNode(main, { scope: 'post' })}
         <button class="composer-preview-remove" title="Remover midia" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
         <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
       </div>
       <div class="composer-media-controls" data-composer-media-controls="${main.id}">
+        <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
         <select class="form-input form-select" data-composer-edit-field="aspect">
           ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
@@ -1712,15 +1730,16 @@ function renderPreviews() {
     else main.editState[key] = value;
     applyMediaEditorTransform(el, main);
   }));
-  bindMediaEditorGestures(el, main, () => {
-    const zoom = el.querySelector('[data-composer-edit-field="zoom"]');
-    const rotation = el.querySelector('[data-composer-edit-field="rotation"]');
-    if (zoom) zoom.value = main.editState.zoom;
-    if (rotation) rotation.value = main.editState.rotation;
-  });
-  syncComposerState();
-  renderMobilePostComposer();
-}
+	  bindMediaEditorGestures(el, main, () => {
+	    const zoom = el.querySelector('[data-composer-edit-field="zoom"]');
+	    const rotation = el.querySelector('[data-composer-edit-field="rotation"]');
+	    if (zoom) zoom.value = main.editState.zoom;
+	    if (rotation) rotation.value = main.editState.rotation;
+	  });
+	  bindMediaPreviewDiagnostics(el, main);
+	  syncComposerState();
+	  renderMobilePostComposer();
+	}
 
 function syncComposerState() {
   const composer = document.querySelector('.social-composer');
@@ -1801,8 +1820,21 @@ function renderMobilePostComposer() {
     renderPreviews();
     renderMobilePostComposer();
   }));
-  if (state.previews[0]) bindMediaEditorGestures(modal, state.previews[0]);
-}
+  modal.querySelectorAll('[data-mobile-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
+    const item = state.previews[0];
+    if (!item) return;
+    const key = event.currentTarget.dataset.mobileEditField;
+    const value = event.currentTarget.value;
+    ensureMediaEditState(item, 'original');
+    if (key === 'zoom' || key === 'rotation') item.editState[key] = Number(value);
+    else item.editState[key] = value;
+    applyMediaEditorTransform(modal, item);
+	  }));
+	  if (state.previews[0]) {
+	    bindMediaEditorGestures(modal, state.previews[0]);
+	    bindMediaPreviewDiagnostics(modal, state.previews[0]);
+	  }
+	}
 
 function renderMobileComposerPreview() {
   if (!state.previews.length) {
@@ -1813,14 +1845,23 @@ function renderMobileComposerPreview() {
       </button>`;
   }
   const main = state.previews[0];
+  const mainEditState = ensureMediaEditState(main, 'original');
+  const mainAspect = mediaAspectCss(mainEditState.aspect, mainEditState.originalAspect);
   const mediaNode = (item) => item.media_type === 'video'
     ? `<video src="${item.url}" muted playsinline controls></video>`
     : `<img src="${item.url}" alt="Preview da publicacao">`;
   return `
     <div class="mobile-composer-preview">
-      <div class="mobile-composer-preview-main">
+      <div class="mobile-composer-preview-main" style="--editor-aspect:${mainAspect}">
         ${renderEditableMediaNode(main, { scope: 'post' })}
         <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="mobile-composer-media-controls">
+        <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
+        <select class="form-input form-select" data-mobile-edit-field="aspect" aria-label="Proporção da mídia">
+          ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+        <label>Zoom <input type="range" min="0.5" max="3" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-mobile-edit-field="zoom"></label>
       </div>
       ${state.previews.length > 1 ? `
         <div class="mobile-composer-strip">
@@ -1853,7 +1894,7 @@ async function publishPost() {
   try {
     const media = [];
     for (const item of state.previews) {
-      const editState = ensureMediaEditState(item, '4:5');
+      const editState = ensureMediaEditState(item, 'original');
       let uploadFile = item.file;
       let skipCompression = false;
       if (item.media_type === 'image') {
@@ -1924,6 +1965,9 @@ async function createStoryFromFile(e = null) {
         try {
           const image = await loadImage(file);
           preview.editState.originalAspect = image.width / image.height;
+          preview.editState.originalWidth = image.width;
+          preview.editState.originalHeight = image.height;
+          preview.editState.detectedFormat = detectMediaFormat(image.width, image.height);
           preview.editState.aspect = 'original';
           preview.editState.zoom = 1;
           preview.editState.offsetX = 0;
@@ -1949,14 +1993,14 @@ function activeStoryComposerItem() {
 }
 
 const mediaAspectOptions = [
-  ['9:16', 'Story'],
+  ['original', 'Original'],
   ['1:1', '1:1'],
   ['4:5', '4:5'],
+  ['9:16', 'Story'],
   ['16:9', '16:9'],
-  ['original', 'Original'],
 ];
 
-function mediaAspectCss(aspect = '9:16', originalAspect = null) {
+function mediaAspectCss(aspect = 'original', originalAspect = null) {
   if (aspect === 'original' && Number(originalAspect) > 0) return `${Number(originalAspect)} / 1`;
   const map = {
     '9:16': '9 / 16',
@@ -1965,10 +2009,38 @@ function mediaAspectCss(aspect = '9:16', originalAspect = null) {
     '16:9': '16 / 9',
     original: 'var(--editor-original-aspect, 9 / 16)',
   };
-  return map[aspect] || map['9:16'];
+  return map[aspect] || map.original;
 }
 
-function ensureMediaEditState(item, fallbackAspect = '9:16') {
+function detectMediaFormat(width, height) {
+  const ratio = Number(width) / Math.max(Number(height), 1);
+  if (!Number.isFinite(ratio) || ratio <= 0) return 'Formato desconhecido';
+  if (Math.abs(ratio - 1) < 0.04) return 'Quadrado';
+  if (ratio < 1) return 'Retrato';
+  return 'Paisagem';
+}
+
+function renderMediaDimensionMeta(item) {
+  const editState = ensureMediaEditState(item, 'original');
+  const width = Number(editState?.originalWidth || 0);
+  const height = Number(editState?.originalHeight || 0);
+  const dimensions = width && height ? `${width}x${height}` : 'Carregando dimensões';
+  const format = editState?.detectedFormat || (editState?.originalAspect ? detectMediaFormat(editState.originalAspect, 1) : 'Formato original');
+  return `
+    <div><strong>Dimensão original:</strong> ${Utils.escapeHtml(dimensions)}</div>
+    <div><strong>Formato:</strong> ${Utils.escapeHtml(format)}</div>`;
+}
+
+function isMediaEditActive(editState = {}) {
+  const normalized = normalizeMediaEditState(editState);
+  return normalized.aspect !== 'original'
+    || Math.abs(Number(normalized.zoom || 1) - 1) > 0.01
+    || Math.abs(Number(normalized.offsetX || 0)) > 0.01
+    || Math.abs(Number(normalized.offsetY || 0)) > 0.01
+    || Math.abs(Number(normalized.rotation || 0)) > 0.01;
+}
+
+function ensureMediaEditState(item, fallbackAspect = 'original') {
   if (!item) return null;
   item.editState = normalizeMediaEditState({
     aspect: fallbackAspect,
@@ -1990,33 +2062,80 @@ function mediaEditorSelector(id) {
 
 function renderEditableMediaNode(item, { scope = 'story', controls = true } = {}) {
   if (!item) return '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma mídia.</div>';
-  const editState = ensureMediaEditState(item, scope === 'post' ? '4:5' : '9:16');
+  const editState = ensureMediaEditState(item, scope === 'post' ? 'original' : '9:16');
   const aspect = mediaAspectCss(editState.aspect, editState.originalAspect);
   const style = `--editor-aspect:${aspect};--editor-transform:${mediaEditorTransform(editState)}`;
+  const activeClass = isMediaEditActive(editState) ? ' is-edited' : ' is-original';
   const media = item.media_type === 'video'
     ? `<video class="media-editor-media" src="${Utils.escapeHtml(item.url)}" ${scope === 'story' ? 'controls' : 'muted'} playsinline preload="metadata"></video>`
     : `<img class="media-editor-media" src="${Utils.escapeHtml(item.url)}" alt="Preview da mídia">`;
   return `
-    <div class="media-editor-crop" style="${style}" data-media-editor="${Utils.escapeHtml(item.id)}" data-media-editor-scope="${scope}">
+    <div class="media-editor-crop${activeClass}" style="${style}" data-media-editor="${Utils.escapeHtml(item.id)}" data-media-editor-scope="${scope}">
       <div class="media-editor-viewport">
         ${media}
         ${controls ? '<div class="media-editor-mask" aria-hidden="true"></div>' : ''}
+        <div class="media-editor-load-error" data-media-load-error hidden>
+          <i class="fa-regular fa-image"></i>
+          <span>Não foi possível carregar esta imagem.</span>
+        </div>
       </div>
     </div>`;
+}
+
+function bindMediaPreviewDiagnostics(root, item) {
+  if (!root || !item || item.media_type !== 'image') return;
+  const editor = root.querySelector?.(mediaEditorSelector(item.id));
+  const img = editor?.querySelector?.('img.media-editor-media');
+  if (!editor || !img || img.dataset.previewDiagnosticsBound === '1') return;
+  img.dataset.previewDiagnosticsBound = '1';
+  const errorNode = editor.querySelector('[data-media-load-error]');
+  const payload = () => ({
+    id: item.id,
+    url: img.currentSrc || img.src || item.url || '',
+    media_type: item.media_type,
+    aspect: item.editState?.aspect,
+    originalAspect: item.editState?.originalAspect,
+    naturalWidth: img.naturalWidth || 0,
+    naturalHeight: img.naturalHeight || 0,
+  });
+  const markLoaded = () => {
+    editor.classList.remove('load-error');
+    if (errorNode) errorNode.hidden = true;
+    console.info('[MSY][feed-social][image-preview] imagem carregada', payload());
+  };
+  const markError = () => {
+    editor.classList.add('load-error');
+    if (errorNode) errorNode.hidden = false;
+    console.warn('[MSY][feed-social][image-preview] falha ao carregar imagem', payload());
+    Utils.showToast?.('Não foi possível carregar a imagem selecionada.', 'error');
+  };
+  img.addEventListener('load', markLoaded, { once: true });
+  img.addEventListener('error', markError, { once: true });
+  if (img.complete) {
+    if (img.naturalWidth > 0) markLoaded();
+    else markError();
+  } else {
+    console.info('[MSY][feed-social][image-preview] aguardando carregamento', payload());
+  }
 }
 
 function applyMediaEditorTransform(root, item) {
   const editor = root?.querySelector?.(mediaEditorSelector(item.id));
   if (!editor) return;
-  const editState = ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? '4:5' : '9:16');
-  editor.style.setProperty('--editor-aspect', mediaAspectCss(editState.aspect, editState.originalAspect));
+  const editState = ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? 'original' : '9:16');
+  const aspect = mediaAspectCss(editState.aspect, editState.originalAspect);
+  editor.style.setProperty('--editor-aspect', aspect);
   editor.style.setProperty('--editor-transform', mediaEditorTransform(editState));
+  editor.closest('.composer-preview-main,.mobile-composer-preview-main')?.style.setProperty('--editor-aspect', aspect);
+  const active = isMediaEditActive(editState);
+  editor.classList.toggle('is-edited', active);
+  editor.classList.toggle('is-original', !active);
 }
 
 function bindMediaEditorGestures(root, item, onChange = () => {}) {
   const editor = root?.querySelector?.(mediaEditorSelector(item.id));
   if (!editor) return;
-  ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? '4:5' : '9:16');
+  ensureMediaEditState(item, editor.dataset.mediaEditorScope === 'post' ? 'original' : '9:16');
   const pointers = new Map();
   let start = null;
   const pointDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -2169,8 +2288,9 @@ function renderStoryComposerBody() {
         </div>
       </div>
     </div>`;
-  openModal(modal);
-  bindMediaEditorGestures(modal, item, () => {
+	  openModal(modal);
+	  bindMediaPreviewDiagnostics(modal, item);
+	  bindMediaEditorGestures(modal, item, () => {
     const zoomLabel = modal.querySelector('[data-story-zoom-label]');
     const rotationLabel = modal.querySelector('[data-story-rotation-label]');
     const zoomInput = modal.querySelector('[data-story-edit-field="zoom"]');
@@ -2582,12 +2702,27 @@ function openPostEditor(post) {
   modal.querySelector('#postEditFiles')?.addEventListener('change', (e) => {
     try {
       [...(e.currentTarget.files || [])].forEach((file) => {
-        validateMediaFile(file);
-        if (state.postEditPreviews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
-        const preview = { ...filePreview(file), isNew: true };
-        preview.editState = normalizeMediaEditState(createStoryMediaEditState(file), preview.media_type);
-        state.postEditPreviews.push(preview);
-      });
+	        validateMediaFile(file);
+	        if (state.postEditPreviews.length >= 10) throw new Error('Limite de 10 midias por publicacao.');
+	        const preview = { ...filePreview(file), isNew: true };
+	        preview.editState = normalizeMediaEditState(createStoryMediaEditState(file), preview.media_type);
+	        preview.editState.aspect = 'original';
+	        preview.editState.zoom = 1;
+	        preview.editState.offsetX = 0;
+	        preview.editState.offsetY = 0;
+	        state.postEditPreviews.push(preview);
+	        if (preview.media_type === 'image') {
+	          loadImage(file).then((image) => {
+	            preview.editState.originalAspect = image.width / image.height;
+	            preview.editState.originalWidth = image.width;
+	            preview.editState.originalHeight = image.height;
+	            preview.editState.detectedFormat = detectMediaFormat(image.width, image.height);
+	            renderPostEditMediaList();
+	          }).catch((imageErr) => {
+	            console.warn('[MSY][feed-social][image-preview] dimensoes da imagem de edicao indisponiveis:', imageErr);
+	          });
+	        }
+	      });
       renderPostEditMediaList();
     } catch (err) {
       Utils.showToast(err.message || 'Erro ao adicionar midia.', 'error');
@@ -2632,7 +2767,10 @@ function renderPostEditMediaList() {
     state.postEditPreviews = state.postEditPreviews.filter((media) => media.id !== id);
     renderPostEditMediaList();
   }));
-  state.postEditPreviews.forEach((item) => bindMediaEditorGestures(list, item));
+	  state.postEditPreviews.forEach((item) => {
+	    bindMediaEditorGestures(list, item);
+	    bindMediaPreviewDiagnostics(list, item);
+	  });
   list.querySelectorAll('[data-post-media-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
     const id = event.currentTarget.closest('[data-edit-media-id]')?.dataset.editMediaId;
     const item = state.postEditPreviews.find((media) => media.id === id);

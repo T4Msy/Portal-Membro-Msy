@@ -198,8 +198,7 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
                         (isMe ? `<span class="mens-badge ${badgeClass}">${badgeLabel}</span>` : '');
 
     const btnMarcar = isDiretoria && statusVal !== 'pago'
-      ? `<button class="btn btn-ghost btn-sm mens-marcar-pago" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}"
-           style="font-size:.72rem;color:#22c55e;border-color:rgba(34,197,94,.3);margin-left:6px;white-space:nowrap">
+      ? `<button class="btn btn-ghost btn-sm mens-marcar-pago" data-id="${m.id}" data-name="${Utils.escapeHtml(m.name)}">
            <i class="fa-solid fa-check"></i> Marcar pago
          </button>`
       : '';
@@ -214,7 +213,7 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
           <div class="mens-membro-name">${Utils.escapeHtml(m.name)}${isMe ? ' <span style="color:var(--gold);font-size:0.7rem">(você)</span>' : ''}</div>
           <div class="mens-membro-role">${Utils.escapeHtml(m.role || '')} · ${Utils.tierBadge(m.tier)}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <div class="mens-membro-actions">
           ${mostraStatus ? badgeIcon : `<span class="mens-badge pendente" style="opacity:0.35">—</span>`}
           ${btnMarcar}
         </div>

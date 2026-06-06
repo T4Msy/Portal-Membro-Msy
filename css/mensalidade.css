@@ -14,6 +14,13 @@
   margin-bottom: 28px;
 }
 
+body[data-page="mensalidade"] .page-content,
+body[data-page="mensalidade"] .page-content * {
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
 .mens-hero::before {
   content: '';
   position: absolute;
@@ -318,6 +325,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .mens-ordem-stats {
@@ -336,6 +345,7 @@
   padding: 4px 14px;
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .mens-stat-pill.verde  { border-color: rgba(34,197,94,0.25); color: #22c55e; }
@@ -344,7 +354,8 @@
 
 /* Linha de membro */
 .mens-membro-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 14px 24px;
@@ -365,14 +376,27 @@
   font-weight: 600;
   font-size: 0.88rem;
   color: var(--text-1);
-  white-space: nowrap;
+  line-height: 1.3;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .mens-membro-role {
   font-size: 0.75rem;
   color: var(--text-3);
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.mens-membro-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .mens-badge {
@@ -386,6 +410,15 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.mens-marcar-pago {
+  margin-left: 0;
+  color: #22c55e;
+  border-color: rgba(34,197,94,.3);
+  font-size: .72rem;
+  white-space: nowrap;
 }
 
 .mens-badge.pago {
@@ -429,4 +462,47 @@
   .mens-status-card { padding: 20px 18px; flex-direction: column; align-items: flex-start; }
   #btnPagarMensalidade { width: 100%; }
   .mens-ordem-header { flex-direction: column; align-items: flex-start; }
+  .mens-ordem-stats { width: 100%; gap: 8px; }
+  .mens-stat-pill { flex: 1 1 auto; justify-content: center; padding: 6px 10px; }
+  .mens-membro-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 13px 14px;
+  }
+  .mens-membro-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .mens-badge {
+    font-size: .68rem;
+    padding: 4px 10px;
+  }
+  .mens-marcar-pago {
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .mens-alerta,
+  .mens-manifesto,
+  .mens-status-card {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .mens-hero-eyebrow {
+    letter-spacing: .1em;
+    line-height: 1.35;
+  }
+
+  .mens-stat-pill {
+    flex-basis: 100%;
+  }
+
+  .mens-membro-actions {
+    grid-column: 1 / -1;
+  }
 }

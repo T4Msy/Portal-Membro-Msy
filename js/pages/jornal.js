@@ -34,6 +34,14 @@ const EDITOR_FORMATS = {
   article: ['fa-newspaper', 'Jornal escrito'],
   tirinha: ['fa-table-cells-large', 'Tirinha'],
 };
+const ARTICLE_IMAGE_ASPECTS = {
+  '16:9': { label: 'Horizontal', ratio: 16 / 9 },
+  '21:9': { label: 'Horizontal ampla', ratio: 21 / 9 },
+  '1:1': { label: 'Quadrada', ratio: 1 },
+  '4:5': { label: 'Vertical', ratio: 4 / 5 },
+  '9:16': { label: 'Vertical Story', ratio: 9 / 16 },
+  free: { label: 'Livre', ratio: null },
+};
 const ARTICLE_PHOTO_POSITION = 0;
 const GALLERY_POSITION_START = 10;
 
@@ -473,9 +481,11 @@ function renderArticleBlock(block) {
 
 function renderArticlePhoto(url, caption = '', meta = getArticleImageMeta()) {
   const crop = meta.crop;
+  const aspectStyle = getArticleAspectStyle(meta.aspect);
+  const cropClass = meta.cropActive ? ' crop-active' : '';
   return `
-    <figure class="journal-article-photo photo-${Utils.escapeHtml(meta.position || 'right')}">
-      <img src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${meta.cropActive ? `transform:translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})` : 'transform:translate(-50%, -50%) scale(1)'}">
+    <figure class="journal-article-photo photo-${Utils.escapeHtml(meta.position || 'right')}" style="${aspectStyle}">
+      <img class="${cropClass.trim()}" src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${meta.cropActive ? `transform:translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})` : 'transform:translate(-50%, -50%) scale(1)'}">
       ${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}
     </figure>`;
 }
@@ -672,6 +682,14 @@ function openEditor(post = null) {
                     <option value="top" ${articlePhotoMeta.position === 'top' ? 'selected' : ''}>Topo</option>
                   </select>
                 </div>
+                <div class="journal-field" data-photo-option>
+                  <label>Dimensões da imagem</label>
+                  <select name="article_photo_aspect">
+                    ${Object.entries(ARTICLE_IMAGE_ASPECTS).map(([key, item]) => `
+                      <option value="${key}" ${articlePhotoMeta.aspect === key ? 'selected' : ''}>${item.label}${key === 'free' ? '' : ` (${key})`}</option>
+                    `).join('')}
+                  </select>
+                </div>
                 <input type="hidden" name="article_photo_x" value="${articlePhotoMeta.crop.x}">
                 <input type="hidden" name="article_photo_y" value="${articlePhotoMeta.crop.y}">
                 <input type="hidden" name="article_photo_zoom" value="${articlePhotoMeta.crop.zoom}">
@@ -681,7 +699,7 @@ function openEditor(post = null) {
                     ${articlePhoto ? `<img src="${Utils.escapeHtml(articlePhoto)}" alt="">` : '<span>Nenhuma foto escolhida</span>'}
                   </figure>
                   <div class="journal-photo-pick-actions">
-                    <span>Escolha a foto e o recorte abre automaticamente, igual fluxo de postagem.</span>
+                    <span>A foto abre inteira. Use Recortar para ajustar enquadramento, zoom e proporção.</span>
                   </div>
                 </div>
               </div>
@@ -745,6 +763,10 @@ function openEditor(post = null) {
   modal.querySelector('[data-remove-article-photo]')?.addEventListener('click', removeArticlePhoto);
   modal.querySelector('[name="article_photo"]')?.addEventListener('change', handleArticlePhotoSelected);
   modal.querySelector('[name="article_photo_position"]')?.addEventListener('change', updateEditorPreview);
+  modal.querySelector('[name="article_photo_aspect"]')?.addEventListener('change', () => {
+    resetArticleCrop(false);
+    updateEditorPreview();
+  });
   modal.querySelector('[data-open-article-crop]')?.addEventListener('click', openArticleCropModal);
   modal.querySelector('[name="gallery"]')?.addEventListener('change', updateEditorPreview);
   modal.querySelector('#journalEditorForm')?.addEventListener('submit', savePost);
@@ -788,6 +810,9 @@ async function savePost(event) {
     }
     if (postType === 'article' && !getArticleEditorBlocks().some((block) => block.text)) {
       throw new Error('Escreva o texto do jornal antes de salvar.');
+    }
+    if (postType === 'article' && articlePhotoEnabled && !articlePhotoFile && !existing?.media?.some((item) => item.media_type === 'image')) {
+      throw new Error('Escolha uma imagem valida para a foto do jornal.');
     }
     if (postType === 'tirinha' && !galleryFiles.length && !existing?.media?.some((item) => item.media_type === 'image')) {
       throw new Error('Envie ao menos uma cena para a tirinha.');
@@ -836,6 +861,20 @@ async function savePost(event) {
       }
     }
 
+    if (postType === 'article' && existing && articlePhotoEnabled && !articlePhoto) {
+      const currentArticlePhoto = (existing.media || []).find((item) => item.media_type === 'image');
+      if (currentArticlePhoto?.id) {
+        const { error } = await db
+          .from('jornal_media')
+          .update({
+            position: ARTICLE_PHOTO_POSITION,
+            alt_text: JSON.stringify(getArticlePhotoMetaPayload(form)),
+          })
+          .eq('id', currentArticlePhoto.id);
+        if (error) throw error;
+      }
+    }
+
     const mediaRows = [];
     if (video) mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'video', url: video.url, storage_path: video.storage_path, position: 0 });
     if (articlePhoto) {
@@ -846,12 +885,7 @@ async function savePost(event) {
         url: articlePhoto.url,
         storage_path: articlePhoto.storage_path,
         position: ARTICLE_PHOTO_POSITION,
-        alt_text: JSON.stringify({
-          kind: 'article_photo',
-          position: form.elements.article_photo_position?.value || 'right',
-          crop: getArticleCropState(form),
-          cropActive: form.elements.article_photo_crop_active?.value === '1',
-        }),
+        alt_text: JSON.stringify(getArticlePhotoMetaPayload(form)),
       });
     }
     for (let index = 0; index < galleryFiles.length; index += 1) {
@@ -922,6 +956,11 @@ function updateArticlePhotoPreview(form) {
   if (!photo) return;
   const enabled = form.elements.article_photo_enabled?.value === '1';
   const position = form.elements.article_photo_position?.value || 'right';
+  const aspect = getArticleAspectValue(form);
+  [photo, pickPreview].forEach((item) => {
+    if (!item) return;
+    item.style.setProperty('--journal-image-aspect', getArticleAspectCssValue(aspect));
+  });
   layout?.classList.toggle('no-photo', !enabled);
   layout?.classList.remove('photo-left', 'photo-right', 'photo-top');
   layout?.classList.add(`photo-${position}`);
@@ -936,13 +975,15 @@ function updateArticlePhotoPreview(form) {
     if (photo.dataset.previewFileKey !== fileKey) {
       const previous = photo.dataset.previewUrl;
       if (previous) URL.revokeObjectURL(previous);
-      const url = URL.createObjectURL(file);
+      const url = createJournalImagePreviewUrl(file, 'article_photo');
+      if (!url) return;
       photo.dataset.previewUrl = url;
       photo.dataset.previewFileKey = fileKey;
-      photo.innerHTML = `<img src="${url}" alt="">`;
+      photo.classList.remove('is-empty', 'load-error');
+      photo.innerHTML = `<img src="${Utils.escapeHtml(url)}" alt="">`;
       if (pickPreview) {
-        pickPreview.classList.remove('is-empty');
-        pickPreview.innerHTML = `<img src="${url}" alt="">`;
+        pickPreview.classList.remove('is-empty', 'load-error');
+        pickPreview.innerHTML = `<img src="${Utils.escapeHtml(url)}" alt="">`;
       }
     }
   }
@@ -951,9 +992,78 @@ function updateArticlePhotoPreview(form) {
   const pickImg = pickPreview?.querySelector('img');
   const crop = getArticleCropState(form);
   if (img) {
+    bindJournalImageDiagnostics(img, { context: 'paper-preview', file, url: img.src });
     applyArticleCropStyle(img, crop);
+    applyArticleNaturalAspect(img, [photo, pickPreview]);
   }
-  if (pickImg) applyArticleCropStyle(pickImg, crop);
+  if (pickImg) {
+    bindJournalImageDiagnostics(pickImg, { context: 'pick-preview', file, url: pickImg.src });
+    applyArticleCropStyle(pickImg, crop);
+    applyArticleNaturalAspect(pickImg, [photo, pickPreview]);
+  }
+}
+
+function createJournalImagePreviewUrl(file, context = 'preview') {
+  if (!file || !file.type?.startsWith('image/')) {
+    console.warn('[MSY][jornal][image-preview] arquivo de imagem invalido', {
+      context,
+      name: file?.name,
+      type: file?.type,
+      size: file?.size,
+    });
+    Utils.showToast?.('Escolha um arquivo de imagem válido.', 'error');
+    return '';
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    console.info('[MSY][jornal][image-preview] URL local criada', {
+      context,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      url,
+    });
+    return url;
+  } catch (err) {
+    console.error('[MSY][jornal][image-preview] falha ao criar URL local', err);
+    Utils.showToast?.('Não foi possível preparar a imagem selecionada.', 'error');
+    return '';
+  }
+}
+
+function bindJournalImageDiagnostics(img, { context = 'preview', file = null, url = '' } = {}) {
+  if (!img || img.dataset.journalDiagnosticsBound === '1') return;
+  img.dataset.journalDiagnosticsBound = '1';
+  const figure = img.closest('figure,.journal-crop-frame');
+  const payload = () => ({
+    context,
+    name: file?.name || '',
+    type: file?.type || '',
+    size: file?.size || 0,
+    src: img.currentSrc || img.src || url || '',
+    naturalWidth: img.naturalWidth || 0,
+    naturalHeight: img.naturalHeight || 0,
+  });
+  const markLoaded = () => {
+    figure?.classList.remove('load-error');
+    console.info('[MSY][jornal][image-preview] imagem carregada', payload());
+  };
+  const markError = () => {
+    console.warn('[MSY][jornal][image-preview] falha ao carregar imagem', payload());
+    if (figure) {
+      figure.classList.add('load-error');
+      figure.innerHTML = '<span>Não foi possível carregar esta imagem</span>';
+    }
+    Utils.showToast?.('Não foi possível carregar a imagem selecionada.', 'error');
+  };
+  img.addEventListener('load', markLoaded, { once: true });
+  img.addEventListener('error', markError, { once: true });
+  if (img.complete) {
+    if (img.naturalWidth > 0) markLoaded();
+    else markError();
+  } else {
+    console.info('[MSY][jornal][image-preview] aguardando carregamento', payload());
+  }
 }
 
 function updatePhotoControls(form) {
@@ -976,7 +1086,6 @@ function handleArticlePhotoSelected() {
   form.elements.article_photo_crop_active.value = '0';
   resetArticleCrop(false);
   updateEditorPreview();
-  setTimeout(openArticleCropModal, 0);
 }
 
 function removeArticlePhoto() {
@@ -1023,17 +1132,25 @@ function openArticleCropModal() {
         <button type="button" class="social-icon-btn" data-close-journal-modal><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="journal-crop-modal-body">
-        <div class="journal-crop-frame journal-crop-frame-large" id="journalArticleCropFrame">
+        <div class="journal-crop-frame journal-crop-frame-large" id="journalArticleCropFrame" style="--journal-image-aspect:${getArticleAspectCssValue(getArticleAspectValue(form))}">
           <img src="${Utils.escapeHtml(src)}" alt="">
           <div class="journal-crop-grid" aria-hidden="true"></div>
         </div>
       </div>
       <div class="journal-crop-modal-foot">
         <div class="journal-crop-tools">
-          <button type="button" class="social-icon-btn" data-photo-zoom="-"><i class="fa-solid fa-minus"></i></button>
-          <button type="button" class="social-icon-btn" data-photo-reset><i class="fa-solid fa-rotate-left"></i></button>
-          <button type="button" class="social-icon-btn" data-photo-zoom="+"><i class="fa-solid fa-plus"></i></button>
-          <span>Arraste a imagem dentro da moldura para enquadrar.</span>
+          <div class="journal-crop-dimensions">
+            <label for="journalCropAspectSelect">Dimensões da imagem</label>
+            <select id="journalCropAspectSelect" data-photo-aspect>
+              ${Object.entries(ARTICLE_IMAGE_ASPECTS).map(([key, item]) => `
+                <option value="${key}" ${getArticleAspectValue(form) === key ? 'selected' : ''}>${item.label}${key === 'free' ? '' : ` (${key})`}</option>
+              `).join('')}
+            </select>
+          </div>
+          <button type="button" class="social-icon-btn" data-photo-zoom="-" title="Zoom -"><i class="fa-solid fa-minus"></i></button>
+          <button type="button" class="social-icon-btn" data-photo-reset title="Resetar"><i class="fa-solid fa-rotate-left"></i></button>
+          <button type="button" class="social-icon-btn" data-photo-zoom="+" title="Zoom +"><i class="fa-solid fa-plus"></i></button>
+          <span>Arraste a imagem para reposicionar. Use os botões para ajuste fino.</span>
         </div>
         <button type="button" class="btn btn-primary" data-apply-article-crop><i class="fa-solid fa-check"></i> Aplicar recorte</button>
       </div>
@@ -1041,10 +1158,20 @@ function openArticleCropModal() {
   openModal(modal);
   const crop = getArticleCropState(form);
   const img = modal.querySelector('#journalArticleCropFrame img');
-  if (img) applyArticleCropStyle(img, crop);
+  if (img) {
+    bindJournalImageDiagnostics(img, { context: 'crop-modal', url: src });
+    applyArticleCropStyle(img, crop);
+    applyArticleNaturalAspect(img, [modal.querySelector('#journalArticleCropFrame')]);
+  }
   bindArticleCropEditor(modal);
   modal.querySelectorAll('[data-photo-zoom]').forEach((btn) => btn.addEventListener('click', () => adjustArticleCropZoom(btn.dataset.photoZoom)));
   modal.querySelector('[data-photo-reset]')?.addEventListener('click', resetArticleCrop);
+  modal.querySelector('[data-photo-aspect]')?.addEventListener('change', (event) => {
+    setArticleAspectValue(event.target.value);
+    resetArticleCrop(false);
+    updateCropFrameAspect(modal);
+    updateEditorPreview();
+  });
   modal.querySelector('[data-apply-article-crop]')?.addEventListener('click', () => {
     form.elements.article_photo_crop_active.value = '1';
     updateEditorPreview();
@@ -1056,19 +1183,67 @@ function openArticleCropModal() {
 
 function getArticleCropState(form = document.getElementById('journalEditorForm')) {
   return {
-    x: clampNumber(Number(form?.elements.article_photo_x?.value || 0), -28, 28),
-    y: clampNumber(Number(form?.elements.article_photo_y?.value || 0), -28, 28),
-    zoom: clampNumber(Number(form?.elements.article_photo_zoom?.value || 1), 1, 2.4),
+    x: clampNumber(Number(form?.elements.article_photo_x?.value || 0), -60, 60),
+    y: clampNumber(Number(form?.elements.article_photo_y?.value || 0), -60, 60),
+    zoom: clampNumber(Number(form?.elements.article_photo_zoom?.value || 1), 1, 4),
   };
+}
+
+function getArticleAspectValue(form = document.getElementById('journalEditorForm')) {
+  const value = form?.elements.article_photo_aspect?.value || '16:9';
+  return ARTICLE_IMAGE_ASPECTS[value] ? value : '16:9';
+}
+
+function setArticleAspectValue(value) {
+  const form = document.getElementById('journalEditorForm');
+  if (!form?.elements.article_photo_aspect || !ARTICLE_IMAGE_ASPECTS[value]) return;
+  form.elements.article_photo_aspect.value = value;
+}
+
+function getArticleAspectCssValue(aspect = '16:9') {
+  if (aspect === 'free') return '4 / 3';
+  return aspect.replace(':', ' / ');
+}
+
+function getArticleAspectStyle(aspect = '16:9') {
+  return `--journal-image-aspect:${getArticleAspectCssValue(aspect)}`;
+}
+
+function getArticlePhotoMetaPayload(form = document.getElementById('journalEditorForm')) {
+  return {
+    kind: 'article_photo',
+    position: form?.elements.article_photo_position?.value || 'right',
+    aspect: getArticleAspectValue(form),
+    crop: getArticleCropState(form),
+    cropActive: form?.elements.article_photo_crop_active?.value === '1',
+  };
+}
+
+function updateCropFrameAspect(root = document) {
+  const frame = root.querySelector('#journalArticleCropFrame');
+  if (frame) frame.style.setProperty('--journal-image-aspect', getArticleAspectCssValue(getArticleAspectValue()));
+  const img = frame?.querySelector('img');
+  if (img) applyArticleNaturalAspect(img, [frame]);
+}
+
+function applyArticleNaturalAspect(img, targets = []) {
+  if (getArticleAspectValue() !== 'free') return;
+  const apply = () => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const value = `${img.naturalWidth} / ${img.naturalHeight}`;
+    targets.filter(Boolean).forEach((target) => target.style.setProperty('--journal-image-aspect', value));
+  };
+  if (img.complete) apply();
+  else img.addEventListener('load', apply, { once: true });
 }
 
 function setArticleCropState(crop) {
   const form = document.getElementById('journalEditorForm');
   if (!form) return;
   const nextCrop = {
-    x: clampNumber(crop.x, -28, 28),
-    y: clampNumber(crop.y, -28, 28),
-    zoom: clampNumber(crop.zoom, 1, 2.4),
+    x: clampNumber(crop.x, -60, 60),
+    y: clampNumber(crop.y, -60, 60),
+    zoom: clampNumber(crop.zoom, 1, 4),
   };
   form.elements.article_photo_x.value = String(nextCrop.x);
   form.elements.article_photo_y.value = String(nextCrop.y);
@@ -1076,6 +1251,7 @@ function setArticleCropState(crop) {
   form.elements.article_photo_crop_active.value = '1';
   const modalImg = document.querySelector('#journalCropModal #journalArticleCropFrame img');
   if (modalImg) applyArticleCropStyle(modalImg, nextCrop);
+  updateCropFrameAspect(document.getElementById('journalCropModal') || document);
   updateEditorPreview();
 }
 
@@ -1323,18 +1499,19 @@ function getPostVideoUrl(post) {
 }
 
 function getArticleImageMeta(media = null) {
-  const fallback = { position: 'right', cropActive: false, crop: { x: 0, y: 0, zoom: 1 } };
+  const fallback = { position: 'right', aspect: '16:9', cropActive: false, crop: { x: 0, y: 0, zoom: 1 } };
   if (!media?.alt_text) return fallback;
   try {
     const meta = JSON.parse(media.alt_text);
     const crop = meta?.crop || {};
     return {
       position: ['left', 'right', 'top'].includes(meta?.position) ? meta.position : 'right',
+      aspect: ARTICLE_IMAGE_ASPECTS[meta?.aspect] ? meta.aspect : '16:9',
       cropActive: Boolean(meta?.cropActive),
       crop: {
-        x: clampNumber(Number(crop.x ?? 0), -42, 42),
-        y: clampNumber(Number(crop.y ?? 0), -42, 42),
-        zoom: clampNumber(Number(crop.zoom ?? 1), 1, 2.4),
+        x: clampNumber(Number(crop.x ?? 0), -60, 60),
+        y: clampNumber(Number(crop.y ?? 0), -60, 60),
+        zoom: clampNumber(Number(crop.zoom ?? 1), 1, 4),
       },
     };
   } catch {

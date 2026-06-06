@@ -769,7 +769,7 @@ body[data-page="jornal"] .page-content {
   position: relative;
   float: right;
   width: min(42%, 340px);
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--journal-image-aspect, 4 / 3);
   margin: 4px 0 18px 24px;
   border: 2px solid rgba(24,18,15,.62);
   background: rgba(24,18,15,.08);
@@ -1099,7 +1099,7 @@ body[data-page="jornal"] .page-content {
 
 .journal-photo-pick-preview {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--journal-image-aspect, 4 / 3);
   margin: 0;
   border: 1px solid rgba(248,239,216,.22);
   background: #050506;
@@ -1149,7 +1149,7 @@ body[data-page="jornal"] .page-content {
 
 .journal-crop-frame {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--journal-image-aspect, 4 / 3);
   border: 2px solid rgba(248,239,216,.85);
   background: #050506;
   overflow: hidden;
@@ -1159,8 +1159,8 @@ body[data-page="jornal"] .page-content {
 }
 
 .journal-crop-modal-panel {
-  width: min(1080px, 100%);
-  height: min(86dvh, 840px);
+  width: min(1080px, calc(100vw - 24px));
+  height: min(92dvh, 860px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   border: 1px solid rgba(244,239,226,.18);
@@ -1254,6 +1254,29 @@ body[data-page="jornal"] .page-content {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.journal-crop-dimensions {
+  display: grid;
+  gap: 4px;
+  min-width: min(240px, 100%);
+}
+
+.journal-crop-dimensions label {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.journal-crop-dimensions select {
+  min-height: 38px;
+  border: 1px solid rgba(248,239,216,.18);
+  border-radius: 6px;
+  background: rgba(255,255,255,.06);
+  color: #f8efd8;
+  padding: 0 10px;
 }
 
 .journal-crop-tools span {
@@ -1352,7 +1375,7 @@ body[data-page="jornal"] .page-content {
 
 .journal-editor-paper-photo {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--journal-image-aspect, 4 / 3);
   margin: 0;
   border: 2px solid rgba(24,18,15,.62);
   background: rgba(24,18,15,.08);
@@ -1778,11 +1801,25 @@ body[data-page="jornal"] .page-content {
   touch-action: none;
 }
 
-.journal-crop-frame img,
+.journal-crop-frame img.crop-active,
 .journal-editor-paper-photo img.crop-active,
 .journal-photo-pick-preview img.crop-active,
 .journal-article-photo img.crop-active {
   object-fit: cover;
+}
+
+.journal-editor-paper-photo.load-error,
+.journal-photo-pick-preview.load-error,
+.journal-crop-frame.load-error {
+  display: grid;
+  place-items: center;
+  color: rgba(248,239,216,.68);
+  font-size: .72rem;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 12px;
 }
 
 [data-theme="light"] .journal-shell,
