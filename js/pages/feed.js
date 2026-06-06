@@ -4052,7 +4052,10 @@ async function openStoryPremium(groupIndex, storyIndex) {
   mediaReady.finally(() => markStoryMediaReady(modal));
   markStoryMediaReady(modal);
 
-  const go = (direction) => advanceStoryOrClose(groupIndex, storyIndex, direction, openStoryPremium);
+  const go = (direction) => {
+    if (isStoryReplyInteractionLocked(modal)) return false;
+    return advanceStoryOrClose(groupIndex, storyIndex, direction, openStoryPremium);
+  };
   modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
   modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
   modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
@@ -4091,6 +4094,7 @@ async function openStoryPremium(groupIndex, storyIndex) {
       console.error('[MSY Feed Error]', err);
       Utils.showToast(err.message || 'Erro ao responder story.', 'error');
     } finally {
+      modal.dataset.storyReplySettledAt = String(Date.now());
       delete modal.dataset.storyReplySending;
       if (input) input.disabled = false;
       Utils.setButtonLoading?.(button, false);
@@ -4167,6 +4171,32 @@ function stopStoryInteractiveEvent(event) {
   event?.stopImmediatePropagation?.();
 }
 
+function isStoryReplyInteractionLocked(modal = document.getElementById('storyViewer')) {
+  const settledAt = Number(modal?.dataset.storyReplySettledAt || 0);
+  return modal?.dataset.storyReplySending === 'true' || (settledAt && Date.now() - settledAt < 450);
+}
+
+function isStoryInteractiveTarget(target) {
+  return Boolean(target?.closest?.([
+    '.story-inline-reply',
+    '.story-inline-send',
+    '.story-social-icon',
+    '.story-sound-toggle',
+    '.story-close',
+    '.story-reactions-panel',
+    '.story-activity-close',
+    '[data-toggle-story-reactions]',
+    '[data-close-story-activity]',
+    '[data-edit-story]',
+    '[data-delete-story]',
+    '[data-close-modal]',
+    'input',
+    'textarea',
+    'select',
+    'button',
+  ].join(',')));
+}
+
 async function toggleStoryReaction(story, reaction, button, canViewReactions = false) {
   const wasActive = button?.classList.contains('active');
   button?.classList.toggle('active', !wasActive);
@@ -4205,7 +4235,13 @@ function bindStoryInteractiveGuards(modal) {
   ].join(',');
   modal.querySelectorAll(selectors).forEach((node) => {
     ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach((eventName) => {
-      node.addEventListener(eventName, (event) => event.stopPropagation(), { passive: true });
+      node.addEventListener(eventName, (event) => {
+        event.stopPropagation();
+      }, { capture: true, passive: true });
+      node.addEventListener(eventName, (event) => {
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+      }, { passive: true });
     });
   });
 }
@@ -4237,14 +4273,14 @@ function bindStoryGestures(modal, go) {
   const panel = modal.querySelector('.story-panel');
   if (!panel) return;
   const startHold = (event) => {
-    if (event.target.closest('input,textarea,button')) return;
+    if (isStoryReplyInteractionLocked(modal) || isStoryInteractiveTarget(event.target)) return;
     const point = event.touches?.[0] || event;
     startX = point?.clientX || 0;
     startY = point?.clientY || 0;
     pauseStoryPlayback(modal);
   };
   const endHold = (event) => {
-    if (event.target.closest('input,textarea,button')) return;
+    if (isStoryReplyInteractionLocked(modal) || isStoryInteractiveTarget(event.target)) return;
     const point = event.changedTouches?.[0] || event;
     const dx = (point?.clientX || 0) - startX;
     const dy = (point?.clientY || 0) - startY;
