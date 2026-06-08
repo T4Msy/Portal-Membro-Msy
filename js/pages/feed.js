@@ -132,12 +132,9 @@ function canManageStory(story) {
   return state.profile.tier === 'diretoria' || state.canModerateFeed || story.author_id === state.profile.id;
 }
 
-function isAdminProfile(profile = state.profile) {
-  return profile?.tier === 'diretoria' || state.canModerateFeed || /admin|diretoria/i.test(profile?.role || '');
-}
-
-function canManageComment(comment) {
-  return isAdminProfile() || comment?.author_id === state.profile?.id;
+function canManageComment(comment, post) {
+  const userId = state.profile?.id;
+  return !!userId && (comment?.author_id === userId || post?.author_id === userId);
 }
 
 function displayUsername(member) {
@@ -1468,7 +1465,7 @@ function renderComments(post) {
         <div class="comment-meta">
           <span>${timeAgo(c.created_at)}</span>
           <button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button>
-          ${canManageComment(c) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
+          ${canManageComment(c, post) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
         </div>
       </div>
     </div>`).join('');
@@ -1485,7 +1482,7 @@ function renderCommentRows(post, { full = false } = {}) {
         <div class="comment-meta">
           <span>${timeAgo(c.created_at)}</span>
           <button data-reply-comment="${c.id}" data-post-id="${post.id}">Responder</button>
-          ${canManageComment(c) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
+          ${canManageComment(c, post) ? `<button class="comment-delete-btn" data-delete-comment="${c.id}" data-post-id="${post.id}">Excluir</button>` : ''}
         </div>
       </div>
     </div>`).join('');
@@ -2610,7 +2607,7 @@ async function deleteComment(postId, commentId) {
   const post = state.posts.find((p) => p.id === postId);
   const comment = post?.comments?.find((item) => item.id === commentId);
   if (!post || !comment) return;
-  if (!canManageComment(comment)) return Utils.showToast('Sem permissao para excluir este comentario.', 'error');
+  if (!canManageComment(comment, post)) return Utils.showToast('Sem permissao para excluir este comentario.', 'error');
   if (!await MSYConfirm.show('Excluir este comentario?', { title: 'Excluir comentario', type: 'danger', confirmText: 'Excluir' })) return;
   try {
     await state.service.deleteComment(commentId);

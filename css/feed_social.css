@@ -3330,3 +3330,96 @@ body[data-page="feed"] .direct-post-share-card{
     padding-inline:7px;
   }
 }
+
+/* Bug fixes: notification badge clipping and post/direct option spacing. */
+body[data-page="feed"] .social-top-actions,
+body[data-page="feed"] .social-top-icon,
+body[data-page="feed"] .social-mobile-bar,
+body[data-page="feed"] .social-mobile-action{
+  overflow:visible!important;
+}
+
+body[data-page="feed"] .social-notification-badge{
+  top:-3px!important;
+  right:-3px!important;
+  z-index:20;
+  min-width:20px;
+  height:20px;
+  padding:0 5px;
+  line-height:1;
+  box-sizing:border-box;
+  border-radius:999px;
+  white-space:nowrap;
+  pointer-events:none;
+  font-size:.62rem;
+}
+
+body[data-page="feed"] .social-notification-badge.mobile{
+  top:2px!important;
+  right:2px!important;
+  transform:translate(34%,-34%);
+}
+
+body[data-page="feed"] .post-head{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  align-items:start;
+  gap:10px;
+  overflow:visible;
+}
+
+body[data-page="feed"] .post-author{
+  min-width:0;
+  padding-right:6px;
+}
+
+body[data-page="feed"] .post-author-copy,
+body[data-page="feed"] .post-author-name,
+body[data-page="feed"] .post-meta{
+  min-width:0;
+}
+
+body[data-page="feed"] .post-author-name span,
+body[data-page="feed"] .post-meta span{
+  min-width:0;
+}
+
+body[data-page="feed"] .post-menu-wrap{
+  justify-self:end;
+  margin-left:2px;
+  overflow:visible;
+}
+
+body[data-page="feed"] .post-more-btn,
+body[data-page="feed"] .direct-message-menu-btn{
+  width:44px!important;
+  height:44px!important;
+  min-width:44px!important;
+  min-height:44px!important;
+  flex:0 0 44px;
+}
+
+body[data-page="feed"] .direct-message-bubble{
+  padding-right:54px!important;
+}
+
+body[data-page="feed"] .direct-message-menu-btn{
+  opacity:1;
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] .post-head{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+
+  body[data-page="feed"] .post-head > .content-type-badge{
+    grid-column:1;
+    justify-self:start;
+    margin:4px 0 0 54px;
+  }
+
+  body[data-page="feed"] .post-menu-wrap{
+    grid-column:2;
+    grid-row:1;
+  }
+}
