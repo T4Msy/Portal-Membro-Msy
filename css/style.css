@@ -1394,6 +1394,7 @@ select option:hover,
   cursor: pointer;
   transition: all var(--t1) var(--ease);
   font-size: 1rem;
+  overflow: visible;
 }
 .notif-bell:hover {
   border-color: var(--border-gold);
@@ -1403,18 +1404,26 @@ select option:hover,
 
 .notif-count {
   position: absolute;
-  top: -4px; right: -4px;
-  width: 18px; height: 18px;
+  top: -6px; right: -6px;
+  z-index: 30;
+  min-width: 18px;
+  width: auto;
+  height: 18px;
+  padding: 0 5px;
   background: var(--red-bright);
-  border-radius: 50%;
+  border-radius: 9999px;
   font-size: 0.62rem;
   font-weight: 700;
+  line-height: 1;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid var(--black);
   box-shadow: 0 0 8px var(--red-glow);
+  box-sizing: border-box;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Notification Dropdown */
@@ -1508,7 +1517,10 @@ select option:hover,
   flex-shrink: 0;
 }
 
-.notif-bell-wrap { position: relative; }
+.notif-bell-wrap {
+  position: relative;
+  overflow: visible;
+}
 
 /* Topbar user info */
 .topbar-user {
@@ -2876,6 +2888,11 @@ button,
     border-color 180ms var(--ease),
     color 180ms var(--ease),
     box-shadow 220ms var(--ease);
+}
+
+.notif-bell,
+.notif-bell-wrap {
+  overflow: visible;
 }
 
 button:not(:disabled):active,

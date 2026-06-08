@@ -76,10 +76,11 @@
 
   function _handleNewNotif(notif) {
     // Atualizar badge
+    const formatNotifCount = (count) => count > 99 ? '99+' : String(count);
     const badge = document.querySelector('.notif-count');
     if (badge) {
       const current = parseInt(badge.textContent, 10) || 0;
-      badge.textContent = current + 1;
+      badge.textContent = formatNotifCount(current + 1);
     } else {
       const bell = document.querySelector('.notif-bell');
       if (bell && !bell.querySelector('.notif-count')) {

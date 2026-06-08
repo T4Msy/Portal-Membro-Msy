@@ -523,13 +523,20 @@
      const topbar = document.getElementById('topbar');
      if (!topbar || !profile) return;
    
-     const { data: notifs } = await db.from('notifications')
-       .select('*').eq('user_id', profile.id)
-       .is('deleted_at', null)
-       .order('created_at', { ascending: false }).limit(6);
-   
-     const unread = (notifs || []).filter(n => !n.read).length;
-   
+     const [{ data: notifs }, { count: unreadCount }] = await Promise.all([
+       db.from('notifications')
+         .select('*').eq('user_id', profile.id)
+         .is('deleted_at', null)
+         .order('created_at', { ascending: false }).limit(6),
+       db.from('notifications')
+         .select('id', { count: 'exact', head: true }).eq('user_id', profile.id)
+         .eq('read', false)
+         .is('deleted_at', null),
+     ]);
+
+     const unread = unreadCount ?? (notifs || []).filter(n => !n.read).length;
+     const unreadLabel = unread > 99 ? '99+' : String(unread);
+
      topbar.innerHTML = `
        <div class="topbar-left">
          <button class="sidebar-toggle" id="sidebarToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar"><i class="fa-solid fa-bars"></i></button>
@@ -542,7 +549,7 @@
          <div class="notif-bell-wrap">
            <button class="notif-bell" id="notifBell" aria-label="Notificações">
              <i class="fa-solid fa-bell"></i>
-             ${unread > 0 ? `<span class="notif-count">${unread}</span>` : ''}
+             ${unread > 0 ? `<span class="notif-count">${unreadLabel}</span>` : ''}
            </button>
            <div class="notif-dropdown" id="notifDropdown">
              <div class="notif-dropdown-header">
