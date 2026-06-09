@@ -1543,21 +1543,17 @@ async function patchAdminPage(profile) {
 
   // Observar quando o conteúdo do admin for renderizado
   const tryPatch = () => {
-    const acoeCard = content.querySelector('.card');
-    if (!acoeCard) return false;
+    const workspace = content.querySelector('.admin-workspace-grid');
+    const shell = content.querySelector('.admin-shell');
+    if (!workspace || !shell) return false;
 
-    // Injetar card de alertas depois dos stats
+    // Injetar alertas fora dos grids internos para não deslocar cards administrativos.
     if (!document.getElementById('systemAlertsCard')) {
       const alertsCard = document.createElement('div');
       alertsCard.id = 'systemAlertsCard';
       alertsCard.className = 'card card-enter';
-      alertsCard.style.marginBottom = '20px';
-      // Inserir antes do primeiro card de conteúdo (após stats)
-      const firstCard = content.querySelector('.card');
-      if (firstCard && firstCard.parentNode) {
-        firstCard.parentNode.insertBefore(alertsCard, firstCard.nextSibling);
-        renderSystemAlerts(alertsCard);
-      }
+      workspace.insertAdjacentElement('afterend', alertsCard);
+      renderSystemAlerts(alertsCard);
     }
 
     return true;

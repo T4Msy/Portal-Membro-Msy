@@ -5813,7 +5813,6 @@
      Utils.showLoading(content);
    
      const [
-       { count: totalMembers },
        { count: activeMembers },
        { count: pendingMembers },
        { count: totalActs },
@@ -5823,7 +5822,6 @@
        { data: recentMembers },
        { data: tabRules }
      ] = await Promise.all([
-       db.from('profiles').select('id', { count: 'exact', head: true }),
        db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
        db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
        db.from('activities').select('id', { count: 'exact', head: true }),
@@ -5858,26 +5856,9 @@
            <strong>${pendingMembers > 0 ? `${pendingMembers} pendente${pendingMembers > 1 ? 's' : ''}` : `${activeMembers || 0} ativos`}</strong>
          </div>
        </section>
-       <div class="admin-command-strip card-enter">
-         <div class="admin-command-node">
-           <span>Membros</span>
-           <strong>${activeMembers || 0}</strong>
-           <small>ativos na plataforma</small>
-         </div>
-         <div class="admin-command-node ${pendingActs > 0 ? 'accent' : ''}">
-           <span>Atividades</span>
-           <strong>${pendingActs || 0}</strong>
-           <small>pendentes de ação</small>
-         </div>
-         <div class="admin-command-node">
-           <span>Abas</span>
-           <strong>${hiddenTabs}</strong>
-           <small>ocultas para membros</small>
-         </div>
-       </div>
 
        <div class="stats-grid" style="margin-bottom:28px">
-         <div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-users"></i></div><div class="stat-info"><div class="stat-value">${totalMembers||0}</div><div class="stat-label">Total Membros</div></div></div>
+         <div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-users"></i></div><div class="stat-info"><div class="stat-value">${activeMembers||0}</div><div class="stat-label">Membros Ativos</div></div></div>
          <div class="stat-card red-accent card-enter"><div class="stat-icon red"><i class="fa-solid fa-user-clock"></i></div><div class="stat-info"><div class="stat-value">${pendingMembers||0}</div><div class="stat-label">Pendentes Aprovação</div></div></div>
          <div class="stat-card blue-accent card-enter"><div class="stat-icon blue"><i class="fa-solid fa-list-check"></i></div><div class="stat-info"><div class="stat-value">${totalActs||0}</div><div class="stat-label">Atividades Total</div></div></div>
          <div class="stat-card green-accent card-enter"><div class="stat-icon green"><i class="fa-solid fa-bullhorn"></i></div><div class="stat-info"><div class="stat-value">${totalComs||0}</div><div class="stat-label">Comunicados</div></div></div>

@@ -1741,7 +1741,7 @@ select option:hover,
 .admin-shell {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   position: relative;
   isolation: isolate;
 }
@@ -1763,7 +1763,7 @@ select option:hover,
   align-items: stretch;
   justify-content: space-between;
   gap: 22px;
-  padding: 26px 28px;
+  padding: 22px 24px;
   border: 1px solid rgba(201,168,76,.24);
   border-radius: var(--radius-xl);
   background:
@@ -1796,7 +1796,7 @@ select option:hover,
   opacity: .45;
 }
 .admin-hero .page-header-title {
-  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  font-size: clamp(1.55rem, 2.4vw, 2.1rem);
   letter-spacing: .045em;
 }
 .admin-hero .page-header-sub {
@@ -1808,7 +1808,7 @@ select option:hover,
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 16px;
 }
 .admin-kicker {
   display: inline-flex;
@@ -1822,7 +1822,7 @@ select option:hover,
   text-transform: uppercase;
 }
 .admin-hero-status {
-  min-width: 190px;
+  min-width: 170px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-faint);
   background: rgba(255,255,255,.03);
@@ -1864,8 +1864,8 @@ select option:hover,
   box-shadow: 0 14px 34px rgba(0,0,0,.35);
 }
 .admin-command-node {
-  min-height: 92px;
-  padding: 18px 20px;
+  min-height: 74px;
+  padding: 14px 18px;
   background:
     linear-gradient(145deg, rgba(255,255,255,.035), transparent),
     rgba(12,12,16,.92);
@@ -1896,7 +1896,7 @@ select option:hover,
   display: block;
   margin: 6px 0 4px;
   font-family: 'Cinzel', serif;
-  font-size: 1.65rem;
+  font-size: 1.35rem;
   line-height: 1;
   color: var(--text-1);
 }
@@ -1904,7 +1904,7 @@ select option:hover,
 .admin-workspace-grid,
 .admin-lists-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, .9fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, .95fr);
   gap: 18px;
   align-items: start;
 }
@@ -1913,7 +1913,7 @@ select option:hover,
   margin-bottom: 0 !important;
 }
 .admin-shell .stat-card {
-  min-height: 108px;
+  min-height: 92px;
   background:
     linear-gradient(145deg, rgba(255,255,255,.035), transparent 42%),
     linear-gradient(160deg, var(--black-3), rgba(24,24,31,.9));
@@ -1922,7 +1922,7 @@ select option:hover,
 .admin-actions-card,
 #systemAlertsCard,
 .admin-pending-card { margin-bottom: 0 !important; }
-.admin-actions-card { padding: 24px; }
+.admin-actions-card { padding: 18px; }
 .admin-actions-card::before,
 #systemAlertsCard::before,
 .admin-pending-card::before {
@@ -1931,17 +1931,17 @@ select option:hover,
 .admin-actions-card .card-title { margin-bottom: 14px; }
 .admin-actions-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px !important;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 10px !important;
 }
 .admin-action-tile {
-  min-height: 82px;
+  min-height: 68px;
   justify-content: flex-start;
   align-items: flex-start;
   border: 1px solid var(--border-faint);
   background: linear-gradient(145deg, var(--black-4), var(--black-3));
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px;
   color: var(--text-1);
   text-decoration: none;
   display: flex;
@@ -2038,7 +2038,6 @@ select option:hover,
   margin: 0 0 16px;
 }
 #systemAlertsCard {
-  grid-column: 1 / -1;
   border-color: rgba(96,165,250,.18);
   background: linear-gradient(145deg, rgba(96,165,250,.05), var(--black-3));
 }
