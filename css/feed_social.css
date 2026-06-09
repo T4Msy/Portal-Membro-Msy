@@ -4184,6 +4184,10 @@ body[data-page="feed"] #mobilePostComposerModal .ig-create-close{
   cursor:pointer;
 }
 
+body[data-page="feed"] #mobilePostComposerModal.post-create-modal .ig-create-close{
+  display:none!important;
+}
+
 body[data-page="feed"] #mobilePostComposerModal .ig-post-composer-panel[data-post-composer-step="crop"]{
   width:100vw!important;
   height:100dvh!important;
