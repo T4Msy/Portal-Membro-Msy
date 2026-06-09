@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.tab_permissions (
   visible boolean NOT NULL DEFAULT true,
   allowed_tiers text[] NOT NULL DEFAULT '{}',
   allowed_roles text[] NOT NULL DEFAULT '{}',
+  allowed_user_ids uuid[] NOT NULL DEFAULT '{}',
   required_permissions text[] NOT NULL DEFAULT '{}',
   updated_at timestamptz NOT NULL DEFAULT now(),
   updated_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL
@@ -105,13 +106,15 @@ BEGIN
   END IF;
 
   IF cardinality(v_rule.allowed_tiers) > 0
-     AND NOT v_profile.tier = ANY(v_rule.allowed_tiers) THEN
-    RETURN false;
-  END IF;
-
-  IF cardinality(v_rule.allowed_roles) > 0
-     AND NOT v_profile.role = ANY(v_rule.allowed_roles) THEN
-    RETURN false;
+     OR cardinality(v_rule.allowed_roles) > 0
+     OR cardinality(v_rule.allowed_user_ids) > 0 THEN
+    IF NOT (
+      v_profile.tier = ANY(v_rule.allowed_tiers)
+      OR v_profile.role = ANY(v_rule.allowed_roles)
+      OR v_profile.id = ANY(v_rule.allowed_user_ids)
+    ) THEN
+      RETURN false;
+    END IF;
   END IF;
 
   IF cardinality(v_rule.required_permissions) > 0 THEN

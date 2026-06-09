@@ -597,6 +597,13 @@ body[data-page="permissoes"] #permsManagerBody {
   }
 }
 
+.tab-access-body {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
 .tab-access-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -629,26 +636,29 @@ body[data-page="permissoes"] #permsManagerBody {
 
 .tab-access-list {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .tab-access-row {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
   border: 1px solid var(--border-faint);
-  border-radius: 12px;
-  background: rgba(255,255,255,.035);
-  padding: 12px;
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.035), transparent),
+    rgba(9,9,13,.86);
+  padding: 14px;
 }
 
 .tab-access-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   min-width: 0;
+  padding-top: 4px;
 }
 
 .tab-access-main strong,
@@ -676,12 +686,13 @@ body[data-page="permissoes"] #permsManagerBody {
 
 .tab-access-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(190px, .75fr) minmax(260px, 1.25fr);
+  gap: 12px;
   min-width: 0;
 }
 
 .tab-access-fields .tab-access-field {
+  position: relative;
   display: grid;
   gap: 6px;
   color: var(--gold);
@@ -703,6 +714,104 @@ body[data-page="permissoes"] #permsManagerBody {
 .tab-access-fields select[multiple] {
   min-height: 82px;
   font-size: .78rem;
+}
+
+.tab-picker-trigger {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.025));
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  text-align: left;
+}
+
+.tab-picker-trigger i {
+  color: var(--text-3);
+  font-size: .68rem;
+}
+
+.tab-access-field.open .tab-picker-trigger {
+  border-color: rgba(201,168,76,.45);
+  box-shadow: 0 0 0 3px rgba(201,168,76,.08);
+}
+
+.tab-picker-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: none;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid rgba(201,168,76,.22);
+  border-radius: 10px;
+  background: #101015;
+  box-shadow: 0 18px 45px rgba(0,0,0,.46);
+  padding: 8px;
+}
+
+.tab-access-field.open .tab-picker-menu {
+  display: grid;
+  gap: 4px;
+}
+
+.tab-picker-menu-members {
+  max-height: 320px;
+}
+
+.tab-picker-option {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px !important;
+  min-height: 36px;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: var(--text-2) !important;
+  font-size: .78rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  cursor: pointer;
+}
+
+.tab-picker-option:hover {
+  background: rgba(255,255,255,.055);
+}
+
+.tab-picker-option input {
+  accent-color: var(--gold);
+}
+
+.tab-picker-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-picker-option small {
+  color: var(--text-3);
+  font-size: .66rem;
+  font-weight: 700;
+}
+
+.tab-picker-empty {
+  color: var(--text-3);
+  font-size: .75rem;
+  padding: 10px;
+  text-transform: none;
 }
 
 .tab-access-badge {
@@ -745,6 +854,11 @@ body[data-page="permissoes"] #permsManagerBody {
 
   .tab-access-fields {
     grid-template-columns: 1fr;
+  }
+
+  .tab-picker-menu {
+    position: static;
+    margin-top: 6px;
   }
 
   .tab-access-toolbar .btn {

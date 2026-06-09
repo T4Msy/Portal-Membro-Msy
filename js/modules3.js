@@ -489,7 +489,7 @@ async function initPermissoesPage() {
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="tabAccessReload"><i class="fa-solid fa-rotate"></i> Recarregar</button>
         </div>
-        <div id="tabAccessBody" class="permissions-manager-body"></div>
+        <div id="tabAccessBody" class="tab-access-body"></div>
       </section>
     </div>`;
 
@@ -517,9 +517,15 @@ async function renderTabAccessWorkspace(body) {
   body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:180px;gap:12px;color:var(--text-3)"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold);font-size:1.3rem"></i> Carregando abas...</div>`;
 
   let rules = [];
+  let members = [];
+  let roles = [];
   try {
-    const { data, error } = await db.from('tab_permissions').select('*').order('label');
+    const [{ data, error }, membersRes] = await Promise.all([
+      db.from('tab_permissions').select('*').order('label'),
+      db.from('profiles').select('id,name,role,initials,color,avatar_url,tier,status').eq('status', 'ativo').order('name'),
+    ]);
     if (error) throw error;
+    if (membersRes.error) throw membersRes.error;
     const map = {};
     (data || []).forEach((row) => { map[row.page_key] = row; });
     rules = MSY_TAB_CATALOG.map(([page_key, label]) => ({
@@ -528,35 +534,32 @@ async function renderTabAccessWorkspace(body) {
       visible: true,
       allowed_tiers: [],
       allowed_roles: [],
+      allowed_user_ids: [],
       required_permissions: [],
       ...(map[page_key] || {}),
     }));
+    members = (membersRes.data || []).filter((member) => member.tier !== 'diretoria');
+    roles = [...new Set(members.map((member) => member.role).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   } catch (err) {
     console.error('[MSY][abas] Erro ao carregar configuração:', err);
     body.innerHTML = `<div class="empty-state" style="padding:28px"><div class="empty-state-text">Aplique a migration de permissões de abas para habilitar este painel.</div></div>`;
     return;
   }
 
-  const permissionOptions = MSYPerms.ALL.map((perm) => `<option value="${perm.key}">${Utils.escapeHtml(perm.label)}</option>`).join('');
-  const tierMode = (rule) => {
-    const tiers = rule.allowed_tiers || [];
-    if (tiers.length === 1 && tiers[0] === 'membro') return 'membro';
-    if (tiers.length === 1 && tiers[0] === 'diretoria') return 'diretoria';
-    return 'todos';
-  };
   const accessBadge = (rule) => {
     if (rule.visible === false) return '<span class="tab-access-badge hidden"><i class="fa-solid fa-eye-slash"></i> Oculta</span>';
-    if ((rule.allowed_tiers || []).length || (rule.allowed_roles || []).length || (rule.required_permissions || []).length) {
+    if ((rule.allowed_tiers || []).length || (rule.allowed_roles || []).length || (rule.allowed_user_ids || []).length) {
       return '<span class="tab-access-badge restricted"><i class="fa-solid fa-lock"></i> Restrita</span>';
     }
     return '<span class="tab-access-badge open"><i class="fa-solid fa-eye"></i> Visível</span>';
   };
+  const selectedSummary = (count, emptyLabel) => count ? `${count} selecionado${count === 1 ? '' : 's'}` : emptyLabel;
 
   body.innerHTML = `
     <div class="tab-access-toolbar">
       <div class="tab-access-toolbar-copy">
         <strong>Visibilidade do menu</strong>
-        <span>Diretoria sempre mantém acesso. Membros seguem as regras abaixo.</span>
+        <span>Escolha cargos ou membros específicos. Se nada for selecionado, a aba fica visível para todos.</span>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="show"><i class="fa-solid fa-eye"></i> Mostrar todas</button>
       <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="hide"><i class="fa-solid fa-eye-slash"></i> Ocultar todas</button>
@@ -577,33 +580,37 @@ async function renderTabAccessWorkspace(body) {
           </div>
           <div class="tab-access-fields">
             <div class="tab-access-field">
-              <span class="tab-access-field-label">Cargos</span>
-              <select class="form-input form-select" data-tab-field="allowed_tier_mode">
-                <option value="todos" ${tierMode(rule) === 'todos' ? 'selected' : ''}>Todos</option>
-                <option value="membro" ${tierMode(rule) === 'membro' ? 'selected' : ''}>Membros</option>
-                <option value="diretoria" ${tierMode(rule) === 'diretoria' ? 'selected' : ''}>Diretoria</option>
-              </select>
+              <span class="tab-access-field-label">Cargos/Funções</span>
+              <button type="button" class="tab-picker-trigger" data-picker-trigger="roles">
+                <span data-picker-label="roles">${selectedSummary((rule.allowed_roles || []).length, 'Selecionar cargos')}</span>
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              <div class="tab-picker-menu" data-picker-menu="roles">
+                ${roles.length ? roles.map((role) => `
+                  <label class="tab-picker-option">
+                    <input type="checkbox" data-tab-role="${Utils.escapeHtml(role)}" ${(rule.allowed_roles || []).includes(role) ? 'checked' : ''}>
+                    <span>${Utils.escapeHtml(role)}</span>
+                  </label>`).join('') : '<div class="tab-picker-empty">Nenhum cargo encontrado.</div>'}
+              </div>
             </div>
-            <label class="tab-access-field">Grupos/Funções
-              <input class="form-input" data-tab-field="allowed_roles" placeholder="Admin,Editor" value="${Utils.escapeHtml((rule.allowed_roles || []).join(','))}">
-            </label>
-            <label class="tab-access-field">Permissões
-              <select class="form-input" data-tab-field="required_permissions" multiple>
-                ${permissionOptions}
-              </select>
-            </label>
+            <div class="tab-access-field tab-access-field-wide">
+              <span class="tab-access-field-label">Membros liberados</span>
+              <button type="button" class="tab-picker-trigger" data-picker-trigger="members">
+                <span data-picker-label="members">${selectedSummary((rule.allowed_user_ids || []).length, 'Selecionar membros')}</span>
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              <div class="tab-picker-menu tab-picker-menu-members" data-picker-menu="members">
+                ${members.length ? members.map((member) => `
+                  <label class="tab-picker-option">
+                    <input type="checkbox" data-tab-user="${member.id}" ${(rule.allowed_user_ids || []).includes(member.id) ? 'checked' : ''}>
+                    <span>${Utils.escapeHtml(member.name)}</span>
+                    <small>${Utils.escapeHtml(member.role || 'Membro')}</small>
+                  </label>`).join('') : '<div class="tab-picker-empty">Nenhum membro ativo encontrado.</div>'}
+              </div>
+            </div>
           </div>
         </div>`).join('')}
     </div>`;
-
-  rules.forEach((rule) => {
-    const row = body.querySelector(`[data-tab-row="${CSS.escape(rule.page_key)}"]`);
-    const select = row?.querySelector('[data-tab-field="required_permissions"]');
-    [...(rule.required_permissions || [])].forEach((key) => {
-      const option = select?.querySelector(`option[value="${CSS.escape(key)}"]`);
-      if (option) option.selected = true;
-    });
-  });
 
   body.querySelectorAll('[data-tabs-bulk]').forEach((btn) => btn.addEventListener('click', () => {
     const show = btn.dataset.tabsBulk === 'show';
@@ -611,7 +618,22 @@ async function renderTabAccessWorkspace(body) {
     body.querySelectorAll('.tab-access-row').forEach((row) => updateTabAccessBadge(row));
   }));
 
-  body.querySelectorAll('[data-tab-field="visible"], [data-tab-field="allowed_tier_mode"], [data-tab-field="allowed_roles"], [data-tab-field="required_permissions"]').forEach((input) => {
+  body.querySelectorAll('[data-picker-trigger]').forEach((trigger) => trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const field = trigger.closest('.tab-access-field');
+    body.querySelectorAll('.tab-access-field.open').forEach((node) => {
+      if (node !== field) node.classList.remove('open');
+    });
+    field?.classList.toggle('open');
+  }));
+
+  body.addEventListener('click', (event) => {
+    if (!event.target.closest('.tab-access-field')) {
+      body.querySelectorAll('.tab-access-field.open').forEach((node) => node.classList.remove('open'));
+    }
+  });
+
+  body.querySelectorAll('[data-tab-field="visible"], [data-tab-role], [data-tab-user]').forEach((input) => {
     input.addEventListener('change', () => updateTabAccessBadge(input.closest('[data-tab-row]')));
     input.addEventListener('input', () => updateTabAccessBadge(input.closest('[data-tab-row]')));
   });
@@ -622,9 +644,10 @@ async function renderTabAccessWorkspace(body) {
       page_key: row.dataset.tabRow,
       label: rules.find((rule) => rule.page_key === row.dataset.tabRow)?.label || row.dataset.tabRow,
       visible: row.querySelector('[data-tab-field="visible"]')?.checked !== false,
-      allowed_tiers: tierModeToArray(row.querySelector('[data-tab-field="allowed_tier_mode"]')?.value),
-      allowed_roles: splitCsv(row.querySelector('[data-tab-field="allowed_roles"]')?.value),
-      required_permissions: [...row.querySelector('[data-tab-field="required_permissions"]')?.selectedOptions || []].map((opt) => opt.value),
+      allowed_tiers: [],
+      allowed_roles: [...row.querySelectorAll('[data-tab-role]:checked')].map((input) => input.dataset.tabRole),
+      allowed_user_ids: [...row.querySelectorAll('[data-tab-user]:checked')].map((input) => input.dataset.tabUser),
+      required_permissions: [],
       updated_at: new Date().toISOString(),
     }));
     Utils.setButtonLoading?.(btn, true, '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...');
@@ -632,7 +655,8 @@ async function renderTabAccessWorkspace(body) {
     Utils.setButtonLoading?.(btn, false);
     if (error) {
       console.error('[MSY][abas] Erro ao salvar:', error);
-      Utils.showToast('Erro ao salvar abas.', 'error');
+      const needsMigration = String(error.message || '').includes('allowed_user_ids');
+      Utils.showToast(needsMigration ? 'Aplique a migration de abas por membro antes de salvar.' : 'Erro ao salvar abas.', 'error');
       return;
     }
     MSYTabAccess?.invalidate?.();
@@ -645,25 +669,24 @@ function updateTabAccessBadge(row) {
   const badge = row.querySelector('.tab-access-badge');
   if (!badge) return;
   const visible = row.querySelector('[data-tab-field="visible"]')?.checked !== false;
-  const hasTier = row.querySelector('[data-tab-field="allowed_tier_mode"]')?.value !== 'todos';
-  const hasRole = splitCsv(row.querySelector('[data-tab-field="allowed_roles"]')?.value).length > 0;
-  const hasPerm = [...row.querySelector('[data-tab-field="required_permissions"]')?.selectedOptions || []].length > 0;
+  const roleCount = row.querySelectorAll('[data-tab-role]:checked').length;
+  const userCount = row.querySelectorAll('[data-tab-user]:checked').length;
+  const hasRole = roleCount > 0;
+  const hasUser = userCount > 0;
+  const roleLabel = row.querySelector('[data-picker-label="roles"]');
+  const memberLabel = row.querySelector('[data-picker-label="members"]');
+  if (roleLabel) roleLabel.textContent = roleCount ? `${roleCount} cargo${roleCount === 1 ? '' : 's'}` : 'Selecionar cargos';
+  if (memberLabel) memberLabel.textContent = userCount ? `${userCount} membro${userCount === 1 ? '' : 's'}` : 'Selecionar membros';
   if (!visible) {
     badge.className = 'tab-access-badge hidden';
     badge.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Oculta';
-  } else if (hasTier || hasRole || hasPerm) {
+  } else if (hasRole || hasUser) {
     badge.className = 'tab-access-badge restricted';
     badge.innerHTML = '<i class="fa-solid fa-lock"></i> Restrita';
   } else {
     badge.className = 'tab-access-badge open';
     badge.innerHTML = '<i class="fa-solid fa-eye"></i> Visível';
   }
-}
-
-function tierModeToArray(mode = 'todos') {
-  if (mode === 'membro') return ['membro'];
-  if (mode === 'diretoria') return ['diretoria'];
-  return [];
 }
 
 function splitCsv(value = '') {

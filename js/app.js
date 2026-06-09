@@ -163,8 +163,15 @@
          return typeof Features !== 'undefined' ? Features.isEnabled(pageKey, profile) : true;
        }
        if (rule.visible === false) return false;
-       if (Array.isArray(rule.allowed_tiers) && rule.allowed_tiers.length && !rule.allowed_tiers.includes(profile?.tier)) return false;
-       if (Array.isArray(rule.allowed_roles) && rule.allowed_roles.length && !rule.allowed_roles.includes(profile?.role)) return false;
+       const allowedTiers = Array.isArray(rule.allowed_tiers) ? rule.allowed_tiers : [];
+       const allowedRoles = Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [];
+       const allowedUsers = Array.isArray(rule.allowed_user_ids) ? rule.allowed_user_ids : [];
+       if (allowedTiers.length || allowedRoles.length || allowedUsers.length) {
+         const matchesTier = allowedTiers.includes(profile?.tier);
+         const matchesRole = allowedRoles.includes(profile?.role);
+         const matchesUser = allowedUsers.includes(profile?.id);
+         if (!matchesTier && !matchesRole && !matchesUser) return false;
+       }
        if (Array.isArray(rule.required_permissions) && rule.required_permissions.length) {
          if (typeof MSYPerms === 'undefined') return false;
          return MSYPerms.checkAny(profile.id, profile.tier, rule.required_permissions);
@@ -5829,13 +5836,13 @@
        db.from('comunicados').select('id', { count: 'exact', head: true }),
        db.from('profiles').select('*').eq('status', 'pendente').order('created_at', { ascending: false }).limit(6),
        db.from('profiles').select('*').order('created_at', { ascending: false }).limit(5),
-       db.from('tab_permissions').select('page_key,label,visible,allowed_tiers,allowed_roles,required_permissions')
+       db.from('tab_permissions').select('*')
      ]);
 
      const tabConfig = tabRules || [];
      const hiddenTabs = tabConfig.filter(t => t.visible === false).length;
      const restrictedTabs = tabConfig.filter(t =>
-       (t.allowed_tiers || []).length || (t.allowed_roles || []).length || (t.required_permissions || []).length
+       (t.allowed_tiers || []).length || (t.allowed_roles || []).length || (t.allowed_user_ids || []).length || (t.required_permissions || []).length
      ).length;
    
      content.innerHTML = `
