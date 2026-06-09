@@ -577,16 +577,18 @@ async function initRanking() {
       .rank-main-tabs {
         display: flex; gap: 0; border-radius: 12px; overflow: hidden;
         background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
-        margin-bottom: 24px;
+        margin-bottom: 24px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
       }
+      .rank-main-tabs::-webkit-scrollbar { display: none; }
       .rank-main-tab {
-        flex: 1; padding: 11px 14px; background: none; border: none;
+        flex: 0 0 auto; min-width: max-content; padding: 11px 14px; background: none; border: none;
         color: var(--text-3); font-size: .78rem; font-weight: 600;
         letter-spacing: .05em; cursor: pointer; transition: all .2s;
         display: flex; align-items: center; justify-content: center; gap: 7px;
         text-transform: uppercase; font-family: 'Cinzel', serif;
         border-right: 1px solid rgba(255,255,255,.06);
-        position: relative;
+        position: relative; white-space: nowrap;
       }
       .rank-main-tab:last-child { border-right: none; }
       .rank-main-tab.active { color: var(--gold); background: linear-gradient(180deg, rgba(201,168,76,.12) 0%, rgba(201,168,76,.04) 100%); }
@@ -650,24 +652,40 @@ async function initRanking() {
         .trono-pos1 { order: 1; flex: none; width: 100%; }
         .trono-pos2 { order: 2; flex: none; width: 100%; }
         .trono-pos3 { order: 3; flex: none; width: 100%; }
-        .trono-podio-item { flex-direction: row; align-items: center; text-align: left; gap: 0; }
+        .trono-podio-item { flex-direction: row; align-items: center; text-align: left; gap: 0; min-width: 0; }
         .trono-podio-item:hover { transform: none; }
-        .trono-card { flex-direction: row; align-items: center; padding: 14px 16px !important; border-radius: 14px !important; gap: 14px; width: 100%; text-align: left; }
-        .trono-coroa { position: static; transform: none; font-size: 1.2rem; animation: none; align-self: flex-start; margin-right: -8px; margin-top: -4px; }
+        .trono-card { flex-direction: row; align-items: center; padding: 14px 16px !important; border-radius: 14px !important; gap: 14px; width: 100%; text-align: left; overflow: hidden; min-width: 0; box-sizing: border-box; }
+        .trono-coroa { position: static; transform: none; font-size: 1.2rem; animation: none; align-self: flex-start; margin-right: -8px; margin-top: -4px; flex-shrink: 0; }
         .trono-pos1 .trono-avatar { width: 54px !important; height: 54px !important; font-size: 1.1rem !important; flex-shrink: 0; box-shadow: 0 0 18px rgba(201,168,76,.25), 0 0 0 3px rgba(201,168,76,.08); }
         .trono-avatar { width: 46px !important; height: 46px !important; font-size: .95rem !important; flex-shrink: 0; margin-bottom: 0 !important; }
         .trono-pos1 .trono-avatar::after { display: none; }
         .trono-medal { font-size: 1.6rem !important; margin-bottom: 0 !important; flex-shrink: 0; filter: none; animation: none; }
         .trono-pos1 .trono-medal { font-size: 2rem !important; }
-        .trono-nome { font-size: .82rem !important; margin-bottom: 2px !important; color: rgba(255,255,255,.85) !important; text-shadow: none !important; }
+        .trono-nome { font-size: .82rem !important; margin-bottom: 2px !important; color: rgba(255,255,255,.85) !important; text-shadow: none !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
         .trono-pos1 .trono-nome { font-size: .92rem !important; text-shadow: none !important; }
-        .trono-msgs { font-size: .72rem !important; font-weight: 700; }
+        .trono-msgs { font-size: .72rem !important; font-weight: 700; flex-shrink: 0; white-space: nowrap; }
         .trono-pos1 .trono-msgs { font-size: .82rem !important; }
-        .trono-periodo { font-size: .6rem; display: block; margin-top: 3px !important; }
+        .trono-periodo { font-size: .6rem; display: block; margin-top: 3px !important; flex-shrink: 0; white-space: nowrap; }
         .trono-degrau { display: none; }
         .trono-card { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
         .trono-wrap { gap: 18px; }
         .trono-categoria { border-radius: 16px; }
+        .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; }
+        .rank-main-tab { padding: 10px 12px; font-size: .72rem; }
+        .trono-cat-badge { font-size: .5rem; padding: 2px 8px; }
+      }
+
+      @media (max-width: 380px) {
+        .trono-card { gap: 10px !important; padding: 12px 14px !important; }
+        .trono-avatar { width: 40px !important; height: 40px !important; font-size: .85rem !important; }
+        .trono-pos1 .trono-avatar { width: 48px !important; height: 48px !important; font-size: 1rem !important; }
+        .trono-medal { font-size: 1.4rem !important; }
+        .trono-pos1 .trono-medal { font-size: 1.7rem !important; }
+        .trono-nome { font-size: .75rem !important; }
+        .trono-pos1 .trono-nome { font-size: .85rem !important; }
+        .trono-msgs { font-size: .68rem !important; }
+        .trono-pos1 .trono-msgs { font-size: .78rem !important; }
+        .rank-main-tab { padding: 9px 10px; font-size: .68rem; gap: 5px; }
       }
 
       @media (min-width: 641px) and (max-width: 900px) {

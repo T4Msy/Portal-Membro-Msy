@@ -4469,12 +4469,18 @@ textarea:invalid:not(:placeholder-shown),
   justify-content: space-between;
   padding: 18px 24px 0;
   gap: 12px;
+  flex-wrap: wrap;
+}
+.ranking-card-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .ranking-card-periodo {
   font-family: 'Cinzel', serif;
   font-size: .9rem;
   color: var(--gold);
   margin-bottom: 2px;
+  word-break: break-word;
 }
 .ranking-podio {
   display: flex;
@@ -4620,7 +4626,8 @@ textarea:invalid:not(:placeholder-shown),
   #bibCount { display: none; }
 
   .ranking-tabs { max-width: 100%; }
-  .ranking-podio { flex-direction: row; }
+  .ranking-podio { flex-direction: row; flex-wrap: wrap; }
+  .ranking-podio-item { min-width: calc(50% - 6px); box-sizing: border-box; }
   .ranking-add-btns { flex-direction: column; width: 100%; }
   .ranking-add-btns .btn { width: 100%; justify-content: center; }
 
@@ -4666,8 +4673,11 @@ textarea:invalid:not(:placeholder-shown),
 
   .ordem-cargo-item { margin-left: calc((var(--nivel)-1) * 8px); }
 
-  .ranking-podio { flex-direction: column; }
-  .ranking-podio-item { min-width: auto; }
+  .ranking-podio { flex-direction: column; padding: 16px; }
+  .ranking-podio-item { min-width: auto; width: 100%; box-sizing: border-box; }
+  .ranking-card-header { padding: 16px 16px 0; flex-wrap: wrap; }
+  .ranking-lista { padding: 0 16px 16px; }
+  .ranking-lista-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
   .presenca-resumo-grid { grid-template-columns: 1fr 1fr; }
 
