@@ -4,6 +4,7 @@
    ============================================================ */
 
 import {
+  captureStoryVideoThumbnail,
   compressImage,
   exportStoryImageFile,
   loadImage,
@@ -451,7 +452,7 @@ function renderCard(post, large = false) {
   return `
     <button class="journal-card ${large ? 'large' : ''}" data-open-journal-post="${post.id}" id="post-${post.id}">
       <div class="journal-card-media">
-        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" muted playsinline preload="metadata"></video>` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
+        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" muted playsinline webkit-playsinline preload="metadata" data-journal-card-video></video>` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
         ${post.post_type === 'video' || videoUrl ? '<span class="journal-play-badge"><i class="fa-solid fa-play"></i></span>' : ''}
       </div>
       <div class="journal-card-body">
@@ -495,6 +496,7 @@ function renderEmpty(text) {
 }
 
 function bindPage() {
+  bindJournalCardVideoPreviews();
   document.querySelectorAll('[data-journal-section]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeSection = btn.dataset.journalSection;
     state.activeFormat = state.activeSection === 'videos' ? 'video'
@@ -515,6 +517,25 @@ function bindPage() {
   }));
   document.querySelectorAll('[data-open-journal-post]').forEach((btn) => btn.addEventListener('click', () => openPost(btn.dataset.openJournalPost)));
   document.getElementById('journalNewPost')?.addEventListener('click', () => openEditor());
+}
+
+function bindJournalCardVideoPreviews(root = document) {
+  root.querySelectorAll('video[data-journal-card-video]').forEach((video) => {
+    if (video.dataset.previewBound === 'true') return;
+    video.dataset.previewBound = 'true';
+    video.playsInline = true;
+    video.addEventListener('loadedmetadata', () => {
+      const duration = Number(video.duration || 0);
+      const targetTime = Number.isFinite(duration) && duration > 1 ? Math.min(0.8, duration - 0.1) : 0;
+      if (targetTime > 0) {
+        try {
+          video.currentTime = targetTime;
+        } catch (err) {
+          console.warn('[MSY][jornal] Preview do card de video indisponivel:', err);
+        }
+      }
+    }, { once: true });
+  });
 }
 
 function updateVisibleSections() {
@@ -577,6 +598,20 @@ function renderPostBody(post) {
     return renderComicPost(post);
   }
   return renderArticlePost(post);
+}
+
+async function createJornalVideoCover(videoFile) {
+  try {
+    const thumb = await captureStoryVideoThumbnail(videoFile, 0.8, 0);
+    const base = videoFile.name.replace(/\.[^.]+$/, '') || 'video';
+    const coverFile = new File([thumb.blob], `${base}-capa.webp`, { type: thumb.blob.type || 'image/webp' });
+    const cover = await uploadJornalFile(coverFile, 'covers', { imageOnly: true });
+    if (thumb.url?.startsWith('blob:')) URL.revokeObjectURL(thumb.url);
+    return cover;
+  } catch (err) {
+    console.warn('[MSY][jornal] Capa automatica do video indisponivel:', err);
+    return null;
+  }
 }
 
 function bindInlineJournalVideos(root = document) {
@@ -1040,6 +1075,7 @@ async function savePost(event) {
     }
 
     const video = videoFile ? await uploadJornalFile(videoFile, 'videos', { videoOnly: true }) : null;
+    const videoCover = videoFile ? await createJornalVideoCover(videoFile) : null;
 
     let articlePhoto = null;
     let articlePhotoMeta = {};
@@ -1073,8 +1109,8 @@ async function savePost(event) {
       comments_enabled: form.elements.comments_enabled.checked,
       is_featured: form.elements.is_featured.checked,
       author_id: existing?.author_id || state.profile.id,
-      cover_url: existing?.cover_url || null,
-      cover_storage_path: existing?.cover_storage_path || null,
+      cover_url: videoCover?.url || existing?.cover_url || null,
+      cover_storage_path: videoCover?.storage_path || existing?.cover_storage_path || null,
       video_url: video?.url || existing?.video_url || null,
       video_storage_path: video?.storage_path || existing?.video_storage_path || null,
       published_at: status === 'published' ? (existing?.published_at || new Date().toISOString()) : existing?.published_at || null,
@@ -1085,6 +1121,9 @@ async function savePost(event) {
     if (existing) {
       const { error } = await db.from('jornal_posts').update(payload).eq('id', existing.id);
       if (error) throw error;
+      if (videoCover?.storage_path && existing.cover_storage_path) {
+        db.storage.from(BUCKET).remove([existing.cover_storage_path]).catch((err) => console.warn('[MSY][jornal] Capa antiga nao removida:', err));
+      }
     } else {
       const { data, error } = await db.from('jornal_posts').insert(payload).select('id').single();
       if (error) throw error;
@@ -1531,9 +1570,10 @@ function getWrittenPosts() {
 }
 
 function getPostCoverImage(post) {
-  const cover = post?.cover_url || '';
-  if (cover && !isLikelyVideoUrl(cover)) return cover;
-  const image = post?.media?.find((item) => item.media_type === 'image' && item.url && !isLikelyVideoUrl(item.url));
+  const directCover = [post?.cover_url, post?.thumbnail_url, post?.poster_url]
+    .find((url) => url && !isLikelyVideoUrl(url));
+  if (directCover) return directCover;
+  const image = post?.media?.find((item) => ['thumbnail', 'image'].includes(item.media_type) && item.url && !isLikelyVideoUrl(item.url));
   return image?.url || '';
 }
 
