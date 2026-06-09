@@ -3,7 +3,7 @@
    Nova experiencia social interna.
    ============================================================ */
 
-import { SocialService } from '../social/social_service.js?v=20260604-author-only-edit';
+import { SocialService } from '../social/social_service.js?v=20260609-post-create-composer';
 import {
   captureStoryVideoThumbnail,
   createStoryMediaEditState,
@@ -1646,7 +1646,10 @@ function bindComposer() {
   });
   bindMentionAutocomplete(composerInput, { minChars: 1 });
   document.getElementById('storyFiles').addEventListener('change', createStoryFromFile);
-  document.getElementById('publishBtn').addEventListener('click', publishPost);
+  document.getElementById('publishBtn').addEventListener('click', () => {
+    if (state.previews.length) openPostComposer('details');
+    else publishPost();
+  });
   files.addEventListener('change', () => {
     addFiles([...files.files]);
     files.value = '';
@@ -1682,7 +1685,7 @@ function addFiles(files) {
       }
     });
     renderPreviews();
-    if (isMobileSocial()) openMobilePostComposer();
+    openPostComposer('crop');
   } catch (err) {
     Utils.showToast(err.message, 'error');
   }
@@ -1757,7 +1760,7 @@ function renderPreviews() {
 	  });
 	  bindMediaPreviewDiagnostics(el, main);
 	  syncComposerState();
-	  renderMobilePostComposer();
+	  if (document.getElementById('mobilePostComposerModal')?.classList.contains('open')) renderPostComposerModal();
 	}
 
 function syncComposerState() {
@@ -1772,40 +1775,58 @@ function syncComposerState() {
   }
 }
 
-function openMobilePostComposer() {
+function openPostComposer(step = 'crop') {
   const modal = document.getElementById('mobilePostComposerModal');
   if (!modal) return;
-  renderMobilePostComposer();
+  state.postComposerStep = step;
+  renderPostComposerModal();
   openModal(modal);
-  const input = modal.querySelector('#mobileComposerText');
-  requestAnimationFrame(() => input?.focus({ preventScroll: true }));
+  const focusTarget = step === 'details' ? modal.querySelector('#mobileComposerText') : modal.querySelector('[data-composer-edit-field], [data-mobile-pick-media]');
+  requestAnimationFrame(() => focusTarget?.focus?.({ preventScroll: true }));
 }
 
-function renderMobilePostComposer() {
+function openMobilePostComposer() {
+  openPostComposer(state.previews.length ? 'crop' : 'details');
+}
+
+function renderPostComposerModal() {
   const modal = document.getElementById('mobilePostComposerModal');
-  if (!modal?.classList.contains('open') && !isMobileSocial()) return;
   if (!modal) return;
+  modal.classList.add('post-create-modal');
+  const step = state.postComposerStep || (state.previews.length ? 'crop' : 'details');
   const text = document.getElementById('composerText')?.value || '';
   const canPost = Boolean(text.trim() || state.previews.length);
+  const title = step === 'details' ? 'Nova publicacao' : 'Cortar';
+  const left = step === 'details' && state.previews.length
+    ? '<button type="button" class="ig-composer-icon" data-composer-step="crop" aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>'
+    : '<button type="button" class="mobile-composer-link" data-close-modal>Cancelar</button>';
+  const right = step === 'crop'
+    ? `<button type="button" class="mobile-composer-post" data-composer-step="details" ${state.previews.length ? '' : 'disabled'}>Avancar</button>`
+    : `<button type="button" class="mobile-composer-post" data-mobile-publish ${canPost ? '' : 'disabled'}>Compartilhar</button>`;
   modal.innerHTML = `
-    <div class="mobile-composer-panel">
-      <div class="mobile-composer-head">
-        <button type="button" class="mobile-composer-link" data-close-modal>Cancelar</button>
-        <strong>Nova publicacao</strong>
-        <button type="button" class="mobile-composer-post" data-mobile-publish ${canPost ? '' : 'disabled'}>Postar</button>
+    <div class="mobile-composer-panel ig-post-composer-panel" data-post-composer-step="${step}">
+      <div class="mobile-composer-head ig-post-composer-head">
+        ${left}
+        <strong>${title}</strong>
+        ${right}
       </div>
-      <div class="mobile-composer-body">
-        <div class="mobile-composer-author">
-          ${avatar(state.profile, 38)}
-          <div><strong>${Utils.escapeHtml(state.profile.name || 'Voce')}</strong><span>@${Utils.escapeHtml(displayUsername(state.profile))}</span></div>
+      <div class="ig-post-composer-body">
+        <div class="ig-post-composer-media">
+          ${renderPostComposerMedia()}
         </div>
-        ${renderMobileComposerPreview()}
-        <textarea id="mobileComposerText" class="mobile-composer-text" maxlength="1200" placeholder="Escreva uma legenda...">${Utils.escapeHtml(text)}</textarea>
-      </div>
-      <div class="mobile-composer-tools">
-        <button type="button" class="social-icon-btn" data-mobile-pick-media><i class="fa-solid fa-image"></i></button>
-        <button type="button" class="social-icon-btn" data-mobile-emoji><i class="fa-regular fa-face-smile"></i></button>
-        <span>${state.previews.length ? `${state.previews.length}/10 midias` : 'Adicione foto ou video'}</span>
+        <div class="ig-post-composer-details">
+          <div class="mobile-composer-author">
+            ${avatar(state.profile, 38)}
+            <div><strong>${Utils.escapeHtml(state.profile.name || 'Voce')}</strong><span>@${Utils.escapeHtml(displayUsername(state.profile))}</span></div>
+          </div>
+          <textarea id="mobileComposerText" class="mobile-composer-text" maxlength="1200" placeholder="Escreva uma legenda...">${Utils.escapeHtml(text)}</textarea>
+          <label class="ig-composer-field"><i class="fa-solid fa-location-dot"></i><input id="composerLocationInput" value="${Utils.escapeHtml(state.composerLocation || '')}" maxlength="80" placeholder="Adicionar localizacao"></label>
+          <label class="ig-composer-field"><i class="fa-regular fa-closed-captioning"></i><input id="composerAltInput" value="${Utils.escapeHtml(state.previews[0]?.alt_text || '')}" maxlength="220" placeholder="Texto alternativo da midia atual"></label>
+          <div class="ig-composer-options">
+            <button type="button" data-mobile-pick-media><i class="fa-regular fa-square-plus"></i><span>Adicionar midia</span></button>
+            <button type="button" data-mobile-emoji><i class="fa-regular fa-face-smile"></i><span>Emoji</span></button>
+          </div>
+        </div>
       </div>
     </div>`;
   const mobileText = modal.querySelector('#mobileComposerText');
@@ -1816,6 +1837,16 @@ function renderMobilePostComposer() {
     modal.querySelector('[data-mobile-publish]')?.toggleAttribute('disabled', !Boolean(mobileText.value.trim() || state.previews.length));
   });
   bindMentionAutocomplete(mobileText, { minChars: 1 });
+  modal.querySelector('#composerLocationInput')?.addEventListener('input', (event) => {
+    state.composerLocation = event.currentTarget.value;
+  });
+  modal.querySelector('#composerAltInput')?.addEventListener('input', (event) => {
+    if (state.previews[0]) state.previews[0].alt_text = event.currentTarget.value;
+  });
+  modal.querySelectorAll('[data-composer-step]').forEach((btn) => btn.addEventListener('click', () => {
+    state.postComposerStep = btn.dataset.composerStep;
+    renderPostComposerModal();
+  }));
   modal.querySelectorAll('[data-mobile-pick-media]').forEach((btn) => btn.addEventListener('click', openPostMediaPicker));
   modal.querySelector('[data-mobile-emoji]')?.addEventListener('click', () => {
     if (!mobileText) return;
@@ -1830,14 +1861,24 @@ function renderMobilePostComposer() {
     if (item) revokePreviews([item]);
     state.previews = state.previews.filter((preview) => preview.id !== btn.dataset.removeMobilePreview);
     renderPreviews();
-    renderMobilePostComposer();
+    if (!state.previews.length) state.postComposerStep = 'details';
+    renderPostComposerModal();
   }));
   modal.querySelectorAll('[data-focus-mobile-preview]').forEach((btn) => btn.addEventListener('click', () => {
     const index = state.previews.findIndex((item) => item.id === btn.dataset.focusMobilePreview);
     if (index <= 0) return;
     state.previews = [state.previews[index], ...state.previews.filter((_, itemIndex) => itemIndex !== index)];
     renderPreviews();
-    renderMobilePostComposer();
+    renderPostComposerModal();
+  }));
+  modal.querySelectorAll('[data-mobile-media-move]').forEach((btn) => btn.addEventListener('click', () => {
+    const from = state.previews.findIndex((item) => item.id === btn.dataset.mobileMediaMove);
+    const to = from + Number(btn.dataset.direction);
+    if (from < 0 || to < 0 || to >= state.previews.length) return;
+    const [item] = state.previews.splice(from, 1);
+    state.previews.splice(to, 0, item);
+    renderPreviews();
+    renderPostComposerModal();
   }));
   modal.querySelectorAll('[data-mobile-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
     const item = state.previews[0];
@@ -1855,12 +1896,12 @@ function renderMobilePostComposer() {
 	  }
 	}
 
-function renderMobileComposerPreview() {
+function renderPostComposerMedia() {
   if (!state.previews.length) {
     return `
-      <button type="button" class="mobile-composer-empty-media" data-mobile-pick-media>
+      <button type="button" class="mobile-composer-empty-media ig-empty-media" data-mobile-pick-media>
         <i class="fa-regular fa-image"></i>
-        <span>Adicionar foto ou video</span>
+        <span>Selecionar do computador</span>
       </button>`;
   }
   const main = state.previews[0];
@@ -1874,6 +1915,7 @@ function renderMobileComposerPreview() {
       <div class="mobile-composer-preview-main" style="--editor-aspect:${mainAspect}">
         ${renderEditableMediaNode(main, { scope: 'post' })}
         <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
+        <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
       </div>
       <div class="mobile-composer-media-controls">
         <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
@@ -1881,14 +1923,22 @@ function renderMobileComposerPreview() {
           ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
         <label>Zoom <input type="range" min="0.5" max="3" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-mobile-edit-field="zoom"></label>
+        <label>Rotacao <input type="range" min="0" max="360" step="1" value="${Number(main.editState?.rotation || 0)}" data-mobile-edit-field="rotation"></label>
       </div>
-      ${state.previews.length > 1 ? `
-        <div class="mobile-composer-strip">
+      <div class="mobile-composer-strip">
+        ${state.previews.length > 1 ? `
           ${state.previews.map((item, index) => `
-            <button type="button" class="${index === 0 ? 'active' : ''}" data-focus-mobile-preview="${item.id}">
+            <span class="ig-strip-item">
+              <button type="button" class="${index === 0 ? 'active' : ''}" data-focus-mobile-preview="${item.id}">
               ${mediaNode(item)}
-            </button>`).join('')}
-        </div>` : ''}
+              </button>
+              <span class="ig-strip-controls">
+                <button type="button" data-mobile-media-move="${item.id}" data-direction="-1" ${index === 0 ? 'disabled' : ''} aria-label="Mover para esquerda"><i class="fa-solid fa-chevron-left"></i></button>
+                <button type="button" data-mobile-media-move="${item.id}" data-direction="1" ${index === state.previews.length - 1 ? 'disabled' : ''} aria-label="Mover para direita"><i class="fa-solid fa-chevron-right"></i></button>
+              </span>
+            </span>`).join('')}` : ''}
+        <button type="button" class="ig-add-thumb" data-mobile-pick-media aria-label="Adicionar midia"><i class="fa-solid fa-plus"></i></button>
+      </div>
     </div>`;
 }
 
@@ -1906,7 +1956,9 @@ async function publishPost() {
     return;
   }
   const buttons = [document.getElementById('publishBtn'), document.querySelector('[data-mobile-publish]')].filter(Boolean);
-  const content = document.getElementById('composerText').value.trim();
+  const rawContent = document.getElementById('composerText').value.trim();
+  const location = String(state.composerLocation || '').trim();
+  const content = [rawContent, location ? `📍 ${location}` : ''].filter(Boolean).join('\n');
   if (!content && !state.previews.length) return Utils.showToast('Escreva algo ou adicione uma midia.', 'error');
   buttons.forEach((btn) => Utils.setButtonLoading?.(btn, true, '<i class="fa-solid fa-circle-notch fa-spin"></i> Publicando...'));
   const uploadedPaths = [];
@@ -1924,6 +1976,7 @@ async function publishPost() {
         skipCompression = true;
       }
       const uploaded = await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression });
+      uploaded.alt_text = item.alt_text || null;
       uploaded.media_meta = { ...editState, exported: true };
       if (item.media_type === 'image') {
         const exportedImage = await loadImage(uploadFile);
@@ -1942,8 +1995,11 @@ async function publishPost() {
     await state.service.createPost({ content, media });
     revokePreviews(state.previews);
     state.previews = [];
+    state.composerLocation = '';
+    state.postComposerStep = 'crop';
     document.getElementById('composerText').value = '';
     renderPreviews();
+    closeSocialModals();
     state.posts = await state.service.loadPosts();
     syncPostPaginationState();
     renderPosts();

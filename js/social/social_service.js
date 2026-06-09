@@ -409,6 +409,8 @@ export class SocialService {
         width: item.width || null,
         height: item.height || null,
         position: index,
+        alt_text: item.alt_text || null,
+        media_meta: item.media_meta || {},
       }));
       const { error: mediaError } = await this.db.from('social_post_media').insert(rows);
       if (mediaError) throw mediaError;
