@@ -2189,18 +2189,18 @@ function renderStoryComposerControls(item) {
   if (!item) return '';
   ensureMediaEditState(item);
   const aspectControl = `
-    <div class="form-group" style="margin:0">
+    <div class="form-group story-compose-control">
       <label class="form-label">Proporção</label>
       <select class="form-input form-select" data-story-edit-field="aspect">
         ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${item.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
     </div>`;
   const transformControls = `
-    <div class="form-group" style="margin:0">
+    <div class="form-group story-compose-control">
       <label class="form-label">Zoom <span data-story-zoom-label>${Number(item.editState?.zoom || 1).toFixed(2)}x</span></label>
       <input type="range" min="0.5" max="3" step="0.01" value="${Number(item.editState?.zoom || 1)}" data-story-edit-field="zoom">
     </div>
-    <div class="form-group" style="margin:0">
+    <div class="form-group story-compose-control">
       <label class="form-label">Rotação <span data-story-rotation-label>${Math.round(Number(item.editState?.rotation || 0))}°</span></label>
       <input type="range" min="0" max="360" step="1" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
     </div>
@@ -2213,15 +2213,15 @@ function renderStoryComposerControls(item) {
       <div class="story-compose-tools">
         ${aspectControl}
         ${transformControls}
-        <div class="form-group" style="margin:0">
+        <div class="form-group story-compose-control">
           <label class="form-label">Início do vídeo</label>
           <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${trimStart}" data-story-edit-field="trimStart">
         </div>
-        <div class="form-group" style="margin:0">
+        <div class="form-group story-compose-control">
           <label class="form-label">Fim do vídeo</label>
           <input type="range" min="0.1" max="${Math.max(duration || 0.1, 0.1)}" step="0.1" value="${trimEnd || duration || 0.1}" data-story-edit-field="trimEnd">
         </div>
-        <div class="form-group" style="margin:0">
+        <div class="form-group story-compose-control">
           <label class="form-label">Thumbnail</label>
           <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${Number(item.editState?.thumbnailTime || 0)}" data-story-edit-field="thumbnailTime">
         </div>
@@ -2267,21 +2267,23 @@ function renderStoryComposerBody() {
         <div class="story-compose-head">
           <div>
             <div class="social-title" style="font-size:1.05rem">${state.activeStoryEditId ? 'Editar story' : 'Novo story'}</div>
-        <div class="social-subtitle">Edite midia, legenda e envie mantendo a experiencia atual.</div>
+            <div class="social-subtitle">Ajuste a midia e publique no feed social.</div>
           </div>
-          <button class="social-icon-btn" data-close-story-composer><i class="fa-solid fa-xmark"></i></button>
+          <button class="social-icon-btn story-compose-close" data-close-story-composer aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="story-compose-strip">
           ${state.storyPreviews.map((preview, index) => renderStoryComposerThumb(preview, index)).join('')}
         </div>
         ${renderStoryComposerControls(item)}
-        <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
-        <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
+        <div class="story-compose-caption-wrap">
+          <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
+          <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
+        </div>
         <div class="message-sub">${item.media_type === 'video' ? 'Videos serao exportados localmente antes do upload quando suportado.' : 'Imagens mantem qualidade alta com compressao apenas quando necessaria.'}</div>
         <div class="story-compose-actions">
           <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir midia</button>
           <input id="storyComposerFile" type="file" accept="image/*,video/*" hidden>
-          <button class="btn btn-primary social-submit" id="publishStoryBtn"><i class="fa-solid fa-paper-plane"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Enviar Story'}</button>
+          <button class="btn btn-primary social-submit story-publish-btn" id="publishStoryBtn"><i class="fa-solid fa-paper-plane"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Enviar story'}</button>
         </div>
       </div>
     </div>`;

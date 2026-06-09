@@ -3423,3 +3423,385 @@ body[data-page="feed"] .direct-message-menu-btn{
     grid-row:1;
   }
 }
+
+/* Final story composer redesign */
+body[data-page="feed"] #storyComposerModal.story-composer-modal{
+  z-index:2147483010;
+  padding:clamp(12px,2.6vw,28px);
+  background:
+    radial-gradient(circle at 28% 0,rgba(255,48,64,.16),transparent 34%),
+    rgba(0,0,0,.88);
+  backdrop-filter:blur(18px);
+}
+
+body[data-page="feed"] #storyComposerModal.story-composer-modal.open{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-panel{
+  width:min(1080px,100%);
+  height:min(840px,calc(100dvh - 44px));
+  max-height:calc(100dvh - 44px);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(330px,380px);
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:26px;
+  background:#07070a;
+  box-shadow:0 38px 120px rgba(0,0,0,.68);
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-preview{
+  position:relative;
+  min-width:0;
+  min-height:0;
+  height:auto;
+  max-height:none;
+  padding:22px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.045),transparent),
+    #020203;
+  overflow:hidden;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-preview::after{
+  content:"";
+  position:absolute;
+  inset:22px;
+  border-radius:28px;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1),0 24px 70px rgba(0,0,0,.34);
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-slide-preview,
+body[data-page="feed"] #storyComposerModal .media-editor-crop{
+  width:100%;
+  height:100%;
+  min-height:0;
+}
+
+body[data-page="feed"] #storyComposerModal .media-editor-viewport{
+  width:min(100%,calc((100dvh - 88px) * var(--editor-aspect,9 / 16)));
+  max-height:100%;
+  border:0;
+  border-radius:28px;
+  background:#000;
+  box-shadow:0 26px 80px rgba(0,0,0,.52);
+}
+
+body[data-page="feed"] #storyComposerModal .media-editor-mask{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-side{
+  min-height:0;
+  max-height:none;
+  display:grid;
+  grid-template-rows:auto auto auto minmax(92px,1fr) auto auto;
+  gap:13px;
+  overflow:auto;
+  padding:20px;
+  border-left:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg,rgba(20,20,26,.98),rgba(10,10,14,.98));
+  -webkit-overflow-scrolling:touch;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-head{
+  align-items:center;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-head .social-title{
+  font-size:1.04rem!important;
+  line-height:1.15;
+  letter-spacing:0;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-head .social-subtitle{
+  margin-top:4px;
+  font-size:.73rem;
+  line-height:1.35;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-close{
+  width:42px;
+  height:42px;
+  border-radius:50%;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-strip{
+  min-height:64px;
+  gap:9px;
+  padding:1px 0 4px;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-thumb{
+  width:48px;
+  height:62px;
+  flex-basis:48px;
+  border-radius:12px;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-tools{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  background:rgba(255,255,255,.04);
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-control{
+  margin:0;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-control .form-label{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+  color:var(--text-3);
+  font-size:.68rem;
+  font-weight:950;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-control .form-label span{
+  color:var(--gold);
+  letter-spacing:0;
+  text-transform:none;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-control .form-input,
+body[data-page="feed"] #storyComposerModal .story-caption-input{
+  border-color:rgba(255,255,255,.1);
+  background:rgba(255,255,255,.055);
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-tools input[type="range"]{
+  min-height:28px;
+}
+
+body[data-page="feed"] #storyComposerModal .media-editor-reset{
+  width:100%;
+  min-height:38px;
+  border-radius:14px;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-caption-wrap{
+  position:relative;
+  min-height:0;
+}
+
+body[data-page="feed"] #storyComposerModal .story-caption-input{
+  width:100%;
+  min-height:96px;
+  max-height:180px;
+  resize:vertical;
+  padding:14px 14px 26px;
+  font-size:16px;
+}
+
+body[data-page="feed"] #storyComposerModal .story-caption-count{
+  position:absolute;
+  right:12px;
+  bottom:9px;
+  font-size:.68rem;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-actions{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  padding-top:2px;
+}
+
+body[data-page="feed"] #storyComposerModal .story-compose-actions .follow-btn{
+  min-height:46px;
+  border-radius:999px;
+  padding:0 14px;
+  white-space:nowrap;
+}
+
+body[data-page="feed"] #storyComposerModal .story-publish-btn{
+  width:100%;
+  min-height:52px;
+  border-radius:999px;
+  justify-content:center;
+  letter-spacing:.03em;
+  box-shadow:0 18px 42px rgba(239,45,45,.28);
+}
+
+@media(max-width:640px){
+  body[data-page="feed"] #storyComposerModal.story-composer-modal{
+    inset:0;
+    width:100vw;
+    height:100svh;
+    max-height:100dvh;
+    padding:0;
+    align-items:stretch;
+    justify-content:stretch;
+    background:#050507;
+    backdrop-filter:none;
+    overflow:hidden;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-panel{
+    width:100vw;
+    height:100svh;
+    max-height:100dvh;
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1fr) auto;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-preview{
+    height:auto!important;
+    max-height:none;
+    padding:0;
+    background:#000;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-preview::after{
+    display:none;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-crop{
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-viewport{
+    width:min(100vw,calc(58svh * var(--editor-aspect,9 / 16)));
+    max-width:100vw;
+    max-height:100%;
+    border-radius:0;
+    box-shadow:none;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-mask{
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-side{
+    max-height:min(46svh,390px);
+    grid-template-rows:auto auto auto auto auto;
+    gap:9px;
+    padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+    border-top:1px solid rgba(255,255,255,.1);
+    border-left:0;
+    border-radius:22px 22px 0 0;
+    background:rgba(14,14,19,.98);
+    box-shadow:0 -18px 46px rgba(0,0,0,.45);
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-head{
+    min-height:40px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-head .social-title{
+    font-size:.95rem!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-head .social-subtitle,
+  body[data-page="feed"] #storyComposerModal .message-sub{
+    display:none;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-close{
+    width:38px;
+    height:38px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-strip{
+    min-height:0;
+    padding:0;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-thumb{
+    width:42px;
+    height:54px;
+    flex-basis:42px;
+    border-radius:10px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-tools{
+    grid-template-columns:1fr 1fr;
+    gap:8px 10px;
+    padding:10px;
+    border-radius:16px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-control:first-child,
+  body[data-page="feed"] #storyComposerModal .media-editor-reset{
+    grid-column:1 / -1;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-control .form-label{
+    margin-bottom:3px;
+    font-size:.62rem;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-control .form-input{
+    min-height:38px;
+    font-size:16px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-tools input[type="range"]{
+    min-height:24px;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-reset{
+    min-height:34px;
+    font-size:.72rem;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-caption-input{
+    min-height:54px;
+    max-height:92px;
+    resize:none;
+    border-radius:16px;
+    padding:12px 12px 22px;
+    line-height:1.25;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions{
+    position:sticky;
+    bottom:0;
+    grid-template-columns:auto minmax(0,1fr);
+    gap:8px;
+    padding-top:0;
+    background:rgba(14,14,19,.98);
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions .follow-btn{
+    min-width:48px;
+    width:48px;
+    height:48px;
+    padding:0;
+    justify-content:center;
+    overflow:hidden;
+    color:var(--red-bright);
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions .follow-btn i{
+    margin:0;
+    font-size:1rem;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions .follow-btn{
+    font-size:0;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-publish-btn{
+    min-height:50px;
+    font-size:.86rem;
+  }
+}
