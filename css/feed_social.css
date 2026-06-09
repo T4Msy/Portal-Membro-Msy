@@ -4646,3 +4646,40 @@ body[data-page="feed"] .post-media-slide .post-media-rendered{
     -webkit-overflow-scrolling:touch!important;
   }
 }
+
+/* Final Direct story-reply sizing override. Keep this after generic Direct overrides. */
+body[data-page="feed"] .direct-story-message-stack{
+  width:min(330px,80%)!important;
+  max-width:min(330px,80%)!important;
+  gap:10px!important;
+}
+
+body[data-page="feed"] .direct-story-reply-ref{max-width:260px!important}
+body[data-page="feed"] .direct-story-reply-label{max-width:260px;font-size:.86rem!important}
+body[data-page="feed"] .direct-story-reply-thumb{width:150px!important;height:240px!important;border-radius:26px!important}
+body[data-page="feed"] .direct-story-reply-caption{max-width:150px!important;font-size:.7rem!important}
+body[data-page="feed"] .direct-story-response-bubble{
+  width:auto!important;
+  min-width:220px!important;
+  max-width:100%!important;
+  padding:15px 54px 12px 17px!important;
+}
+body[data-page="feed"] .direct-story-response-bubble .direct-message-text{font-size:1.02rem!important;line-height:1.35!important}
+
+@media(max-width:640px){
+  body[data-page="feed"] .direct-story-message-stack{
+    width:min(260px,88%)!important;
+    max-width:min(260px,88%)!important;
+    gap:8px!important;
+  }
+  body[data-page="feed"] .direct-story-reply-ref{max-width:198px!important}
+  body[data-page="feed"] .direct-story-reply-label{max-width:198px;font-size:.76rem!important}
+  body[data-page="feed"] .direct-story-reply-thumb{width:108px!important;height:174px!important;border-radius:22px!important}
+  body[data-page="feed"] .direct-story-reply-caption{max-width:108px!important;font-size:.64rem!important}
+  body[data-page="feed"] .direct-story-response-bubble{
+    min-width:156px!important;
+    max-width:100%!important;
+    padding:12px 44px 9px 14px!important;
+  }
+  body[data-page="feed"] .direct-story-response-bubble .direct-message-text{font-size:.94rem!important}
+}
