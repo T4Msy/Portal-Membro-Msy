@@ -301,9 +301,13 @@ function renderStoryMediaElement(story, attrs = '') {
     : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs}>`;
 }
 
+function isPostMediaExported(media) {
+  return media?.media_meta?.exported === true || /-story\.(webp|webm)$/i.test(media?.storage_path || '');
+}
+
 function renderPostMediaElement(media, attrs = '') {
   const editState = normalizeMediaEditState(media?.media_meta || {}, media?.media_type || 'image');
-  const alreadyExported = media?.media_meta?.exported === true || /-story\.(webp|webm)$/i.test(media?.storage_path || '');
+  const alreadyExported = isPostMediaExported(media);
   const transform = alreadyExported
     ? 'translate(-50%,-50%) scale(1) rotate(0deg)'
     : mediaEditorTransform(editState);
@@ -315,10 +319,11 @@ function renderPostMediaElement(media, attrs = '') {
 }
 
 function postMediaAspectCss(media) {
+  if (isPostMediaExported(media) && (media?.media_meta?.aspect || 'original') === 'original') return '4 / 5';
+  if (Number(media?.media_meta?.exportedAspect) > 0) return `${Number(media.media_meta.exportedAspect)} / 1`;
   const width = Number(media?.width || media?.media_meta?.exportedWidth || 0);
   const height = Number(media?.height || media?.media_meta?.exportedHeight || 0);
   if (width > 0 && height > 0) return `${width} / ${height}`;
-  if (Number(media?.media_meta?.exportedAspect) > 0) return `${Number(media.media_meta.exportedAspect)} / 1`;
   const editState = normalizeMediaEditState(media?.media_meta || {}, media?.media_type || 'image');
   if (editState.aspect && editState.aspect !== 'original') return mediaAspectCss(editState.aspect, editState.originalAspect);
   if (Number(editState.originalAspect) > 0) return `${Number(editState.originalAspect)} / 1`;
