@@ -320,7 +320,6 @@ function renderPostMediaElement(media, attrs = '') {
 }
 
 function postMediaAspectCss(media) {
-  if (isPostMediaExported(media) && (media?.media_meta?.aspect || 'original') === 'original') return '4 / 5';
   if (Number(media?.media_meta?.exportedAspect) > 0) return `${Number(media.media_meta.exportedAspect)} / 1`;
   const width = Number(media?.width || media?.media_meta?.exportedWidth || 0);
   const height = Number(media?.height || media?.media_meta?.exportedHeight || 0);

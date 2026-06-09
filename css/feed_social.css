@@ -4503,3 +4503,12 @@ body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-add{
     width:min(356px,calc(100vw - 28px));
   }
 }
+
+/* Published feed media should be fully visible on mobile Safari instead of being re-cropped by older mobile overrides. */
+body[data-page="feed"] .post-media-slide{
+  aspect-ratio:var(--post-media-aspect,4 / 5)!important;
+}
+
+body[data-page="feed"] .post-media-slide .post-media-rendered{
+  object-fit:contain!important;
+}
