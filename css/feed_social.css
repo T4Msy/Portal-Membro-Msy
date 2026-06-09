@@ -4683,3 +4683,331 @@ body[data-page="feed"] .direct-story-response-bubble .direct-message-text{font-s
   }
   body[data-page="feed"] .direct-story-response-bubble .direct-message-text{font-size:.94rem!important}
 }
+
+/* Feed light theme final pass: keep the social feed aligned with the portal theme. */
+[data-theme="light"] body[data-page="feed"]{
+  background:
+    radial-gradient(circle at 12% 6%, rgba(159,117,36,.12), transparent 28%),
+    radial-gradient(circle at 88% 14%, rgba(163,25,25,.07), transparent 30%),
+    var(--black)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .page-content,
+[data-theme="light"] body[data-page="feed"] .social-shell,
+[data-theme="light"] body[data-page="feed"] .social-main,
+[data-theme="light"] body[data-page="feed"] .social-feed-list{
+  background:transparent!important;
+  color:var(--text-1)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-card,
+[data-theme="light"] body[data-page="feed"] .social-post,
+[data-theme="light"] body[data-page="feed"] .stories-strip,
+[data-theme="light"] body[data-page="feed"] .social-composer,
+[data-theme="light"] body[data-page="feed"] .story-compose-panel,
+[data-theme="light"] body[data-page="feed"] .activity-drawer-panel,
+[data-theme="light"] body[data-page="feed"] .post-menu,
+[data-theme="light"] body[data-page="feed"] .mention-dropdown{
+  border-color:rgba(38,34,45,.14)!important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.68), rgba(255,255,255,.34) 48%, rgba(159,117,36,.08)),
+    rgba(238,232,221,.9)!important;
+  box-shadow:0 18px 52px rgba(31,31,38,.12), inset 0 1px 0 rgba(255,255,255,.72)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-card::before,
+[data-theme="light"] body[data-page="feed"] .social-post::before,
+[data-theme="light"] body[data-page="feed"] .stories-strip::before,
+[data-theme="light"] body[data-page="feed"] .social-composer::before{
+  background:linear-gradient(90deg, transparent, rgba(159,117,36,.32), rgba(163,25,25,.16), transparent)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .topbar{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.58)),
+    rgba(245,243,239,.84)!important;
+  border-bottom-color:rgba(38,34,45,.12)!important;
+  box-shadow:0 10px 28px rgba(31,31,38,.08)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .topbar-page-title,
+[data-theme="light"] body[data-page="feed"] .social-title,
+[data-theme="light"] body[data-page="feed"] .post-author-name,
+[data-theme="light"] body[data-page="feed"] .side-title,
+[data-theme="light"] body[data-page="feed"] .member-name,
+[data-theme="light"] body[data-page="feed"] .message-name,
+[data-theme="light"] body[data-page="feed"] .comment-name,
+[data-theme="light"] body[data-page="feed"] .direct-title,
+[data-theme="light"] body[data-page="feed"] .direct-chat-name,
+[data-theme="light"] body[data-page="feed"] .profile-modal-name{
+  color:var(--text-1)!important;
+  text-shadow:none!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-subtitle,
+[data-theme="light"] body[data-page="feed"] .post-meta,
+[data-theme="light"] body[data-page="feed"] .story-label,
+[data-theme="light"] body[data-page="feed"] .member-role,
+[data-theme="light"] body[data-page="feed"] .message-sub,
+[data-theme="light"] body[data-page="feed"] .direct-subtitle,
+[data-theme="light"] body[data-page="feed"] .direct-chat-handle,
+[data-theme="light"] body[data-page="feed"] .comment-meta,
+[data-theme="light"] body[data-page="feed"] .social-empty,
+[data-theme="light"] body[data-page="feed"] .feed-sentinel{
+  color:var(--text-3)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-content,
+[data-theme="light"] body[data-page="feed"] .comment-text,
+[data-theme="light"] body[data-page="feed"] .direct-message-text,
+[data-theme="light"] body[data-page="feed"] .my-social-card p{
+  color:var(--text-2)!important;
+  text-shadow:none!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-content a,
+[data-theme="light"] body[data-page="feed"] .post-content .mention,
+[data-theme="light"] body[data-page="feed"] .post-content .hashtag,
+[data-theme="light"] body[data-page="feed"] .post-stats,
+[data-theme="light"] body[data-page="feed"] .side-title i{
+  color:var(--gold)!important;
+  text-shadow:none!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .composer-input,
+[data-theme="light"] body[data-page="feed"] .comment-input,
+[data-theme="light"] body[data-page="feed"] .social-search input,
+[data-theme="light"] body[data-page="feed"] .side-member-search input,
+[data-theme="light"] body[data-page="feed"] .direct-search input,
+[data-theme="light"] body[data-page="feed"] .direct-composer-input,
+[data-theme="light"] body[data-page="feed"] .story-caption-input,
+[data-theme="light"] body[data-page="feed"] .ig-composer-field input{
+  border-color:rgba(38,34,45,.14)!important;
+  background:rgba(255,255,255,.74)!important;
+  color:var(--text-1)!important;
+  text-shadow:none!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .composer-input::placeholder,
+[data-theme="light"] body[data-page="feed"] .comment-input::placeholder,
+[data-theme="light"] body[data-page="feed"] .social-search input::placeholder,
+[data-theme="light"] body[data-page="feed"] .side-member-search input::placeholder,
+[data-theme="light"] body[data-page="feed"] .direct-composer-input::placeholder,
+[data-theme="light"] body[data-page="feed"] .story-caption-input::placeholder,
+[data-theme="light"] body[data-page="feed"] .ig-composer-field input::placeholder{
+  color:#7d7482!important;
+  opacity:1!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .composer-input:focus,
+[data-theme="light"] body[data-page="feed"] .comment-input:focus,
+[data-theme="light"] body[data-page="feed"] .social-search input:focus,
+[data-theme="light"] body[data-page="feed"] .side-member-search input:focus,
+[data-theme="light"] body[data-page="feed"] .direct-composer-input:focus,
+[data-theme="light"] body[data-page="feed"] .story-caption-input:focus{
+  border-color:rgba(139,99,30,.44)!important;
+  background:rgba(255,255,255,.9)!important;
+  box-shadow:0 0 0 3px rgba(159,117,36,.12), inset 0 1px 0 rgba(255,255,255,.84)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-icon-btn,
+[data-theme="light"] body[data-page="feed"] .social-action,
+[data-theme="light"] body[data-page="feed"] .follow-btn,
+[data-theme="light"] body[data-page="feed"] .social-profile-chip,
+[data-theme="light"] body[data-page="feed"] .social-mobile-action,
+[data-theme="light"] body[data-page="feed"] .direct-composer-icon,
+[data-theme="light"] body[data-page="feed"] .direct-back-btn,
+[data-theme="light"] body[data-page="feed"] .story-compose-close,
+[data-theme="light"] body[data-page="feed"] .post-more-btn,
+[data-theme="light"] body[data-page="feed"] .sidebar-toggle,
+[data-theme="light"] body[data-page="feed"] .topbar-search-btn,
+[data-theme="light"] body[data-page="feed"] .notif-bell{
+  border-color:rgba(38,34,45,.12)!important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.48)),
+    rgba(255,255,255,.55)!important;
+  color:var(--text-2)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.78)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-icon-btn:hover,
+[data-theme="light"] body[data-page="feed"] .social-action:hover,
+[data-theme="light"] body[data-page="feed"] .follow-btn:hover,
+[data-theme="light"] body[data-page="feed"] .social-profile-chip:hover,
+[data-theme="light"] body[data-page="feed"] .social-mobile-action:hover,
+[data-theme="light"] body[data-page="feed"] .social-mobile-action:active,
+[data-theme="light"] body[data-page="feed"] .post-menu button:hover{
+  border-color:rgba(139,99,30,.34)!important;
+  background:rgba(159,117,36,.12)!important;
+  color:var(--gold)!important;
+  box-shadow:0 10px 24px rgba(31,31,38,.08), inset 0 1px 0 rgba(255,255,255,.75)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-action.active{
+  border-color:rgba(163,25,25,.32)!important;
+  background:rgba(163,25,25,.1)!important;
+  color:var(--red-bright)!important;
+  box-shadow:none!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .social-submit,
+[data-theme="light"] body[data-page="feed"] .profile-primary-action,
+[data-theme="light"] body[data-page="feed"] .mobile-action-fab,
+[data-theme="light"] body[data-page="feed"] .direct-composer-send{
+  border-color:rgba(163,25,25,.22)!important;
+  background:linear-gradient(135deg,#d23b3b,#a31919 58%,#8e1515)!important;
+  color:#fff!important;
+  box-shadow:0 14px 30px rgba(163,25,25,.18), inset 0 1px 0 rgba(255,255,255,.18)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-head,
+[data-theme="light"] body[data-page="feed"] .post-comments,
+[data-theme="light"] body[data-page="feed"] .comment-body,
+[data-theme="light"] body[data-page="feed"] .composer-dropzone,
+[data-theme="light"] body[data-page="feed"] .profile-stat,
+[data-theme="light"] body[data-page="feed"] .side-member-empty,
+[data-theme="light"] body[data-page="feed"] .feed-sentinel,
+[data-theme="light"] body[data-page="feed"] .social-empty,
+[data-theme="light"] body[data-page="feed"] .social-schema-warning,
+[data-theme="light"] body[data-page="feed"] .story-compose-tools,
+[data-theme="light"] body[data-page="feed"] .ig-composer-field,
+[data-theme="light"] body[data-page="feed"] .ig-composer-options button{
+  border-color:rgba(38,34,45,.12)!important;
+  background:rgba(255,255,255,.42)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-menu button,
+[data-theme="light"] body[data-page="feed"] .mention-option,
+[data-theme="light"] body[data-page="feed"] .ig-composer-field,
+[data-theme="light"] body[data-page="feed"] .ig-composer-options button{
+  color:var(--text-2)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .my-profile-card-main .social-avatar,
+[data-theme="light"] body[data-page="feed"] .profile-modal-head .social-avatar,
+[data-theme="light"] body[data-page="feed"] .story-avatar-inner{
+  border-color:#eee8dd!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .story-label{
+  color:var(--text-3)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .my-profile-cover,
+[data-theme="light"] body[data-page="feed"] .profile-cover{
+  background:
+    linear-gradient(135deg,rgba(163,25,25,.36),rgba(159,117,36,.2)),
+    repeating-linear-gradient(135deg,rgba(255,255,255,.26) 0 1px,transparent 1px 14px)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-media{
+  border-color:rgba(38,34,45,.1)!important;
+  background:#111116!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-media-slide,
+[data-theme="light"] body[data-page="feed"] .post-media-track,
+[data-theme="light"] body[data-page="feed"] .media-editor-viewport,
+[data-theme="light"] body[data-page="feed"] .media-editor-crop,
+[data-theme="light"] body[data-page="feed"] .mobile-composer-preview-main,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-media{
+  background:#111116!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-media-dot{
+  background:rgba(255,255,255,.55)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .post-media-dot.active{
+  background:var(--gold)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .direct-shell,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-panel{
+  border-color:rgba(38,34,45,.14)!important;
+  background:rgba(238,232,221,.96)!important;
+  box-shadow:0 34px 90px rgba(31,31,38,.18)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .direct-sidebar,
+[data-theme="light"] body[data-page="feed"] .direct-chat,
+[data-theme="light"] body[data-page="feed"] .direct-chat-header,
+[data-theme="light"] body[data-page="feed"] .direct-composer,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-head,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-details,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-media .mobile-composer-media-controls,
+[data-theme="light"] body[data-page="feed"] .ig-post-composer-media .mobile-composer-strip{
+  border-color:rgba(38,34,45,.12)!important;
+  background:rgba(255,255,255,.46)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .direct-thread:hover,
+[data-theme="light"] body[data-page="feed"] .direct-thread.active,
+[data-theme="light"] body[data-page="feed"] .message-row:hover,
+[data-theme="light"] body[data-page="feed"] .member-suggestion:hover{
+  background:rgba(159,117,36,.1)!important;
+  border-color:rgba(139,99,30,.22)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .direct-message-row.theirs .direct-message-bubble{
+  background:rgba(255,255,255,.66)!important;
+  border-color:rgba(38,34,45,.12)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] .direct-message-row.mine .direct-message-bubble{
+  background:linear-gradient(135deg,rgba(159,117,36,.2),rgba(159,117,36,.11))!important;
+  border-color:rgba(139,99,30,.22)!important;
+}
+
+[data-theme="light"] body[data-page="feed"] #directViewer.profile-viewer.open,
+[data-theme="light"] body[data-page="feed"] #mobilePostComposerModal.post-create-modal.open,
+[data-theme="light"] body[data-page="feed"] #socialNotificationsDrawer.profile-viewer.open,
+[data-theme="light"] body[data-page="feed"] #storyComposerModal.story-composer-modal{
+  background:rgba(222,216,204,.78)!important;
+}
+
+@media(max-width:640px){
+  [data-theme="light"] body[data-page="feed"] .page-content,
+  [data-theme="light"] body[data-page="feed"] .social-shell,
+  [data-theme="light"] body[data-page="feed"] .social-main,
+  [data-theme="light"] body[data-page="feed"] .social-feed-list{
+    background:var(--black)!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] .stories-strip,
+  [data-theme="light"] body[data-page="feed"] .social-composer,
+  [data-theme="light"] body[data-page="feed"] .social-post,
+  [data-theme="light"] body[data-page="feed"] .post-head,
+  [data-theme="light"] body[data-page="feed"] .post-comments{
+    background:rgba(238,232,221,.96)!important;
+    border-color:rgba(38,34,45,.12)!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] .social-mobile-bar{
+    border-top-color:rgba(38,34,45,.12)!important;
+    background:rgba(238,232,221,.94)!important;
+    box-shadow:0 -18px 42px rgba(31,31,38,.12)!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] .social-mobile-action{
+    background:transparent!important;
+    color:var(--text-3)!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] .social-mobile-action:hover,
+  [data-theme="light"] body[data-page="feed"] .social-mobile-action:active{
+    background:rgba(159,117,36,.1)!important;
+    color:var(--gold)!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] .comment-body{
+    background:transparent!important;
+  }
+
+  [data-theme="light"] body[data-page="feed"] #storyComposerModal .story-compose-side{
+    border-color:rgba(38,34,45,.12)!important;
+    background:rgba(238,232,221,.98)!important;
+    box-shadow:0 -18px 42px rgba(31,31,38,.12)!important;
+  }
+}
