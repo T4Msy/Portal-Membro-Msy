@@ -4259,8 +4259,16 @@ async function openStoryPremium(groupIndex, storyIndex) {
     if (isStoryReplyInteractionLocked(modal)) return false;
     return advanceStoryOrClose(groupIndex, storyIndex, direction, openStoryPremium);
   };
-  modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
-  modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
+  modal.querySelector('[data-story-prev]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (shouldSuppressStoryTap(modal)) return;
+    go(-1);
+  });
+  modal.querySelector('[data-story-next]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (shouldSuppressStoryTap(modal)) return;
+    go(1);
+  });
   modal.querySelector('[data-story-focus-reply]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-share-story]')?.addEventListener('click', () => modal.querySelector('#storyReplyInput')?.focus({ preventScroll: true }));
   modal.querySelector('[data-story-reaction]')?.addEventListener('click', async (e) => {
@@ -4379,6 +4387,7 @@ function isStoryReplyInteractionLocked(modal = document.getElementById('storyVie
 }
 
 function isStoryInteractiveTarget(target) {
+  if (target?.closest?.('.story-tap-zone')) return false;
   return Boolean(target?.closest?.([
     '.story-inline-reply',
     '.story-inline-send',
@@ -4397,6 +4406,10 @@ function isStoryInteractiveTarget(target) {
     'select',
     'button',
   ].join(',')));
+}
+
+function shouldSuppressStoryTap(modal = document.getElementById('storyViewer')) {
+  return Number(modal?.dataset.storySuppressTapUntil || 0) > Date.now();
 }
 
 async function toggleStoryReaction(story, reaction, button, canViewReactions = false) {
@@ -4445,9 +4458,12 @@ function bindStoryInteractiveGuards(modal) {
 }
 
 function clearStoryTimer(modal = document.getElementById('storyViewer')) {
-  if (!modal?.dataset.storyTimer) return;
-  clearInterval(Number(modal.dataset.storyTimer));
+  if (!modal) return;
+  if (modal.dataset.storyTimer) clearInterval(Number(modal.dataset.storyTimer));
   delete modal.dataset.storyTimer;
+  delete modal.dataset.storyPaused;
+  delete modal.dataset.storySuppressTapUntil;
+  delete modal.dataset.storyTickAt;
 }
 
 function advanceStoryOrClose(groupIndex, storyIndex, direction = 1, opener = openStoryPremium) {
@@ -4468,6 +4484,8 @@ function advanceStoryOrClose(groupIndex, storyIndex, direction = 1, opener = ope
 function bindStoryGestures(modal, go) {
   let startX = 0;
   let startY = 0;
+  let startAt = 0;
+  let startedOnStorySurface = false;
   const panel = modal.querySelector('.story-panel');
   if (!panel) return;
   const startHold = (event) => {
@@ -4475,14 +4493,22 @@ function bindStoryGestures(modal, go) {
     const point = event.touches?.[0] || event;
     startX = point?.clientX || 0;
     startY = point?.clientY || 0;
+    startAt = Date.now();
+    startedOnStorySurface = true;
     pauseStoryPlayback(modal);
   };
   const endHold = (event) => {
-    if (isStoryReplyInteractionLocked(modal) || isStoryInteractiveTarget(event.target)) return;
+    if (!startedOnStorySurface || isStoryReplyInteractionLocked(modal) || isStoryInteractiveTarget(event.target)) return;
+    startedOnStorySurface = false;
     const point = event.changedTouches?.[0] || event;
     const dx = (point?.clientX || 0) - startX;
     const dy = (point?.clientY || 0) - startY;
+    const heldFor = Date.now() - startAt;
     resumeStoryPlayback(modal);
+    if (heldFor > 260 && Math.abs(dx) < 18 && Math.abs(dy) < 18) {
+      modal.dataset.storySuppressTapUntil = String(Date.now() + 420);
+      return;
+    }
     if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
     else if (dy > 76 && Math.abs(dy) > Math.abs(dx) * 1.2) closeSocialModals();
   };
@@ -4611,6 +4637,7 @@ async function openStoryFast(groupIndex, storyIndex) {
   }));
   modal.querySelectorAll('[data-story-prev]').forEach((node) => node.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (shouldSuppressStoryTap(modal)) return;
     if (storyIndex > 0) openStoryFast(groupIndex, storyIndex - 1);
     else if (groupIndex > 0) {
       const prevGroup = state.stories[groupIndex - 1];
@@ -4619,6 +4646,7 @@ async function openStoryFast(groupIndex, storyIndex) {
   }));
   modal.querySelectorAll('[data-story-next]').forEach((node) => node.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (shouldSuppressStoryTap(modal)) return;
     advanceStoryOrClose(groupIndex, storyIndex, 1, openStoryFast);
   }));
   modal.querySelector('[data-story-reply]')?.addEventListener('click', (e) => {

@@ -4512,3 +4512,84 @@ body[data-page="feed"] .post-media-slide{
 body[data-page="feed"] .post-media-slide .post-media-rendered{
   object-fit:contain!important;
 }
+
+/* Story composer mobile/iPhone fit: keep preview, controls, caption and publish reachable in one viewport. */
+@media(max-width:640px){
+  body[data-page="feed"] #storyComposerModal.story-composer-modal{
+    height:100vh!important;
+    height:100svh!important;
+    max-height:100dvh!important;
+    overflow:hidden!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-panel{
+    height:100vh!important;
+    height:100svh!important;
+    max-height:100dvh!important;
+    display:grid!important;
+    grid-template-rows:minmax(170px,38vh) minmax(0,1fr)!important;
+    grid-template-rows:minmax(170px,38svh) minmax(0,1fr)!important;
+    overflow:hidden!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-preview{
+    min-height:0!important;
+    height:100%!important;
+    max-height:none!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-viewport{
+    width:min(100vw,calc(38vh * var(--editor-aspect,9 / 16)))!important;
+    width:min(100vw,calc(38svh * var(--editor-aspect,9 / 16)))!important;
+    max-height:100%!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-side{
+    min-height:0!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    grid-template-rows:auto auto auto auto auto!important;
+    gap:8px!important;
+    padding:10px 10px calc(10px + env(safe-area-inset-bottom))!important;
+    border-radius:18px 18px 0 0!important;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-tools{
+    gap:7px 9px!important;
+    padding:9px!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-caption-input{
+    min-height:48px!important;
+    max-height:74px!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-actions{
+    position:sticky!important;
+    bottom:0!important;
+    z-index:3;
+  }
+}
+
+@media(max-width:640px) and (max-height:740px){
+  body[data-page="feed"] #storyComposerModal .story-compose-panel{
+    grid-template-rows:minmax(140px,32vh) minmax(0,1fr)!important;
+    grid-template-rows:minmax(140px,32svh) minmax(0,1fr)!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .media-editor-viewport{
+    width:min(100vw,calc(32vh * var(--editor-aspect,9 / 16)))!important;
+    width:min(100vw,calc(32svh * var(--editor-aspect,9 / 16)))!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-strip{
+    min-height:42px!important;
+  }
+
+  body[data-page="feed"] #storyComposerModal .story-compose-thumb{
+    width:36px!important;
+    height:44px!important;
+    flex-basis:36px!important;
+  }
+}
