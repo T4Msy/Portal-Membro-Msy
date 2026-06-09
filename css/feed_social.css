@@ -4616,3 +4616,27 @@ body[data-page="feed"] .post-media-slide .post-media-rendered{
     flex-basis:36px!important;
   }
 }
+
+/* Final activity drawer override: keep desktop centered, force mobile drawer to start at the top. */
+@media(max-width:640px){
+  body[data-page="feed"] #socialNotificationsDrawer.profile-viewer.open{
+    align-items:flex-start!important;
+    justify-content:center!important;
+    padding:0!important;
+    background:#07070a!important;
+  }
+
+  body[data-page="feed"] #socialNotificationsDrawer .activity-drawer-panel{
+    width:100vw!important;
+    min-height:100dvh!important;
+    height:auto!important;
+    max-height:none!important;
+    margin-top:0!important;
+    border:0!important;
+    border-radius:0!important;
+    padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))!important;
+    animation:none!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+}
