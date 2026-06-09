@@ -298,8 +298,8 @@ function renderStoryMediaElement(story, attrs = '') {
   const aspect = mediaAspectCss(editState.aspect || '9:16', editState.originalAspect);
   const style = `--editor-transform:${mediaEditorTransform(editState)};--story-media-aspect:${aspect}`;
   return story.media_type === 'video'
-    ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs} playsinline webkit-playsinline></video>`
-    : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs}>`;
+    ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs} playsinline webkit-playsinline draggable="false"></video>`
+    : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(story.media_url)}" ${attrs} draggable="false" alt="">`;
 }
 
 function isPostMediaExported(media) {
@@ -1626,6 +1626,19 @@ async function submitPostCommentSheet(e) {
   }
 }
 
+function bindStorySelectionGuards() {
+  const storyViewer = document.getElementById('storyViewer');
+  if (!storyViewer || storyViewer.dataset.selectionGuardsBound === 'true') return;
+  storyViewer.dataset.selectionGuardsBound = 'true';
+  const isEditable = (target) => Boolean(target?.closest?.('input,textarea,select,[contenteditable="true"]'));
+  ['contextmenu', 'selectstart', 'dragstart'].forEach((eventName) => {
+    storyViewer.addEventListener(eventName, (event) => {
+      if (isEditable(event.target)) return;
+      event.preventDefault();
+    });
+  });
+}
+
 function bindComposer() {
   const files = document.getElementById('composerFiles');
   const drop = document.getElementById('composerDrop');
@@ -1658,6 +1671,7 @@ function bindComposer() {
     if (isMobileSocial()) openMobilePostComposer();
   });
   bindMentionAutocomplete(composerInput, { minChars: 1 });
+  bindStorySelectionGuards();
   document.getElementById('storyFiles').addEventListener('change', createStoryFromFile);
   document.getElementById('publishBtn').addEventListener('click', () => {
     if (state.previews.length) openPostComposer('details');
