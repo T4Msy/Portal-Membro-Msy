@@ -4243,6 +4243,7 @@ body[data-page="feed"] #mobilePostComposerModal .ig-post-composer-panel[data-pos
 }
 
 body[data-page="feed"] #mobilePostComposerModal .ig-post-composer-panel[data-post-composer-step="crop"] .mobile-composer-preview{
+  position:relative;
   width:min(728px,calc(100vw - 160px));
   height:auto!important;
   min-height:0!important;
@@ -4385,7 +4386,7 @@ body[data-page="feed"] #mobilePostComposerModal .ig-crop-zoom-popover input[type
 body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-popover{
   right:14px;
   bottom:58px;
-  max-width:min(342px,calc(100% - 28px));
+  width:min(356px,calc(100% - 28px));
   padding:12px;
 }
 
@@ -4399,6 +4400,10 @@ body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-strip{
   overscroll-behavior-x:contain;
   -webkit-overflow-scrolling:touch;
   scrollbar-width:none;
+}
+
+body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-popover:has(.ig-crop-carousel-item:only-child){
+  width:174px;
 }
 
 body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-strip::-webkit-scrollbar{
@@ -4463,7 +4468,7 @@ body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-add{
   width:76px;
   height:76px;
   flex:0 0 76px;
-  display:grid;
+  display:grid!important;
   place-items:center;
   border-radius:50%;
   border-color:rgba(255,255,255,.18);
@@ -4495,6 +4500,6 @@ body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-add{
   }
 
   body[data-page="feed"] #mobilePostComposerModal .ig-crop-carousel-popover{
-    max-width:calc(100vw - 28px);
+    width:min(356px,calc(100vw - 28px));
   }
 }

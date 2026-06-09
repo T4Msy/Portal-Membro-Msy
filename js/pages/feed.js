@@ -507,6 +507,19 @@ function closeSocialModals() {
   unlockBodyScroll();
 }
 
+function cancelPostComposer() {
+  if (state.previews?.length) revokePreviews(state.previews);
+  state.previews = [];
+  state.postComposerTool = null;
+  state.postComposerStep = 'crop';
+  state.composerLocation = '';
+  const composerText = document.getElementById('composerText');
+  if (composerText) composerText.value = '';
+  renderPreviews();
+  syncComposerState();
+  closeSocialModals();
+}
+
 async function initFeed() {
   const profile = await renderSidebar('feed');
   if (!profile) return;
@@ -1800,12 +1813,12 @@ function renderPostComposerModal() {
   const title = step === 'details' ? 'Nova publicacao' : 'Cortar';
   const left = step === 'details' && state.previews.length
     ? '<button type="button" class="ig-composer-icon" data-composer-step="crop" aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>'
-    : '<button type="button" class="ig-composer-icon" data-close-modal aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>';
+    : '<button type="button" class="ig-composer-icon" data-cancel-post-composer aria-label="Cancelar publicacao"><i class="fa-solid fa-arrow-left"></i></button>';
   const right = step === 'crop'
     ? `<button type="button" class="mobile-composer-post" data-composer-step="details" ${state.previews.length ? '' : 'disabled'}>Avancar</button>`
     : `<button type="button" class="mobile-composer-post" data-mobile-publish ${canPost ? '' : 'disabled'}>Compartilhar</button>`;
   modal.innerHTML = `
-    <button type="button" class="ig-create-close" data-close-modal aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+    <button type="button" class="ig-create-close" data-cancel-post-composer aria-label="Cancelar publicacao"><i class="fa-solid fa-xmark"></i></button>
     <div class="mobile-composer-panel ig-post-composer-panel" data-post-composer-step="${step}">
       <div class="mobile-composer-head ig-post-composer-head">
         ${left}
@@ -1848,6 +1861,11 @@ function renderPostComposerModal() {
     state.postComposerStep = btn.dataset.composerStep;
     if (state.postComposerStep === 'details') state.postComposerTool = null;
     renderPostComposerModal();
+  }));
+  modal.querySelectorAll('[data-cancel-post-composer]').forEach((btn) => btn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelPostComposer();
   }));
   modal.querySelectorAll('[data-mobile-pick-media]').forEach((btn) => btn.addEventListener('click', openPostMediaPicker));
   modal.querySelector('[data-mobile-emoji]')?.addEventListener('click', () => {
@@ -1952,9 +1970,9 @@ function renderPostComposerMedia({ step = state.postComposerStep || 'crop' } = {
           <div class="ig-crop-overlay-tools ig-crop-tools-right">
             <button type="button" class="${activeTool === 'carousel' ? 'active' : ''}" data-ig-crop-tool="carousel" aria-label="Adicionar ao carrossel"><i class="fa-regular fa-clone"></i></button>
           </div>
-          ${renderPostCropPopover(main, activeTool)}
         ` : ''}
       </div>
+      ${isCropStep ? renderPostCropPopover(main, activeTool) : ''}
       ${isCropStep ? `<div class="mobile-composer-media-controls">
         <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
         <select class="form-input form-select" data-mobile-edit-field="aspect" aria-label="Proporção da mídia">
@@ -5996,12 +6014,20 @@ function bindModals() {
     if (state.directConversationMenu && !e.target.closest('.direct-thread-menu')) {
       closeDirectConversationMenu();
     }
+    const postComposer = document.getElementById('mobilePostComposerModal');
+    if (postComposer?.classList.contains('open') && e.target === postComposer) {
+      cancelPostComposer();
+      return;
+    }
     if (e.target.matches('.story-viewer,.profile-viewer,.story-composer-modal,.media-viewer,.post-comments-modal,[data-close-modal]') || e.target.closest('[data-close-modal]')) {
       closeSocialModals();
     }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSocialModals();
+    if (e.key !== 'Escape') return;
+    const postComposer = document.getElementById('mobilePostComposerModal');
+    if (postComposer?.classList.contains('open')) cancelPostComposer();
+    else closeSocialModals();
   });
 }
 
