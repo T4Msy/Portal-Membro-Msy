@@ -10,6 +10,7 @@ import {
   exportStoryImageFile,
   exportStoryVideoFile,
   filePreview,
+  getStoryAspectRatioValue,
   loadImage,
   normalizeMediaEditState,
   removeSocialMedia,
@@ -302,10 +303,26 @@ function renderStoryMediaElement(story, attrs = '') {
 
 function renderPostMediaElement(media, attrs = '') {
   const editState = normalizeMediaEditState(media?.media_meta || {}, media?.media_type || 'image');
-  const style = `--editor-transform:${mediaEditorTransform(editState)}`;
+  const alreadyExported = media?.media_meta?.exported === true || /-story\.(webp|webm)$/i.test(media?.storage_path || '');
+  const transform = alreadyExported
+    ? 'translate(-50%,-50%) scale(1) rotate(0deg)'
+    : mediaEditorTransform(editState);
+  const style = `--editor-transform:${transform}`;
+  const className = `post-media-edited${alreadyExported ? ' post-media-rendered' : ''}`;
   return media.media_type === 'video'
-    ? `<video class="post-media-edited" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs} playsinline></video>`
-    : `<img class="post-media-edited" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs}>`;
+    ? `<video class="${className}" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs} playsinline></video>`
+    : `<img class="${className}" style="${style}" src="${Utils.escapeHtml(media.url)}" ${attrs}>`;
+}
+
+function postMediaAspectCss(media) {
+  const width = Number(media?.width || media?.media_meta?.exportedWidth || 0);
+  const height = Number(media?.height || media?.media_meta?.exportedHeight || 0);
+  if (width > 0 && height > 0) return `${width} / ${height}`;
+  if (Number(media?.media_meta?.exportedAspect) > 0) return `${Number(media.media_meta.exportedAspect)} / 1`;
+  const editState = normalizeMediaEditState(media?.media_meta || {}, media?.media_type || 'image');
+  if (editState.aspect && editState.aspect !== 'original') return mediaAspectCss(editState.aspect, editState.originalAspect);
+  if (Number(editState.originalAspect) > 0) return `${Number(editState.originalAspect)} / 1`;
+  return '4 / 5';
 }
 
 function renderPostMediaViewerElement(media, attrs = '') {
@@ -792,7 +809,7 @@ function renderPost(post) {
   const media = (post.media || []).length ? `
       <div class="post-media" data-media-post="${post.id}">
         <div class="post-media-track">
-        ${post.media.map((m, index) => `<div class="post-media-slide" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? 'controls preload="metadata"' : 'loading="lazy" decoding="async"')}</div>`).join('')}
+        ${post.media.map((m, index) => `<div class="post-media-slide" style="--post-media-aspect:${postMediaAspectCss(m)}" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? 'controls preload="metadata"' : 'loading="lazy" decoding="async"')}</div>`).join('')}
       </div>
       ${post.media.length > 1 ? `
         <button type="button" class="post-media-nav post-media-prev" data-media-nav="${post.id}" data-media-direction="-1" aria-label="Foto anterior"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1902,7 +1919,18 @@ async function publishPost() {
         skipCompression = true;
       }
       const uploaded = await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression });
-      uploaded.media_meta = editState;
+      uploaded.media_meta = { ...editState, exported: true };
+      if (item.media_type === 'image') {
+        const exportedImage = await loadImage(uploadFile);
+        uploaded.media_meta.exportedWidth = exportedImage.width;
+        uploaded.media_meta.exportedHeight = exportedImage.height;
+        uploaded.width = exportedImage.width;
+        uploaded.height = exportedImage.height;
+      } else if (item.media_type === 'video') {
+        uploaded.media_meta.exportedAspect = editState.aspect === 'original'
+          ? Number(editState.originalAspect || 0) || null
+          : getStoryAspectRatioValue(editState.aspect);
+      }
       media.push(uploaded);
       if (uploaded.storage_path) uploadedPaths.push(uploaded.storage_path);
     }
@@ -2817,7 +2845,20 @@ async function savePostEditor() {
           uploadFile = await exportStoryVideoFile(item.file, editState);
           skipCompression = true;
         }
-        media.push({ ...(await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression })), media_meta: editState });
+        const uploaded = await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression });
+        uploaded.media_meta = { ...editState, exported: true };
+        if (item.media_type === 'image') {
+          const exportedImage = await loadImage(uploadFile);
+          uploaded.media_meta.exportedWidth = exportedImage.width;
+          uploaded.media_meta.exportedHeight = exportedImage.height;
+          uploaded.width = exportedImage.width;
+          uploaded.height = exportedImage.height;
+        } else if (item.media_type === 'video') {
+          uploaded.media_meta.exportedAspect = editState.aspect === 'original'
+            ? Number(editState.originalAspect || 0) || null
+            : getStoryAspectRatioValue(editState.aspect);
+        }
+        media.push(uploaded);
       } else {
         media.push({ ...item, media_meta: editState });
       }
