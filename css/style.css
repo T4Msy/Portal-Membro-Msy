@@ -1804,6 +1804,12 @@ select option:hover,
   color: rgba(236,236,236,.58);
 }
 .admin-hero-main { min-width: 0; position: relative; z-index: 1; }
+.admin-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
 .admin-kicker {
   display: inline-flex;
   align-items: center;
@@ -1895,6 +1901,13 @@ select option:hover,
   color: var(--text-1);
 }
 .admin-command-node.accent strong { color: var(--gold); text-shadow: 0 0 22px rgba(201,168,76,.18); }
+.admin-workspace-grid,
+.admin-lists-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, .9fr);
+  gap: 18px;
+  align-items: start;
+}
 .admin-shell > .stats-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 0 !important;
@@ -1921,6 +1934,44 @@ select option:hover,
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px !important;
 }
+.admin-action-tile {
+  min-height: 82px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  border: 1px solid var(--border-faint);
+  background: linear-gradient(145deg, var(--black-4), var(--black-3));
+  border-radius: var(--radius);
+  padding: 14px;
+  color: var(--text-1);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 8px 20px rgba(0,0,0,.2);
+  transition: all var(--t1) var(--ease);
+  font: inherit;
+}
+.admin-action-tile i {
+  color: var(--gold);
+  font-size: .95rem;
+}
+.admin-action-tile span {
+  font-size: .88rem;
+  font-weight: 800;
+}
+.admin-action-tile small {
+  color: var(--text-3);
+  font-size: .72rem;
+  line-height: 1.35;
+}
+.admin-action-tile:hover,
+.admin-action-tile:focus-visible {
+  border-color: var(--border-gold);
+  background: linear-gradient(145deg, rgba(201,168,76,.08), var(--black-4));
+  transform: translateY(-2px);
+}
 .admin-actions-grid .btn {
   min-height: 58px;
   justify-content: flex-start;
@@ -1943,7 +1994,51 @@ select option:hover,
   border-color: rgba(220,38,38,.28) !important;
   background: linear-gradient(145deg, rgba(185,28,28,.08), var(--black-3));
 }
+.admin-pending-card.is-clear {
+  border-color: rgba(74,222,128,.18) !important;
+  background: linear-gradient(145deg, rgba(34,197,94,.045), var(--black-3));
+}
+.admin-tabs-card {
+  border-color: rgba(96,165,250,.18);
+  background: linear-gradient(145deg, rgba(96,165,250,.055), var(--black-3));
+}
+.admin-tabs-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.admin-tabs-summary div {
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.035);
+  padding: 12px 8px;
+  text-align: center;
+}
+.admin-tabs-summary strong {
+  display: block;
+  color: var(--gold);
+  font-family: 'Cinzel', serif;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.admin-tabs-summary span {
+  display: block;
+  color: var(--text-3);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  margin-top: 7px;
+  text-transform: uppercase;
+}
+.admin-card-copy {
+  color: var(--text-3);
+  font-size: .82rem;
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
 #systemAlertsCard {
+  grid-column: 1 / -1;
   border-color: rgba(96,165,250,.18);
   background: linear-gradient(145deg, rgba(96,165,250,.05), var(--black-3));
 }
@@ -4655,11 +4750,19 @@ textarea:invalid:not(:placeholder-shown),
   .admin-shell > .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .admin-workspace-grid,
+  .admin-lists-grid {
+    grid-template-columns: 1fr;
+  }
   .admin-command-strip {
     grid-template-columns: 1fr;
   }
   .admin-actions-grid {
     grid-template-columns: 1fr;
+  }
+  .admin-hero-actions .btn {
+    flex: 1 1 180px;
+    justify-content: center;
   }
 }
 
@@ -4667,6 +4770,8 @@ textarea:invalid:not(:placeholder-shown),
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .admin-shell > .stats-grid { grid-template-columns: 1fr; }
   .admin-hero { border-radius: var(--radius-lg); padding: 20px; }
+  .admin-tabs-summary { grid-template-columns: 1fr; }
+  .admin-hero-actions { display: grid; grid-template-columns: 1fr; }
 
   .prem-list-grid { grid-template-columns: 1fr; }
   .bib-grid { grid-template-columns: 1fr; }

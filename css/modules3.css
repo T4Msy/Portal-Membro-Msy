@@ -600,9 +600,31 @@ body[data-page="permissoes"] #permsManagerBody {
 .tab-access-toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 14px;
   border-bottom: 1px solid var(--border-faint);
+}
+
+.tab-access-toolbar-copy {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.tab-access-toolbar-copy strong,
+.tab-access-toolbar-copy span {
+  display: block;
+}
+
+.tab-access-toolbar-copy strong {
+  color: var(--text-1);
+  font-size: .86rem;
+}
+
+.tab-access-toolbar-copy span {
+  color: var(--text-3);
+  font-size: .72rem;
+  margin-top: 2px;
 }
 
 .tab-access-list {
@@ -640,6 +662,10 @@ body[data-page="permissoes"] #permsManagerBody {
 .tab-access-main strong {
   color: var(--text-1);
   font-size: .9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
 }
 
 .tab-access-main span {
@@ -655,7 +681,7 @@ body[data-page="permissoes"] #permsManagerBody {
   min-width: 0;
 }
 
-.tab-access-fields label {
+.tab-access-fields .tab-access-field {
   display: grid;
   gap: 6px;
   color: var(--gold);
@@ -666,9 +692,50 @@ body[data-page="permissoes"] #permsManagerBody {
   min-width: 0;
 }
 
+.tab-access-field-label {
+  color: var(--gold);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
 .tab-access-fields select[multiple] {
   min-height: 82px;
   font-size: .78rem;
+}
+
+.tab-access-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  padding: 3px 8px;
+  font-family: var(--font-sans, inherit);
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tab-access-badge.open {
+  color: #4ade80;
+  border-color: rgba(74,222,128,.28);
+  background: rgba(34,197,94,.09);
+}
+
+.tab-access-badge.restricted {
+  color: #60a5fa;
+  border-color: rgba(96,165,250,.28);
+  background: rgba(96,165,250,.09);
+}
+
+.tab-access-badge.hidden {
+  color: #f87171;
+  border-color: rgba(248,113,113,.3);
+  background: rgba(239,68,68,.09);
 }
 
 @media (max-width: 860px) {

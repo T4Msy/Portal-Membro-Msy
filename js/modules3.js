@@ -235,7 +235,7 @@ async function openPermissionsManager() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
-    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes'] },
+    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
   const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
@@ -439,7 +439,7 @@ function getPermissionsGroups() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
-    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes'] },
+    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
 }
 
@@ -497,6 +497,9 @@ async function initPermissoesPage() {
   await renderPermissionsWorkspace(body);
   await renderTabAccessWorkspace(document.getElementById('tabAccessBody'));
   document.getElementById('tabAccessReload')?.addEventListener('click', () => renderTabAccessWorkspace(document.getElementById('tabAccessBody')));
+  if (window.location.hash === '#abas') {
+    document.getElementById('tabAccessBody')?.closest('.permissions-workspace')?.scrollIntoView({ block: 'start' });
+  }
 }
 
 const MSY_TAB_CATALOG = [
@@ -535,9 +538,26 @@ async function renderTabAccessWorkspace(body) {
   }
 
   const permissionOptions = MSYPerms.ALL.map((perm) => `<option value="${perm.key}">${Utils.escapeHtml(perm.label)}</option>`).join('');
+  const tierMode = (rule) => {
+    const tiers = rule.allowed_tiers || [];
+    if (tiers.length === 1 && tiers[0] === 'membro') return 'membro';
+    if (tiers.length === 1 && tiers[0] === 'diretoria') return 'diretoria';
+    return 'todos';
+  };
+  const accessBadge = (rule) => {
+    if (rule.visible === false) return '<span class="tab-access-badge hidden"><i class="fa-solid fa-eye-slash"></i> Oculta</span>';
+    if ((rule.allowed_tiers || []).length || (rule.allowed_roles || []).length || (rule.required_permissions || []).length) {
+      return '<span class="tab-access-badge restricted"><i class="fa-solid fa-lock"></i> Restrita</span>';
+    }
+    return '<span class="tab-access-badge open"><i class="fa-solid fa-eye"></i> Visível</span>';
+  };
 
   body.innerHTML = `
     <div class="tab-access-toolbar">
+      <div class="tab-access-toolbar-copy">
+        <strong>Visibilidade do menu</strong>
+        <span>Diretoria sempre mantém acesso. Membros seguem as regras abaixo.</span>
+      </div>
       <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="show"><i class="fa-solid fa-eye"></i> Mostrar todas</button>
       <button type="button" class="btn btn-ghost btn-sm" data-tabs-bulk="hide"><i class="fa-solid fa-eye-slash"></i> Ocultar todas</button>
       <button type="button" class="btn btn-primary btn-sm" id="saveAllTabs"><i class="fa-solid fa-floppy-disk"></i> Salvar alterações</button>
@@ -551,18 +571,23 @@ async function renderTabAccessWorkspace(body) {
               <span class="pm-toggle-track"></span>
             </label>
             <div>
-              <strong>${Utils.escapeHtml(rule.label)}</strong>
+              <strong>${Utils.escapeHtml(rule.label)} ${accessBadge(rule)}</strong>
               <span>${Utils.escapeHtml(rule.page_key)}.html</span>
             </div>
           </div>
           <div class="tab-access-fields">
-            <label>Cargos
-              <input class="form-input" data-tab-field="allowed_tiers" placeholder="membro,diretoria" value="${Utils.escapeHtml((rule.allowed_tiers || []).join(','))}">
-            </label>
-            <label>Grupos/Funções
+            <div class="tab-access-field">
+              <span class="tab-access-field-label">Cargos</span>
+              <select class="form-input form-select" data-tab-field="allowed_tier_mode">
+                <option value="todos" ${tierMode(rule) === 'todos' ? 'selected' : ''}>Todos</option>
+                <option value="membro" ${tierMode(rule) === 'membro' ? 'selected' : ''}>Membros</option>
+                <option value="diretoria" ${tierMode(rule) === 'diretoria' ? 'selected' : ''}>Diretoria</option>
+              </select>
+            </div>
+            <label class="tab-access-field">Grupos/Funções
               <input class="form-input" data-tab-field="allowed_roles" placeholder="Admin,Editor" value="${Utils.escapeHtml((rule.allowed_roles || []).join(','))}">
             </label>
-            <label>Permissões
+            <label class="tab-access-field">Permissões
               <select class="form-input" data-tab-field="required_permissions" multiple>
                 ${permissionOptions}
               </select>
@@ -583,7 +608,13 @@ async function renderTabAccessWorkspace(body) {
   body.querySelectorAll('[data-tabs-bulk]').forEach((btn) => btn.addEventListener('click', () => {
     const show = btn.dataset.tabsBulk === 'show';
     body.querySelectorAll('[data-tab-field="visible"]').forEach((input) => { input.checked = show; });
+    body.querySelectorAll('.tab-access-row').forEach((row) => updateTabAccessBadge(row));
   }));
+
+  body.querySelectorAll('[data-tab-field="visible"], [data-tab-field="allowed_tier_mode"], [data-tab-field="allowed_roles"], [data-tab-field="required_permissions"]').forEach((input) => {
+    input.addEventListener('change', () => updateTabAccessBadge(input.closest('[data-tab-row]')));
+    input.addEventListener('input', () => updateTabAccessBadge(input.closest('[data-tab-row]')));
+  });
 
   body.querySelector('#saveAllTabs')?.addEventListener('click', async () => {
     const btn = body.querySelector('#saveAllTabs');
@@ -591,7 +622,7 @@ async function renderTabAccessWorkspace(body) {
       page_key: row.dataset.tabRow,
       label: rules.find((rule) => rule.page_key === row.dataset.tabRow)?.label || row.dataset.tabRow,
       visible: row.querySelector('[data-tab-field="visible"]')?.checked !== false,
-      allowed_tiers: splitCsv(row.querySelector('[data-tab-field="allowed_tiers"]')?.value),
+      allowed_tiers: tierModeToArray(row.querySelector('[data-tab-field="allowed_tier_mode"]')?.value),
       allowed_roles: splitCsv(row.querySelector('[data-tab-field="allowed_roles"]')?.value),
       required_permissions: [...row.querySelector('[data-tab-field="required_permissions"]')?.selectedOptions || []].map((opt) => opt.value),
       updated_at: new Date().toISOString(),
@@ -607,6 +638,32 @@ async function renderTabAccessWorkspace(body) {
     MSYTabAccess?.invalidate?.();
     Utils.showToast('Permissões de abas salvas.');
   });
+}
+
+function updateTabAccessBadge(row) {
+  if (!row) return;
+  const badge = row.querySelector('.tab-access-badge');
+  if (!badge) return;
+  const visible = row.querySelector('[data-tab-field="visible"]')?.checked !== false;
+  const hasTier = row.querySelector('[data-tab-field="allowed_tier_mode"]')?.value !== 'todos';
+  const hasRole = splitCsv(row.querySelector('[data-tab-field="allowed_roles"]')?.value).length > 0;
+  const hasPerm = [...row.querySelector('[data-tab-field="required_permissions"]')?.selectedOptions || []].length > 0;
+  if (!visible) {
+    badge.className = 'tab-access-badge hidden';
+    badge.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Oculta';
+  } else if (hasTier || hasRole || hasPerm) {
+    badge.className = 'tab-access-badge restricted';
+    badge.innerHTML = '<i class="fa-solid fa-lock"></i> Restrita';
+  } else {
+    badge.className = 'tab-access-badge open';
+    badge.innerHTML = '<i class="fa-solid fa-eye"></i> Visível';
+  }
+}
+
+function tierModeToArray(mode = 'todos') {
+  if (mode === 'membro') return ['membro'];
+  if (mode === 'diretoria') return ['diretoria'];
+  return [];
 }
 
 function splitCsv(value = '') {

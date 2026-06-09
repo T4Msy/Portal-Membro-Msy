@@ -1431,7 +1431,7 @@
          </div>
        </div>
      `;
-   
+
      await loadActivities();
 
      function updateActivityHeader() {
@@ -1450,7 +1450,7 @@
        const wrap = document.getElementById('activityMemberFilterWrap');
        if (wrap) wrap.style.display = visible ? 'flex' : 'none';
      }
-   
+
      content.querySelectorAll('.filter-btn').forEach(btn => {
        btn.addEventListener('click', () => {
          content.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -5820,7 +5820,8 @@
        { count: pendingActs },
        { count: totalComs },
        { data: pendingList },
-       { data: recentMembers }
+       { data: recentMembers },
+       { data: tabRules }
      ] = await Promise.all([
        db.from('profiles').select('id', { count: 'exact', head: true }),
        db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
@@ -5829,69 +5830,102 @@
        db.from('activities').select('id', { count: 'exact', head: true }).eq('status', 'Pendente'),
        db.from('comunicados').select('id', { count: 'exact', head: true }),
        db.from('profiles').select('*').eq('status', 'pendente').order('created_at', { ascending: false }).limit(6),
-       db.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
+       db.from('profiles').select('*').order('created_at', { ascending: false }).limit(5),
+       db.from('tab_permissions').select('page_key,label,visible,allowed_tiers,allowed_roles,required_permissions')
      ]);
+
+     const tabConfig = tabRules || [];
+     const hiddenTabs = tabConfig.filter(t => t.visible === false).length;
+     const restrictedTabs = tabConfig.filter(t =>
+       (t.allowed_tiers || []).length || (t.allowed_roles || []).length || (t.required_permissions || []).length
+     ).length;
    
      content.innerHTML = `
        <div class="admin-shell">
-       <div class="admin-hero card-enter">
+       <section class="admin-hero card-enter">
          <div class="admin-hero-main">
-           <div class="admin-kicker"><i class="fa-solid fa-shield-halved"></i> Centro de comando</div>
+           <div class="admin-kicker"><i class="fa-solid fa-shield-halved"></i> Centro administrativo</div>
            <div class="page-header-title">Painel Administrativo</div>
-           <div class="page-header-sub">Visao geral, operacao e controle da Masayoshi Order</div>
+           <div class="page-header-sub">Operação, membros, permissões e configurações centrais da plataforma.</div>
+           <div class="admin-hero-actions">
+             <button class="btn btn-primary" id="addMemberBtn"><i class="fa-solid fa-user-plus"></i> Adicionar membro</button>
+             <button class="btn btn-outline" id="notifyAllBtn"><i class="fa-solid fa-bell"></i> Notificar todos</button>
+             <a class="btn btn-ghost" href="permissoes.html"><i class="fa-solid fa-table-columns"></i> Gerenciar abas</a>
+           </div>
          </div>
          <div class="admin-hero-status ${pendingMembers > 0 ? 'attention' : 'stable'}">
-           <span>${pendingMembers > 0 ? 'Atencao requerida' : 'Operacao estavel'}</span>
+           <span>${pendingMembers > 0 ? 'Atenção requerida' : 'Operação estável'}</span>
            <strong>${pendingMembers > 0 ? `${pendingMembers} pendente${pendingMembers > 1 ? 's' : ''}` : `${activeMembers || 0} ativos`}</strong>
          </div>
-       </div>
+       </section>
        <div class="admin-command-strip card-enter">
          <div class="admin-command-node">
-           <span>Diretoria</span>
+           <span>Membros</span>
            <strong>${activeMembers || 0}</strong>
-           <small>membros ativos sob gestao</small>
+           <small>ativos na plataforma</small>
          </div>
-         <div class="admin-command-node accent">
-           <span>Operacao</span>
+         <div class="admin-command-node ${pendingActs > 0 ? 'accent' : ''}">
+           <span>Atividades</span>
            <strong>${pendingActs || 0}</strong>
-           <small>atividades aguardando acao</small>
+           <small>pendentes de ação</small>
          </div>
          <div class="admin-command-node">
-           <span>Comunicacao</span>
-           <strong>${totalComs || 0}</strong>
-           <small>comunicados publicados</small>
+           <span>Abas</span>
+           <strong>${hiddenTabs}</strong>
+           <small>ocultas para membros</small>
          </div>
        </div>
-       <div class="page-header">
-         <div>
-           <div class="page-header-title">Painel Administrativo</div>
-           <div class="page-header-sub">Visão geral e gestão da Ordem</div>
-         </div>
-       </div>
-   
+
        <div class="stats-grid" style="margin-bottom:28px">
          <div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-users"></i></div><div class="stat-info"><div class="stat-value">${totalMembers||0}</div><div class="stat-label">Total Membros</div></div></div>
          <div class="stat-card red-accent card-enter"><div class="stat-icon red"><i class="fa-solid fa-user-clock"></i></div><div class="stat-info"><div class="stat-value">${pendingMembers||0}</div><div class="stat-label">Pendentes Aprovação</div></div></div>
          <div class="stat-card blue-accent card-enter"><div class="stat-icon blue"><i class="fa-solid fa-list-check"></i></div><div class="stat-info"><div class="stat-value">${totalActs||0}</div><div class="stat-label">Atividades Total</div></div></div>
          <div class="stat-card green-accent card-enter"><div class="stat-icon green"><i class="fa-solid fa-bullhorn"></i></div><div class="stat-info"><div class="stat-value">${totalComs||0}</div><div class="stat-label">Comunicados</div></div></div>
        </div>
-   
-       <div class="card card-enter" style="margin-bottom:20px">
-         <div class="card-title"><i class="fa-solid fa-bolt"></i> Ações Rápidas</div>
-         <div style="display:flex;flex-wrap:wrap;gap:10px">
-           <a href="atividades.html" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Nova Atividade</a>
-           <a href="comunicados.html" class="btn btn-gold"><i class="fa-solid fa-bullhorn"></i> Novo Comunicado</a>
-           <a href="membros.html" class="btn btn-outline"><i class="fa-solid fa-users"></i> Gerenciar Membros</a>
-           <a href="eventos.html" class="btn btn-outline"><i class="fa-solid fa-calendar-days"></i> Eventos</a>
-           <button class="btn btn-ghost" id="notifyAllBtn"><i class="fa-solid fa-bell"></i> Notificar Todos</button>
-           <button class="btn btn-ghost" id="pagManualBtn" style="border-color:rgba(201,168,76,.3);color:var(--gold)"><i class="fa-solid fa-hand-holding-dollar"></i> Pagamento Manual</button>
-           <button class="btn btn-ghost" id="viewAsMemberAdminBtn" style="border-color:rgba(96,165,250,.3);color:#60a5fa"><i class="fa-solid fa-eye"></i> Visualizar como Membro</button>
-           <button class="btn btn-ghost" id="addMemberBtn" style="border-color:rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-user-plus"></i> Adicionar Membro</button>
+
+       <section class="admin-workspace-grid">
+         <div class="card card-enter admin-actions-card">
+           <div class="card-title"><i class="fa-solid fa-bolt"></i> Ações por área</div>
+           <div class="admin-actions-grid">
+             <a href="membros.html" class="admin-action-tile"><i class="fa-solid fa-users"></i><span>Membros</span><small>Perfis, cargos e situação</small></a>
+             <a href="atividades.html" class="admin-action-tile"><i class="fa-solid fa-list-check"></i><span>Atividades</span><small>Tarefas, anexos e prazos</small></a>
+             <a href="comunicados.html" class="admin-action-tile"><i class="fa-solid fa-bullhorn"></i><span>Comunicados</span><small>Publicações oficiais</small></a>
+             <a href="eventos.html" class="admin-action-tile"><i class="fa-solid fa-calendar-days"></i><span>Eventos</span><small>Agenda e presença</small></a>
+             <button class="admin-action-tile" id="pagManualBtn"><i class="fa-solid fa-hand-holding-dollar"></i><span>Pagamento manual</span><small>Registrar mensalidade</small></button>
+             <button class="admin-action-tile" id="viewAsMemberAdminBtn"><i class="fa-solid fa-eye"></i><span>Visão de membro</span><small>Simular acesso comum</small></button>
+           </div>
          </div>
-       </div>
-   
+
+         <div class="card card-enter admin-tabs-card">
+           <div class="card-title"><i class="fa-solid fa-table-columns"></i> Controle de abas</div>
+           <div class="admin-tabs-summary">
+             <div><strong>${tabConfig.length || 0}</strong><span>abas cadastradas</span></div>
+             <div><strong>${hiddenTabs}</strong><span>ocultas</span></div>
+             <div><strong>${restrictedTabs}</strong><span>restritas</span></div>
+           </div>
+           <p class="admin-card-copy">Defina quais abas aparecem para membros comuns e quais páginas exigem cargo, função ou permissão individual.</p>
+           <a href="permissoes.html#abas" class="btn btn-primary"><i class="fa-solid fa-sliders"></i> Configurar visibilidade</a>
+         </div>
+       </section>
+
+       <section class="admin-lists-grid">
+         <div class="card card-enter">
+           <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Cadastros recentes</div>
+           <div class="small-list">
+             ${(recentMembers||[]).length === 0 ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum cadastro recente.</div></div>` : (recentMembers||[]).map(m => `
+               <div class="small-list-item">
+                 <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials||Utils.getInitials(m.name))}</div>
+                 <div class="small-list-info">
+                   <div class="small-list-title">${Utils.escapeHtml(m.name)}</div>
+                   <div class="small-list-sub">${Utils.escapeHtml(m.role || 'Membro')} · ${Utils.formatDate(m.created_at)}</div>
+                 </div>
+                 <span class="badge ${m.status === 'ativo' ? 'badge-done' : 'badge-pending'}">${Utils.escapeHtml(m.status || 'novo')}</span>
+               </div>`).join('')}
+           </div>
+         </div>
+
        ${pendingMembers > 0 ? `
-         <div class="card card-enter" style="border-color:var(--border-red);margin-bottom:20px">
+         <div class="card card-enter admin-pending-card">
            <div class="card-title" style="color:var(--red-bright)"><i class="fa-solid fa-triangle-exclamation"></i> Membros Aguardando Aprovação (${pendingMembers})</div>
            <div class="small-list">
              ${(pendingList||[]).map(m => `
@@ -5904,8 +5938,13 @@
                  <button class="btn btn-primary btn-sm quick-approve" data-id="${m.id}">Aprovar</button>
                </div>`).join('')}
            </div>
-         </div>` : ''}
-   
+         </div>` : `
+         <div class="card card-enter admin-pending-card is-clear">
+           <div class="card-title"><i class="fa-solid fa-circle-check"></i> Aprovações</div>
+           <div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum membro aguardando aprovação.</div></div>
+         </div>`}
+       </section>
+
        </div>
 
        <div class="modal-overlay" id="addMemberModal">
@@ -5992,11 +6031,6 @@
        </div>
      `;
 
-     const adminCards = content.querySelectorAll('.admin-shell > .card');
-     adminCards[0]?.classList.add('admin-actions-card');
-     adminCards[0]?.querySelector(':scope > div:last-child')?.classList.add('admin-actions-grid');
-     adminCards[1]?.classList.add('admin-pending-card');
-   
      content.querySelectorAll('.quick-approve').forEach(btn => {
        btn.addEventListener('click', async () => {
          await db.from('profiles').update({ status: 'ativo' }).eq('id', btn.dataset.id);
