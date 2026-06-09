@@ -1993,6 +1993,21 @@ select option:hover,
   margin-top: 2px;
 }
 
+/* Dashboard notification item — fix overlap */
+.notif-item-dash {
+  flex-wrap: wrap;
+}
+.notif-item-dash .small-list-info {
+  min-width: 120px;
+  flex: 1 1 120px;
+}
+.notif-item-dash .badge {
+  flex-shrink: 0;
+}
+.notif-item-dash .notif-view-btn {
+  flex-shrink: 0;
+}
+
 /* ============================================================
    ACTIVITIES PAGE
    ============================================================ */
@@ -3080,6 +3095,9 @@ textarea:invalid:not(:placeholder-shown),
   .page-header { flex-direction: column; align-items: flex-start; }
   .login-card { padding: 30px 22px; }
   .filters-bar { gap: 6px; }
+
+  .notif-item-dash { gap: 8px; }
+  .notif-item-dash .notif-view-btn { font-size: 0.64rem; padding: 4px 8px; }
 }
 
 /* ============================================================
