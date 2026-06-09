@@ -249,8 +249,8 @@ export async function exportStoryImageFile(file, editState = {}) {
 
   const maxX = Math.max(0, (image.width - cropWidth) / 2);
   const maxY = Math.max(0, (image.height - cropHeight) / 2);
-  const offsetX = clamp(Number(normalized.offsetX || 0), -1, 1) * maxX;
-  const offsetY = clamp(Number(normalized.offsetY || 0), -1, 1) * maxY;
+  const offsetX = clamp(Number(normalized.offsetX || 0), -1, 1) * -maxX;
+  const offsetY = clamp(Number(normalized.offsetY || 0), -1, 1) * -maxY;
   const sx = clamp((image.width - cropWidth) / 2 + offsetX, 0, image.width - cropWidth);
   const sy = clamp((image.height - cropHeight) / 2 + offsetY, 0, image.height - cropHeight);
 

@@ -18,7 +18,7 @@ import {
   supportsVideoEditing,
   uploadSocialMedia,
   validateMediaFile,
-} from '../social/social_media.js?v=20260601-story-contain';
+} from '../social/social_media.js?v=20260609-ig-crop-final';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -54,6 +54,7 @@ const state = {
   activeProfileSummary: null,
   activeProfileTab: 'posts',
   previews: [],
+  postComposerTool: null,
   postEditPreviews: [],
   activePostEditId: null,
   storyPreviews: [],
@@ -1813,7 +1814,7 @@ function renderPostComposerModal() {
       </div>
       <div class="ig-post-composer-body">
         <div class="ig-post-composer-media">
-          ${renderPostComposerMedia()}
+          ${renderPostComposerMedia({ step })}
         </div>
         <div class="ig-post-composer-details">
           <div class="mobile-composer-author">
@@ -1824,7 +1825,6 @@ function renderPostComposerModal() {
           <label class="ig-composer-field"><i class="fa-solid fa-location-dot"></i><input id="composerLocationInput" value="${Utils.escapeHtml(state.composerLocation || '')}" maxlength="80" placeholder="Adicionar localizacao"></label>
           <label class="ig-composer-field"><i class="fa-regular fa-closed-captioning"></i><input id="composerAltInput" value="${Utils.escapeHtml(state.previews[0]?.alt_text || '')}" maxlength="220" placeholder="Texto alternativo da midia atual"></label>
           <div class="ig-composer-options">
-            <button type="button" data-mobile-pick-media><i class="fa-regular fa-square-plus"></i><span>Adicionar midia</span></button>
             <button type="button" data-mobile-emoji><i class="fa-regular fa-face-smile"></i><span>Emoji</span></button>
           </div>
         </div>
@@ -1846,6 +1846,7 @@ function renderPostComposerModal() {
   });
   modal.querySelectorAll('[data-composer-step]').forEach((btn) => btn.addEventListener('click', () => {
     state.postComposerStep = btn.dataset.composerStep;
+    if (state.postComposerStep === 'details') state.postComposerTool = null;
     renderPostComposerModal();
   }));
   modal.querySelectorAll('[data-mobile-pick-media]').forEach((btn) => btn.addEventListener('click', openPostMediaPicker));
@@ -1881,24 +1882,29 @@ function renderPostComposerModal() {
     renderPreviews();
     renderPostComposerModal();
   }));
-  modal.querySelector('[data-ig-crop-fit]')?.addEventListener('click', () => {
+  modal.querySelectorAll('[data-ig-crop-tool]').forEach((btn) => btn.addEventListener('click', () => {
+    const tool = btn.dataset.igCropTool;
+    state.postComposerTool = state.postComposerTool === tool ? null : tool;
+    renderPostComposerModal();
+  }));
+  modal.querySelectorAll('[data-ig-aspect-option]').forEach((btn) => btn.addEventListener('click', () => {
     const item = state.previews[0];
     if (!item) return;
     const editState = ensureMediaEditState(item, 'original');
-    editState.aspect = editState.aspect === 'original' ? '1:1' : 'original';
+    editState.aspect = btn.dataset.igAspectOption || 'original';
     editState.zoom = 1;
     editState.offsetX = 0;
     editState.offsetY = 0;
+    state.postComposerTool = null;
     renderPreviews();
     renderPostComposerModal();
-  });
-  modal.querySelector('[data-ig-zoom-toggle]')?.addEventListener('click', () => {
+  }));
+  modal.querySelector('[data-ig-zoom-range]')?.addEventListener('input', (event) => {
     const item = state.previews[0];
     if (!item) return;
     const editState = ensureMediaEditState(item, 'original');
-    editState.zoom = Number(editState.zoom || 1) > 1.05 ? 1 : 1.35;
-    renderPreviews();
-    renderPostComposerModal();
+    editState.zoom = Number(event.currentTarget.value || 1);
+    applyMediaEditorTransform(modal, item);
   });
   modal.querySelectorAll('[data-mobile-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
     const item = state.previews[0];
@@ -1910,13 +1916,13 @@ function renderPostComposerModal() {
     else item.editState[key] = value;
     applyMediaEditorTransform(modal, item);
 	  }));
-	  if (state.previews[0]) {
+	  if (state.previews[0] && step === 'crop') {
 	    bindMediaEditorGestures(modal, state.previews[0]);
-	    bindMediaPreviewDiagnostics(modal, state.previews[0]);
 	  }
+	  if (state.previews[0]) bindMediaPreviewDiagnostics(modal, state.previews[0]);
 	}
 
-function renderPostComposerMedia() {
+function renderPostComposerMedia({ step = state.postComposerStep || 'crop' } = {}) {
   if (!state.previews.length) {
     return `
       <button type="button" class="mobile-composer-empty-media ig-empty-media" data-mobile-pick-media>
@@ -1927,6 +1933,8 @@ function renderPostComposerMedia() {
   const main = state.previews[0];
   const mainEditState = ensureMediaEditState(main, 'original');
   const mainAspect = mediaAspectCss(mainEditState.aspect, mainEditState.originalAspect);
+  const isCropStep = step === 'crop';
+  const activeTool = state.postComposerTool;
   const mediaNode = (item) => item.media_type === 'video'
     ? `<video src="${item.url}" muted playsinline controls></video>`
     : `<img src="${item.url}" alt="Preview da publicacao">`;
@@ -1934,25 +1942,28 @@ function renderPostComposerMedia() {
     <div class="mobile-composer-preview">
       <div class="mobile-composer-preview-main" style="--editor-aspect:${mainAspect}">
         ${renderEditableMediaNode(main, { scope: 'post' })}
-        <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
-        <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
-        <div class="ig-crop-overlay-tools ig-crop-tools-left">
-          <button type="button" data-ig-crop-fit aria-label="Alternar proporcao"><i class="fa-solid fa-expand"></i></button>
-          <button type="button" data-ig-zoom-toggle aria-label="Alternar zoom"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-        </div>
-        <div class="ig-crop-overlay-tools ig-crop-tools-right">
-          <button type="button" data-mobile-pick-media aria-label="Adicionar ao carrossel"><i class="fa-regular fa-clone"></i></button>
-        </div>
+        ${isCropStep ? `
+          <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
+          <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
+          <div class="ig-crop-overlay-tools ig-crop-tools-left">
+            <button type="button" class="${activeTool === 'aspect' ? 'active' : ''}" data-ig-crop-tool="aspect" aria-label="Escolher proporcao"><i class="fa-solid fa-expand"></i></button>
+            <button type="button" class="${activeTool === 'zoom' ? 'active' : ''}" data-ig-crop-tool="zoom" aria-label="Ajustar zoom"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+          </div>
+          <div class="ig-crop-overlay-tools ig-crop-tools-right">
+            <button type="button" class="${activeTool === 'carousel' ? 'active' : ''}" data-ig-crop-tool="carousel" aria-label="Adicionar ao carrossel"><i class="fa-regular fa-clone"></i></button>
+          </div>
+          ${renderPostCropPopover(main, activeTool)}
+        ` : ''}
       </div>
-      <div class="mobile-composer-media-controls">
+      ${isCropStep ? `<div class="mobile-composer-media-controls">
         <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
         <select class="form-input form-select" data-mobile-edit-field="aspect" aria-label="Proporção da mídia">
           ${mediaAspectOptions.map(([value, label]) => `<option value="${value}" ${main.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
         <label>Zoom <input type="range" min="0.5" max="3" step="0.01" value="${Number(main.editState?.zoom || 1)}" data-mobile-edit-field="zoom"></label>
         <label>Rotacao <input type="range" min="0" max="360" step="1" value="${Number(main.editState?.rotation || 0)}" data-mobile-edit-field="rotation"></label>
-      </div>
-      <div class="mobile-composer-strip">
+      </div>` : ''}
+      ${isCropStep ? `<div class="mobile-composer-strip">
         ${state.previews.length > 1 ? `
           ${state.previews.map((item, index) => `
             <span class="ig-strip-item">
@@ -1965,8 +1976,55 @@ function renderPostComposerMedia() {
               </span>
             </span>`).join('')}` : ''}
         <button type="button" class="ig-add-thumb" data-mobile-pick-media aria-label="Adicionar midia"><i class="fa-solid fa-plus"></i></button>
-      </div>
+      </div>` : ''}
     </div>`;
+}
+
+function renderPostCropPopover(main, activeTool) {
+  if (!activeTool || !main) return '';
+  const editState = ensureMediaEditState(main, 'original');
+  if (activeTool === 'aspect') {
+    const icons = {
+      original: 'fa-regular fa-image',
+      '1:1': 'fa-regular fa-square',
+      '4:5': 'fa-regular fa-rectangle-list',
+      '16:9': 'fa-regular fa-window-maximize',
+    };
+    const options = mediaAspectOptions.filter(([value]) => value !== '9:16');
+    return `
+      <div class="ig-crop-popover ig-crop-aspect-popover">
+        ${options.map(([value, label]) => `
+          <button type="button" class="${editState.aspect === value ? 'active' : ''}" data-ig-aspect-option="${value}">
+            <span>${label}</span>
+            <i class="${icons[value] || 'fa-regular fa-square'}"></i>
+          </button>`).join('')}
+      </div>`;
+  }
+  if (activeTool === 'zoom') {
+    return `
+      <div class="ig-crop-popover ig-crop-zoom-popover">
+        <input type="range" min="0.5" max="3" step="0.01" value="${Number(editState.zoom || 1)}" data-ig-zoom-range aria-label="Zoom">
+      </div>`;
+  }
+  if (activeTool === 'carousel') {
+    const mediaNode = (item) => item.media_type === 'video'
+      ? `<video src="${item.url}" muted playsinline></video>`
+      : `<img src="${item.url}" alt="">`;
+    return `
+      <div class="ig-crop-popover ig-crop-carousel-popover">
+        <div class="ig-crop-carousel-strip">
+          ${state.previews.map((item, index) => `
+            <span class="ig-crop-carousel-item">
+              <button type="button" class="${index === 0 ? 'active' : ''}" data-focus-mobile-preview="${item.id}" aria-label="Selecionar midia ${index + 1}">
+                ${mediaNode(item)}
+              </button>
+              ${state.previews.length > 1 ? `<button type="button" class="ig-crop-carousel-remove" data-remove-mobile-preview="${item.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            </span>`).join('')}
+          <button type="button" class="ig-crop-carousel-add" data-mobile-pick-media aria-label="Adicionar midia"><i class="fa-solid fa-plus"></i></button>
+        </div>
+      </div>`;
+  }
+  return '';
 }
 
 async function publishPostFromMobile() {
