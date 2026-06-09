@@ -2994,6 +2994,29 @@ body[data-page="feed"] #storyViewer .story-tap-zone{
   z-index:5!important;
 }
 
+/* Activity drawer mobile lock: use the full viewport from the top instead of leaving a large black gutter. */
+@media(max-width:640px){
+  body[data-page="feed"] #socialNotificationsDrawer.profile-viewer.open{
+    align-items:stretch!important;
+    justify-content:stretch!important;
+    padding:0!important;
+    background:#07070a!important;
+  }
+
+  body[data-page="feed"] #socialNotificationsDrawer .activity-drawer-panel{
+    width:100vw!important;
+    height:100vh!important;
+    height:100svh!important;
+    max-height:100dvh!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+    padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+}
+
 /* Story activity and share-sheet responsive polish. */
 body[data-page="feed"] #storyViewer .story-activity-icon{
   min-width:44px!important;
