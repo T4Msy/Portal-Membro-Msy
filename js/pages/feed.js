@@ -1799,11 +1799,12 @@ function renderPostComposerModal() {
   const title = step === 'details' ? 'Nova publicacao' : 'Cortar';
   const left = step === 'details' && state.previews.length
     ? '<button type="button" class="ig-composer-icon" data-composer-step="crop" aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>'
-    : '<button type="button" class="mobile-composer-link" data-close-modal>Cancelar</button>';
+    : '<button type="button" class="ig-composer-icon" data-close-modal aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>';
   const right = step === 'crop'
     ? `<button type="button" class="mobile-composer-post" data-composer-step="details" ${state.previews.length ? '' : 'disabled'}>Avancar</button>`
     : `<button type="button" class="mobile-composer-post" data-mobile-publish ${canPost ? '' : 'disabled'}>Compartilhar</button>`;
   modal.innerHTML = `
+    <button type="button" class="ig-create-close" data-close-modal aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
     <div class="mobile-composer-panel ig-post-composer-panel" data-post-composer-step="${step}">
       <div class="mobile-composer-head ig-post-composer-head">
         ${left}
@@ -1880,6 +1881,25 @@ function renderPostComposerModal() {
     renderPreviews();
     renderPostComposerModal();
   }));
+  modal.querySelector('[data-ig-crop-fit]')?.addEventListener('click', () => {
+    const item = state.previews[0];
+    if (!item) return;
+    const editState = ensureMediaEditState(item, 'original');
+    editState.aspect = editState.aspect === 'original' ? '1:1' : 'original';
+    editState.zoom = 1;
+    editState.offsetX = 0;
+    editState.offsetY = 0;
+    renderPreviews();
+    renderPostComposerModal();
+  });
+  modal.querySelector('[data-ig-zoom-toggle]')?.addEventListener('click', () => {
+    const item = state.previews[0];
+    if (!item) return;
+    const editState = ensureMediaEditState(item, 'original');
+    editState.zoom = Number(editState.zoom || 1) > 1.05 ? 1 : 1.35;
+    renderPreviews();
+    renderPostComposerModal();
+  });
   modal.querySelectorAll('[data-mobile-edit-field]').forEach((field) => field.addEventListener('input', (event) => {
     const item = state.previews[0];
     if (!item) return;
@@ -1916,6 +1936,13 @@ function renderPostComposerMedia() {
         ${renderEditableMediaNode(main, { scope: 'post' })}
         <button type="button" data-remove-mobile-preview="${main.id}" aria-label="Remover midia"><i class="fa-solid fa-xmark"></i></button>
         <div class="composer-preview-badge"><i class="fa-solid fa-layer-group"></i> ${state.previews.length}/10</div>
+        <div class="ig-crop-overlay-tools ig-crop-tools-left">
+          <button type="button" data-ig-crop-fit aria-label="Alternar proporcao"><i class="fa-solid fa-expand"></i></button>
+          <button type="button" data-ig-zoom-toggle aria-label="Alternar zoom"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+        </div>
+        <div class="ig-crop-overlay-tools ig-crop-tools-right">
+          <button type="button" data-mobile-pick-media aria-label="Adicionar ao carrossel"><i class="fa-regular fa-clone"></i></button>
+        </div>
       </div>
       <div class="mobile-composer-media-controls">
         <div class="composer-media-meta">${renderMediaDimensionMeta(main)}</div>
