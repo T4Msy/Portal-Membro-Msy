@@ -3,7 +3,13 @@
    Central editorial multimidia.
    ============================================================ */
 
-import { compressImage, validateMediaFile } from '../social/social_media.js';
+import {
+  compressImage,
+  exportStoryImageFile,
+  loadImage,
+  normalizeMediaEditState,
+  validateMediaFile,
+} from '../social/social_media.js?v=20260609-jornal-editor';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -54,7 +60,185 @@ const state = {
   editingPostId: null,
   jornalLikesAvailable: true,
   jornalViewsAvailable: true,
+  articlePhotoItem: null,
 };
+
+const JOURNAL_IMAGE_ASPECT_OPTIONS = [
+  ['original', 'Original'],
+  ['16:9', '16:9'],
+  ['21:9', '21:9'],
+  ['1:1', '1:1'],
+  ['4:5', '4:5'],
+  ['9:16', '9:16'],
+];
+
+function journalMediaAspectCss(aspect = 'original', originalAspect = null) {
+  if (aspect === 'original' && Number(originalAspect) > 0) return `${Number(originalAspect)} / 1`;
+  const map = {
+    '9:16': '9 / 16',
+    '1:1': '1 / 1',
+    '4:5': '4 / 5',
+    '16:9': '16 / 9',
+    '21:9': '21 / 9',
+    original: 'var(--editor-original-aspect, 16 / 9)',
+  };
+  return map[aspect] || map.original;
+}
+
+function journalDetectMediaFormat(width, height) {
+  const ratio = Number(width) / Math.max(Number(height), 1);
+  if (!Number.isFinite(ratio) || ratio <= 0) return 'Formato desconhecido';
+  if (Math.abs(ratio - 1) < 0.04) return 'Quadrado';
+  if (ratio < 1) return 'Retrato';
+  return 'Paisagem';
+}
+
+function journalRenderMediaDimensionMeta(item) {
+  const editState = journalEnsureMediaEditState(item);
+  const width = Number(editState?.originalWidth || 0);
+  const height = Number(editState?.originalHeight || 0);
+  const dimensions = width && height ? `${width}x${height}` : 'Carregando dimensões';
+  const format = editState?.detectedFormat || (editState?.originalAspect ? journalDetectMediaFormat(editState.originalAspect, 1) : 'Formato original');
+  return `
+    <div><strong>Dimensão:</strong> ${Utils.escapeHtml(dimensions)}</div>
+    <div><strong>Formato:</strong> ${Utils.escapeHtml(format)}</div>`;
+}
+
+function journalIsMediaEditActive(editState = {}) {
+  const normalized = normalizeMediaEditState(editState);
+  return normalized.aspect !== 'original'
+    || Math.abs(Number(normalized.zoom || 1) - 1) > 0.01
+    || Math.abs(Number(normalized.offsetX || 0)) > 0.01
+    || Math.abs(Number(normalized.offsetY || 0)) > 0.01
+    || Math.abs(Number(normalized.rotation || 0)) > 0.01;
+}
+
+function journalEnsureMediaEditState(item, fallbackAspect = '16:9') {
+  if (!item) return null;
+  item.editState = normalizeMediaEditState({
+    aspect: fallbackAspect,
+    ...(item.editState || {}),
+  }, 'image');
+  return item.editState;
+}
+
+function journalMediaEditorTransform(editState = {}) {
+  const s = normalizeMediaEditState(editState);
+  return `translate(calc(-50% + ${s.offsetX * 42}%), calc(-50% + ${s.offsetY * 42}%)) scale(${s.zoom}) rotate(${s.rotation}deg)`;
+}
+
+function journalMediaEditorSelector(id) {
+  const safeId = window.CSS?.escape ? CSS.escape(String(id)) : String(id).replace(/["\\]/g, '\\$&');
+  return `[data-media-editor="${safeId}"]`;
+}
+
+function journalRenderEditableMediaNode(item, { controls = true } = {}) {
+  if (!item) return '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma mídia.</div>';
+  const editState = journalEnsureMediaEditState(item);
+  const aspect = journalMediaAspectCss(editState.aspect, editState.originalAspect);
+  const style = `--editor-aspect:${aspect};--editor-transform:${journalMediaEditorTransform(editState)}`;
+  const activeClass = journalIsMediaEditActive(editState) ? ' is-edited' : ' is-original';
+  return `
+    <div class="media-editor-crop${activeClass}" style="${style}" data-media-editor="${Utils.escapeHtml(item.id)}" data-media-editor-scope="jornal">
+      <div class="media-editor-viewport">
+        <img class="media-editor-media" src="${Utils.escapeHtml(item.url)}" alt="Preview">
+        ${controls ? '<div class="media-editor-mask" aria-hidden="true"></div>' : ''}
+        <div class="media-editor-load-error" data-media-load-error hidden>
+          <i class="fa-regular fa-image"></i>
+          <span>Não foi possível carregar esta imagem.</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function journalApplyMediaEditorTransform(root, item) {
+  const editor = root?.querySelector?.(journalMediaEditorSelector(item.id));
+  if (!editor) return;
+  const editState = journalEnsureMediaEditState(item);
+  const aspect = journalMediaAspectCss(editState.aspect, editState.originalAspect);
+  editor.style.setProperty('--editor-aspect', aspect);
+  editor.style.setProperty('--editor-transform', journalMediaEditorTransform(editState));
+  editor.closest('.journal-photo-editor-main')?.style.setProperty('--editor-aspect', aspect);
+  const active = journalIsMediaEditActive(editState);
+  editor.classList.toggle('is-edited', active);
+  editor.classList.toggle('is-original', !active);
+}
+
+function journalBindMediaEditorGestures(root, item, onChange = () => {}) {
+  const editor = root?.querySelector?.(journalMediaEditorSelector(item.id));
+  if (!editor) return;
+  journalEnsureMediaEditState(item);
+  const pointers = new Map();
+  let start = null;
+  const pointDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  const pointAngle = (a, b) => Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180 / Math.PI;
+  const schedule = () => requestAnimationFrame(() => {
+    journalApplyMediaEditorTransform(root, item);
+    onChange(item);
+  });
+  editor.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button,input,select,textarea')) return;
+    event.preventDefault();
+    editor.setPointerCapture?.(event.pointerId);
+    pointers.set(event.pointerId, event);
+    const values = [...pointers.values()];
+    start = {
+      points: values,
+      offsetX: item.editState.offsetX,
+      offsetY: item.editState.offsetY,
+      zoom: item.editState.zoom,
+      rotation: item.editState.rotation,
+      distance: values.length > 1 ? pointDistance(values[0], values[1]) : 0,
+      angle: values.length > 1 ? pointAngle(values[0], values[1]) : 0,
+    };
+  });
+  editor.addEventListener('pointermove', (event) => {
+    if (!pointers.has(event.pointerId) || !start) return;
+    pointers.set(event.pointerId, event);
+    const values = [...pointers.values()];
+    if (values.length > 1 && start.points.length > 1) {
+      const distance = pointDistance(values[0], values[1]);
+      const angle = pointAngle(values[0], values[1]);
+      item.editState.zoom = Math.min(3, Math.max(0.5, start.zoom * (distance / Math.max(start.distance, 1))));
+      item.editState.rotation = (start.rotation + angle - start.angle + 360) % 360;
+    } else {
+      const first = start.points[0];
+      const current = values[0];
+      const rect = editor.getBoundingClientRect();
+      item.editState.offsetX = Math.min(1, Math.max(-1, start.offsetX + ((current.clientX - first.clientX) / Math.max(rect.width, 1)) * 2));
+      item.editState.offsetY = Math.min(1, Math.max(-1, start.offsetY + ((current.clientY - first.clientY) / Math.max(rect.height, 1)) * 2));
+    }
+    schedule();
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((eventName) => editor.addEventListener(eventName, (event) => {
+    pointers.delete(event.pointerId);
+    start = null;
+  }));
+}
+
+function journalBindMediaPreviewDiagnostics(root, item) {
+  if (!root || !item) return;
+  const editor = root.querySelector?.(journalMediaEditorSelector(item.id));
+  const img = editor?.querySelector?.('img.media-editor-media');
+  if (!editor || !img || img.dataset.previewDiagnosticsBound === '1') return;
+  img.dataset.previewDiagnosticsBound = '1';
+  const errorNode = editor.querySelector('[data-media-load-error]');
+  const markLoaded = () => {
+    editor.classList.remove('load-error');
+    if (errorNode) errorNode.hidden = true;
+  };
+  const markError = () => {
+    editor.classList.add('load-error');
+    if (errorNode) errorNode.hidden = false;
+    Utils.showToast?.('Não foi possível carregar a imagem selecionada.', 'error');
+  };
+  img.addEventListener('load', markLoaded, { once: true });
+  img.addEventListener('error', markError, { once: true });
+  if (img.complete) {
+    if (img.naturalWidth > 0) markLoaded();
+    else markError();
+  }
+}
 
 async function initJornal() {
   const profile = await renderSidebar('jornal');
@@ -166,7 +350,7 @@ function renderPage() {
 function ensureModalRoots() {
   const root = document.body;
   if (!root) return;
-  ['journalPostModal', 'journalEditorModal', 'journalLightbox', 'journalCropModal'].forEach((id) => {
+  ['journalPostModal', 'journalEditorModal', 'journalLightbox'].forEach((id) => {
     let modal = document.getElementById(id);
     if (!modal) {
       modal = document.createElement('div');
@@ -480,12 +664,14 @@ function renderArticleBlock(block) {
 }
 
 function renderArticlePhoto(url, caption = '', meta = getArticleImageMeta()) {
-  const crop = meta.crop;
-  const aspectStyle = getArticleAspectStyle(meta.aspect);
-  const cropClass = meta.cropActive ? ' crop-active' : '';
+  const aspectStyle = meta.exported ? '' : getArticleAspectStyle(meta.aspect);
+  const cropClass = !meta.exported && meta.cropActive ? ' crop-active' : '';
+  const imgStyle = !meta.exported && meta.cropActive
+    ? `transform:translate(calc(-50% + ${meta.crop.x}%), calc(-50% + ${meta.crop.y}%)) scale(${meta.crop.zoom})`
+    : '';
   return `
     <figure class="journal-article-photo photo-${Utils.escapeHtml(meta.position || 'right')}" style="${aspectStyle}">
-      <img class="${cropClass.trim()}" src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${meta.cropActive ? `transform:translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})` : 'transform:translate(-50%, -50%) scale(1)'}">
+      <img class="${cropClass.trim()}" src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${imgStyle}">
       ${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}
     </figure>`;
 }
@@ -628,14 +814,32 @@ async function reloadAndReopen(postId) {
 
 function openEditor(post = null) {
   state.editingPostId = post?.id || null;
+  state.articlePhotoItem = null;
   const modal = document.getElementById('journalEditorModal');
   if (!modal) return;
   const editorType = normalizeEditorPostType(post?.post_type);
   const articleBlocks = normalizeArticleBlocks(post?.content_blocks);
   const articlePhotoItem = post?.media?.find((item) => item.media_type === 'image') || null;
   const articlePhoto = articlePhotoItem?.url || '';
-  const articlePhotoMeta = getArticleImageMeta(articlePhotoItem);
   const hasArticlePhoto = Boolean(articlePhoto);
+  if (hasArticlePhoto) {
+    state.articlePhotoItem = {
+      id: 'article-photo',
+      url: articlePhoto,
+      existingUrl: articlePhoto,
+      media_type: 'image',
+      editState: normalizeMediaEditState({ aspect: '16:9' }, 'image'),
+    };
+    loadImageFromUrl(articlePhoto).then((img) => {
+      if (!state.articlePhotoItem) return;
+      state.articlePhotoItem.editState.originalAspect = img.width / img.height;
+      state.articlePhotoItem.editState.originalWidth = img.width;
+      state.articlePhotoItem.editState.originalHeight = img.height;
+      state.articlePhotoItem.editState.detectedFormat = journalDetectMediaFormat(img.width, img.height);
+      state.articlePhotoItem.editState.aspect = 'original';
+      updateArticlePhotoEditorUI();
+    }).catch(() => {});
+  }
   modal.innerHTML = `
     <div class="journal-modal-panel">
       <div class="journal-modal-head">
@@ -668,38 +872,45 @@ function openEditor(post = null) {
             </section>
 
             <section class="journal-editor-panel" data-editor-panel="article">
-              <div class="journal-photo-controls full">
-                <input type="hidden" name="article_photo_enabled" value="${hasArticlePhoto ? '1' : '0'}">
-                <input type="file" name="article_photo" accept="image/*" hidden>
-                <button type="button" class="btn btn-ghost" data-add-article-photo><i class="fa-solid fa-image"></i> ${hasArticlePhoto ? 'Trocar foto' : 'Adicionar foto'}</button>
-                <button type="button" class="btn btn-ghost" data-open-article-crop data-photo-option><i class="fa-solid fa-crop-simple"></i> Recortar</button>
-                <button type="button" class="btn btn-ghost" data-remove-article-photo data-photo-option><i class="fa-solid fa-xmark"></i> Remover foto</button>
-                <div class="journal-field" data-photo-option>
-                  <label>Posição</label>
-                  <select name="article_photo_position">
-                    <option value="right" ${articlePhotoMeta.position === 'right' ? 'selected' : ''}>Direita</option>
-                    <option value="left" ${articlePhotoMeta.position === 'left' ? 'selected' : ''}>Esquerda</option>
-                    <option value="top" ${articlePhotoMeta.position === 'top' ? 'selected' : ''}>Topo</option>
-                  </select>
+              <input type="hidden" name="article_photo_enabled" value="${hasArticlePhoto ? '1' : '0'}">
+              <input type="file" name="article_photo" accept="image/*" hidden>
+              <div class="journal-photo-editor full" id="journalPhotoEditor">
+                <div class="journal-photo-editor-head">
+                  <strong><i class="fa-solid fa-image"></i> Foto da matéria</strong>
+                  <div class="journal-photo-editor-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" data-add-article-photo><i class="fa-solid fa-image"></i> ${hasArticlePhoto ? 'Trocar foto' : 'Adicionar foto'}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-remove-article-photo ${hasArticlePhoto ? '' : 'disabled'}><i class="fa-solid fa-xmark"></i> Remover</button>
+                  </div>
                 </div>
-                <div class="journal-field" data-photo-option>
-                  <label>Dimensões da imagem</label>
-                  <select name="article_photo_aspect">
-                    ${Object.entries(ARTICLE_IMAGE_ASPECTS).map(([key, item]) => `
-                      <option value="${key}" ${articlePhotoMeta.aspect === key ? 'selected' : ''}>${item.label}${key === 'free' ? '' : ` (${key})`}</option>
-                    `).join('')}
-                  </select>
-                </div>
-                <input type="hidden" name="article_photo_x" value="${articlePhotoMeta.crop.x}">
-                <input type="hidden" name="article_photo_y" value="${articlePhotoMeta.crop.y}">
-                <input type="hidden" name="article_photo_zoom" value="${articlePhotoMeta.crop.zoom}">
-                <input type="hidden" name="article_photo_crop_active" value="${articlePhotoMeta.cropActive ? '1' : '0'}">
-                <div class="journal-photo-pick full" data-photo-option>
-                  <figure class="journal-photo-pick-preview ${articlePhoto ? '' : 'is-empty'}" id="journalArticlePhotoPickPreview">
-                    ${articlePhoto ? `<img src="${Utils.escapeHtml(articlePhoto)}" alt="">` : '<span>Nenhuma foto escolhida</span>'}
-                  </figure>
-                  <div class="journal-photo-pick-actions">
-                    <span>A foto abre inteira. Use Recortar para ajustar enquadramento, zoom e proporção.</span>
+                <div class="journal-photo-editor-body" id="journalPhotoEditorBody" ${hasArticlePhoto ? '' : 'hidden'}>
+                  <div class="journal-photo-editor-main" id="journalPhotoEditorMain" style="--editor-aspect:16 / 9">
+                    ${hasArticlePhoto ? journalRenderEditableMediaNode(state.articlePhotoItem) : ''}
+                  </div>
+                  <div class="journal-photo-editor-controls" id="journalPhotoEditorControls">
+                    <div class="journal-photo-editor-meta" id="journalPhotoEditorMeta">${hasArticlePhoto ? journalRenderMediaDimensionMeta(state.articlePhotoItem) : ''}</div>
+                    <div class="journal-photo-editor-field">
+                      <label>Proporção</label>
+                      <select class="form-input form-select" data-photo-edit-field="aspect">
+                        ${JOURNAL_IMAGE_ASPECT_OPTIONS.map(([value, label]) => `<option value="${value}" ${state.articlePhotoItem?.editState?.aspect === value ? 'selected' : ''}>${label}</option>`).join('')}
+                      </select>
+                    </div>
+                    <div class="journal-photo-editor-field">
+                      <label>Posição na matéria</label>
+                      <select class="form-input form-select" name="article_photo_position">
+                        <option value="right" ${getArticleImageMeta(articlePhotoItem).position === 'right' ? 'selected' : ''}>Direita</option>
+                        <option value="left" ${getArticleImageMeta(articlePhotoItem).position === 'left' ? 'selected' : ''}>Esquerda</option>
+                        <option value="top" ${getArticleImageMeta(articlePhotoItem).position === 'top' ? 'selected' : ''}>Topo</option>
+                      </select>
+                    </div>
+                    <label class="journal-photo-editor-field">
+                      <span>Zoom <span data-photo-zoom-label>${Number(state.articlePhotoItem?.editState?.zoom || 1).toFixed(2)}x</span></span>
+                      <input type="range" min="0.5" max="3" step="0.01" value="${Number(state.articlePhotoItem?.editState?.zoom || 1)}" data-photo-edit-field="zoom">
+                    </label>
+                    <label class="journal-photo-editor-field">
+                      <span>Rotação <span data-photo-rotation-label>${Math.round(Number(state.articlePhotoItem?.editState?.rotation || 0))}°</span></span>
+                      <input type="range" min="0" max="360" step="1" value="${Number(state.articlePhotoItem?.editState?.rotation || 0)}" data-photo-edit-field="rotation">
+                    </label>
+                    <button type="button" class="btn btn-ghost btn-sm journal-photo-editor-reset" data-photo-edit-reset><i class="fa-solid fa-rotate-left"></i> Resetar enquadramento</button>
                   </div>
                 </div>
               </div>
@@ -763,14 +974,15 @@ function openEditor(post = null) {
   modal.querySelector('[data-remove-article-photo]')?.addEventListener('click', removeArticlePhoto);
   modal.querySelector('[name="article_photo"]')?.addEventListener('change', handleArticlePhotoSelected);
   modal.querySelector('[name="article_photo_position"]')?.addEventListener('change', updateEditorPreview);
-  modal.querySelector('[name="article_photo_aspect"]')?.addEventListener('change', () => {
-    resetArticleCrop(false);
-    updateEditorPreview();
-  });
-  modal.querySelector('[data-open-article-crop]')?.addEventListener('click', openArticleCropModal);
+  modal.querySelectorAll('[data-photo-edit-field]').forEach((field) => field.addEventListener('input', (event) => handleArticlePhotoEditField(event)));
+  modal.querySelector('[data-photo-edit-reset]')?.addEventListener('click', resetArticlePhotoEdit);
   modal.querySelector('[name="gallery"]')?.addEventListener('change', updateEditorPreview);
   modal.querySelector('#journalEditorForm')?.addEventListener('submit', savePost);
   updateEditorMode();
+  if (state.articlePhotoItem) {
+    bindArticlePhotoEditorGestures(modal);
+    journalBindMediaPreviewDiagnostics(modal, state.articlePhotoItem);
+  }
 }
 
 function field(label, name, value = '', type = 'text', required = false) {
@@ -800,7 +1012,6 @@ async function savePost(event) {
     const videoFile = form.elements.video.files?.[0] || null;
     const galleryFiles = [...(form.elements.gallery.files || [])];
     const articlePhotoEnabled = form.elements.article_photo_enabled?.value === '1';
-    const articlePhotoFile = articlePhotoEnabled ? (form.elements.article_photo.files?.[0] || null) : null;
     const summary = postType === 'tirinha'
       ? form.elements.comic_caption.value.trim()
       : form.elements.summary?.value.trim() || null;
@@ -811,7 +1022,7 @@ async function savePost(event) {
     if (postType === 'article' && !getArticleEditorBlocks().some((block) => block.text)) {
       throw new Error('Escreva o texto do jornal antes de salvar.');
     }
-    if (postType === 'article' && articlePhotoEnabled && !articlePhotoFile && !existing?.media?.some((item) => item.media_type === 'image')) {
+    if (postType === 'article' && articlePhotoEnabled && !state.articlePhotoItem && !existing?.media?.some((item) => item.media_type === 'image')) {
       throw new Error('Escolha uma imagem valida para a foto do jornal.');
     }
     if (postType === 'tirinha' && !galleryFiles.length && !existing?.media?.some((item) => item.media_type === 'image')) {
@@ -819,7 +1030,28 @@ async function savePost(event) {
     }
 
     const video = videoFile ? await uploadJornalFile(videoFile, 'videos', { videoOnly: true }) : null;
-    const articlePhoto = articlePhotoFile ? await uploadJornalFile(articlePhotoFile, 'article', { imageOnly: true }) : null;
+
+    let articlePhoto = null;
+    let articlePhotoMeta = {};
+    if (postType === 'article' && articlePhotoEnabled && state.articlePhotoItem) {
+      const item = state.articlePhotoItem;
+      const editState = journalEnsureMediaEditState(item);
+      const position = form.elements.article_photo_position?.value || 'right';
+      articlePhotoMeta = {
+        kind: 'article_photo',
+        position,
+        aspect: editState.aspect,
+        exported: true,
+        editState: { ...editState },
+      };
+      if (item.file) {
+        const exportedFile = await exportStoryImageFile(item.file, editState);
+        articlePhoto = await uploadJornalFile(exportedFile, 'article', { imageOnly: true });
+      } else if (item.existingUrl) {
+        articlePhoto = { url: item.existingUrl, storage_path: null, needsReExport: false };
+      }
+    }
+
     const payload = {
       title: form.elements.title.value.trim(),
       subtitle: null,
@@ -861,31 +1093,17 @@ async function savePost(event) {
       }
     }
 
-    if (postType === 'article' && existing && articlePhotoEnabled && !articlePhoto) {
-      const currentArticlePhoto = (existing.media || []).find((item) => item.media_type === 'image');
-      if (currentArticlePhoto?.id) {
-        const { error } = await db
-          .from('jornal_media')
-          .update({
-            position: ARTICLE_PHOTO_POSITION,
-            alt_text: JSON.stringify(getArticlePhotoMetaPayload(form)),
-          })
-          .eq('id', currentArticlePhoto.id);
-        if (error) throw error;
-      }
-    }
-
     const mediaRows = [];
     if (video) mediaRows.push({ post_id: postId, author_id: state.profile.id, media_type: 'video', url: video.url, storage_path: video.storage_path, position: 0 });
-    if (articlePhoto) {
+    if (articlePhoto && articlePhoto.url) {
       mediaRows.push({
         post_id: postId,
         author_id: state.profile.id,
         media_type: 'image',
         url: articlePhoto.url,
-        storage_path: articlePhoto.storage_path,
+        storage_path: articlePhoto.storage_path || null,
         position: ARTICLE_PHOTO_POSITION,
-        alt_text: JSON.stringify(getArticlePhotoMetaPayload(form)),
+        alt_text: JSON.stringify(articlePhotoMeta),
       });
     }
     for (let index = 0; index < galleryFiles.length; index += 1) {
@@ -897,6 +1115,8 @@ async function savePost(event) {
       if (error) throw error;
     }
 
+    if (state.articlePhotoItem?.url?.startsWith('blob:')) URL.revokeObjectURL(state.articlePhotoItem.url);
+    state.articlePhotoItem = null;
     closeModal(document.getElementById('journalEditorModal'));
     await loadPosts();
     renderPage();
@@ -938,8 +1158,12 @@ function updateEditorPreview() {
     articlePreview.querySelector('h3').textContent = title;
     const flow = document.getElementById('journalArticleTextPreview');
     if (flow) flow.innerHTML = renderArticlePreviewBlocks(getArticleEditorBlocks());
-    updateArticlePhotoPreview(form);
-    updatePhotoControls(form);
+    const layout = document.getElementById('journalArticlePaperLayout');
+    const enabled = form.elements.article_photo_enabled?.value === '1';
+    const position = form.elements.article_photo_position?.value || 'right';
+    layout?.classList.toggle('no-photo', !enabled);
+    layout?.classList.remove('photo-left', 'photo-right', 'photo-top');
+    if (enabled) layout?.classList.add(`photo-${position}`);
   }
 
   const comicPreview = document.getElementById('journalComicPreview');
@@ -949,255 +1173,178 @@ function updateEditorPreview() {
   }
 }
 
-function updateArticlePhotoPreview(form) {
-  const photo = document.getElementById('journalArticlePhotoPreview');
-  const pickPreview = document.getElementById('journalArticlePhotoPickPreview');
-  const layout = document.getElementById('journalArticlePaperLayout');
-  if (!photo) return;
-  const enabled = form.elements.article_photo_enabled?.value === '1';
-  const position = form.elements.article_photo_position?.value || 'right';
-  const aspect = getArticleAspectValue(form);
-  [photo, pickPreview].forEach((item) => {
-    if (!item) return;
-    item.style.setProperty('--journal-image-aspect', getArticleAspectCssValue(aspect));
+function loadImageFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Imagem invalida.'));
+    img.crossOrigin = 'anonymous';
+    img.src = url;
   });
-  layout?.classList.toggle('no-photo', !enabled);
-  layout?.classList.remove('photo-left', 'photo-right', 'photo-top');
-  layout?.classList.add(`photo-${position}`);
-  document.querySelectorAll('[data-photo-option]').forEach((option) => {
-    option.hidden = !enabled;
-  });
-  if (!enabled) return;
-
-  const file = form.elements.article_photo?.files?.[0];
-  if (file) {
-    const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
-    if (photo.dataset.previewFileKey !== fileKey) {
-      const previous = photo.dataset.previewUrl;
-      if (previous) URL.revokeObjectURL(previous);
-      const url = createJournalImagePreviewUrl(file, 'article_photo');
-      if (!url) return;
-      photo.dataset.previewUrl = url;
-      photo.dataset.previewFileKey = fileKey;
-      photo.classList.remove('is-empty', 'load-error');
-      photo.innerHTML = `<img src="${Utils.escapeHtml(url)}" alt="">`;
-      if (pickPreview) {
-        pickPreview.classList.remove('is-empty', 'load-error');
-        pickPreview.innerHTML = `<img src="${Utils.escapeHtml(url)}" alt="">`;
-      }
-    }
-  }
-  photo.classList.remove('is-empty');
-  const img = photo.querySelector('img');
-  const pickImg = pickPreview?.querySelector('img');
-  const crop = getArticleCropState(form);
-  if (img) {
-    bindJournalImageDiagnostics(img, { context: 'paper-preview', file, url: img.src });
-    applyArticleCropStyle(img, crop);
-    applyArticleNaturalAspect(img, [photo, pickPreview]);
-  }
-  if (pickImg) {
-    bindJournalImageDiagnostics(pickImg, { context: 'pick-preview', file, url: pickImg.src });
-    applyArticleCropStyle(pickImg, crop);
-    applyArticleNaturalAspect(pickImg, [photo, pickPreview]);
-  }
-}
-
-function createJournalImagePreviewUrl(file, context = 'preview') {
-  if (!file || !file.type?.startsWith('image/')) {
-    console.warn('[MSY][jornal][image-preview] arquivo de imagem invalido', {
-      context,
-      name: file?.name,
-      type: file?.type,
-      size: file?.size,
-    });
-    Utils.showToast?.('Escolha um arquivo de imagem válido.', 'error');
-    return '';
-  }
-  try {
-    const url = URL.createObjectURL(file);
-    console.info('[MSY][jornal][image-preview] URL local criada', {
-      context,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      url,
-    });
-    return url;
-  } catch (err) {
-    console.error('[MSY][jornal][image-preview] falha ao criar URL local', err);
-    Utils.showToast?.('Não foi possível preparar a imagem selecionada.', 'error');
-    return '';
-  }
-}
-
-function bindJournalImageDiagnostics(img, { context = 'preview', file = null, url = '' } = {}) {
-  if (!img || img.dataset.journalDiagnosticsBound === '1') return;
-  img.dataset.journalDiagnosticsBound = '1';
-  const figure = img.closest('figure,.journal-crop-frame');
-  const payload = () => ({
-    context,
-    name: file?.name || '',
-    type: file?.type || '',
-    size: file?.size || 0,
-    src: img.currentSrc || img.src || url || '',
-    naturalWidth: img.naturalWidth || 0,
-    naturalHeight: img.naturalHeight || 0,
-  });
-  const markLoaded = () => {
-    figure?.classList.remove('load-error');
-    console.info('[MSY][jornal][image-preview] imagem carregada', payload());
-  };
-  const markError = () => {
-    console.warn('[MSY][jornal][image-preview] falha ao carregar imagem', payload());
-    if (figure) {
-      figure.classList.add('load-error');
-      figure.innerHTML = '<span>Não foi possível carregar esta imagem</span>';
-    }
-    Utils.showToast?.('Não foi possível carregar a imagem selecionada.', 'error');
-  };
-  img.addEventListener('load', markLoaded, { once: true });
-  img.addEventListener('error', markError, { once: true });
-  if (img.complete) {
-    if (img.naturalWidth > 0) markLoaded();
-    else markError();
-  } else {
-    console.info('[MSY][jornal][image-preview] aguardando carregamento', payload());
-  }
-}
-
-function updatePhotoControls(form) {
-  const enabled = form.elements.article_photo_enabled?.value === '1';
-  document.querySelectorAll('[data-photo-option]').forEach((option) => {
-    option.hidden = !enabled;
-  });
-  const addBtn = document.querySelector('[data-add-article-photo]');
-  if (addBtn) addBtn.innerHTML = `<i class="fa-solid fa-image"></i> ${enabled ? 'Trocar foto' : 'Adicionar foto'}`;
 }
 
 function chooseArticlePhoto() {
   document.querySelector('#journalEditorForm [name="article_photo"]')?.click();
 }
 
-function handleArticlePhotoSelected() {
+async function handleArticlePhotoSelected() {
   const form = document.getElementById('journalEditorForm');
-  if (!form?.elements.article_photo?.files?.[0]) return;
-  form.elements.article_photo_enabled.value = '1';
-  form.elements.article_photo_crop_active.value = '0';
-  resetArticleCrop(false);
-  updateEditorPreview();
+  const file = form?.elements.article_photo?.files?.[0];
+  if (!file) return;
+  try {
+    validateMediaFile(file, { maxImageMB: 12 });
+    if (!file.type.startsWith('image/')) throw new Error('Use uma imagem neste campo.');
+    const url = URL.createObjectURL(file);
+    const img = await loadImage(file);
+    if (state.articlePhotoItem?.url?.startsWith('blob:')) URL.revokeObjectURL(state.articlePhotoItem.url);
+    state.articlePhotoItem = {
+      id: 'article-photo',
+      file,
+      url,
+      media_type: 'image',
+      editState: normalizeMediaEditState({ aspect: 'original' }, 'image'),
+    };
+    state.articlePhotoItem.editState.originalAspect = img.width / img.height;
+    state.articlePhotoItem.editState.originalWidth = img.width;
+    state.articlePhotoItem.editState.originalHeight = img.height;
+    state.articlePhotoItem.editState.detectedFormat = journalDetectMediaFormat(img.width, img.height);
+    form.elements.article_photo_enabled.value = '1';
+    updateArticlePhotoEditorUI();
+    updateEditorPreview();
+  } catch (err) {
+    console.error('[MSY][jornal] Erro ao carregar foto:', err);
+    Utils.showToast(err.message || 'Erro ao carregar imagem.', 'error');
+  }
 }
 
 function removeArticlePhoto() {
   const form = document.getElementById('journalEditorForm');
   if (!form) return;
   form.elements.article_photo_enabled.value = '0';
-  form.elements.article_photo_crop_active.value = '0';
-  form.elements.article_photo.value = '';
+  if (state.articlePhotoItem?.url?.startsWith('blob:')) URL.revokeObjectURL(state.articlePhotoItem.url);
+  state.articlePhotoItem = null;
+  const body = document.getElementById('journalPhotoEditorBody');
+  const main = document.getElementById('journalPhotoEditorMain');
+  const controls = document.getElementById('journalPhotoEditorControls');
+  if (body) body.hidden = true;
+  if (main) main.innerHTML = '';
+  const removeBtn = document.querySelector('[data-remove-article-photo]');
+  if (removeBtn) removeBtn.disabled = true;
+  const addBtn = document.querySelector('[data-add-article-photo]');
+  if (addBtn) addBtn.innerHTML = '<i class="fa-solid fa-image"></i> Adicionar foto';
   const photo = document.getElementById('journalArticlePhotoPreview');
-  const pickPreview = document.getElementById('journalArticlePhotoPickPreview');
   if (photo) {
     photo.classList.add('is-empty');
     photo.innerHTML = '<span>Foto</span>';
   }
-  if (pickPreview) {
-    pickPreview.classList.add('is-empty');
-    pickPreview.innerHTML = '<span>Nenhuma foto escolhida</span>';
+  updateEditorPreview();
+}
+
+function updateArticlePhotoEditorUI() {
+  const form = document.getElementById('journalEditorForm');
+  const body = document.getElementById('journalPhotoEditorBody');
+  const main = document.getElementById('journalPhotoEditorMain');
+  const meta = document.getElementById('journalPhotoEditorMeta');
+  const removeBtn = document.querySelector('[data-remove-article-photo]');
+  const addBtn = document.querySelector('[data-add-article-photo]');
+  const photo = document.getElementById('journalArticlePhotoPreview');
+  const layout = document.getElementById('journalArticlePaperLayout');
+  if (!state.articlePhotoItem) {
+    if (body) body.hidden = true;
+    if (removeBtn) removeBtn.disabled = true;
+    if (addBtn) addBtn.innerHTML = '<i class="fa-solid fa-image"></i> Adicionar foto';
+    if (photo) { photo.classList.add('is-empty'); photo.innerHTML = '<span>Foto</span>'; }
+    layout?.classList.add('no-photo');
+    return;
+  }
+  const editState = journalEnsureMediaEditState(state.articlePhotoItem);
+  const aspect = journalMediaAspectCss(editState.aspect, editState.originalAspect);
+  if (body) body.hidden = false;
+  if (main) {
+    main.style.setProperty('--editor-aspect', aspect);
+    main.innerHTML = journalRenderEditableMediaNode(state.articlePhotoItem);
+  }
+  if (meta) meta.innerHTML = journalRenderMediaDimensionMeta(state.articlePhotoItem);
+  if (removeBtn) removeBtn.disabled = false;
+  if (addBtn) addBtn.innerHTML = '<i class="fa-solid fa-image"></i> Trocar foto';
+  const zoomLabel = document.querySelector('[data-photo-zoom-label]');
+  const rotationLabel = document.querySelector('[data-photo-rotation-label]');
+  const zoomInput = document.querySelector('[data-photo-edit-field="zoom"]');
+  const rotationInput = document.querySelector('[data-photo-edit-field="rotation"]');
+  const aspectSelect = document.querySelector('[data-photo-edit-field="aspect"]');
+  if (zoomLabel) zoomLabel.textContent = `${Number(editState.zoom || 1).toFixed(2)}x`;
+  if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(editState.rotation || 0))}°`;
+  if (zoomInput) zoomInput.value = Number(editState.zoom || 1);
+  if (rotationInput) rotationInput.value = Number(editState.rotation || 0);
+  if (aspectSelect) aspectSelect.value = editState.aspect || 'original';
+  if (photo) {
+    photo.classList.remove('is-empty');
+    photo.innerHTML = `<img src="${Utils.escapeHtml(state.articlePhotoItem.existingUrl || state.articlePhotoItem.url)}" alt="">`;
+  }
+  const position = form?.elements.article_photo_position?.value || 'right';
+  layout?.classList.remove('no-photo', 'photo-left', 'photo-right', 'photo-top');
+  layout?.classList.add(`photo-${position}`);
+  const modal = document.getElementById('journalEditorModal');
+  if (modal) {
+    bindArticlePhotoEditorGestures(modal);
+    journalBindMediaPreviewDiagnostics(modal, state.articlePhotoItem);
+  }
+}
+
+function handleArticlePhotoEditField(event) {
+  if (!state.articlePhotoItem) return;
+  const key = event.currentTarget.dataset.photoEditField;
+  const value = event.currentTarget.value;
+  const editState = journalEnsureMediaEditState(state.articlePhotoItem);
+  if (key === 'zoom' || key === 'rotation') editState[key] = Number(value);
+  else editState[key] = value;
+  if (key === 'aspect') {
+    editState.zoom = 1;
+    editState.offsetX = 0;
+    editState.offsetY = 0;
+    editState.rotation = 0;
+  }
+  const modal = document.getElementById('journalEditorModal');
+  if (modal) {
+    journalApplyMediaEditorTransform(modal, state.articlePhotoItem);
+    const zoomLabel = modal.querySelector('[data-photo-zoom-label]');
+    const rotationLabel = modal.querySelector('[data-photo-rotation-label]');
+    if (zoomLabel) zoomLabel.textContent = `${Number(editState.zoom || 1).toFixed(2)}x`;
+    if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(editState.rotation || 0))}°`;
+    const main = document.getElementById('journalPhotoEditorMain');
+    if (main) main.style.setProperty('--editor-aspect', journalMediaAspectCss(editState.aspect, editState.originalAspect));
   }
   updateEditorPreview();
 }
 
-function getArticlePhotoSrc() {
-  const photo = document.getElementById('journalArticlePhotoPreview')?.querySelector('img');
-  return photo?.src || '';
+function resetArticlePhotoEdit() {
+  if (!state.articlePhotoItem) return;
+  const editState = journalEnsureMediaEditState(state.articlePhotoItem);
+  editState.zoom = 1;
+  editState.rotation = 0;
+  editState.offsetX = 0;
+  editState.offsetY = 0;
+  updateArticlePhotoEditorUI();
 }
 
-function openArticleCropModal() {
-  const form = document.getElementById('journalEditorForm');
-  const src = getArticlePhotoSrc();
-  if (form?.elements.article_photo_enabled?.value !== '1') {
-    Utils.showToast('Adicione uma foto antes de recortar.', 'error');
-    return;
-  }
-  if (!src) {
-    Utils.showToast('Escolha uma foto antes de recortar.', 'error');
-    return;
-  }
-  const modal = document.getElementById('journalCropModal');
-  if (!modal) return;
-  modal.innerHTML = `
-    <div class="journal-crop-modal-panel">
-      <div class="journal-crop-modal-head">
-        <strong>Recortar foto</strong>
-        <button type="button" class="social-icon-btn" data-close-journal-modal><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="journal-crop-modal-body">
-        <div class="journal-crop-frame journal-crop-frame-large" id="journalArticleCropFrame" style="--journal-image-aspect:${getArticleAspectCssValue(getArticleAspectValue(form))}">
-          <img src="${Utils.escapeHtml(src)}" alt="">
-          <div class="journal-crop-grid" aria-hidden="true"></div>
-        </div>
-      </div>
-      <div class="journal-crop-modal-foot">
-        <div class="journal-crop-tools">
-          <div class="journal-crop-dimensions">
-            <label for="journalCropAspectSelect">Dimensões da imagem</label>
-            <select id="journalCropAspectSelect" data-photo-aspect>
-              ${Object.entries(ARTICLE_IMAGE_ASPECTS).map(([key, item]) => `
-                <option value="${key}" ${getArticleAspectValue(form) === key ? 'selected' : ''}>${item.label}${key === 'free' ? '' : ` (${key})`}</option>
-              `).join('')}
-            </select>
-          </div>
-          <button type="button" class="social-icon-btn" data-photo-zoom="-" title="Zoom -"><i class="fa-solid fa-minus"></i></button>
-          <button type="button" class="social-icon-btn" data-photo-reset title="Resetar"><i class="fa-solid fa-rotate-left"></i></button>
-          <button type="button" class="social-icon-btn" data-photo-zoom="+" title="Zoom +"><i class="fa-solid fa-plus"></i></button>
-          <span>Arraste a imagem para reposicionar. Use os botões para ajuste fino.</span>
-        </div>
-        <button type="button" class="btn btn-primary" data-apply-article-crop><i class="fa-solid fa-check"></i> Aplicar recorte</button>
-      </div>
-    </div>`;
-  openModal(modal);
-  const crop = getArticleCropState(form);
-  const img = modal.querySelector('#journalArticleCropFrame img');
-  if (img) {
-    bindJournalImageDiagnostics(img, { context: 'crop-modal', url: src });
-    applyArticleCropStyle(img, crop);
-    applyArticleNaturalAspect(img, [modal.querySelector('#journalArticleCropFrame')]);
-  }
-  bindArticleCropEditor(modal);
-  modal.querySelectorAll('[data-photo-zoom]').forEach((btn) => btn.addEventListener('click', () => adjustArticleCropZoom(btn.dataset.photoZoom)));
-  modal.querySelector('[data-photo-reset]')?.addEventListener('click', resetArticleCrop);
-  modal.querySelector('[data-photo-aspect]')?.addEventListener('change', (event) => {
-    setArticleAspectValue(event.target.value);
-    resetArticleCrop(false);
-    updateCropFrameAspect(modal);
-    updateEditorPreview();
+function bindArticlePhotoEditorGestures(root) {
+  if (!state.articlePhotoItem) return;
+  journalBindMediaEditorGestures(root, state.articlePhotoItem, () => {
+    const modal = document.getElementById('journalEditorModal');
+    if (!modal) return;
+    const zoomLabel = modal.querySelector('[data-photo-zoom-label]');
+    const rotationLabel = modal.querySelector('[data-photo-rotation-label]');
+    const zoomInput = modal.querySelector('[data-photo-edit-field="zoom"]');
+    const rotationInput = modal.querySelector('[data-photo-edit-field="rotation"]');
+    if (zoomLabel) zoomLabel.textContent = `${Number(state.articlePhotoItem.editState.zoom || 1).toFixed(2)}x`;
+    if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(state.articlePhotoItem.editState.rotation || 0))}°`;
+    if (zoomInput) zoomInput.value = state.articlePhotoItem.editState.zoom;
+    if (rotationInput) rotationInput.value = state.articlePhotoItem.editState.rotation;
   });
-  modal.querySelector('[data-apply-article-crop]')?.addEventListener('click', () => {
-    form.elements.article_photo_crop_active.value = '1';
-    updateEditorPreview();
-    closeModal(modal);
-  });
-  modal.querySelector('[data-close-journal-modal]')?.addEventListener('click', () => closeModal(modal));
-  modal.onclick = (event) => { if (event.target === modal) closeModal(modal); };
 }
-
-function getArticleCropState(form = document.getElementById('journalEditorForm')) {
-  return {
-    x: clampNumber(Number(form?.elements.article_photo_x?.value || 0), -60, 60),
-    y: clampNumber(Number(form?.elements.article_photo_y?.value || 0), -60, 60),
-    zoom: clampNumber(Number(form?.elements.article_photo_zoom?.value || 1), 1, 4),
-  };
-}
-
-function getArticleAspectValue(form = document.getElementById('journalEditorForm')) {
-  const value = form?.elements.article_photo_aspect?.value || '16:9';
-  return ARTICLE_IMAGE_ASPECTS[value] ? value : '16:9';
-}
-
-function setArticleAspectValue(value) {
-  const form = document.getElementById('journalEditorForm');
-  if (!form?.elements.article_photo_aspect || !ARTICLE_IMAGE_ASPECTS[value]) return;
-  form.elements.article_photo_aspect.value = value;
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
 }
 
 function getArticleAspectCssValue(aspect = '16:9') {
@@ -1207,115 +1354,6 @@ function getArticleAspectCssValue(aspect = '16:9') {
 
 function getArticleAspectStyle(aspect = '16:9') {
   return `--journal-image-aspect:${getArticleAspectCssValue(aspect)}`;
-}
-
-function getArticlePhotoMetaPayload(form = document.getElementById('journalEditorForm')) {
-  return {
-    kind: 'article_photo',
-    position: form?.elements.article_photo_position?.value || 'right',
-    aspect: getArticleAspectValue(form),
-    crop: getArticleCropState(form),
-    cropActive: form?.elements.article_photo_crop_active?.value === '1',
-  };
-}
-
-function updateCropFrameAspect(root = document) {
-  const frame = root.querySelector('#journalArticleCropFrame');
-  if (frame) frame.style.setProperty('--journal-image-aspect', getArticleAspectCssValue(getArticleAspectValue()));
-  const img = frame?.querySelector('img');
-  if (img) applyArticleNaturalAspect(img, [frame]);
-}
-
-function applyArticleNaturalAspect(img, targets = []) {
-  if (getArticleAspectValue() !== 'free') return;
-  const apply = () => {
-    if (!img.naturalWidth || !img.naturalHeight) return;
-    const value = `${img.naturalWidth} / ${img.naturalHeight}`;
-    targets.filter(Boolean).forEach((target) => target.style.setProperty('--journal-image-aspect', value));
-  };
-  if (img.complete) apply();
-  else img.addEventListener('load', apply, { once: true });
-}
-
-function setArticleCropState(crop) {
-  const form = document.getElementById('journalEditorForm');
-  if (!form) return;
-  const nextCrop = {
-    x: clampNumber(crop.x, -60, 60),
-    y: clampNumber(crop.y, -60, 60),
-    zoom: clampNumber(crop.zoom, 1, 4),
-  };
-  form.elements.article_photo_x.value = String(nextCrop.x);
-  form.elements.article_photo_y.value = String(nextCrop.y);
-  form.elements.article_photo_zoom.value = String(nextCrop.zoom);
-  form.elements.article_photo_crop_active.value = '1';
-  const modalImg = document.querySelector('#journalCropModal #journalArticleCropFrame img');
-  if (modalImg) applyArticleCropStyle(modalImg, nextCrop);
-  updateCropFrameAspect(document.getElementById('journalCropModal') || document);
-  updateEditorPreview();
-}
-
-function applyArticleCropStyle(img, crop) {
-  const form = document.getElementById('journalEditorForm');
-  const active = form?.elements.article_photo_crop_active?.value === '1';
-  img.classList.toggle('crop-active', active);
-  img.style.objectPosition = 'center';
-  img.style.transform = active
-    ? `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom})`
-    : 'translate(-50%, -50%) scale(1)';
-}
-
-function adjustArticleCropZoom(direction) {
-  const crop = getArticleCropState();
-  const delta = direction === '+' ? 0.12 : -0.12;
-  setArticleCropState({ ...crop, zoom: crop.zoom + delta });
-}
-
-function resetArticleCrop(refresh = true) {
-  const form = document.getElementById('journalEditorForm');
-  if (!form) return;
-  form.elements.article_photo_x.value = '0';
-  form.elements.article_photo_y.value = '0';
-  form.elements.article_photo_zoom.value = '1';
-  form.elements.article_photo_crop_active.value = '0';
-  if (refresh) updateEditorPreview();
-}
-
-function bindArticleCropEditor(root) {
-  const frame = root.querySelector('#journalArticleCropFrame');
-  if (!frame) return;
-  let start = null;
-  frame.addEventListener('pointerdown', (event) => {
-    if (!frame.querySelector('img')) return;
-    event.preventDefault();
-    frame.setPointerCapture?.(event.pointerId);
-    const crop = getArticleCropState();
-    start = { clientX: event.clientX, clientY: event.clientY, crop };
-  });
-  frame.addEventListener('pointermove', (event) => {
-    if (!start) return;
-    const rect = frame.getBoundingClientRect();
-    const next = {
-      ...start.crop,
-      x: start.crop.x + ((event.clientX - start.clientX) / Math.max(rect.width, 1)) * 84,
-      y: start.crop.y + ((event.clientY - start.clientY) / Math.max(rect.height, 1)) * 84,
-    };
-    setArticleCropState(next);
-  });
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((name) => frame.addEventListener(name, () => {
-    start = null;
-  }));
-  frame.addEventListener('wheel', (event) => {
-    if (!frame.querySelector('img')) return;
-    event.preventDefault();
-    const crop = getArticleCropState();
-    setArticleCropState({ ...crop, zoom: crop.zoom + (event.deltaY > 0 ? -0.08 : 0.08) });
-  }, { passive: false });
-}
-
-function clampNumber(value, min, max) {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
 }
 
 function renderArticleEditorBlock(block = { type: 'paragraph', text: '' }) {
@@ -1499,15 +1537,16 @@ function getPostVideoUrl(post) {
 }
 
 function getArticleImageMeta(media = null) {
-  const fallback = { position: 'right', aspect: '16:9', cropActive: false, crop: { x: 0, y: 0, zoom: 1 } };
+  const fallback = { position: 'right', aspect: '16:9', cropActive: false, crop: { x: 0, y: 0, zoom: 1 }, exported: false };
   if (!media?.alt_text) return fallback;
   try {
     const meta = JSON.parse(media.alt_text);
     const crop = meta?.crop || {};
     return {
       position: ['left', 'right', 'top'].includes(meta?.position) ? meta.position : 'right',
-      aspect: ARTICLE_IMAGE_ASPECTS[meta?.aspect] ? meta.aspect : '16:9',
+      aspect: meta?.aspect || '16:9',
       cropActive: Boolean(meta?.cropActive),
+      exported: Boolean(meta?.exported),
       crop: {
         x: clampNumber(Number(crop.x ?? 0), -60, 60),
         y: clampNumber(Number(crop.y ?? 0), -60, 60),

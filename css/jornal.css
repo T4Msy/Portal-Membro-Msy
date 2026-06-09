@@ -1844,3 +1844,44 @@ body[data-page="jornal"] .page-content {
 [data-theme="light"] .journal-modal-foot {
   background: rgba(255,250,240,.96);
 }
+
+.media-editor-crop{width:100%;height:100%;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;overscroll-behavior:contain}
+.media-editor-viewport{position:relative;width:100%;aspect-ratio:var(--editor-aspect,16 / 9);max-width:100%;overflow:hidden;background:#020203;border:1px solid rgba(201,168,76,.18);border-radius:8px}
+.media-editor-media{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:cover;transform:var(--editor-transform);transform-origin:center center;will-change:transform;max-width:none!important;max-height:none!important;touch-action:none}
+.media-editor-mask{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(201,168,76,.22)}
+.media-editor-crop.is-original .media-editor-media{object-fit:contain!important}
+.media-editor-crop.is-edited .media-editor-media{object-fit:cover!important}
+.media-editor-load-error{position:absolute;inset:0;z-index:3;display:grid;place-items:center;align-content:center;gap:8px;padding:18px;background:#050507;color:var(--text-2);text-align:center;font-size:.8rem;font-weight:900}
+.media-editor-load-error[hidden]{display:none}
+.media-editor-load-error i{color:var(--journal-red);font-size:1.35rem}
+
+.journal-photo-editor{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid rgba(201,168,76,.16);border-radius:12px;background:rgba(255,255,255,.02)}
+.journal-photo-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.journal-photo-editor-head strong{display:flex;align-items:center;gap:8px;color:var(--text-1);font-size:.92rem}
+.journal-photo-editor-head strong i{color:var(--journal-gold)}
+.journal-photo-editor-actions{display:flex;gap:8px;flex-wrap:wrap}
+.journal-photo-editor-body{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px;align-items:start}
+.journal-photo-editor-main{position:relative;min-height:200px;aspect-ratio:var(--editor-aspect,16 / 9);border-radius:10px;overflow:hidden;background:#020203;border:1px solid rgba(201,168,76,.14)}
+.journal-photo-editor-main .media-editor-crop,
+.journal-photo-editor-main .media-editor-viewport{width:100%;height:100%}
+.journal-photo-editor-controls{display:flex;flex-direction:column;gap:10px;padding:10px;border:1px solid rgba(201,168,76,.1);border-radius:10px;background:rgba(255,255,255,.02)}
+.journal-photo-editor-meta{color:var(--text-3);font-size:.72rem;line-height:1.4;padding-bottom:6px;border-bottom:1px solid rgba(201,168,76,.08)}
+.journal-photo-editor-meta strong{color:var(--text-2);font-weight:900}
+.journal-photo-editor-field{display:grid;gap:5px}
+.journal-photo-editor-field>span,
+.journal-photo-editor-field>label{color:var(--text-3);font-size:.72rem;font-weight:900}
+.journal-photo-editor-field select,
+.journal-photo-editor-field input[type="range"]{width:100%;min-width:0}
+.journal-photo-editor-field input[type="range"]{accent-color:var(--journal-gold);min-height:32px}
+.journal-photo-editor-reset{width:100%;justify-content:center;margin-top:4px}
+
+@media(max-width:760px){
+  .journal-photo-editor-body{grid-template-columns:1fr}
+  .journal-photo-editor-main{max-height:min(52dvh,400px)}
+}
+
+@media(max-width:640px){
+  .journal-photo-editor{padding:10px}
+  .journal-photo-editor-controls{padding:8px}
+  .journal-photo-editor-head{flex-direction:column;align-items:flex-start}
+}
