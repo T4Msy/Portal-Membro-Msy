@@ -1105,15 +1105,23 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
 @keyframes mobileSheetIn{from{transform:translateY(22px);opacity:.45}to{transform:translateY(0);opacity:1}}
 .activity-filters button{display:inline-flex;align-items:center;gap:6px}
 .activity-filters button span{min-width:18px;height:18px;border-radius:999px;background:var(--red-bright);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.62rem;padding:0 5px}
-.direct-story-reply-card{width:100%;display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:center;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);border-radius:14px;padding:8px;color:inherit;text-align:left;cursor:pointer;overflow:hidden}
-.direct-story-reply-card.unavailable{opacity:.65;cursor:not-allowed}
-.direct-story-reply-thumb{position:relative;width:44px;height:58px;border-radius:10px;overflow:hidden;background:#050505;display:flex;align-items:center;justify-content:center;color:var(--text-3);flex:0 0 44px}
+.direct-story-message-row.mine{justify-content:flex-end}
+.direct-story-message-row.theirs{justify-content:flex-start}
+.direct-story-message-stack{max-width:min(72%,560px);display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.direct-story-message-row.mine .direct-story-message-stack{align-items:flex-end}
+.direct-story-reply-ref{display:flex;flex-direction:column;align-items:flex-start;gap:7px;color:var(--text-3);max-width:180px}
+.direct-story-reply-ref.mine{align-items:flex-end}
+.direct-story-reply-label{font-size:.78rem;line-height:1.25;color:rgba(236,236,236,.68)}
+.direct-story-reply-preview{position:relative;border:0;background:transparent;color:inherit;padding:0 0 0 14px;display:block;cursor:pointer;text-align:left}
+.direct-story-reply-ref.mine .direct-story-reply-preview{padding:0 14px 0 0}
+.direct-story-reply-preview.unavailable{opacity:.62;cursor:not-allowed}
+.direct-story-reply-rail{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:999px;background:rgba(255,255,255,.18)}
+.direct-story-reply-ref.mine .direct-story-reply-rail{left:auto;right:0}
+.direct-story-reply-thumb{position:relative;width:92px;height:148px;border-radius:22px;overflow:hidden;background:#050505;display:flex;align-items:center;justify-content:center;color:var(--text-3);box-shadow:0 12px 28px rgba(0,0,0,.28)}
 .direct-story-reply-thumb img,.direct-story-reply-thumb video{width:100%;height:100%;object-fit:cover;display:block}
-.direct-story-reply-thumb i.fa-play{position:absolute;inset:auto auto 5px 5px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.55rem}
-.direct-story-reply-copy{min-width:0;display:flex;flex-direction:column;gap:2px}
-.direct-story-reply-copy strong{font-size:.75rem;color:var(--text-1)}
-.direct-story-reply-copy span{font-size:.7rem;color:var(--text-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.direct-story-reply-copy em{font-style:normal;font-size:.62rem;color:var(--text-3)}
+.direct-story-reply-thumb i.fa-play{position:absolute;inset:auto auto 8px 8px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.62rem}
+.direct-story-reply-caption{display:block;max-width:92px;margin-top:5px;color:var(--text-3);font-size:.68rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.direct-story-response-bubble{max-width:100%;min-width:0}
 .direct-post-share-card{width:100%;display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px;align-items:center;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:16px;padding:9px;color:inherit;text-align:left;cursor:pointer;overflow:hidden}
 .direct-post-share-card:hover{border-color:rgba(201,168,76,.24);background:rgba(255,255,255,.085)}
 .direct-post-share-thumb{position:relative;width:74px;height:74px;border-radius:12px;overflow:hidden;background:#050505;display:flex;align-items:center;justify-content:center;color:var(--gold);flex:0 0 74px}
@@ -3615,12 +3623,10 @@ body[data-page="feed"] .direct-message-row.theirs .direct-message-menu-btn{
   left:auto!important;
 }
 
-body[data-page="feed"] .direct-message-bubble:has(.direct-story-reply-card),
 body[data-page="feed"] .direct-message-bubble:has(.direct-post-share-card){
   padding-top:42px;
 }
 
-body[data-page="feed"] .direct-story-reply-card,
 body[data-page="feed"] .direct-post-share-card{
   max-width:100%;
   min-width:0;

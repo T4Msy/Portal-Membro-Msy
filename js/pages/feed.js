@@ -5352,27 +5352,33 @@ function renderDirectMessageAttachment(message) {
       </button>`;
   }
   if (message.attachment?.kind === 'story_reply') {
-    const reply = resolveStoryReplyState(message);
-    const previewUrl = reply.story?.thumbnail_url || reply.story?.media_url || reply.attachment.thumbnail_url || reply.attachment.story_url || reply.attachment.media_url || '';
-    const authorName = reply.story?.author?.name || reply.attachment.story_author_name || 'Story';
-    const caption = reply.story?.caption || reply.attachment.caption_excerpt || reply.attachment.caption || '';
-    const mediaType = reply.story?.media_type || reply.attachment.media_type || 'image';
-    const thumb = previewUrl
-      ? (mediaType === 'video'
-        ? `<video src="${Utils.escapeHtml(previewUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
-        : `<img src="${Utils.escapeHtml(previewUrl)}" alt="Preview do story" loading="lazy" decoding="async">`)
-      : '<i class="fa-regular fa-image"></i>';
-    return `
-      <button type="button" class="direct-story-reply-card${reply.available ? '' : ' unavailable'}" data-open-story-reference="${Utils.escapeHtml(reply.storyId || '')}" ${reply.available ? '' : 'disabled'}>
-        <div class="direct-story-reply-thumb">${thumb}</div>
-        <div class="direct-story-reply-copy">
-          <strong>${Utils.escapeHtml(authorName)}</strong>
-          <span>${Utils.escapeHtml(caption || (reply.available ? 'Abrir story original' : 'Story indisponível'))}</span>
-          <em>${reply.available ? 'Abrir story' : 'Story indisponível'}</em>
-        </div>
-      </button>`;
+    return '';
   }
   return '';
+}
+
+function renderDirectStoryReplyReference(message, { mine = false } = {}) {
+  const reply = resolveStoryReplyState(message);
+  const previewUrl = reply.story?.thumbnail_url || reply.story?.media_url || reply.attachment.thumbnail_url || reply.attachment.story_url || reply.attachment.media_url || '';
+  const mediaType = reply.story?.media_type || reply.attachment.media_type || 'image';
+  const author = reply.story?.author || null;
+  const rawAuthorLabel = author ? displayUsername(author) : (reply.attachment.story_author_username || reply.attachment.story_author_name || 'story');
+  const authorLabel = String(rawAuthorLabel).includes(' ') ? rawAuthorLabel : `@${String(rawAuthorLabel).replace(/^@/, '')}`;
+  const caption = reply.story?.caption || reply.attachment.caption_excerpt || reply.attachment.caption || '';
+  const thumb = previewUrl
+    ? (mediaType === 'video'
+      ? `<video src="${Utils.escapeHtml(previewUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
+      : `<img src="${Utils.escapeHtml(previewUrl)}" alt="Story respondido" loading="lazy" decoding="async">`)
+    : '<i class="fa-regular fa-image"></i>';
+  return `
+    <div class="direct-story-reply-ref ${mine ? 'mine' : 'theirs'}">
+      <div class="direct-story-reply-label">Respondeu ao story de ${Utils.escapeHtml(authorLabel)}</div>
+      <button type="button" class="direct-story-reply-preview${reply.available ? '' : ' unavailable'}" data-open-story-reference="${Utils.escapeHtml(reply.storyId || '')}" ${reply.available ? '' : 'disabled'}>
+        <span class="direct-story-reply-rail"></span>
+        <span class="direct-story-reply-thumb">${thumb}</span>
+        ${caption ? `<span class="direct-story-reply-caption">${Utils.escapeHtml(caption)}</span>` : ''}
+      </button>
+    </div>`;
 }
 
 function renderDirectMessageBubble(message, { mine = false, showDate = false } = {}) {
@@ -5381,6 +5387,30 @@ function renderDirectMessageBubble(message, { mine = false, showDate = false } =
   const canDeleteForAll = mine && !deleted;
   const canEdit = mine && !deleted && Boolean(message.body);
   const canCopy = Boolean(message.body) && !deleted;
+  const isStoryReply = message.attachment?.kind === 'story_reply' && !deleted;
+  if (isStoryReply) {
+    return `
+      ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
+      <div class="direct-message-row ${mine ? 'mine' : 'theirs'} direct-story-message-row" data-direct-message-row="${message.id}">
+        <div class="direct-story-message-stack">
+          ${renderDirectStoryReplyReference(message, { mine })}
+          <div class="direct-message-bubble direct-story-response-bubble" data-direct-message-bubble="${message.id}">
+            <button type="button" class="social-icon-btn direct-message-menu-btn" data-open-direct-message-menu="${message.id}" aria-label="Mais opções"><i class="fa-solid fa-ellipsis"></i></button>
+            ${message.body ? `<div class="direct-message-text">${Utils.escapeHtml(message.body || '')}</div>` : '<div class="direct-message-text">Respondeu ao story.</div>'}
+            <div class="direct-message-meta-line">
+              ${edited}
+              <div class="direct-message-time">${new Date(message.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+            <div class="post-menu direct-message-menu" data-direct-message-menu="${message.id}">
+              ${canEdit ? `<button data-direct-edit="${message.id}"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
+              ${canCopy ? `<button data-direct-copy="${message.id}"><i class="fa-solid fa-copy"></i> Copiar</button>` : ''}
+              <button data-direct-delete-me="${message.id}"><i class="fa-solid fa-eye-slash"></i> Apagar para mim</button>
+              ${canDeleteForAll ? `<button class="danger" data-direct-delete-all="${message.id}"><i class="fa-solid fa-trash"></i> Apagar para todos</button>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
   return `
     ${showDate ? `<div class="direct-date-divider"><span>${Utils.formatDate(message.created_at)}</span></div>` : ''}
     <div class="direct-message-row ${mine ? 'mine' : 'theirs'}" data-direct-message-row="${message.id}">
