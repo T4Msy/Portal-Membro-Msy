@@ -575,14 +575,15 @@ async function initRanking() {
       .trono-diario-btn:hover { background: rgba(201,168,76,.08); border-color: rgba(201,168,76,.38); color: var(--gold); }
 
       .rank-main-tabs {
-        display: flex; gap: 0; border-radius: 12px; overflow: hidden;
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+        border-radius: 12px; overflow: hidden;
         background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
         margin-bottom: 24px; overflow-x: auto; -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
       }
       .rank-main-tabs::-webkit-scrollbar { display: none; }
       .rank-main-tab {
-        flex: 0 0 auto; min-width: max-content; padding: 11px 14px; background: none; border: none;
+        min-width: 0; width: 100%; padding: 11px 14px; background: none; border: none;
         color: var(--text-3); font-size: .78rem; font-weight: 600;
         letter-spacing: .05em; cursor: pointer; transition: all .2s;
         display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -591,15 +592,21 @@ async function initRanking() {
         position: relative; white-space: nowrap;
       }
       .rank-main-tab:last-child { border-right: none; }
+      .rank-main-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       .rank-main-tab.active { color: var(--gold); background: linear-gradient(180deg, rgba(201,168,76,.12) 0%, rgba(201,168,76,.04) 100%); }
       .rank-main-tab.active::after {
         content: ''; position: absolute; bottom: 0; left: 10%; right: 10%; height: 2px;
         background: var(--gold); border-radius: 2px 2px 0 0;
       }
       .rank-tab-count {
-        background: rgba(201,168,76,.2); color: var(--gold);
-        font-size: .6rem; padding: 1px 6px; border-radius: 20px;
-        font-family: sans-serif;
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.6rem; height: 1.25rem; padding: 0 6px;
+        background: rgba(201,168,76,.18); color: var(--gold);
+        font-size: .62rem; border-radius: 999px; font-family: sans-serif;
       }
 
       .trono-diario-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
@@ -670,7 +677,7 @@ async function initRanking() {
         .trono-card { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
         .trono-wrap { gap: 18px; }
         .trono-categoria { border-radius: 16px; }
-        .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; }
+        .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .rank-main-tab { padding: 10px 12px; font-size: .72rem; }
         .trono-cat-badge { font-size: .5rem; padding: 2px 8px; }
       }
@@ -685,6 +692,7 @@ async function initRanking() {
         .trono-pos1 .trono-nome { font-size: .85rem !important; }
         .trono-msgs { font-size: .68rem !important; }
         .trono-pos1 .trono-msgs { font-size: .78rem !important; }
+        .rank-main-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .rank-main-tab { padding: 9px 10px; font-size: .68rem; gap: 5px; }
       }
 
@@ -1257,17 +1265,17 @@ async function initRanking() {
 
     <div class="rank-main-tabs">
       <button class="rank-main-tab active" data-aba="trono">
-        🏆 Trono dos Recordes
+        <i class="fa-solid fa-trophy"></i><span class="rank-main-label">Trono dos Recordes</span>
       </button>
       <button class="rank-main-tab" data-aba="constancia">
-        <i class="fa-solid fa-fire-flame-curved"></i> Constância
+        <i class="fa-solid fa-fire-flame-curved"></i><span class="rank-main-label">Constância</span>
       </button>
       <button class="rank-main-tab" data-aba="mensal">
-        <i class="fa-solid fa-calendar-days"></i> Mensal
+        <i class="fa-solid fa-calendar-days"></i><span class="rank-main-label">Mensal</span>
         <span class="rank-tab-count">${mensais.length}</span>
       </button>
       <button class="rank-main-tab" data-aba="semanal">
-        <i class="fa-solid fa-calendar-week"></i> Semanal
+        <i class="fa-solid fa-calendar-week"></i><span class="rank-main-label">Semanal</span>
         <span class="rank-tab-count">${semanais.length}</span>
       </button>
     </div>

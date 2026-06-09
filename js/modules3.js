@@ -45,7 +45,7 @@ const MSYPerms = {
     // ── Biblioteca
     { key: 'gerenciar_biblioteca',  label: 'Gerenciar Biblioteca',   group: 'Biblioteca', icon: 'fa-book-open' },
     // ── Jornal
-    { key: 'gerenciar_jornal',      label: 'Gerenciar Jornal',       group: 'Jornal',     icon: 'fa-newspaper' },
+    { key: 'gerenciar_jornal',      label: 'Gerenciar Jornal, fotos e vídeos', group: 'Jornal', icon: 'fa-newspaper' },
     // ── Feed
     { key: 'publicar_feed',         label: 'Publicar no Feed',       group: 'Feed',       icon: 'fa-rss' },
     { key: 'moderar_feed',          label: 'Moderar Feed',           group: 'Feed',       icon: 'fa-shield-virus' },
@@ -433,6 +433,7 @@ function getPermissionsGroups() {
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
     'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
     'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
+    'Jornal':      { icon:'fa-newspaper',     color:'#c9a84c', keys:['gerenciar_jornal'] },
     'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
