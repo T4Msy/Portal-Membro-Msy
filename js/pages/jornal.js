@@ -569,7 +569,7 @@ function renderPostBody(post) {
     const poster = getPostCoverImage(post);
     return `
       <div class="journal-player">
-        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
+        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls playsinline webkit-playsinline x5-playsinline preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
       </div>
       ${renderVideoDescription(post)}`;
   }
@@ -577,6 +577,15 @@ function renderPostBody(post) {
     return renderComicPost(post);
   }
   return renderArticlePost(post);
+}
+
+function bindInlineJournalVideos(root = document) {
+  root.querySelectorAll('.journal-player video').forEach((video) => {
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.setAttribute('x5-playsinline', '');
+  });
 }
 
 function renderVideoDescription(post) {
@@ -709,6 +718,7 @@ function renderComment(comment) {
 }
 
 function bindPostModal(modal, post) {
+  bindInlineJournalVideos(modal);
   modal.querySelectorAll('[data-close-journal-modal]').forEach((btn) => btn.addEventListener('click', () => closeModal(modal)));
   modal.onclick = (event) => { if (event.target === modal) closeModal(modal); };
   modal.querySelector('[data-journal-comment-form]')?.addEventListener('submit', submitComment);
