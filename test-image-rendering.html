@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teste - Bug de Renderização de Imagem</title>
+  <link rel="stylesheet" href="css/jornal.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #1a1a1a;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #fff;
+    }
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .test-section {
+      margin-bottom: 40px;
+      padding: 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #d5b15b;
+    }
+    .test-description {
+      color: #aaa;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .journal-article {
+      max-width: 880px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>Teste de Correção - Bug de Renderização de Imagem</h1>
+    
+    <div class="test-section">
+      <h2>1. Imagem em Artigo (journal-article-photo)</h2>
+      <div class="test-description">
+        A imagem deve estar centralizada no container, sem deslocamento para o canto inferior direito.
+      </div>
+      <article class="journal-article">
+        <h1>Título da Matéria</h1>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+        <figure class="journal-article-photo photo-right" style="--journal-image-aspect: 4 / 3">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23991b1f' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='48' fill='%23fff'%3E800x600%3C/text%3E%3C/svg%3E" alt="Teste">
+          <figcaption>Legenda da imagem</figcaption>
+        </figure>
+        <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+        <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+      </article>
+    </div>
+
+    <div class="test-section">
+      <h2>2. Preview de Foto (journal-photo-pick-preview)</h2>
+      <div class="test-description">
+        A imagem deve estar centralizada no preview.
+      </div>
+      <div class="journal-photo-pick-preview" style="--journal-image-aspect: 16 / 9; width: 300px; aspect-ratio: 16 / 9;">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'%3E%3Crect fill='%23d5b15b' width='1600' height='900'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='64' fill='%23000'%3E1600x900%3C/text%3E%3C/svg%3E" alt="Teste">
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>3. Crop Frame (journal-crop-frame)</h2>
+      <div class="test-description">
+        A imagem deve estar centralizada no frame de crop.
+      </div>
+      <div class="journal-crop-frame" style="--journal-image-aspect: 1 / 1; width: 400px; aspect-ratio: 1 / 1;">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1000' height='1000'%3E%3Crect fill='%23991b1f' width='1000' height='1000'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='64' fill='%23fff'%3E1000x1000%3C/text%3E%3C/svg%3E" alt="Teste">
+        <div class="journal-crop-grid"></div>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>4. Preview de Foto no Editor (journal-editor-paper-photo)</h2>
+      <div class="test-description">
+        A imagem deve estar centralizada na prévia do editor.
+      </div>
+      <div class="journal-editor-paper" style="max-width: 600px;">
+        <h3>Prévia da Matéria</h3>
+        <div class="journal-editor-paper-layout">
+          <figure class="journal-editor-paper-photo" style="--journal-image-aspect: 4 / 3">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23d5b15b' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='48' fill='%23000'%3E800x600%3C/text%3E%3C/svg%3E" alt="Teste">
+          </figure>
+          <div class="journal-editor-paper-flow">
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>5. Imagem com Crop Ativo</h2>
+      <div class="test-description">
+        Quando o crop está ativo, o transform inline do JS deve sobrescrever o CSS.
+      </div>
+      <article class="journal-article">
+        <figure class="journal-article-photo photo-right" style="--journal-image-aspect: 16 / 9">
+          <img class="crop-active" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'%3E%3Crect fill='%23991b1f' width='1600' height='900'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='64' fill='%23fff'%3ECrop Ativo%3C/text%3E%3C/svg%3E" alt="Teste" style="transform:translate(calc(-50% + 10%), calc(-50% + 5%)) scale(1.2)">
+          <figcaption>Imagem com crop ativo e deslocamento</figcaption>
+        </figure>
+      </article>
+    </div>
+  </div>
+</body>
+</html>
