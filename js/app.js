@@ -2394,9 +2394,7 @@
      });
      attachmentOpenBtn?.addEventListener('click', () => {
        if (!attachmentInput) return;
-       attachmentInput.value = '';
-       if (typeof attachmentInput.showPicker === 'function') attachmentInput.showPicker();
-       else attachmentInput.click();
+       attachmentInput.click();
      });
      attachmentOpenBtn?.addEventListener('touchend', e => {
        e.preventDefault();
@@ -2407,7 +2405,10 @@
        if (e.target.closest('.activity-attachment-open-btn')) return;
        attachmentOpenBtn?.click();
      });
-     attachmentInput?.addEventListener('change', () => addAttachmentFiles(attachmentInput.files));
+     attachmentInput?.addEventListener('change', () => {
+       addAttachmentFiles(attachmentInput.files);
+       if (attachmentInput) attachmentInput.value = '';
+     });
      attachmentZone?.addEventListener('dragover', e => {
        e.preventDefault();
        attachmentZone.classList.add('activity-attachment-zone-active');
