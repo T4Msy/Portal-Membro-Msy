@@ -1163,6 +1163,68 @@
      }
    };
 
+   function _sanitizeAttachmentName(name) {
+     return (name || 'arquivo')
+       .normalize('NFKD')
+       .replace(/[\u0300-\u036f]/g, '')
+       .replace(/[^a-zA-Z0-9._-]/g, '_');
+   }
+
+   function _buildAttachmentStoragePath(profileId, fileName, scope = 'activity-attachments') {
+     const stamp = Date.now();
+     const nonce = Math.random().toString(36).slice(2, 8);
+     return `${profileId}/${scope}/${stamp}_${nonce}_${_sanitizeAttachmentName(fileName)}`;
+   }
+
+   function renderActivityAttachmentSection(attachments) {
+     if (!attachments || attachments.length === 0) return '';
+
+     const cards = attachments.map(a => {
+       const fileInfo = AnexoUtils.getFileIcon(a.mime_type, a.file_name);
+       const isImg = AnexoUtils.isImage(a.mime_type, a.file_name);
+       const size = AnexoUtils.formatBytes(a.file_size);
+       const uploader = Utils.escapeHtml(a.created_by_profile?.name || '—');
+       const safeName = Utils.escapeHtml(a.file_name || 'arquivo');
+       const safeUrl = a.file_url || '#';
+       const preview = isImg
+         ? `<img src="${a.file_url}" alt="${safeName}" loading="lazy" onerror="this.outerHTML='<div class=&quot;activity-attachment-thumb-fallback&quot;><i class=&quot;fa-solid fa-image&quot;></i></div>'">`
+         : `<i class="${fileInfo.icon}" style="color:${fileInfo.color}"></i>`;
+
+       return `
+         <div class="activity-attachment-card">
+           <div class="activity-attachment-thumb">
+             ${preview}
+             <span class="activity-attachment-badge">${fileInfo.label}</span>
+           </div>
+           <div class="activity-attachment-body">
+             <div class="activity-attachment-name" title="${safeName}">${safeName}</div>
+             <div class="activity-attachment-meta">
+               <span><i class="fa-solid fa-user"></i> ${uploader}</span>
+               ${size ? `<span><i class="fa-solid fa-weight-scale"></i> ${size}</span>` : ''}
+             </div>
+             <div class="activity-attachment-actions">
+               <a href="${safeUrl}" target="_blank" class="btn btn-ghost btn-sm"><i class="fa-solid fa-eye"></i> Ver</a>
+               <a href="${safeUrl}" download="${safeName}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i></a>
+             </div>
+           </div>
+         </div>`;
+     }).join('');
+
+     return `
+       <div class="divider"></div>
+       <div class="activity-attachment-section">
+         <div class="activity-attachment-section-head">
+           <div>
+             <div class="activity-attachment-section-title"><i class="fa-solid fa-paperclip"></i> Anexos da atividade</div>
+             <div class="activity-attachment-section-sub">Arquivos anexados no momento da criação da atividade.</div>
+           </div>
+           <span class="badge badge-gold">${attachments.length}</span>
+         </div>
+         <div class="activity-attachment-grid">${cards}</div>
+       </div>
+     `;
+   }
+
    async function initAtividades() {
      const profile = await renderSidebar('atividades');
      if (!profile) return;
@@ -1276,23 +1338,46 @@
        if (!grid) return;
        grid.innerHTML = `<div style="grid-column:1/-1"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i></div></div>`;
 
-       // Buscar todos os anexos via activity_responses (file_url preenchido)
-       let query = db.from('activity_responses')
+       let responseQuery = db.from('activity_responses')
          .select('id, file_url, file_name, created_at, user_id, activity_id, user:user_id(name,initials,color), activity:activity_id(title,status)')
          .not('file_url', 'is', null)
          .not('file_name', 'is', null)
          .order('created_at', { ascending: false });
 
-       if (!isDiretoria) query = query.eq('user_id', profile.id);
+       let attachmentQuery = db.from('activity_attachments')
+         .select('id, file_url, file_name, file_path, file_size, mime_type, created_at, created_by, created_by_profile:created_by(name,initials,color), activity_id, activity:activity_id(title,status)')
+         .order('created_at', { ascending: false });
 
-       const { data: anexos, error } = await query;
+       if (!isDiretoria) {
+         responseQuery = responseQuery.eq('user_id', profile.id);
+         attachmentQuery = attachmentQuery.eq('created_by', profile.id);
+       }
 
-       if (error) { Utils.showToast('Erro ao carregar anexos.', 'error'); return; }
+       const [{ data: respAnexos, error: respErr }, { data: actAnexos, error: actErr }] = await Promise.all([
+         responseQuery,
+         attachmentQuery,
+       ]);
+
+       if (respErr || actErr) { Utils.showToast('Erro ao carregar anexos.', 'error'); return; }
+
+       const anexos = [
+         ...(respAnexos || []).map(a => ({
+           ...a,
+           source: 'response',
+           user: a.user,
+         })),
+         ...(actAnexos || []).map(a => ({
+           ...a,
+           source: 'attachment',
+           user: a.created_by_profile,
+         })),
+       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
        if (!anexos || anexos.length === 0) {
          grid.innerHTML = `<div style="grid-column:1/-1" class="empty-state">
            <div class="empty-state-icon"><i class="fa-solid fa-paperclip"></i></div>
            <div class="empty-state-text">Nenhum anexo encontrado.</div>
-           <div style="font-size:.78rem;color:var(--text-3);margin-top:6px">Os arquivos enviados nas respostas de atividades aparecerão aqui.</div>
+           <div style="font-size:.78rem;color:var(--text-3);margin-top:6px">Os arquivos enviados nas respostas e nos anexos das atividades aparecerão aqui.</div>
          </div>`;
          return;
        }
@@ -1321,7 +1406,7 @@
              btn.disabled = true;
              btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
 
-             // Extrair o path do storage a partir da URL pública
+             const source = btn.dataset.source || 'response';
              const fileUrl = btn.dataset.url || '';
              const storageMarker = '/storage/v1/object/public/activity-files/';
              let storagePath = null;
@@ -1329,16 +1414,19 @@
                storagePath = decodeURIComponent(fileUrl.split(storageMarker)[1]);
              }
 
-             // 1. Apagar do storage
              if (storagePath) {
                const { error: storageErr } = await db.storage.from('activity-files').remove([storagePath]);
                if (storageErr) console.warn('Aviso storage:', storageErr.message);
              }
 
-             // 2. Limpar referência no banco
-             const { error } = await db.from('activity_responses')
-               .update({ file_url: null, file_name: null })
-               .eq('id', btn.dataset.id);
+             let error = null;
+             if (source === 'attachment') {
+               ({ error } = await db.from('activity_attachments').delete().eq('id', btn.dataset.id));
+             } else {
+               ({ error } = await db.from('activity_responses')
+                 .update({ file_url: null, file_name: null })
+                 .eq('id', btn.dataset.id));
+             }
 
              if (!error) {
                btn.closest('.anexo-card-wrap')?.remove();
@@ -1392,7 +1480,7 @@
                  <button class="btn btn-outline btn-sm anexo-download-btn" data-url="${a.file_url}" data-name="${Utils.escapeHtml(a.file_name)}" title="Download">
                    <i class="fa-solid fa-download"></i>
                  </button>
-                 ${isDiretoria ? `<button class="btn btn-ghost btn-sm anexo-delete-btn" data-id="${a.id}" data-name="${Utils.escapeHtml(a.file_name)}" data-url="${a.file_url}" title="Excluir" style="color:var(--red-bright);margin-left:auto">
+                 ${isDiretoria ? `<button class="btn btn-ghost btn-sm anexo-delete-btn" data-id="${a.id}" data-source="${a.source || 'response'}" data-name="${Utils.escapeHtml(a.file_name)}" data-url="${a.file_url}" title="Excluir" style="color:var(--red-bright);margin-left:auto">
                    <i class="fa-solid fa-trash"></i>
                  </button>` : ''}
                </div>
@@ -1562,6 +1650,12 @@
        .eq('activity_id', id)
        .order('created_at', { ascending: false });
 
+     const { data: attachments } = await db
+       .from('activity_attachments')
+       .select('*, created_by_profile:created_by(name,initials,color)')
+       .eq('activity_id', id)
+       .order('created_at', { ascending: false });
+
      // Respostas com anexos
      const anexosDaAtividade = (responses||[]).filter(r => r.file_url && r.file_name);
 
@@ -1613,6 +1707,7 @@
        <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Descrição</div>
        <div class="modal-description">${Utils.escapeHtml(act.description)}</div>
 
+       ${renderActivityAttachmentSection(attachments)}
        ${renderModalAnexos(anexosDaAtividade)}
 
        ${responses && responses.length > 0 ? `
@@ -2070,6 +2165,17 @@
          <label class="form-label">Descrição *</label>
          <textarea class="form-input form-textarea" id="na-desc" placeholder="Instruções detalhadas..."></textarea>
        </div>
+       <div class="activity-modal-section activity-attachment-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
+         <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-paperclip"></i> Anexos (opcional)</div>
+         <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
+           <div class="activity-attachment-dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+           <div class="activity-attachment-dropzone-text">Clique ou arraste arquivos para anexar</div>
+           <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Até 100MB por arquivo.</div>
+           <input type="file" id="na-attachments-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="display:none">
+         </div>
+         <div class="activity-attachment-summary" id="na-attachment-summary">Nenhum arquivo selecionado.</div>
+         <div class="activity-attachment-grid" id="na-attachment-preview"></div>
+       </div>
        <div class="activity-modal-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
          <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-calendar-clock"></i> Agendamento (opcional)</div>
          <div class="activity-modal-grid activity-modal-grid-schedule" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -2105,6 +2211,145 @@
        <button class="btn btn-primary" id="createActivityBtn"><i class="fa-solid fa-plus"></i> Criar Atividade</button>
      `;
      modal.classList.add('open');
+
+     const attachmentState = { files: [], urls: [] };
+     const attachmentZone = document.getElementById('na-attachment-zone');
+     const attachmentInput = document.getElementById('na-attachments-input');
+     const attachmentSummary = document.getElementById('na-attachment-summary');
+     const attachmentPreview = document.getElementById('na-attachment-preview');
+
+     function clearAttachmentUrls() {
+       attachmentState.urls.forEach(url => URL.revokeObjectURL(url));
+       attachmentState.urls = [];
+     }
+
+     function renderAttachmentState() {
+       clearAttachmentUrls();
+       if (!attachmentPreview || !attachmentSummary) return;
+
+       if (!attachmentState.files.length) {
+         attachmentSummary.textContent = 'Nenhum arquivo selecionado.';
+         attachmentPreview.innerHTML = '';
+         return;
+       }
+
+       attachmentSummary.textContent = `${attachmentState.files.length} arquivo${attachmentState.files.length > 1 ? 's' : ''} selecionado${attachmentState.files.length > 1 ? 's' : ''}.`;
+       attachmentPreview.innerHTML = attachmentState.files.map((file, index) => {
+         const meta = AnexoUtils.getFileIcon(file.type, file.name);
+         const isImg = AnexoUtils.isImage(file.type, file.name);
+         const safeName = Utils.escapeHtml(file.name);
+         const size = AnexoUtils.formatBytes(file.size);
+         const previewUrl = isImg ? URL.createObjectURL(file) : '';
+         if (previewUrl) attachmentState.urls.push(previewUrl);
+         return `
+           <div class="activity-attachment-preview-card">
+             <div class="activity-attachment-preview-thumb">
+               ${isImg
+                 ? `<img src="${previewUrl}" alt="${safeName}" loading="lazy" onload="URL.revokeObjectURL(this.src)">`
+                 : `<i class="${meta.icon}" style="color:${meta.color}"></i>`
+               }
+             </div>
+             <div class="activity-attachment-preview-body">
+               <div class="activity-attachment-preview-name" title="${safeName}">${safeName}</div>
+               <div class="activity-attachment-preview-meta">${meta.label}${size ? ` • ${size}` : ''}</div>
+             </div>
+             <button type="button" class="activity-attachment-remove" data-index="${index}" aria-label="Remover anexo">
+               <i class="fa-solid fa-xmark"></i>
+             </button>
+           </div>`;
+       }).join('');
+
+       attachmentPreview.querySelectorAll('.activity-attachment-remove').forEach(btn => {
+         btn.addEventListener('click', () => {
+           const idx = Number(btn.dataset.index);
+           if (Number.isNaN(idx)) return;
+           attachmentState.files.splice(idx, 1);
+           renderAttachmentState();
+         });
+       });
+     }
+
+     function addAttachmentFiles(files) {
+       const MAX = 100 * 1024 * 1024;
+       const incoming = Array.from(files || []).filter(Boolean);
+       if (!incoming.length) return;
+
+       const seen = new Set(attachmentState.files.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+       for (const file of incoming) {
+         if (file.size > MAX) {
+           Utils.showToast(`Arquivo "${file.name}" é maior que 100MB.`, 'error');
+           continue;
+         }
+         const key = `${file.name}_${file.size}_${file.lastModified}`;
+         if (seen.has(key)) continue;
+         seen.add(key);
+         attachmentState.files.push(file);
+       }
+       renderAttachmentState();
+     }
+
+     attachmentZone?.addEventListener('click', () => attachmentInput?.click());
+     attachmentZone?.addEventListener('keydown', e => {
+       if (e.key === 'Enter' || e.key === ' ') {
+         e.preventDefault();
+         attachmentInput?.click();
+       }
+     });
+     attachmentInput?.addEventListener('change', () => addAttachmentFiles(attachmentInput.files));
+     attachmentZone?.addEventListener('dragover', e => {
+       e.preventDefault();
+       attachmentZone.classList.add('activity-attachment-zone-active');
+     });
+     attachmentZone?.addEventListener('dragleave', () => attachmentZone.classList.remove('activity-attachment-zone-active'));
+     attachmentZone?.addEventListener('drop', e => {
+       e.preventDefault();
+       attachmentZone.classList.remove('activity-attachment-zone-active');
+       addAttachmentFiles(e.dataTransfer?.files);
+     });
+
+     async function uploadSelectedAttachments(files) {
+       const uploaded = [];
+       for (const [index, file] of (files || []).entries()) {
+         const path = _buildAttachmentStoragePath(profile.id, `${index}_${file.name}`);
+         const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file);
+         if (upErr) {
+           await Promise.all(uploaded.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+           return { ok: false, error: upErr, uploaded };
+         }
+         if (upData) {
+           const { data: urlData } = db.storage.from('activity-files').getPublicUrl(path);
+           uploaded.push({
+             path,
+             file,
+             file_url: urlData.publicUrl,
+             file_name: file.name,
+             mime_type: file.type || null,
+             file_size: file.size || null,
+           });
+         }
+       }
+       return { ok: true, uploaded };
+     }
+
+     async function cleanupUploadedAttachments(uploadedFiles) {
+       if (!uploadedFiles || !uploadedFiles.length) return;
+       await Promise.all(uploadedFiles.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+     }
+
+     async function attachFilesToActivities(activityIds, uploadedFiles) {
+       if (!activityIds.length || !uploadedFiles.length) return { ok: true };
+       const rows = activityIds.flatMap(activity_id => uploadedFiles.map(file => ({
+         activity_id,
+         file_url: file.file_url,
+         file_name: file.file_name,
+         file_path: file.path,
+         mime_type: file.mime_type,
+         file_size: file.file_size,
+         created_by: profile.id,
+       })));
+       const { error } = await db.from('activity_attachments').insert(rows);
+       return { ok: !error, error };
+     }
 
      // ── Init dropdowns ──
      _initMemberDropdown('na-members-wrap', 'na-members-tags', 'na-members-placeholder', 'na-members-dropdown', 'na-member-opt', 'na-member-ids');
@@ -2151,14 +2396,29 @@
        }
 
        const btn = document.getElementById('createActivityBtn');
+       const selectedAttachments = attachmentState.files.slice();
+       let uploadedAttachments = [];
+
+       if (selectedAttachments.length) {
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Preparando anexos...';
+         const uploadResult = await uploadSelectedAttachments(selectedAttachments);
+         if (!uploadResult.ok) {
+           Utils.showToast(`Erro ao enviar anexos: ${uploadResult.error?.message || 'tente novamente.'}`, 'error');
+           btn.disabled = false;
+           btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
+           return;
+         }
+         uploadedAttachments = uploadResult.uploaded || [];
+       }
 
        if (_isCollab) {
          // ── Modo colaborativo: 1 atividade compartilhada ──
          const ownerId   = document.getElementById('na-collab-owner').value;
          const collabIds = (document.getElementById('na-collab-ids').value || '').split(',').filter(Boolean);
-         if (!ownerId) { Utils.showToast('Selecione o responsável principal.', 'error'); return; }
-         if (!collabIds.length) { Utils.showToast('Selecione ao menos um co-membro.', 'error'); return; }
-         if (collabIds.includes(ownerId)) { Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); return; }
+         if (!ownerId) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione o responsável principal.', 'error'); return; }
+         if (!collabIds.length) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione ao menos um co-membro.', 'error'); return; }
+         if (collabIds.includes(ownerId)) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); return; }
 
          btn.disabled = true;
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
@@ -2176,6 +2436,7 @@
            await db.from('activity_collaborators').insert(
              collabIds.map(uid => ({ activity_id: newAct.id, user_id: uid }))
            );
+           const attachResult = await attachFilesToActivities([newAct.id], uploadedAttachments);
            const allMembers = [ownerId, ...collabIds];
            await Promise.all(allMembers.map(uid =>
              NotifPrefs.dispatch(uid, {
@@ -2184,9 +2445,17 @@
              })
            ));
            modal.classList.remove('open');
-           Utils.showToast(`Atividade colaborativa criada para ${allMembers.length} membros!`);
+           if (!attachResult.ok) {
+             await Promise.all(uploadedAttachments.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+             Utils.showToast('Atividade criada, mas os anexos não puderam ser salvos.', 'error');
+           } else {
+             Utils.showToast(`Atividade colaborativa criada para ${allMembers.length} membros!`);
+           }
+           attachmentState.files = [];
+           clearAttachmentUrls();
            setTimeout(onSuccess, 300);
          } else {
+           await cleanupUploadedAttachments(uploadedAttachments);
            Utils.showToast('Erro ao criar atividade.', 'error');
            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
          }
@@ -2194,7 +2463,7 @@
        } else {
          // ── Modo individual: cópia para cada membro selecionado ──
          const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
-         if (!memberIds.length) { Utils.showToast('Selecione ao menos um membro.', 'error'); return; }
+         if (!memberIds.length) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione ao menos um membro.', 'error'); return; }
 
          btn.disabled = true;
          btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Criando${memberIds.length > 1 ? ` (${memberIds.length})` : ''}...`;
@@ -2206,9 +2475,11 @@
            return p;
          });
 
-         const { error } = await db.from('activities').insert(payloads);
+         const { data: createdActs, error } = await db.from('activities').insert(payloads).select('id');
 
-         if (!error) {
+         if (!error && createdActs) {
+           const activityIds = createdActs.map(a => a.id);
+           const attachResult = await attachFilesToActivities(activityIds, uploadedAttachments);
            await Promise.all(memberIds.map(uid =>
              NotifPrefs.dispatch(uid, {
                message: `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
@@ -2216,9 +2487,17 @@
              })
            ));
            modal.classList.remove('open');
-           Utils.showToast(memberIds.length > 1 ? `Atividade criada para ${memberIds.length} membros!` : 'Atividade criada com sucesso!');
+           if (!attachResult.ok) {
+             await cleanupUploadedAttachments(uploadedAttachments);
+             Utils.showToast('Atividade criada, mas os anexos não puderam ser salvos.', 'error');
+           } else {
+             Utils.showToast(memberIds.length > 1 ? `Atividade criada para ${memberIds.length} membros!` : 'Atividade criada com sucesso!');
+           }
+           attachmentState.files = [];
+           clearAttachmentUrls();
            setTimeout(onSuccess, 300);
          } else {
+           await cleanupUploadedAttachments(uploadedAttachments);
            Utils.showToast('Erro ao criar atividade.', 'error');
            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
          }
