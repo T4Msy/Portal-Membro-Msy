@@ -2446,12 +2446,13 @@
          Utils.showToast('Preencha título, prazo e descrição.', 'error'); return;
        }
 
-       const btn = document.getElementById('createActivityBtn');
-       const idleBtnHtml = isEditing
-         ? '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações'
-         : '<i class="fa-solid fa-plus"></i> Criar Atividade';
-       const selectedAttachments = attachmentState.files.slice();
-       let uploadedAttachments = [];
+     const btn = document.getElementById('createActivityBtn');
+     const idleBtnHtml = isEditing
+       ? '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações'
+       : '<i class="fa-solid fa-plus"></i> Criar Atividade';
+     const selectedAttachments = attachmentState.files.slice();
+     let uploadedAttachments = [];
+     const editorName = profile.name || 'A Diretoria';
 
        if (selectedAttachments.length) {
          btn.disabled = true;
@@ -2512,12 +2513,22 @@
              return;
            }
 
-           const attachResult = await attachFilesToActivities([editingActivity.id], uploadedAttachments);
-           if (!attachResult.ok) {
-             await cleanupUploadedAttachments(uploadedAttachments);
-             Utils.showToast('Atividade salva, mas os anexos não puderam ser gravados.', 'error');
-           } else {
-             Utils.showToast('Atividade atualizada com sucesso!');
+          const attachResult = await attachFilesToActivities([editingActivity.id], uploadedAttachments);
+          const notifyTargets = [...new Set([ownerId, ...collabIds].filter(uid => uid && uid !== profile.id))];
+          await Promise.all(notifyTargets.map(uid =>
+            NotifPrefs.dispatch(uid, {
+              message: `A atividade "${title}" foi editada por ${editorName}.`,
+              type: 'activity',
+              icon: '✏️',
+              link: 'atividades.html',
+              channels: ['push', 'email'],
+            })
+          ));
+          if (!attachResult.ok) {
+            await cleanupUploadedAttachments(uploadedAttachments);
+            Utils.showToast('Atividade salva, mas os anexos não puderam ser gravados.', 'error');
+          } else {
+            Utils.showToast('Atividade atualizada com sucesso!');
            }
            modal.classList.remove('open');
            attachmentState.files = [];
@@ -2551,6 +2562,16 @@
          }
 
          const attachResult = await attachFilesToActivities([editingActivity.id], uploadedAttachments);
+         const notifyTargets = [...new Set(memberIds.filter(uid => uid && uid !== profile.id))];
+         await Promise.all(notifyTargets.map(uid =>
+           NotifPrefs.dispatch(uid, {
+             message: `A atividade "${title}" foi editada por ${editorName}.`,
+             type: 'activity',
+             icon: '✏️',
+             link: 'atividades.html',
+             channels: ['push', 'email'],
+           })
+         ));
          if (!attachResult.ok) {
            await cleanupUploadedAttachments(uploadedAttachments);
            Utils.showToast('Atividade salva, mas os anexos não puderam ser gravados.', 'error');
