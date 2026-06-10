@@ -563,6 +563,8 @@ async function initRanking() {
       .trono-periodo { font-size: .6rem; color: rgba(255,255,255,.2); margin-top: 5px; letter-spacing: .05em; }
       .trono-pos1 .trono-periodo { color: rgba(201,168,76,.5); }
 
+      .trono-msg-wrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 2px; }
+
       .trono-vazio { padding: 50px; text-align: center; color: rgba(255,255,255,.18); font-size: .84rem; font-style: italic; }
 
       .trono-diario-btn {
@@ -608,6 +610,8 @@ async function initRanking() {
         background: rgba(201,168,76,.18); color: var(--gold);
         font-size: .62rem; border-radius: 999px; font-family: sans-serif;
       }
+
+      .rank-entry-row { display: grid; grid-template-columns: minmax(150px,1.1fr) minmax(130px,1fr) 90px 34px; gap: 8px; align-items: center; }
 
       .trono-diario-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
       .trono-diario-row {
@@ -672,7 +676,8 @@ async function initRanking() {
         .trono-pos1 .trono-nome { font-size: .92rem !important; text-shadow: none !important; }
         .trono-msgs { font-size: .72rem !important; font-weight: 700; flex-shrink: 0; white-space: nowrap; }
         .trono-pos1 .trono-msgs { font-size: .82rem !important; }
-        .trono-periodo { font-size: .6rem; display: block; margin-top: 3px !important; flex-shrink: 0; white-space: nowrap; }
+        .trono-msg-wrap { align-items: flex-end; gap: 1px; }
+        .trono-periodo { font-size: .58rem; display: block; flex-shrink: 0; white-space: nowrap; }
         .trono-degrau { display: none; }
         .trono-card { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
         .trono-wrap { gap: 18px; }
@@ -680,6 +685,10 @@ async function initRanking() {
         .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .rank-main-tab { padding: 10px 12px; font-size: .72rem; }
         .trono-cat-badge { font-size: .5rem; padding: 2px 8px; }
+        .rank-entry-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .rank-entry-row .rank-member, .rank-entry-row .rank-name { flex: 1 1 100%; min-width: 0; }
+        .rank-entry-row .rank-msgs { flex: 1 1 auto; min-width: 60px; }
+        .rank-entry-row > button { flex: 0 0 34px; }
       }
 
       @media (max-width: 380px) {
@@ -692,6 +701,8 @@ async function initRanking() {
         .trono-pos1 .trono-nome { font-size: .85rem !important; }
         .trono-msgs { font-size: .68rem !important; }
         .trono-pos1 .trono-msgs { font-size: .78rem !important; }
+        .trono-msg-wrap { gap: 0; }
+        .trono-periodo { font-size: .5rem !important; }
         .rank-main-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .rank-main-tab { padding: 9px 10px; font-size: .68rem; gap: 5px; }
       }
@@ -813,8 +824,10 @@ async function initRanking() {
                         <div class="trono-medal">${tronoPosEmojis[origIdx]}</div>
                         <div class="trono-avatar">${Utils.getInitials(item.nome)}</div>
                         <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
-                        <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
-                        ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
+                        <div class="trono-msg-wrap">
+                          <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
+                          ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
+                        </div>
                       </div>
                       <div class="trono-degrau">${tronoPosLabels[origIdx]}</div>
                     </div>`;
@@ -1027,7 +1040,7 @@ async function initRanking() {
 
     const addRow = (n = '', m = '', uid = '') => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(130px,1fr) 90px 34px;gap:8px;align-items:center';
+      row.className = 'rank-entry-row';
       row.innerHTML = `<select class="form-input rank-member" style="padding:8px 10px;font-size:.85rem">
           <option value="">Membro cadastrado</option>
           ${memberOptions}

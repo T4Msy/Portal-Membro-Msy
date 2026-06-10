@@ -5095,6 +5095,8 @@ textarea:invalid:not(:placeholder-shown),
   #bibCount { display: none; }
 
   .ranking-tabs { max-width: 100%; }
+  .ranking-card-header { padding: 14px 16px 0; }
+  .ranking-card-periodo { font-size: .8rem; overflow-wrap: anywhere; }
   .ranking-podio { flex-direction: row; flex-wrap: wrap; }
   .ranking-podio-item { min-width: calc(50% - 6px); box-sizing: border-box; }
   .ranking-add-btns { flex-direction: column; width: 100%; }
