@@ -2874,6 +2874,23 @@ select option:hover,
   line-height: 1.45;
 }
 
+.activity-attachment-dropzone-cta {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(201,168,76,.32);
+  background: rgba(201,168,76,.08);
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .activity-attachment-summary {
   margin-top: 8px;
 }

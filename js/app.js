@@ -2167,12 +2167,13 @@
        </div>
        <div class="activity-modal-section activity-attachment-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
          <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-paperclip"></i> Anexos (opcional)</div>
-         <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
+         <label class="activity-attachment-dropzone" id="na-attachment-zone" for="na-attachments-input">
            <div class="activity-attachment-dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
            <div class="activity-attachment-dropzone-text">Clique ou arraste arquivos para anexar</div>
            <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Até 100MB por arquivo.</div>
+           <div class="activity-attachment-dropzone-cta">Selecionar arquivos</div>
            <input type="file" id="na-attachments-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="display:none">
-         </div>
+         </label>
          <div class="activity-attachment-summary" id="na-attachment-summary">Nenhum arquivo selecionado.</div>
          <div class="activity-attachment-grid" id="na-attachment-preview"></div>
        </div>
