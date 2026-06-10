@@ -1127,7 +1127,7 @@
      getFileIcon(tipo, nome) {
        if (!tipo && nome) {
          const ext = nome.split('.').pop().toLowerCase();
-         if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return { icon: 'fa-solid fa-image', color: '#60a5fa', label: 'Imagem' };
+         if (['jpg','jpeg','png','gif','webp','svg','heic','heif'].includes(ext)) return { icon: 'fa-solid fa-image', color: '#60a5fa', label: 'Imagem' };
          if (['mp4','mov','avi','mkv','webm'].includes(ext)) return { icon: 'fa-solid fa-film', color: '#a78bfa', label: 'Vídeo' };
          if (['mp3','wav','ogg','aac'].includes(ext)) return { icon: 'fa-solid fa-music', color: '#f472b6', label: 'Áudio' };
          if (ext === 'pdf') return { icon: 'fa-solid fa-file-pdf', color: '#f87171', label: 'PDF' };
@@ -1151,7 +1151,7 @@
 
      isImage(tipo, nome) {
        if (tipo && tipo.startsWith('image/')) return true;
-       if (nome) { const ext = nome.split('.').pop().toLowerCase(); return ['jpg','jpeg','png','gif','webp'].includes(ext); }
+       if (nome) { const ext = nome.split('.').pop().toLowerCase(); return ['jpg','jpeg','png','gif','webp','heic','heif'].includes(ext); }
        return false;
      },
 
@@ -2273,7 +2273,16 @@
        attachmentState.urls = [];
      }
 
-     function renderAttachmentState() {
+     function readFileAsDataUrl(file) {
+       return new Promise(resolve => {
+         const reader = new FileReader();
+         reader.onload = () => resolve(reader.result || '');
+         reader.onerror = () => resolve('');
+         reader.readAsDataURL(file);
+       });
+     }
+
+     async function renderAttachmentState() {
        clearAttachmentUrls();
        if (!attachmentPreview || !attachmentSummary) return;
 
@@ -2289,15 +2298,13 @@
          const isImg = AnexoUtils.isImage(file.type, file.name);
          const safeName = Utils.escapeHtml(file.name);
          const size = AnexoUtils.formatBytes(file.size);
-         const previewUrl = isImg ? URL.createObjectURL(file) : '';
-         if (previewUrl) attachmentState.urls.push(previewUrl);
          return `
           <div class="activity-attachment-preview-card">
             <div class="activity-attachment-preview-thumb">
               ${isImg
-                 ? `<img src="${previewUrl}" alt="${safeName}" loading="lazy">`
+                 ? `<div class="activity-attachment-thumb-loading"><i class="fa-solid fa-image"></i></div>`
                  : `<i class="${meta.icon}" style="color:${meta.color}"></i>`
-               }
+              }
             </div>
              <div class="activity-attachment-preview-body">
                <div class="activity-attachment-preview-name" title="${safeName}">${safeName}</div>
@@ -2317,6 +2324,21 @@
            renderAttachmentState();
         });
       });
+
+      const imageCards = [...attachmentPreview.querySelectorAll('.activity-attachment-preview-card')];
+      await Promise.all(attachmentState.files.map(async (file, index) => {
+        if (!AnexoUtils.isImage(file.type, file.name)) return;
+        const src = await readFileAsDataUrl(file);
+        if (!src) return;
+        const img = new Image();
+        img.alt = file.name;
+        img.src = src;
+        img.onload = () => {
+          const card = imageCards[index];
+          const thumb = card?.querySelector('.activity-attachment-preview-thumb');
+          if (thumb) thumb.innerHTML = `<img src="${src}" alt="${Utils.escapeHtml(file.name)}" loading="lazy">`;
+        };
+      }));
 
       if (window.innerWidth <= 768) {
         requestAnimationFrame(() => {
