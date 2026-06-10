@@ -2193,7 +2193,7 @@
            <div class="activity-attachment-dropzone-text">Clique ou arraste arquivos para anexar</div>
            <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Até 100MB por arquivo.</div>
            <div class="activity-attachment-dropzone-cta">Selecionar arquivos</div>
-           <input type="file" id="na-attachments-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="display:none">
+           <input type="file" id="na-attachments-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="display:none">
          </label>
          <div class="activity-attachment-summary" id="na-attachment-summary">Nenhum arquivo selecionado.</div>
          <div class="activity-attachment-grid" id="na-attachment-preview"></div>
@@ -2288,13 +2288,13 @@
          const previewUrl = isImg ? URL.createObjectURL(file) : '';
          if (previewUrl) attachmentState.urls.push(previewUrl);
          return `
-           <div class="activity-attachment-preview-card">
-             <div class="activity-attachment-preview-thumb">
-               ${isImg
-                 ? `<img src="${previewUrl}" alt="${safeName}" loading="lazy" onload="URL.revokeObjectURL(this.src)">`
+          <div class="activity-attachment-preview-card">
+            <div class="activity-attachment-preview-thumb">
+              ${isImg
+                 ? `<img src="${previewUrl}" alt="${safeName}" loading="lazy">`
                  : `<i class="${meta.icon}" style="color:${meta.color}"></i>`
                }
-             </div>
+            </div>
              <div class="activity-attachment-preview-body">
                <div class="activity-attachment-preview-name" title="${safeName}">${safeName}</div>
                <div class="activity-attachment-preview-meta">${meta.label}${size ? ` • ${size}` : ''}</div>
@@ -2311,9 +2311,15 @@
            if (Number.isNaN(idx)) return;
            attachmentState.files.splice(idx, 1);
            renderAttachmentState();
-         });
-       });
-     }
+        });
+      });
+
+      if (window.innerWidth <= 768) {
+        requestAnimationFrame(() => {
+          attachmentSummary?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
+    }
 
      function addAttachmentFiles(files) {
        const MAX = 100 * 1024 * 1024;
