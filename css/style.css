@@ -5921,6 +5921,20 @@ body[data-page="atividades"] #activityModal .activity-modal-notif {
   }
 }
 
+@supports (-webkit-touch-callout: none) {
+  @media (hover: none) and (pointer: coarse) and (max-width: 600px) {
+    body[data-page="atividades"] #activityModal .activity-attachment-section-native .activity-attachment-dropzone,
+    body[data-page="atividades"] #activityModal .activity-attachment-section-native .activity-attachment-open-btn,
+    body[data-page="atividades"] #activityModal .activity-attachment-section-native .activity-attachment-summary {
+      display: none !important;
+    }
+
+    body[data-page="atividades"] #activityModal .activity-attachment-section-native .activity-attachment-native-input {
+      margin-top: 0;
+    }
+  }
+}
+
 @media (max-width: 390px) {
   body[data-page="atividades"] #activityModal.modal-overlay {
     padding: 6px !important;

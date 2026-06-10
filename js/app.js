@@ -2187,7 +2187,7 @@
          <textarea class="form-input form-textarea" id="na-desc" placeholder="Instruções detalhadas..."></textarea>
        </div>
        ${isEditing ? `<div class="activity-attachment-dock" id="na-attachment-dock"></div>` : ''}
-       <div class="activity-modal-section activity-attachment-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
+       <div class="activity-modal-section activity-attachment-section ${isEditing ? 'activity-attachment-section-native' : ''}" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
          <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-paperclip"></i> Anexos (opcional)</div>
          <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
            <div class="activity-attachment-dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
