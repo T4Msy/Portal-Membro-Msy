@@ -2186,6 +2186,7 @@
          <label class="form-label">Descrição *</label>
          <textarea class="form-input form-textarea" id="na-desc" placeholder="Instruções detalhadas..."></textarea>
        </div>
+       ${isEditing ? `<div class="activity-attachment-dock" id="na-attachment-dock"></div>` : ''}
        <div class="activity-modal-section activity-attachment-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
          <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-paperclip"></i> Anexos (opcional)</div>
          <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
@@ -2243,6 +2244,7 @@
      const attachmentInput = document.getElementById('na-attachments-input');
      const attachmentSummary = document.getElementById('na-attachment-summary');
      const attachmentPreview = document.getElementById('na-attachment-preview');
+     const attachmentDock = document.getElementById('na-attachment-dock');
      const btnInd   = document.getElementById('na-type-individual');
      const btnCollab = document.getElementById('na-type-collab');
      const secInd   = document.getElementById('na-section-individual');
@@ -2289,10 +2291,28 @@
        if (!attachmentState.files.length) {
          attachmentSummary.textContent = 'Nenhum arquivo selecionado.';
          attachmentPreview.innerHTML = '';
+         if (attachmentDock) attachmentDock.innerHTML = '';
          return;
        }
 
        attachmentSummary.textContent = `${attachmentState.files.length} arquivo${attachmentState.files.length > 1 ? 's' : ''} selecionado${attachmentState.files.length > 1 ? 's' : ''}.`;
+       if (attachmentDock) {
+         attachmentDock.innerHTML = `
+           <div class="activity-attachment-dock-head">
+             <span><i class="fa-solid fa-paperclip"></i> Arquivos selecionados</span>
+             <span>${attachmentState.files.length}</span>
+           </div>
+           <div class="activity-attachment-dock-list">
+             ${attachmentState.files.map(file => {
+               const meta = AnexoUtils.getFileIcon(file.type, file.name);
+               return `
+                 <div class="activity-attachment-dock-item">
+                   <i class="${meta.icon}" style="color:${meta.color}"></i>
+                   <span title="${Utils.escapeHtml(file.name)}">${Utils.escapeHtml(file.name)}</span>
+                 </div>`;
+             }).join('')}
+           </div>`;
+       }
        attachmentPreview.innerHTML = attachmentState.files.map((file, index) => {
          const meta = AnexoUtils.getFileIcon(file.type, file.name);
          const isImg = AnexoUtils.isImage(file.type, file.name);

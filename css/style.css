@@ -2915,6 +2915,58 @@ select option:hover,
   margin-top: 8px;
 }
 
+.activity-attachment-dock {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(201,168,76,.22);
+  border-radius: var(--radius);
+  background: rgba(201,168,76,.05);
+}
+
+.activity-attachment-dock-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+}
+
+.activity-attachment-dock-head i {
+  margin-right: 6px;
+}
+
+.activity-attachment-dock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.activity-attachment-dock-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.03);
+  color: var(--text-1);
+  font-size: 0.76rem;
+  min-width: 0;
+}
+
+.activity-attachment-dock-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .activity-attachment-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
