@@ -2911,6 +2911,28 @@ select option:hover,
   transform: translateY(-1px);
 }
 
+.activity-attachment-native-input {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(201,168,76,.22);
+  border-radius: var(--radius);
+  background: var(--black-4);
+  color: var(--text-1);
+  font-size: 0.82rem;
+}
+
+.activity-attachment-native-input::file-selector-button {
+  margin-right: 10px;
+  border: 1px solid rgba(201,168,76,.3);
+  border-radius: 999px;
+  background: rgba(201,168,76,.08);
+  color: var(--gold);
+  padding: 7px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .activity-attachment-summary {
   margin-top: 8px;
 }
