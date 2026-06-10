@@ -1325,10 +1325,10 @@
        }).join('');
    
        grid.querySelectorAll('.open-activity').forEach(el => {
-         el.addEventListener('click', e => { e.stopPropagation(); openActivityModal(el.dataset.id, acts, profile); });
+         el.addEventListener('click', e => { e.stopPropagation(); openActivityModal(el.dataset.id, acts, profile, loadActivities); });
        });
      grid.querySelectorAll('.activity-card').forEach(card => {
-       card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile));
+       card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile, loadActivities));
      });
       _focusInternalTarget('id', '.activity-card');
      }
@@ -1625,7 +1625,7 @@
        '<div class="modal-anexos-list">' + items + '</div>';
    }
 
-   async function openActivityModal(id, acts, profile) {
+   async function openActivityModal(id, acts, profile, onSuccess = null) {
      const act = acts.find(a => a.id === id);
      if (!act) return;
      const modal = document.getElementById('activityModal');
@@ -1762,14 +1762,15 @@
        ` : ''}
    
        ${isDiretoria ? `
-         <div class="divider"></div>
-         <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ações da Diretoria</div>
-         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-           ${act.status !== 'Concluída' && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="markDoneBtn"><i class="fa-solid fa-check"></i> Marcar Concluída</button>` : ''}
-           ${act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-ghost" id="cancelActBtn" style="color:var(--red-bright)"><i class="fa-solid fa-ban"></i> Cancelar</button>` : ''}
-           ${act.status === 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="uncancelActBtn" style="color:#22c55e;border-color:rgba(34,197,94,.35)"><i class="fa-solid fa-rotate-left"></i> Descancelar</button>` : ''}
-           <button class="btn btn-sm btn-ghost" id="deleteActBtn" style="color:var(--red-bright);border-color:var(--border-red)"><i class="fa-solid fa-trash"></i> Excluir</button>
-         </div>
+       <div class="divider"></div>
+       <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ações da Diretoria</div>
+       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-sm btn-outline" id="editActBtn"><i class="fa-solid fa-pen"></i> Editar</button>
+          ${act.status !== 'Concluída' && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="markDoneBtn"><i class="fa-solid fa-check"></i> Marcar Concluída</button>` : ''}
+          ${act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-ghost" id="cancelActBtn" style="color:var(--red-bright)"><i class="fa-solid fa-ban"></i> Cancelar</button>` : ''}
+          ${act.status === 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="uncancelActBtn" style="color:#22c55e;border-color:rgba(34,197,94,.35)"><i class="fa-solid fa-rotate-left"></i> Descancelar</button>` : ''}
+          <button class="btn btn-sm btn-ghost" id="deleteActBtn" style="color:var(--red-bright);border-color:var(--border-red)"><i class="fa-solid fa-trash"></i> Excluir</button>
+        </div>
          ${act.status !== 'Cancelada' ? `
          <div class="form-group" style="margin-bottom:0">
            <label class="form-label"><i class="fa-solid fa-calendar-plus"></i> Estender Prazo</label>
@@ -2000,7 +2001,16 @@
          Utils.showToast('Erro ao excluir atividade.', 'error');
        }
      });
-   
+
+     document.getElementById('editActBtn')?.addEventListener('click', async () => {
+       const fullAct = {
+         ...act,
+         collabMembers,
+       };
+       modal.classList.remove('open');
+       setTimeout(() => openNewActivityModal(profile, onSuccess, fullAct), 50);
+     });
+
      const extBtn = document.getElementById('extDeadlineBtn');
      if (extBtn) {
        let _extLock = false;
@@ -2055,11 +2065,19 @@
      const drop = document.getElementById(dropId);
      const ph   = document.getElementById(phId);
      if (!tags || !drop) return;
-     const selectedIds = new Set();
+     const hidden = document.getElementById(hiddenId);
+     const selectedIds = new Set((hidden?.value || '').split(',').map(v => v.trim()).filter(Boolean));
 
-     function updateTags() {
+    function updateTags() {
        tags.querySelectorAll('.na-tag').forEach(t => t.remove());
        ph.style.display = selectedIds.size ? 'none' : '';
+       drop.querySelectorAll(`.${optClass}`).forEach(opt => {
+         const id = opt.dataset.id;
+         const isSelected = selectedIds.has(id);
+         opt.classList.toggle('selected', isSelected);
+         opt.querySelector('.na-chk-box-inner').innerHTML = isSelected ? '<i class="fa-solid fa-check" style="color:var(--gold)"></i>' : '';
+         opt.style.background = isSelected ? 'rgba(201,168,76,.1)' : 'transparent';
+       });
        selectedIds.forEach(id => {
          const opt = drop.querySelector(`.${optClass}[data-id="${id}"]`);
          if (!opt) return;
@@ -2078,7 +2096,7 @@
          });
          tags.appendChild(tag);
        });
-       document.getElementById(hiddenId).value = [...selectedIds].join(',');
+       if (hidden) hidden.value = [...selectedIds].join(',');
      }
 
      drop.querySelectorAll(`.${optClass}`).forEach(opt => {
@@ -2105,18 +2123,21 @@
      }, true);
    }
 
-   async function openNewActivityModal(profile, onSuccess) {
+   async function openNewActivityModal(profile, onSuccess, editingActivity = null) {
      const { data: members } = await db.from('profiles').select('id,name,role').eq('status', 'ativo').order('name');
-   
+    const isEditing = !!editingActivity;
+    const editingCollaborators = editingActivity?.collabMembers || [];
+    const editingIsCollab = isEditing ? editingCollaborators.length > 0 : false;
+
      const modal = document.getElementById('activityModal');
-     document.getElementById('modalTitle').textContent = 'Nova Atividade';
+     document.getElementById('modalTitle').textContent = isEditing ? 'Editar Atividade' : 'Nova Atividade';
      document.getElementById('modalBody').innerHTML = `
        <div class="form-group" style="margin-bottom:14px">
          <label class="form-label">Título *</label>
          <input class="form-input" id="na-title" placeholder="Nome da atividade">
        </div>
        <!-- Tipo de atividade: individual ou colaborativa -->
-       <div class="activity-modal-type-toggle" style="display:flex;gap:8px;margin-bottom:14px">
+       <div class="activity-modal-type-toggle" style="display:flex;gap:8px;margin-bottom:14px${isEditing ? ';display:none' : ''}">
          <button type="button" id="na-type-individual" class="btn btn-sm btn-outline" style="flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)">
            <i class="fa-solid fa-user"></i> Individual
          </button>
@@ -2209,7 +2230,7 @@
      `;
      document.getElementById('modalFooter').innerHTML = `
        <button class="btn btn-ghost" id="cancelModal">Cancelar</button>
-       <button class="btn btn-primary" id="createActivityBtn"><i class="fa-solid fa-plus"></i> Criar Atividade</button>
+       <button class="btn btn-primary" id="createActivityBtn"><i class="fa-solid fa-plus"></i> ${isEditing ? 'Salvar Alterações' : 'Criar Atividade'}</button>
      `;
      modal.classList.add('open');
 
@@ -2218,6 +2239,30 @@
      const attachmentInput = document.getElementById('na-attachments-input');
      const attachmentSummary = document.getElementById('na-attachment-summary');
      const attachmentPreview = document.getElementById('na-attachment-preview');
+     const btnInd   = document.getElementById('na-type-individual');
+     const btnCollab = document.getElementById('na-type-collab');
+     const secInd   = document.getElementById('na-section-individual');
+     const secCollab = document.getElementById('na-section-collab');
+     let _isCollab = editingIsCollab;
+
+     if (isEditing) {
+       document.getElementById('na-title').value = editingActivity.title || '';
+       document.getElementById('na-deadline').value = (editingActivity.deadline || '').slice(0, 10);
+       document.getElementById('na-priority').value = editingActivity.priority || 'Média';
+       document.getElementById('na-desc').value = editingActivity.description || '';
+       document.getElementById('na-opens').value = editingActivity.opens_at ? editingActivity.opens_at.slice(0, 16) : '';
+       document.getElementById('na-closes').value = editingActivity.closes_at ? editingActivity.closes_at.slice(0, 16) : '';
+       if (editingIsCollab) {
+         document.getElementById('na-collab-owner').value = editingActivity.assigned_to || '';
+         document.getElementById('na-collab-ids').value = (editingCollaborators || []).join(',');
+         secInd.style.display = 'none';
+         secCollab.style.display = '';
+       } else {
+         document.getElementById('na-member-ids').value = editingActivity.assigned_to || '';
+         secInd.style.display = '';
+         secCollab.style.display = 'none';
+       }
+     }
 
      function clearAttachmentUrls() {
        attachmentState.urls.forEach(url => URL.revokeObjectURL(url));
@@ -2357,12 +2402,6 @@
      _initMemberDropdown('na-collab-wrap', 'na-collab-tags', 'na-collab-placeholder', 'na-collab-dropdown', 'na-collab-opt', 'na-collab-ids');
 
      // ── Toggle individual / colaborativa ──
-     let _isCollab = false;
-     const btnInd   = document.getElementById('na-type-individual');
-     const btnCollab = document.getElementById('na-type-collab');
-     const secInd   = document.getElementById('na-section-individual');
-     const secCollab = document.getElementById('na-section-collab');
-
      btnInd.addEventListener('click', () => {
        _isCollab = false;
        btnInd.style.cssText   = 'flex:1;border-color:rgba(201,168,76,.5);color:var(--gold);background:rgba(201,168,76,.1)';
@@ -2377,6 +2416,11 @@
        secCollab.style.display = '';
        secInd.style.display    = 'none';
      });
+
+     if (isEditing) {
+       btnInd.style.display = 'none';
+       btnCollab.style.display = 'none';
+     }
 
      document.getElementById('cancelModal').addEventListener('click', () => modal.classList.remove('open'));
 
@@ -2397,6 +2441,9 @@
        }
 
        const btn = document.getElementById('createActivityBtn');
+       const idleBtnHtml = isEditing
+         ? '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações'
+         : '<i class="fa-solid fa-plus"></i> Criar Atividade';
        const selectedAttachments = attachmentState.files.slice();
        let uploadedAttachments = [];
 
@@ -2407,19 +2454,117 @@
          if (!uploadResult.ok) {
            Utils.showToast(`Erro ao enviar anexos: ${uploadResult.error?.message || 'tente novamente.'}`, 'error');
            btn.disabled = false;
-           btn.innerHTML = '<i class="fa-solid fa-plus"></i> Criar Atividade';
+           btn.innerHTML = idleBtnHtml;
            return;
          }
          uploadedAttachments = uploadResult.uploaded || [];
+       }
+
+       if (isEditing) {
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+
+         if (_isCollab) {
+           const ownerId   = document.getElementById('na-collab-owner').value;
+           const collabIds = (document.getElementById('na-collab-ids').value || '').split(',').filter(Boolean);
+           if (!ownerId) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione o responsável principal.', 'error'); btn.disabled = false; btn.innerHTML = idleBtnHtml; return; }
+           if (!collabIds.length) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione ao menos um co-membro.', 'error'); btn.disabled = false; btn.innerHTML = idleBtnHtml; return; }
+           if (collabIds.includes(ownerId)) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); btn.disabled = false; btn.innerHTML = idleBtnHtml; return; }
+
+           const payload = {
+             title, description: desc, assigned_to: ownerId, assigned_by: editingActivity.assigned_by || profile.id, deadline, priority
+           };
+           if (opens)  payload.opens_at  = new Date(opens).toISOString();
+           if (closes) payload.closes_at = new Date(closes).toISOString();
+
+           const { error: updateErr } = await db.from('activities').update(payload).eq('id', editingActivity.id);
+           if (updateErr) {
+             await cleanupUploadedAttachments(uploadedAttachments);
+             Utils.showToast('Erro ao salvar atividade.', 'error');
+             btn.disabled = false;
+             btn.innerHTML = idleBtnHtml;
+             return;
+           }
+
+           const { error: deleteCollabsErr } = await db.from('activity_collaborators').delete().eq('activity_id', editingActivity.id);
+           if (deleteCollabsErr) {
+             await cleanupUploadedAttachments(uploadedAttachments);
+             Utils.showToast('Erro ao atualizar co-membros.', 'error');
+             btn.disabled = false;
+             btn.innerHTML = idleBtnHtml;
+             return;
+           }
+
+           const { error: insertCollabsErr } = await db.from('activity_collaborators').insert(
+             collabIds.map(uid => ({ activity_id: editingActivity.id, user_id: uid }))
+           );
+           if (insertCollabsErr) {
+             await cleanupUploadedAttachments(uploadedAttachments);
+             Utils.showToast('Erro ao atualizar co-membros.', 'error');
+             btn.disabled = false;
+             btn.innerHTML = idleBtnHtml;
+             return;
+           }
+
+           const attachResult = await attachFilesToActivities([editingActivity.id], uploadedAttachments);
+           if (!attachResult.ok) {
+             await cleanupUploadedAttachments(uploadedAttachments);
+             Utils.showToast('Atividade salva, mas os anexos não puderam ser gravados.', 'error');
+           } else {
+             Utils.showToast('Atividade atualizada com sucesso!');
+           }
+           modal.classList.remove('open');
+           attachmentState.files = [];
+           clearAttachmentUrls();
+           if (typeof onSuccess === 'function') setTimeout(onSuccess, 300);
+           return;
+         }
+
+         const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
+         if (memberIds.length !== 1) {
+           await cleanupUploadedAttachments(uploadedAttachments);
+           Utils.showToast('Na edição, selecione apenas um membro.', 'error');
+           btn.disabled = false;
+           btn.innerHTML = idleBtnHtml;
+           return;
+         }
+
+         const payload = {
+           title, description: desc, assigned_to: memberIds[0], assigned_by: editingActivity.assigned_by || profile.id, deadline, priority
+         };
+         if (opens)  payload.opens_at  = new Date(opens).toISOString();
+         if (closes) payload.closes_at = new Date(closes).toISOString();
+
+         const { error: updateErr } = await db.from('activities').update(payload).eq('id', editingActivity.id);
+         if (updateErr) {
+           await cleanupUploadedAttachments(uploadedAttachments);
+           Utils.showToast('Erro ao salvar atividade.', 'error');
+           btn.disabled = false;
+           btn.innerHTML = idleBtnHtml;
+           return;
+         }
+
+         const attachResult = await attachFilesToActivities([editingActivity.id], uploadedAttachments);
+         if (!attachResult.ok) {
+           await cleanupUploadedAttachments(uploadedAttachments);
+           Utils.showToast('Atividade salva, mas os anexos não puderam ser gravados.', 'error');
+         } else {
+           Utils.showToast('Atividade atualizada com sucesso!');
+         }
+         modal.classList.remove('open');
+         attachmentState.files = [];
+         clearAttachmentUrls();
+         if (typeof onSuccess === 'function') setTimeout(onSuccess, 300);
+         return;
        }
 
        if (_isCollab) {
          // ── Modo colaborativo: 1 atividade compartilhada ──
          const ownerId   = document.getElementById('na-collab-owner').value;
          const collabIds = (document.getElementById('na-collab-ids').value || '').split(',').filter(Boolean);
-         if (!ownerId) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione o responsável principal.', 'error'); return; }
-         if (!collabIds.length) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione ao menos um co-membro.', 'error'); return; }
-         if (collabIds.includes(ownerId)) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); return; }
+         if (!ownerId) { await cleanupUploadedAttachments(uploadedAttachments); btn.disabled = false; btn.innerHTML = idleBtnHtml; Utils.showToast('Selecione o responsável principal.', 'error'); return; }
+         if (!collabIds.length) { await cleanupUploadedAttachments(uploadedAttachments); btn.disabled = false; btn.innerHTML = idleBtnHtml; Utils.showToast('Selecione ao menos um co-membro.', 'error'); return; }
+         if (collabIds.includes(ownerId)) { await cleanupUploadedAttachments(uploadedAttachments); btn.disabled = false; btn.innerHTML = idleBtnHtml; Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); return; }
 
          btn.disabled = true;
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
@@ -2454,7 +2599,7 @@
            }
            attachmentState.files = [];
            clearAttachmentUrls();
-           setTimeout(onSuccess, 300);
+           if (typeof onSuccess === 'function') setTimeout(onSuccess, 300);
          } else {
            await cleanupUploadedAttachments(uploadedAttachments);
            Utils.showToast('Erro ao criar atividade.', 'error');
@@ -2464,7 +2609,7 @@
        } else {
          // ── Modo individual: cópia para cada membro selecionado ──
          const memberIds = (document.getElementById('na-member-ids').value || '').split(',').filter(Boolean);
-         if (!memberIds.length) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('Selecione ao menos um membro.', 'error'); return; }
+         if (!memberIds.length) { await cleanupUploadedAttachments(uploadedAttachments); btn.disabled = false; btn.innerHTML = idleBtnHtml; Utils.showToast('Selecione ao menos um membro.', 'error'); return; }
 
          btn.disabled = true;
          btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Criando${memberIds.length > 1 ? ` (${memberIds.length})` : ''}...`;
@@ -2496,7 +2641,7 @@
            }
            attachmentState.files = [];
            clearAttachmentUrls();
-           setTimeout(onSuccess, 300);
+           if (typeof onSuccess === 'function') setTimeout(onSuccess, 300);
          } else {
            await cleanupUploadedAttachments(uploadedAttachments);
            Utils.showToast('Erro ao criar atividade.', 'error');
