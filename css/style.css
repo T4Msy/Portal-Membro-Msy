@@ -2891,6 +2891,26 @@ select option:hover,
   letter-spacing: 0.04em;
 }
 
+.activity-attachment-open-btn {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 42px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(201,168,76,.28);
+  background: rgba(201,168,76,.08);
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--t1) var(--ease), border-color var(--t1) var(--ease), transform var(--t1) var(--ease);
+}
+
+.activity-attachment-open-btn:hover {
+  background: rgba(201,168,76,.12);
+  border-color: rgba(201,168,76,.45);
+  transform: translateY(-1px);
+}
+
 .activity-attachment-summary {
   margin-top: 8px;
 }

@@ -2188,13 +2188,16 @@
        </div>
        <div class="activity-modal-section activity-attachment-section" style="border-top:1px solid var(--border-faint);padding-top:14px;margin-top:4px">
          <div class="activity-modal-section-title" style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px"><i class="fa-solid fa-paperclip"></i> Anexos (opcional)</div>
-         <label class="activity-attachment-dropzone" id="na-attachment-zone" for="na-attachments-input">
+         <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
            <div class="activity-attachment-dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
            <div class="activity-attachment-dropzone-text">Clique ou arraste arquivos para anexar</div>
            <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Até 100MB por arquivo.</div>
            <div class="activity-attachment-dropzone-cta">Selecionar arquivos</div>
-           <input type="file" id="na-attachments-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="display:none">
-         </label>
+         </div>
+         <button type="button" class="activity-attachment-open-btn" id="na-attachment-open-btn">
+           <i class="fa-solid fa-folder-open"></i> Escolher arquivos
+         </button>
+         <input type="file" id="na-attachments-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
          <div class="activity-attachment-summary" id="na-attachment-summary">Nenhum arquivo selecionado.</div>
          <div class="activity-attachment-grid" id="na-attachment-preview"></div>
        </div>
@@ -2236,6 +2239,7 @@
 
      const attachmentState = { files: [], urls: [] };
      const attachmentZone = document.getElementById('na-attachment-zone');
+     const attachmentOpenBtn = document.getElementById('na-attachment-open-btn');
      const attachmentInput = document.getElementById('na-attachments-input');
      const attachmentSummary = document.getElementById('na-attachment-summary');
      const attachmentPreview = document.getElementById('na-attachment-preview');
@@ -2346,6 +2350,21 @@
          e.preventDefault();
          attachmentInput?.click();
        }
+     });
+     attachmentOpenBtn?.addEventListener('click', () => {
+       if (!attachmentInput) return;
+       attachmentInput.value = '';
+       if (typeof attachmentInput.showPicker === 'function') attachmentInput.showPicker();
+       else attachmentInput.click();
+     });
+     attachmentOpenBtn?.addEventListener('touchend', e => {
+       e.preventDefault();
+       attachmentOpenBtn.click();
+     }, { passive: false });
+     attachmentZone?.addEventListener('touchend', e => {
+       if (e.target.closest('.activity-attachment-remove')) return;
+       if (e.target.closest('.activity-attachment-open-btn')) return;
+       attachmentOpenBtn?.click();
      });
      attachmentInput?.addEventListener('change', () => addAttachmentFiles(attachmentInput.files));
      attachmentZone?.addEventListener('dragover', e => {
