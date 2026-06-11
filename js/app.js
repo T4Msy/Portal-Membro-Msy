@@ -6232,17 +6232,17 @@
          </div>`).join('');
      }
    
-     body.innerHTML = `
-       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-         <div class="form-group">
-           <label class="form-label">Início da Semana *</label>
-           <input class="form-input" type="date" id="rk-start" value="${todayStr}">
-         </div>
-         <div class="form-group">
-           <label class="form-label">Fim da Semana *</label>
-           <input class="form-input" type="date" id="rk-end" value="${todayStr}">
-         </div>
-       </div>
+      body.innerHTML = `
+        <div class="rank-date-grid" style="margin-bottom:16px">
+          <div class="form-group">
+            <label class="form-label">Início da Semana *</label>
+            <input class="form-input" type="date" id="rk-start" value="${todayStr}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fim da Semana *</label>
+            <input class="form-input" type="date" id="rk-end" value="${todayStr}">
+          </div>
+        </div>
        <div style="font-size:.78rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Membros & Mensagens</div>
        <div id="rkRows">${buildRows()}</div>
        <button class="btn btn-ghost btn-sm" id="addRkRow" style="margin-top:8px"><i class="fa-solid fa-plus"></i> Adicionar linha</button>

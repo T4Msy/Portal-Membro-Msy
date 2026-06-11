@@ -2176,7 +2176,7 @@ async function initRanking() {
           <button class="modal-close" id="rankModalClose"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="rank-date-grid">
             <div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" id="rankStart"></div>
             <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-input" id="rankEnd"></div>
           </div>

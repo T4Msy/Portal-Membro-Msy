@@ -4988,6 +4988,21 @@ textarea:invalid:not(:placeholder-shown),
 .ranking-lista-nome { flex: 1; font-size: .85rem; color: var(--text-1); }
 .ranking-lista-msgs { color: var(--text-3); font-size: .82rem; }
 
+.rank-date-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rank-entry-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.rank-entry-row .rank-member { flex: 1 1 140px; min-width: 0; }
+.rank-entry-row .rank-name   { flex: 1 1 120px; min-width: 0; }
+.rank-entry-row .rank-msgs   { flex: 0 0 80px; min-width: 0; }
+
 /* -------- BUSCA MELHORADA -------- */
 .busca-empty-state {
   text-align: center;
@@ -5046,6 +5061,11 @@ textarea:invalid:not(:placeholder-shown),
 }
 @media (max-width: 640px) {
   .hide-xs { display: none !important; }
+  .rank-date-grid { grid-template-columns: 1fr; }
+  .rank-entry-row { flex-direction: column; align-items: stretch; }
+  .rank-entry-row .rank-member,
+  .rank-entry-row .rank-name,
+  .rank-entry-row .rank-msgs { flex: 1 1 auto; width: 100%; }
 }
 
 /* -------- RESPONSIVIDADE GLOBAL MELHORADA -------- */

@@ -1012,7 +1012,7 @@ async function initRanking() {
           <button class="modal-close" id="rankModalClose"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="rank-date-grid">
             <div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" id="rankStart"></div>
             <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-input" id="rankEnd"></div>
           </div>
@@ -1045,7 +1045,7 @@ async function initRanking() {
           <option value="">Membro cadastrado</option>
           ${memberOptions}
         </select>
-        <input type="text" class="form-input rank-name" placeholder="Nome legado/manual" value="${Utils.escapeHtml(n)}" style="padding:8px 10px;font-size:.85rem">
+        <input type="text" class="form-input rank-name" placeholder="Nome" value="${Utils.escapeHtml(n)}" style="padding:8px 10px;font-size:.85rem">
         <input type="number" class="form-input rank-msgs" placeholder="Msgs" value="${m}" min="0" style="padding:8px 10px;font-size:.85rem">
         <button class="btn btn-ghost btn-sm" style="padding:8px;flex-shrink:0"><i class="fa-solid fa-times" style="color:var(--red-bright)"></i></button>`;
       const select = row.querySelector('.rank-member');
