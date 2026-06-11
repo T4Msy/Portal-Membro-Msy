@@ -611,7 +611,7 @@ async function initRanking() {
         font-size: .62rem; border-radius: 999px; font-family: sans-serif;
       }
 
-      .rank-entry-row { display: grid; grid-template-columns: minmax(150px,1.1fr) minmax(130px,1fr) 90px 34px; gap: 8px; align-items: center; }
+      .rank-entry-row { display: grid; grid-template-columns: minmax(180px,1fr) minmax(76px,90px) 44px; gap: 8px; align-items: center; }
 
       .trono-diario-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
       .trono-diario-row {
@@ -685,10 +685,9 @@ async function initRanking() {
         .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .rank-main-tab { padding: 10px 12px; font-size: .72rem; }
         .trono-cat-badge { font-size: .5rem; padding: 2px 8px; }
-        .rank-entry-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .rank-entry-row .rank-member, .rank-entry-row .rank-name { flex: 1 1 100%; min-width: 0; }
-        .rank-entry-row .rank-msgs { flex: 1 1 auto; min-width: 60px; }
-        .rank-entry-row > button { flex: 0 0 34px; }
+        .rank-entry-row { display: grid; grid-template-columns: minmax(0,1fr) 72px 42px; gap: 7px; align-items: center; }
+        .rank-entry-row .rank-member, .rank-entry-row .rank-msgs { min-width: 0; width: 100%; }
+        .rank-entry-row > button { width: 42px; height: 44px; }
       }
 
       @media (max-width: 380px) {
@@ -1006,22 +1005,22 @@ async function initRanking() {
     if (!modal) { modal = document.createElement('div'); modal.id = 'rankModal'; modal.className = 'modal-overlay'; document.body.appendChild(modal); }
 
     modal.innerHTML = `
-      <div class="modal-box" style="max-width:680px">
+      <div class="modal-box rank-modal-box">
         <div class="modal-header">
           <h3 class="font-cinzel"><i class="fa-solid fa-plus" style="color:var(--gold);margin-right:8px"></i>Novo Ranking ${tipo === 'semanal' ? 'Semanal' : 'Mensal'}</h3>
           <button class="modal-close" id="rankModalClose"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:14px">
+        <div class="modal-body rank-modal-body">
           <div class="rank-date-grid">
             <div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" id="rankStart"></div>
             <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-input" id="rankEnd"></div>
           </div>
           <div>
             <label class="form-label" style="margin-bottom:6px;display:block">Participantes</label>
-            <div id="rankEntries" style="display:flex;flex-direction:column;gap:6px"></div>
-            <button class="btn btn-ghost btn-sm" id="rankAddRow" style="margin-top:8px"><i class="fa-solid fa-plus"></i> Linha</button>
+            <div id="rankEntries" class="rank-entries"></div>
+            <button class="btn btn-ghost btn-sm rank-add-row" id="rankAddRow"><i class="fa-solid fa-plus"></i> Linha</button>
           </div>
-          <div style="display:flex;gap:10px;justify-content:flex-end">
+          <div class="rank-modal-actions">
             <button class="btn btn-ghost" id="rankCancelBtn">Cancelar</button>
             <button class="btn btn-gold" id="rankSaveBtn"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
           </div>
@@ -1038,22 +1037,17 @@ async function initRanking() {
       .map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}${m.role ? ` · ${Utils.escapeHtml(m.role)}` : ''}</option>`)
       .join('');
 
-    const addRow = (n = '', m = '', uid = '') => {
+    const addRow = (m = '', uid = '') => {
       const row = document.createElement('div');
       row.className = 'rank-entry-row';
       row.innerHTML = `<select class="form-input rank-member" style="padding:8px 10px;font-size:.85rem">
           <option value="">Membro cadastrado</option>
           ${memberOptions}
         </select>
-        <input type="text" class="form-input rank-name" placeholder="Nome" value="${Utils.escapeHtml(n)}" style="padding:8px 10px;font-size:.85rem">
-        <input type="number" class="form-input rank-msgs" placeholder="Msgs" value="${m}" min="0" style="padding:8px 10px;font-size:.85rem">
-        <button class="btn btn-ghost btn-sm" style="padding:8px;flex-shrink:0"><i class="fa-solid fa-times" style="color:var(--red-bright)"></i></button>`;
+        <input type="number" class="form-input rank-msgs" placeholder="Msgs" value="${m}" min="0" inputmode="numeric" style="padding:8px 10px;font-size:.85rem">
+        <button class="btn btn-ghost btn-sm rank-remove-row" type="button" aria-label="Remover participante"><i class="fa-solid fa-times" style="color:var(--red-bright)"></i></button>`;
       const select = row.querySelector('.rank-member');
       if (uid) select.value = uid;
-      select.addEventListener('change', () => {
-        const member = (membrosRanking || []).find(item => item.id === select.value);
-        if (member) row.querySelector('.rank-name').value = member.name || '';
-      });
       row.querySelector('button').addEventListener('click', () => row.remove());
       document.getElementById('rankEntries').appendChild(row);
     };
@@ -1071,11 +1065,11 @@ async function initRanking() {
           const member = userId ? (membrosRanking || []).find(item => item.id === userId) : null;
           return {
             user_id: userId,
-            name: (member?.name || r.querySelector('.rank-name').value || '').trim(),
+            name: (member?.name || '').trim(),
             messages: parseInt(r.querySelector('.rank-msgs').value) || 0,
           };
         })
-        .filter(e => e.name));
+        .filter(e => e.user_id && e.name));
 
       if (!entries.length) { Utils.showToast('Adicione participantes.', 'error'); return; }
 

@@ -4993,15 +4993,46 @@ textarea:invalid:not(:placeholder-shown),
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.rank-entry-row {
+.rank-modal-box {
+  max-width: 680px;
+}
+.rank-modal-body {
+  padding: 24px;
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rank-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.rank-entry-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(76px, 90px) 44px;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
 }
-.rank-entry-row .rank-member { flex: 1 1 140px; min-width: 0; }
-.rank-entry-row .rank-name   { flex: 1 1 120px; min-width: 0; }
-.rank-entry-row .rank-msgs   { flex: 0 0 80px; min-width: 0; }
+.rank-entry-row .rank-member,
+.rank-entry-row .rank-msgs {
+  min-width: 0;
+  width: 100%;
+}
+.rank-remove-row {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  justify-content: center;
+}
+.rank-add-row {
+  margin-top: 8px;
+}
+.rank-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 6px;
+}
 
 /* -------- BUSCA MELHORADA -------- */
 .busca-empty-state {
@@ -5061,11 +5092,38 @@ textarea:invalid:not(:placeholder-shown),
 }
 @media (max-width: 640px) {
   .hide-xs { display: none !important; }
-  .rank-date-grid { grid-template-columns: 1fr; }
-  .rank-entry-row { flex-direction: column; align-items: stretch; }
-  .rank-entry-row .rank-member,
-  .rank-entry-row .rank-name,
-  .rank-entry-row .rank-msgs { flex: 1 1 auto; width: 100%; }
+  .rank-modal-box {
+    width: min(100%, 390px);
+    max-width: calc(100vw - 18px) !important;
+  }
+  .rank-modal-body {
+    padding: 18px;
+    gap: 16px;
+  }
+  .rank-date-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .rank-entry-row {
+    grid-template-columns: minmax(0, 1fr) 72px 42px;
+    gap: 7px;
+  }
+  .rank-entry-row .form-input {
+    min-height: 44px;
+  }
+  .rank-remove-row {
+    width: 42px;
+    height: 44px;
+  }
+  .rank-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .rank-modal-actions .btn,
+  .rank-add-row {
+    justify-content: center;
+  }
 }
 
 /* -------- RESPONSIVIDADE GLOBAL MELHORADA -------- */
