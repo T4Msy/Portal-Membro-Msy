@@ -13,6 +13,43 @@
     *  Depende de MSY_CONFIG (config.js) estar carregado antes. */
    const db = createClient(MSY_CONFIG.SUPABASE_URL, MSY_CONFIG.SUPABASE_ANON_KEY);
 
+   const MSYSessionCache = {
+     prefix: 'msy_session_cache:',
+     get(key) {
+       try {
+         const raw = sessionStorage.getItem(this.prefix + key);
+         if (!raw) return null;
+         const entry = JSON.parse(raw);
+         if (!entry || Date.now() > entry.expiresAt) {
+           sessionStorage.removeItem(this.prefix + key);
+           return null;
+         }
+         return entry.value;
+       } catch {
+         return null;
+       }
+     },
+     set(key, value, ttlMs = 30_000) {
+       try {
+         sessionStorage.setItem(this.prefix + key, JSON.stringify({
+           value,
+           expiresAt: Date.now() + ttlMs,
+         }));
+       } catch {}
+     },
+     invalidate(key) {
+       try { sessionStorage.removeItem(this.prefix + key); } catch {}
+     },
+     invalidatePrefix(prefix) {
+       try {
+         Object.keys(sessionStorage)
+           .filter((key) => key.startsWith(this.prefix + prefix))
+           .forEach((key) => sessionStorage.removeItem(key));
+       } catch {}
+     },
+   };
+   window.MSYSessionCache = MSYSessionCache;
+
    /* ============================================================
       VIEW MODE — Simulação de visão de membro para admins
       ============================================================ */
@@ -100,7 +137,11 @@
      async getProfile() {
        const session = await this.getSession();
        if (!session) return null;
+       const cacheKey = `profile:${session.user.id}`;
+       const cached = MSYSessionCache.get(cacheKey);
+       if (cached) return cached;
        const { data } = await db.from('profiles').select('*').eq('id', session.user.id).single();
+       if (data) MSYSessionCache.set(cacheKey, data, 45_000);
        return data;
      },
      async login(email, password) {
@@ -109,6 +150,7 @@
        return data;
      },
      async logout() {
+       MSYSessionCache.invalidatePrefix('');
        await db.auth.signOut();
        window.location.href = 'login.html';
      },
@@ -132,11 +174,17 @@
 
      async rules() {
        if (this._rules) return this._rules;
+       const cached = MSYSessionCache.get('tab_permissions');
+       if (cached) {
+         this._rules = cached;
+         return this._rules;
+       }
        try {
          const { data, error } = await db.from('tab_permissions').select('*');
          if (error) throw error;
          this._rules = {};
          (data || []).forEach((rule) => { this._rules[rule.page_key] = rule; });
+         MSYSessionCache.set('tab_permissions', this._rules, 60_000);
        } catch (err) {
          console.warn('[MSY][tabs] Configuração de abas indisponível, usando fallback local:', err.message);
          this._rules = {};
@@ -151,7 +199,7 @@
 
        const rules = await this.rules();
        const rule = rules[pageKey];
-       if (rule) {
+       if (rule && !rule.required_permissions?.length) {
          try {
            const { data, error } = await db.rpc('can_access_tab', { p_page_key: pageKey });
            if (!error && typeof data === 'boolean') return data;
@@ -180,6 +228,42 @@
      },
 
      async filterNav(navItems, profile) {
+       if (!profile) return [];
+       if (profile.tier === 'diretoria') return navItems;
+       const rules = await this.rules();
+       const permissionKeys = new Set();
+       navItems.forEach((item) => {
+         const rule = rules[item.page];
+         if (Array.isArray(rule?.required_permissions)) {
+           rule.required_permissions.forEach((key) => permissionKeys.add(key));
+         }
+       });
+       const permissions = permissionKeys.size && typeof MSYPerms !== 'undefined'
+         ? await MSYPerms.load(profile.id)
+         : [];
+       const allowedByRule = (item) => {
+         if (!item.page || this.ALWAYS_ALLOWED.has(item.page)) return true;
+         if (this.ADMIN_ONLY.has(item.page)) return false;
+         const rule = rules[item.page];
+         if (!rule) return typeof Features !== 'undefined' ? Features.isEnabled(item.page, profile) : true;
+         if (rule.visible === false) return false;
+         const allowedTiers = Array.isArray(rule.allowed_tiers) ? rule.allowed_tiers : [];
+         const allowedRoles = Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [];
+         const allowedUsers = Array.isArray(rule.allowed_user_ids) ? rule.allowed_user_ids : [];
+         if (allowedTiers.length || allowedRoles.length || allowedUsers.length) {
+           const matchesTier = allowedTiers.includes(profile.tier);
+           const matchesRole = allowedRoles.includes(profile.role);
+           const matchesUser = allowedUsers.includes(profile.id);
+           if (!matchesTier && !matchesRole && !matchesUser) return false;
+         }
+         const required = Array.isArray(rule.required_permissions) ? rule.required_permissions : [];
+         if (required.length) return required.some((key) => permissions.includes(key));
+         return true;
+       };
+       return navItems.filter(allowedByRule);
+     },
+
+     async filterNavLegacy(navItems, profile) {
        const allowed = [];
        for (const item of navItems) {
          if (await this.canAccess(item.page, profile)) allowed.push(item);
@@ -196,7 +280,10 @@
        return ok;
      },
 
-     invalidate() { this._rules = null; },
+     invalidate() {
+       this._rules = null;
+       MSYSessionCache.invalidate('tab_permissions');
+     },
    };
    
    /* ============================================================
@@ -345,10 +432,16 @@
    
      const isDiretoria = profile.tier === 'diretoria';
    
-     const { count: actBadgeCount } = await db.from('activities')
-       .select('id', { count: 'exact', head: true })
-       .eq('assigned_to', profile.id)
-       .in('status', ['Pendente', 'Em andamento']);
+     const actBadgeCacheKey = `activity_badge:${profile.id}`;
+     let actBadgeCount = MSYSessionCache.get(actBadgeCacheKey);
+     if (actBadgeCount === null) {
+       const { count } = await db.from('activities')
+         .select('id', { count: 'exact', head: true })
+         .eq('assigned_to', profile.id)
+         .in('status', ['Pendente', 'Em andamento']);
+       actBadgeCount = count || 0;
+       MSYSessionCache.set(actBadgeCacheKey, actBadgeCount, 30_000);
+     }
      const actBadge = actBadgeCount > 0 ? actBadgeCount : '';
    
      const nav = await MSYTabAccess.filterNav([
@@ -530,16 +623,23 @@
      const topbar = document.getElementById('topbar');
      if (!topbar || !profile) return;
    
-     const [{ data: notifs }, { count: unreadCount }] = await Promise.all([
-       db.from('notifications')
-         .select('*').eq('user_id', profile.id)
-         .is('deleted_at', null)
-         .order('created_at', { ascending: false }).limit(6),
-       db.from('notifications')
-         .select('id', { count: 'exact', head: true }).eq('user_id', profile.id)
-         .eq('read', false)
-         .is('deleted_at', null),
-     ]);
+     const notifCacheKey = `topbar_notifs:${profile.id}`;
+     let notifData = MSYSessionCache.get(notifCacheKey);
+     if (!notifData) {
+       const [{ data: notifs }, { count: unreadCount }] = await Promise.all([
+         db.from('notifications')
+           .select('*').eq('user_id', profile.id)
+           .is('deleted_at', null)
+           .order('created_at', { ascending: false }).limit(6),
+         db.from('notifications')
+           .select('id', { count: 'exact', head: true }).eq('user_id', profile.id)
+           .eq('read', false)
+           .is('deleted_at', null),
+       ]);
+       notifData = { notifs: notifs || [], unreadCount: unreadCount || 0 };
+       MSYSessionCache.set(notifCacheKey, notifData, 20_000);
+     }
+     const { notifs, unreadCount } = notifData;
 
      const unread = unreadCount ?? (notifs || []).filter(n => !n.read).length;
      const unreadLabel = unread > 99 ? '99+' : String(unread);
@@ -604,6 +704,7 @@
    
      document.getElementById('markAllRead').addEventListener('click', async () => {
        await db.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false).is('deleted_at', null);
+       MSYSessionCache.invalidate(`topbar_notifs:${profile.id}`);
        topbar.querySelector('.notif-count')?.remove();
        topbar.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
      });
@@ -8606,6 +8707,7 @@
      Utils,
      Auth,
      ViewMode,
+     SessionCache: MSYSessionCache,
      renderSidebar,
      renderTopBar,
    };

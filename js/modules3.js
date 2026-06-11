@@ -74,11 +74,19 @@ const MSYPerms = {
   /** Carrega permissões do usuário atual do banco */
   async load(userId) {
     if (this._cacheUid === userId && this._cache !== null) return this._cache;
+    const cacheKey = `member_permissions:${userId}`;
+    const cached = window.MSYSessionCache?.get(cacheKey);
+    if (Array.isArray(cached)) {
+      this._cache = cached;
+      this._cacheUid = userId;
+      return this._cache;
+    }
     try {
       const { data, error } = await db.from('member_permissions').select('permissions').eq('user_id', userId).single();
       if (error && error.code !== 'PGRST116') throw error;
       this._cache = (data?.permissions) || [];
       this._cacheUid = userId;
+      window.MSYSessionCache?.set(cacheKey, this._cache, 60_000);
       return this._cache;
     } catch (err) {
       console.error('[MSY][permissoes] Erro ao carregar permissões:', err);
@@ -89,7 +97,11 @@ const MSYPerms = {
   },
 
   /** Invalida cache */
-  invalidate() { this._cache = null; this._cacheUid = null; },
+  invalidate() {
+    this._cache = null;
+    this._cacheUid = null;
+    window.MSYSessionCache?.invalidatePrefix('member_permissions:');
+  },
 
   /** Verifica se usuário tem permissão (ou é diretoria) */
   async check(userId, tier, permKey) {
@@ -119,6 +131,7 @@ const MSYPerms = {
       if (!updErr && updData && updData.length > 0) {
         // UPDATE ok
         if (userId === this._cacheUid) this.invalidate();
+        window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 60_000);
         return true;
       }
 
@@ -130,6 +143,7 @@ const MSYPerms = {
       if (insErr) throw insErr;
 
       if (userId === this._cacheUid) this.invalidate();
+      window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 60_000);
       return true;
     } catch (err) {
       console.error('[MSY][permissoes] Erro ao salvar permissões:', err);
