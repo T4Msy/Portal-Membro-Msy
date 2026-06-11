@@ -1,78 +1,13 @@
-/* MSY Portal — Service Worker v4
-   Cache-first para assets estaticos | Stale-while-revalidate para paginas
+/* MSY Portal — Service Worker v5
+   Cache leve para midia/manifest | HTML/JS/CSS ficam com a rede
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v54-opera-navigation-fix';
+const CACHE_VERSION  = 'msy-v55-navigation-network-only';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
-const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
-/* Arquivos do app shell. Mantidos em cache para troca rapida de abas. */
+/* Arquivos seguros para cache. Paginas, JS e CSS ficam fora do SW para evitar
+   navegacao presa em cache antigo e ERR_FAILED ao trocar de aba. */
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/admin.html',
-  '/atividades.html',
-  '/biblioteca.html',
-  '/busca.html',
-  '/comunicados.html',
-  '/dashboard.html',
-  '/desempenho.html',
-  '/eventos.html',
-  '/feed.html',
-  '/icm.html',
-  '/jornal.html',
-  '/login.html',
-  '/membros.html',
-  '/mensalidade.html',
-  '/offline.html',
-  '/onboarding.html',
-  '/ordem.html',
-  '/perfil.html',
-  '/permissoes.html',
-  '/premiacoes.html',
-  '/presencas.html',
-  '/ranking.html',
-  '/reunioes.html',
-  '/sugestoes.html',
-  '/tecnologias.html',
-  '/css/style.css',
-  '/css/modules3.css',
-  '/css/icm_style.css',
-  '/css/icm_overrides.css',
-  '/css/premium.css',
-  '/css/eventos.css',
-  '/css/feed_social.css',
-  '/css/desempenho.css',
-  '/css/jornal.css',
-  '/css/mensalidade.css',
-  '/css/login.css',
-  '/css/reunioes.css',
-  '/js/config.js',
-  '/js/features.js',
-  '/js/core/theme.js',
-  '/js/core/cache.js',
-  '/js/core/realtime.js',
-  '/js/core/confirm.js',
-  '/js/core/a11y.js',
-  '/js/app.js',
-  '/js/badges_unificado.js',
-  '/js/modules.js',
-  '/js/modules2.js',
-  '/js/modules3.js',
-  '/js/modules4.js',
-  '/js/icm_script.js',
-  '/js/mensalidade.js',
-  '/js/payments.js',
-  '/js/push.js',
-  '/js/pages/biblioteca.js',
-  '/js/pages/busca.js',
-  '/js/pages/feed.js',
-  '/js/pages/jornal.js',
-  '/js/pages/ranking.js',
-  '/js/pages/sugestoes.js',
-  '/js/reunioes.js',
-  '/js/social/social_media.js',
-  '/js/social/social_service.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable.png',
@@ -105,7 +40,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((k) => k.startsWith('msy-') && k !== ASSETS_CACHE && k !== PAGES_CACHE)
+          .filter((k) => k.startsWith('msy-') && k !== ASSETS_CACHE)
           .map((k) => caches.delete(k))
       )
     )
@@ -124,16 +59,15 @@ self.addEventListener('fetch', (event) => {
   if (NETWORK_ONLY.some((h) => url.hostname.includes(h))) return;
   if (url.protocol === 'chrome-extension:') return;
 
-  /* Assets estáticos (CSS, JS, SVG, fonts, imagens) → cache-first */
-  if (isStaticAsset(url.pathname)) {
-    event.respondWith(cacheFirst(request, ASSETS_CACHE, true));
+  /* Navegacoes, HTML, JS e CSS devem ir direto para a rede/HTTP cache.
+     Isso impede Service Worker antigo de quebrar troca de paginas. */
+  if (request.mode === 'navigate' || isNetworkCriticalAsset(url.pathname, request)) {
     return;
   }
 
-  /* Paginas HTML -> rede primeiro. Evita Opera servir HTML antigo/redirect
-     salvo por Service Worker, mas ainda preserva fallback offline. */
-  if (request.headers.get('Accept')?.includes('text/html') || url.pathname.endsWith('.html')) {
-    event.respondWith(networkFirstPage(request, event, PAGES_CACHE));
+  /* Midia/manifest seguros para cache-first */
+  if (isCacheableStaticAsset(url.pathname)) {
+    event.respondWith(cacheFirst(request, ASSETS_CACHE, true));
     return;
   }
 });
@@ -177,8 +111,13 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 /* ── Helpers ─────────────────────────────────────────────────── */
-function isStaticAsset(pathname) {
-  return /\.(css|js|svg|png|jpg|jpeg|webp|ico|woff2?|ttf|eot)$/.test(pathname);
+function isNetworkCriticalAsset(pathname, request) {
+  return request.headers.get('Accept')?.includes('text/html')
+    || /\.(html?|css|js|mjs)$/i.test(pathname);
+}
+
+function isCacheableStaticAsset(pathname) {
+  return /\.(svg|png|jpg|jpeg|webp|ico|woff2?|ttf|eot|json)$/i.test(pathname);
 }
 
 async function precacheIndividually(cache, urls) {
@@ -216,85 +155,4 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
     console.warn('[MSY SW] Asset indisponivel offline:', err);
     return new Response('Offline', { status: 503 });
   }
-}
-
-async function networkFirstPage(request, event, cacheName) {
-  const cache = await caches.open(cacheName);
-  const normalized = normalizePageRequest(request);
-  try {
-    const response = await fetchPage(request, event);
-    if (response?.ok) {
-      cache.put(request, response.clone()).catch((error) => {
-        console.warn('[MSY SW] Falha ao salvar pagina no cache:', error);
-      });
-      return response;
-    }
-    console.warn('[MSY SW] Resposta de rede invalida para pagina:', request.url, response?.status);
-  } catch (error) {
-    console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
-  }
-
-  const cached = await cache.match(request)
-    || await cache.match(normalized)
-    || await caches.match(request)
-    || await caches.match(normalized);
-  if (cached) return cached;
-  return offlinePageFallback(cache, 503);
-}
-
-async function fetchPage(request, event) {
-  const preload = await event.preloadResponse;
-  if (preload) return preload;
-  return fetchWithTimeout(request, { timeoutMs: 3500 });
-}
-
-function normalizePageRequest(request) {
-  const url = new URL(request.url);
-  if (url.pathname === '/') url.pathname = '/index.html';
-  return new Request(url.href, request);
-}
-
-async function networkFirstWithCache(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  try {
-    const response = await fetchWithTimeout(request, { timeoutMs: 8000 });
-    if (!response || !response.ok) {
-      console.warn('[MSY SW] Resposta de rede inválida para página:', request.url, response?.status);
-      const cachedOnBadResponse = await cache.match(request);
-      if (cachedOnBadResponse) return cachedOnBadResponse;
-      return await offlinePageFallback(cache, response?.status || 503);
-    }
-    cache.put(request, response.clone()).catch((error) => {
-      console.warn('[MSY SW] Falha ao salvar página no cache:', error);
-    });
-    return response;
-  } catch (error) {
-    console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    return offlinePageFallback(cache, 503);
-  }
-}
-
-async function fetchWithTimeout(request, { timeoutMs = 8000 } = {}) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(request, { signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function offlinePageFallback(cache, status = 503) {
-  const cachedOffline = await cache.match('/offline.html')
-    || await caches.match('/offline.html')
-    || await cache.match('/dashboard.html')
-    || await caches.match('/dashboard.html');
-  if (cachedOffline) return cachedOffline;
-  console.warn('[MSY SW] Usando fallback HTML embutido.');
-  return new Response('<h1>Offline</h1><p>Conecte à internet para usar o MSY Portal.</p>', {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    status,
-  });
 }
