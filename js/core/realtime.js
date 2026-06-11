@@ -13,6 +13,7 @@
   'use strict';
 
   let _channel = null;
+  let _resumeTimer = null;
 
   async function init() {
     if (typeof db === 'undefined') return;
@@ -186,10 +187,32 @@
     }
   }
 
+  function scheduleResume() {
+    if (_resumeTimer) clearTimeout(_resumeTimer);
+    _resumeTimer = setTimeout(() => {
+      _resumeTimer = null;
+      if (document.visibilityState === 'visible') {
+        init().catch((e) => console.warn('[MSY Realtime] Falha ao retomar após voltar à aba:', e));
+      }
+    }, 250);
+  }
+
   window.MSYRealtime = { init, destroy };
 
   document.addEventListener('DOMContentLoaded', () => {
     init().catch((e) => console.warn('[MSY Realtime] Falha na inicialização:', e));
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      destroy();
+      return;
+    }
+    scheduleResume();
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) scheduleResume();
   });
 
   window.addEventListener('beforeunload', destroy);
