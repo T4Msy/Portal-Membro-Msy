@@ -2,7 +2,7 @@
    Cache leve para midia/manifest | HTML/JS/CSS ficam com a rede
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v55-navigation-network-only';
+const CACHE_VERSION  = 'msy-v56-opera-navigation-fix';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 
 /* Arquivos seguros para cache. Paginas, JS e CSS ficam fora do SW para evitar
@@ -54,14 +54,18 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  /* Navegacoes ficam totalmente fora do SW. Opera mobile rejeita reconstruir
+     Requests de navegacao com init extra dentro de respondWith. */
+  if (request.mode === 'navigate' || request.destination === 'document') return;
+
   /* Ignorar não-GET e requisições para serviços externos (rede pura) */
   if (request.method !== 'GET') return;
   if (NETWORK_ONLY.some((h) => url.hostname.includes(h))) return;
   if (url.protocol === 'chrome-extension:') return;
 
-  /* Navegacoes, HTML, JS e CSS devem ir direto para a rede/HTTP cache.
+  /* HTML, JS e CSS devem ir direto para a rede/HTTP cache.
      Isso impede Service Worker antigo de quebrar troca de paginas. */
-  if (request.mode === 'navigate' || isNetworkCriticalAsset(url.pathname, request)) {
+  if (isNetworkCriticalAsset(url.pathname, request)) {
     return;
   }
 
@@ -139,7 +143,7 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
   const cached = await cache.match(request, { ignoreSearch: true });
   if (cached) {
     if (refreshInBackground) {
-      fetch(request, { cache: 'reload' }).then((response) => {
+      fetchFresh(request).then((response) => {
         if (response.ok) cache.put(request, response.clone());
       }).catch((err) => {
         console.warn('[MSY SW] Falha ao atualizar asset em background:', err);
@@ -148,11 +152,19 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
     return cached;
   }
   try {
-    const response = await fetch(request, { cache: 'reload' });
+    const response = await fetchFresh(request);
     if (response.ok) cache.put(request, response.clone());
     return response;
   } catch (err) {
     console.warn('[MSY SW] Asset indisponivel offline:', err);
     return new Response('Offline', { status: 503 });
   }
+}
+
+function fetchFresh(request) {
+  return fetch(request.url, {
+    cache: 'reload',
+    credentials: request.credentials,
+    redirect: 'follow',
+  });
 }
