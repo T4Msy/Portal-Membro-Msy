@@ -141,7 +141,7 @@
        const cached = MSYSessionCache.get(cacheKey);
        if (cached) return cached;
        const { data } = await db.from('profiles').select('*').eq('id', session.user.id).single();
-       if (data) MSYSessionCache.set(cacheKey, data, 45_000);
+       if (data) MSYSessionCache.set(cacheKey, data, 5 * 60_000);
        return data;
      },
      async login(email, password) {
@@ -184,7 +184,7 @@
          if (error) throw error;
          this._rules = {};
          (data || []).forEach((rule) => { this._rules[rule.page_key] = rule; });
-         MSYSessionCache.set('tab_permissions', this._rules, 60_000);
+         MSYSessionCache.set('tab_permissions', this._rules, 5 * 60_000);
        } catch (err) {
          console.warn('[MSY][tabs] Configuração de abas indisponível, usando fallback local:', err.message);
          this._rules = {};
@@ -440,7 +440,7 @@
          .eq('assigned_to', profile.id)
          .in('status', ['Pendente', 'Em andamento']);
        actBadgeCount = count || 0;
-       MSYSessionCache.set(actBadgeCacheKey, actBadgeCount, 30_000);
+       MSYSessionCache.set(actBadgeCacheKey, actBadgeCount, 2 * 60_000);
      }
      const actBadge = actBadgeCount > 0 ? actBadgeCount : '';
    
@@ -637,7 +637,7 @@
            .is('deleted_at', null),
        ]);
        notifData = { notifs: notifs || [], unreadCount: unreadCount || 0 };
-       MSYSessionCache.set(notifCacheKey, notifData, 20_000);
+       MSYSessionCache.set(notifCacheKey, notifData, 60_000);
      }
      const { notifs, unreadCount } = notifData;
 

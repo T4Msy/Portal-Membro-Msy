@@ -86,7 +86,7 @@ const MSYPerms = {
       if (error && error.code !== 'PGRST116') throw error;
       this._cache = (data?.permissions) || [];
       this._cacheUid = userId;
-      window.MSYSessionCache?.set(cacheKey, this._cache, 60_000);
+      window.MSYSessionCache?.set(cacheKey, this._cache, 5 * 60_000);
       return this._cache;
     } catch (err) {
       console.error('[MSY][permissoes] Erro ao carregar permissões:', err);
@@ -131,7 +131,7 @@ const MSYPerms = {
       if (!updErr && updData && updData.length > 0) {
         // UPDATE ok
         if (userId === this._cacheUid) this.invalidate();
-        window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 60_000);
+        window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 5 * 60_000);
         return true;
       }
 
@@ -143,7 +143,7 @@ const MSYPerms = {
       if (insErr) throw insErr;
 
       if (userId === this._cacheUid) this.invalidate();
-      window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 60_000);
+      window.MSYSessionCache?.set(`member_permissions:${userId}`, permissions, 5 * 60_000);
       return true;
     } catch (err) {
       console.error('[MSY][permissoes] Erro ao salvar permissões:', err);

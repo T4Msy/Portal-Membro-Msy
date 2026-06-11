@@ -1,18 +1,54 @@
-/* MSY Portal — Service Worker v3
-   Cache-first para assets estaticos | Network-first para paginas
+/* MSY Portal — Service Worker v4
+   Cache-first para assets estaticos | Stale-while-revalidate para paginas
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v52-lean-precache';
+const CACHE_VERSION  = 'msy-v53-fast-navigation';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
-/* Assets que vão para cache no install */
+/* Arquivos do app shell. Mantidos em cache para troca rapida de abas. */
 const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/admin.html',
+  '/atividades.html',
+  '/biblioteca.html',
+  '/busca.html',
+  '/comunicados.html',
+  '/dashboard.html',
+  '/desempenho.html',
+  '/eventos.html',
+  '/feed.html',
+  '/icm.html',
+  '/jornal.html',
+  '/login.html',
+  '/membros.html',
+  '/mensalidade.html',
+  '/offline.html',
+  '/onboarding.html',
+  '/ordem.html',
+  '/perfil.html',
+  '/permissoes.html',
+  '/premiacoes.html',
+  '/presencas.html',
+  '/ranking.html',
+  '/reunioes.html',
+  '/sugestoes.html',
+  '/tecnologias.html',
   '/css/style.css',
   '/css/modules3.css',
+  '/css/icm_style.css',
+  '/css/icm_overrides.css',
   '/css/premium.css',
+  '/css/eventos.css',
+  '/css/feed_social.css',
+  '/css/desempenho.css',
   '/css/jornal.css',
+  '/css/mensalidade.css',
+  '/css/login.css',
+  '/css/reunioes.css',
   '/js/config.js',
+  '/js/features.js',
   '/js/core/theme.js',
   '/js/core/cache.js',
   '/js/core/realtime.js',
@@ -20,18 +56,28 @@ const PRECACHE_ASSETS = [
   '/js/core/a11y.js',
   '/js/app.js',
   '/js/badges_unificado.js',
+  '/js/modules.js',
+  '/js/modules2.js',
   '/js/modules3.js',
+  '/js/modules4.js',
+  '/js/icm_script.js',
+  '/js/mensalidade.js',
+  '/js/payments.js',
   '/js/push.js',
+  '/js/pages/biblioteca.js',
+  '/js/pages/busca.js',
+  '/js/pages/feed.js',
+  '/js/pages/jornal.js',
+  '/js/pages/ranking.js',
+  '/js/pages/sugestoes.js',
+  '/js/reunioes.js',
+  '/js/social/social_media.js',
+  '/js/social/social_service.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable.png',
   '/icons/apple-touch-icon.png',
   '/manifest.json',
-  '/offline.html',
-  '/dashboard.html',
-  '/jornal.html',
-  '/permissoes.html',
-  '/login.html',
 ];
 
 /* Padrões que sempre vão para a rede (Supabase, CDN) */
@@ -49,11 +95,7 @@ const NETWORK_ONLY = [
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(ASSETS_CACHE).then((cache) =>
-      cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[MSY SW] Precache parcial:', err);
-      })
-    )
+    caches.open(ASSETS_CACHE).then((cache) => precacheIndividually(cache, PRECACHE_ASSETS))
   );
 });
 
@@ -66,7 +108,9 @@ self.addEventListener('activate', (event) => {
           .filter((k) => k.startsWith('msy-') && k !== ASSETS_CACHE && k !== PAGES_CACHE)
           .map((k) => caches.delete(k))
       )
-    ).then(() => self.clients.claim())
+    )
+      .then(() => self.registration.navigationPreload?.enable?.())
+      .then(() => self.clients.claim())
   );
 });
 
@@ -86,9 +130,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Páginas HTML → network-first com fallback de cache */
+  /* Paginas HTML -> cache imediato, rede atualiza em background */
   if (request.headers.get('Accept')?.includes('text/html') || url.pathname.endsWith('.html')) {
-    event.respondWith(networkFirstWithCache(request, PAGES_CACHE));
+    event.respondWith(staleWhileRevalidatePage(request, event, PAGES_CACHE));
     return;
   }
 });
@@ -136,12 +180,26 @@ function isStaticAsset(pathname) {
   return /\.(css|js|svg|png|jpg|jpeg|webp|ico|woff2?|ttf|eot)$/.test(pathname);
 }
 
+async function precacheIndividually(cache, urls) {
+  const results = await Promise.allSettled(
+    urls.map(async (url) => {
+      const response = await fetch(url, { cache: 'reload' });
+      if (!response.ok) throw new Error(`${url} -> ${response.status}`);
+      await cache.put(url, response);
+    })
+  );
+  const failed = results.filter((result) => result.status === 'rejected');
+  if (failed.length) {
+    console.warn(`[MSY SW] Precache parcial: ${failed.length} arquivo(s) falharam.`, failed);
+  }
+}
+
 async function cacheFirst(request, cacheName, refreshInBackground = false) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await cache.match(request, { ignoreSearch: true });
   if (cached) {
     if (refreshInBackground) {
-      fetch(request).then((response) => {
+      fetch(request, { cache: 'reload' }).then((response) => {
         if (response.ok) cache.put(request, response.clone());
       }).catch((err) => {
         console.warn('[MSY SW] Falha ao atualizar asset em background:', err);
@@ -150,13 +208,52 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
     return cached;
   }
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { cache: 'reload' });
     if (response.ok) cache.put(request, response.clone());
     return response;
   } catch (err) {
     console.warn('[MSY SW] Asset indisponivel offline:', err);
     return new Response('Offline', { status: 503 });
   }
+}
+
+async function staleWhileRevalidatePage(request, event, cacheName) {
+  const cache = await caches.open(cacheName);
+  const normalized = normalizePageRequest(request);
+  const cached = await cache.match(request)
+    || await cache.match(normalized)
+    || await caches.match(request)
+    || await caches.match(normalized);
+  const networkPromise = fetchPage(request, event)
+    .then((response) => {
+      if (response?.ok) cache.put(request, response.clone());
+      return response;
+    })
+    .catch((error) => {
+      console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
+      return null;
+    });
+
+  if (cached) {
+    event.waitUntil(networkPromise);
+    return cached;
+  }
+
+  const response = await networkPromise;
+  if (response) return response;
+  return offlinePageFallback(cache, 503);
+}
+
+async function fetchPage(request, event) {
+  const preload = await event.preloadResponse;
+  if (preload) return preload;
+  return fetchWithTimeout(request, { timeoutMs: 3500 });
+}
+
+function normalizePageRequest(request) {
+  const url = new URL(request.url);
+  if (url.pathname === '/') url.pathname = '/index.html';
+  return new Request(url.href, request);
 }
 
 async function networkFirstWithCache(request, cacheName) {
