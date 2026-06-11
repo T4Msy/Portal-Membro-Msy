@@ -4,6 +4,7 @@
     "supabase:fix-story-likes": "bash scripts/apply-story-reaction-policy.sh"
   },
   "devDependencies": {
-    "supabase": "^2.104.0"
+    "supabase": "^2.104.0",
+    "vercel": "^54.11.1"
   }
 }

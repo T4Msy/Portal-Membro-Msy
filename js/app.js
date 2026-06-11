@@ -6,7 +6,19 @@
    'use strict';
 
 
-   const { createClient } = supabase;
+   if (!window.supabase?.createClient) {
+     document.addEventListener('DOMContentLoaded', () => {
+       const target = document.querySelector('.login-card') || document.getElementById('pageContent') || document.body;
+       target.innerHTML = `
+         <div style="max-width:520px;margin:48px auto;padding:24px;border:1px solid rgba(201,168,76,.28);border-radius:12px;background:rgba(10,10,14,.92);color:#f5f5f5;font-family:Inter,system-ui,sans-serif">
+           <h1 style="margin:0 0 10px;font-size:1.2rem;color:#c9a84c">Falha ao carregar o portal</h1>
+           <p style="margin:0;line-height:1.55;color:#d4d4d8">O navegador bloqueou um script necessario de autenticacao. Desative bloqueadores para este site ou recarregue a pagina.</p>
+         </div>`;
+     });
+     throw new Error('[MSY] Supabase client indisponivel. Verifique bloqueadores/CDN do navegador.');
+   }
+
+   const { createClient } = window.supabase;
 
    /** @global {import('@supabase/supabase-js').SupabaseClient} db
     *  Cliente Supabase compartilhado. Inicializado aqui, usado por TODOS os módulos.

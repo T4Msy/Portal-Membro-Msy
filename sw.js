@@ -2,7 +2,7 @@
    Cache-first para assets estaticos | Stale-while-revalidate para paginas
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v53-fast-navigation';
+const CACHE_VERSION  = 'msy-v54-opera-navigation-fix';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 const PAGES_CACHE    = `${CACHE_VERSION}-pages`;
 
@@ -130,9 +130,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Paginas HTML -> cache imediato, rede atualiza em background */
+  /* Paginas HTML -> rede primeiro. Evita Opera servir HTML antigo/redirect
+     salvo por Service Worker, mas ainda preserva fallback offline. */
   if (request.headers.get('Accept')?.includes('text/html') || url.pathname.endsWith('.html')) {
-    event.respondWith(staleWhileRevalidatePage(request, event, PAGES_CACHE));
+    event.respondWith(networkFirstPage(request, event, PAGES_CACHE));
     return;
   }
 });
@@ -217,30 +218,27 @@ async function cacheFirst(request, cacheName, refreshInBackground = false) {
   }
 }
 
-async function staleWhileRevalidatePage(request, event, cacheName) {
+async function networkFirstPage(request, event, cacheName) {
   const cache = await caches.open(cacheName);
   const normalized = normalizePageRequest(request);
+  try {
+    const response = await fetchPage(request, event);
+    if (response?.ok) {
+      cache.put(request, response.clone()).catch((error) => {
+        console.warn('[MSY SW] Falha ao salvar pagina no cache:', error);
+      });
+      return response;
+    }
+    console.warn('[MSY SW] Resposta de rede invalida para pagina:', request.url, response?.status);
+  } catch (error) {
+    console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
+  }
+
   const cached = await cache.match(request)
     || await cache.match(normalized)
     || await caches.match(request)
     || await caches.match(normalized);
-  const networkPromise = fetchPage(request, event)
-    .then((response) => {
-      if (response?.ok) cache.put(request, response.clone());
-      return response;
-    })
-    .catch((error) => {
-      console.warn('[MSY SW] Pagina indisponivel na rede:', request.url, error);
-      return null;
-    });
-
-  if (cached) {
-    event.waitUntil(networkPromise);
-    return cached;
-  }
-
-  const response = await networkPromise;
-  if (response) return response;
+  if (cached) return cached;
   return offlinePageFallback(cache, 503);
 }
 
