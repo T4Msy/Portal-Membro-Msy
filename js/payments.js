@@ -11,7 +11,7 @@
    ─────────────────────────────────────────────────────────── */
 const MP_CONFIG = {
   // URL base do seu site (para redirect após pagamento)
-  BASE_URL: 'https://www.portalmsy.site',
+  BASE_URL: 'https://portalmsy.site',
 
   VALOR_MENSALIDADE: 10.00,
   DESCRICAO: 'Mensalidade MSY – Masayoshi Order',

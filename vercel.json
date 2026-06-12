@@ -8,19 +8,6 @@
       "destination": "/index.html"
     }
   ],
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "portalmsy.site"
-        }
-      ],
-      "destination": "https://www.portalmsy.site/$1",
-      "permanent": true
-    }
-  ],
   "headers": [
     {
       "source": "/(.*).html",

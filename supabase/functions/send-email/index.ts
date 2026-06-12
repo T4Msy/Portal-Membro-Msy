@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
           <div style="background:#07070a;color:#ececec;padding:32px;font-family:sans-serif;max-width:520px;margin:0 auto;border:1px solid rgba(201,168,76,0.2);border-radius:12px">
             <div style="font-size:1.4rem;font-weight:700;color:#c9a84c;margin-bottom:16px">MSY Portal</div>
             <p style="color:#ececec;font-size:0.95rem;line-height:1.7">${safeMessage}</p>
-            <a href="https://www.portalmsy.site"
+            <a href="https://portalmsy.site"
                style="display:inline-block;margin-top:20px;padding:10px 22px;background:#b91c1c;color:#fff;text-decoration:none;border-radius:8px;font-size:0.85rem;font-weight:600">
               Abrir Portal →
             </a>

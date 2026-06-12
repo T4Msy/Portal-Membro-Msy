@@ -7,11 +7,6 @@
 (function () {
   'use strict';
 
-  if (location.hostname === 'portalmsy.site') {
-    location.replace(`https://www.portalmsy.site${location.pathname}${location.search}${location.hash}`);
-    return;
-  }
-
   const KEY      = 'msy_theme';
   const DARK_KEY = 'dark';
   const LIGHT_KEY = 'light';
