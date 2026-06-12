@@ -260,10 +260,10 @@ async function renderMembros(isDiretoria, meProfile, onDone) {
       }
     });
   });
+}
 
 /* ── Boot ─────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
   if (page === 'mensalidade') initMensalidade();
 });
-}
