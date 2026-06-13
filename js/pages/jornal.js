@@ -97,6 +97,16 @@ function renderJornalSceneList(existingImages = []) {
   return existingHtml + newHtml;
 }
 
+function updateJornalSceneList(modal) {
+  const listEl = modal?.querySelector('#journalSceneList');
+  const countEl = modal?.querySelector('#journalSceneCount');
+  if (!listEl) return;
+  const existingImages = listEl.dataset.existingImages ? JSON.parse(listEl.dataset.existingImages) : [];
+  listEl.innerHTML = renderJornalSceneList(existingImages);
+  const total = existingImages.length + jornalSceneFiles.length;
+  if (countEl) countEl.textContent = total > 0 ? `${total} cena${total !== 1 ? 's' : ''}` : '';
+}
+
 const JOURNAL_IMAGE_ASPECT_OPTIONS = [
   ['original', 'Original'],
   ['16:9', '16:9'],
@@ -899,6 +909,7 @@ async function reloadAndReopen(postId) {
 function openEditor(post = null) {
   state.editingPostId = post?.id || null;
   state.articlePhotoItem = null;
+  clearJornalSceneFiles();
   const modal = document.getElementById('journalEditorModal');
   if (!modal) return;
   const editorType = normalizeEditorPostType(post?.post_type);
@@ -1028,7 +1039,7 @@ function openEditor(post = null) {
                 </div>
                 <div class="journal-file-note">${post?.media?.some((item) => item.media_type === 'image') ? 'Cenas atuais preservadas. Adicione novas imagens para incluir mais quadros.' : 'Adicione as imagens dos quadros na ordem da história.'}</div>
               </div>
-              <div class="journal-scene-list" id="journalSceneList">
+              <div class="journal-scene-list" id="journalSceneList" data-existing-images="${Utils.escapeHtml(JSON.stringify(post?.media?.filter((item) => item.media_type === 'image') || []))}">
                 ${renderJornalSceneList(post?.media?.filter((item) => item.media_type === 'image') || [])}
               </div>
             </section>
@@ -1046,7 +1057,7 @@ function openEditor(post = null) {
       </div>
     </div>`;
   openModal(modal);
-  modal.querySelectorAll('[data-close-journal-modal]').forEach((btn) => btn.addEventListener('click', () => closeModal(modal)));
+  modal.querySelectorAll('[data-close-journal-modal]').forEach((btn) => btn.addEventListener('click', () => { clearJornalSceneFiles(); closeModal(modal); }));
   modal.querySelectorAll('[data-editor-type]').forEach((btn) => btn.addEventListener('click', () => setEditorType(btn.dataset.editorType)));
   modal.querySelector('[name="title"]')?.addEventListener('input', updateEditorPreview);
   modal.querySelector('#journalArticleBuilder')?.addEventListener('input', updateEditorPreview);
@@ -1114,7 +1125,7 @@ async function savePost(event) {
     const status = form.elements.status.value;
     const postType = form.elements.post_type.value;
     const videoFile = form.elements.video.files?.[0] || null;
-    const galleryFiles = [...(form.elements.gallery.files || [])];
+    const galleryFiles = jornalSceneFiles.slice();
     const articlePhotoEnabled = form.elements.article_photo_enabled?.value === '1';
     const summary = postType === 'tirinha'
       ? form.elements.comic_caption.value.trim()
@@ -1225,6 +1236,7 @@ async function savePost(event) {
 
     if (state.articlePhotoItem?.url?.startsWith('blob:')) URL.revokeObjectURL(state.articlePhotoItem.url);
     state.articlePhotoItem = null;
+    clearJornalSceneFiles();
     closeModal(document.getElementById('journalEditorModal'));
     await loadPosts();
     renderPage();
@@ -1274,11 +1286,6 @@ function updateEditorPreview() {
     if (enabled) layout?.classList.add(`photo-${position}`);
   }
 
-  const comicPreview = document.getElementById('journalComicPreview');
-  if (comicPreview) {
-    const count = Math.max(1, form.elements.gallery?.files?.length || comicPreview.dataset.existingCount || 4);
-    comicPreview.innerHTML = renderComicEditorPreview(null, Number(count));
-  }
 }
 
 function loadImageFromUrl(url) {
