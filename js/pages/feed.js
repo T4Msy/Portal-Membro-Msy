@@ -1709,6 +1709,25 @@ function addFiles(files) {
         }).catch((imageErr) => {
           console.warn('[MSY][feed-social] Dimensoes da imagem indisponiveis:', imageErr);
         });
+      } else if (preview.media_type === 'video') {
+        const videoEl = document.createElement('video');
+        videoEl.preload = 'metadata';
+        videoEl.src = preview.url;
+        videoEl.onloadedmetadata = () => {
+          if (videoEl.videoWidth && videoEl.videoHeight) {
+            preview.editState.originalAspect = videoEl.videoWidth / videoEl.videoHeight;
+            preview.editState.originalWidth = videoEl.videoWidth;
+            preview.editState.originalHeight = videoEl.videoHeight;
+            preview.editState.detectedFormat = detectMediaFormat(videoEl.videoWidth, videoEl.videoHeight);
+          }
+          if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+            preview.editState.duration = videoEl.duration;
+            if (!preview.editState.trimEnd) preview.editState.trimEnd = videoEl.duration;
+          }
+          videoEl.removeAttribute('src');
+          videoEl.load();
+          renderPreviews();
+        };
       }
     });
     renderPreviews();
@@ -2087,23 +2106,26 @@ async function publishPost() {
       if (item.media_type === 'image') {
         uploadFile = await exportStoryImageFile(item.file, editState);
         skipCompression = true;
-      } else if (item.media_type === 'video' && item.editState?.exportSupported) {
-        uploadFile = await exportStoryVideoFile(item.file, editState);
+      } else if (item.media_type === 'video') {
         skipCompression = true;
       }
       const uploaded = await uploadSocialMedia(db, state.profile.id, uploadFile, 'posts', { skipCompression });
       uploaded.alt_text = item.alt_text || null;
-      uploaded.media_meta = { ...editState, exported: true };
       if (item.media_type === 'image') {
+        uploaded.media_meta = { ...editState, exported: true };
         const exportedImage = await loadImage(uploadFile);
         uploaded.media_meta.exportedWidth = exportedImage.width;
         uploaded.media_meta.exportedHeight = exportedImage.height;
         uploaded.width = exportedImage.width;
         uploaded.height = exportedImage.height;
       } else if (item.media_type === 'video') {
-        uploaded.media_meta.exportedAspect = editState.aspect === 'original'
-          ? Number(editState.originalAspect || 0) || null
-          : getStoryAspectRatioValue(editState.aspect);
+        uploaded.media_meta = {
+          ...editState,
+          exported: false,
+          exportedAspect: editState.aspect === 'original'
+            ? Number(editState.originalAspect || 0) || null
+            : getStoryAspectRatioValue(editState.aspect),
+        };
       }
       media.push(uploaded);
       if (uploaded.storage_path) uploadedPaths.push(uploaded.storage_path);
@@ -2384,6 +2406,12 @@ function bindMediaEditorGestures(root, item, onChange = () => {}) {
     pointers.delete(event.pointerId);
     start = null;
   }));
+  editor.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 0.08 : -0.08;
+    item.editState.zoom = Math.min(3, Math.max(0.5, (item.editState.zoom || 1) + delta));
+    schedule();
+  }, { passive: false });
 }
 
 function renderStoryComposerMedia(item) {

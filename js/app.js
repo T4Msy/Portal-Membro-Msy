@@ -1236,6 +1236,9 @@
    /* ============================================================
       UTILS: ANEXOS — tipos de arquivo e ícones
       ============================================================ */
+   const ACTIVITY_FILE_MAX_BYTES = 100 * 1024 * 1024;
+   const ACTIVITY_FILE_MAX_LABEL = '100MB';
+
    const AnexoUtils = {
      getFileIcon(tipo, nome) {
        if (!tipo && nome) {
@@ -1287,6 +1290,14 @@
      const stamp = Date.now();
      const nonce = Math.random().toString(36).slice(2, 8);
      return `${profileId}/${scope}/${stamp}_${nonce}_${_sanitizeAttachmentName(fileName)}`;
+   }
+
+   function _formatActivityUploadError(error) {
+     const message = error?.message || String(error || '');
+     if (/maximum allowed size|exceeded.*size|file.*too large|payload too large/i.test(message)) {
+       return `O arquivo excedeu o limite permitido. Máximo: ${ACTIVITY_FILE_MAX_LABEL}.`;
+     }
+     return message || 'tente novamente.';
    }
 
    function renderActivityAttachmentSection(attachments) {
@@ -1924,8 +1935,7 @@
 
      function handleFileSelected(f) {
        if (!f) return;
-       const MAX = 100 * 1024 * 1024;
-       if (f.size > MAX) { Utils.showToast('Arquivo muito grande. Máximo: 100MB.', 'error'); return; }
+       if (f.size > ACTIVITY_FILE_MAX_BYTES) { Utils.showToast(`Arquivo muito grande. Máximo: ${ACTIVITY_FILE_MAX_LABEL}.`, 'error'); return; }
        fileChosen.innerHTML = `
          <div style="display:flex;align-items:center;gap:8px;background:var(--black-4);border:1px solid var(--border-gold);border-radius:var(--radius);padding:8px 12px">
            <i class="fa-solid fa-paperclip" style="color:var(--gold)"></i>
@@ -1974,7 +1984,7 @@
          const path = `${profile.id}/${id}/${Date.now()}_${sanitizedName}`;
          const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file);
          if (upErr) {
-           Utils.showToast(`Erro no upload: ${upErr.message}`, 'error');
+           Utils.showToast(`Erro no upload: ${_formatActivityUploadError(upErr)}`, 'error');
            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Resposta';
            return;
          }
@@ -2480,14 +2490,13 @@
     }
 
      function addAttachmentFiles(files) {
-       const MAX = 100 * 1024 * 1024;
        const incoming = Array.from(files || []).filter(Boolean);
        if (!incoming.length) return;
 
        const seen = new Set(attachmentState.files.map(f => `${f.name}_${f.size}_${f.lastModified}`));
        for (const file of incoming) {
-         if (file.size > MAX) {
-           Utils.showToast(`Arquivo "${file.name}" é maior que 100MB.`, 'error');
+         if (file.size > ACTIVITY_FILE_MAX_BYTES) {
+           Utils.showToast(`Arquivo "${file.name}" é maior que ${ACTIVITY_FILE_MAX_LABEL}.`, 'error');
            continue;
          }
          const key = `${file.name}_${file.size}_${file.lastModified}`;
@@ -2633,7 +2642,7 @@
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Preparando anexos...';
          const uploadResult = await uploadSelectedAttachments(selectedAttachments);
          if (!uploadResult.ok) {
-           Utils.showToast(`Erro ao enviar anexos: ${uploadResult.error?.message || 'tente novamente.'}`, 'error');
+           Utils.showToast(`Erro ao enviar anexos: ${_formatActivityUploadError(uploadResult.error)}`, 'error');
            btn.disabled = false;
            btn.innerHTML = idleBtnHtml;
            return;

@@ -64,6 +64,39 @@ const state = {
   articlePhotoItem: null,
 };
 
+let jornalSceneFiles = [];
+let jornalScenePreviewUrls = [];
+
+function clearJornalSceneFiles() {
+  jornalScenePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+  jornalSceneFiles = [];
+  jornalScenePreviewUrls = [];
+}
+
+function addJornalSceneFiles(files) {
+  files.forEach((file) => {
+    if (!file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    jornalSceneFiles.push(file);
+    jornalScenePreviewUrls.push(url);
+  });
+}
+
+function renderJornalSceneList(existingImages = []) {
+  const existingHtml = existingImages.map((item, index) => `
+    <div class="journal-scene-item journal-scene-existing">
+      <img src="${Utils.escapeHtml(item.url)}" alt="Cena ${index + 1}">
+      <span class="journal-scene-label">Cena ${index + 1}</span>
+    </div>`).join('');
+  const newHtml = jornalSceneFiles.map((file, index) => `
+    <div class="journal-scene-item journal-scene-new" data-scene-index="${index}">
+      <img src="${Utils.escapeHtml(jornalScenePreviewUrls[index])}" alt="Nova cena ${existingImages.length + index + 1}">
+      <span class="journal-scene-label">Cena ${existingImages.length + index + 1}</span>
+      <button type="button" class="journal-scene-remove" data-remove-scene="${index}" aria-label="Remover cena"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+  return existingHtml + newHtml;
+}
+
 const JOURNAL_IMAGE_ASPECT_OPTIONS = [
   ['original', 'Original'],
   ['16:9', '16:9'],
@@ -215,6 +248,12 @@ function journalBindMediaEditorGestures(root, item, onChange = () => {}) {
     pointers.delete(event.pointerId);
     start = null;
   }));
+  editor.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 0.08 : -0.08;
+    item.editState.zoom = Math.min(3, Math.max(0.5, (item.editState.zoom || 1) + delta));
+    schedule();
+  }, { passive: false });
 }
 
 function journalBindMediaPreviewDiagnostics(root, item) {
@@ -982,11 +1021,15 @@ function openEditor(post = null) {
               ${field('Legenda', 'comic_caption', post?.summary || '', 'textarea')}
               <div class="journal-field full">
                 <label>Cenas da tirinha</label>
-                <input type="file" name="gallery" accept="image/*" multiple>
-                <div class="journal-file-note">${post?.media?.some((item) => item.media_type === 'image') ? 'Cenas atuais preservadas. Envie novas imagens para adicionar quadros.' : 'Envie as imagens dos quadros na ordem da história.'}</div>
+                <input type="file" id="journalSceneFileInput" accept="image/*" multiple hidden>
+                <div class="journal-scene-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" id="journalAddSceneBtn"><i class="fa-solid fa-plus"></i> Adicionar cenas</button>
+                  <span class="journal-scene-count" id="journalSceneCount"></span>
+                </div>
+                <div class="journal-file-note">${post?.media?.some((item) => item.media_type === 'image') ? 'Cenas atuais preservadas. Adicione novas imagens para incluir mais quadros.' : 'Adicione as imagens dos quadros na ordem da história.'}</div>
               </div>
-              <div class="journal-comic-editor-preview" id="journalComicPreview" data-existing-count="${post?.media?.filter((item) => item.media_type === 'image').length || 0}">
-                ${renderComicEditorPreview(post)}
+              <div class="journal-scene-list" id="journalSceneList">
+                ${renderJornalSceneList(post?.media?.filter((item) => item.media_type === 'image') || [])}
               </div>
             </section>
 
@@ -1021,7 +1064,23 @@ function openEditor(post = null) {
   modal.querySelector('[name="article_photo_position"]')?.addEventListener('change', updateEditorPreview);
   modal.querySelectorAll('[data-photo-edit-field]').forEach((field) => field.addEventListener('input', (event) => handleArticlePhotoEditField(event)));
   modal.querySelector('[data-photo-edit-reset]')?.addEventListener('click', resetArticlePhotoEdit);
-  modal.querySelector('[name="gallery"]')?.addEventListener('change', updateEditorPreview);
+  modal.querySelector('#journalAddSceneBtn')?.addEventListener('click', () => modal.querySelector('#journalSceneFileInput')?.click());
+  modal.querySelector('#journalSceneFileInput')?.addEventListener('change', (event) => {
+    const files = [...(event.currentTarget.files || [])];
+    addJornalSceneFiles(files);
+    event.currentTarget.value = '';
+    updateJornalSceneList(modal);
+  });
+  modal.querySelector('#journalSceneList')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-remove-scene]');
+    if (!btn) return;
+    const index = Number(btn.dataset.removeScene);
+    if (!Number.isFinite(index) || index < 0 || index >= jornalSceneFiles.length) return;
+    URL.revokeObjectURL(jornalScenePreviewUrls[index]);
+    jornalSceneFiles.splice(index, 1);
+    jornalScenePreviewUrls.splice(index, 1);
+    updateJornalSceneList(modal);
+  });
   modal.querySelector('#journalEditorForm')?.addEventListener('submit', savePost);
   updateEditorMode();
   if (state.articlePhotoItem) {
