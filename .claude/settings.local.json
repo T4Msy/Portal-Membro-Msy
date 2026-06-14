@@ -13,7 +13,8 @@
       "Bash(curl -s -X POST https://api.supabase.com/v1/projects/__TRACKED_VAR__/database/query -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"query\":\"delete from storage.objects where bucket_id='\\\\''activity-files'\\\\'' and name like '\\\\''197609/probe_test/%'\\\\'';\"}')",
       "Bash(curl -s -X POST https://api.supabase.com/v1/projects/__TRACKED_VAR__/database/query -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"query\":\"select pg_get_functiondef\\(oid\\) as def from pg_proc where proname='\\\\''has_permission'\\\\'';\"}')",
       "Bash(curl -s -X DELETE https://lldzgkxpoyqauxdcjyaw.supabase.co/storage/v1/object/activity-files -H 'apikey: __TRACKED_VAR__' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"prefixes\":[\"197609/probe_test/1781408190_doc.pdf\",\"197609/probe_test/1781408191_img.png\"]}')",
-      "Bash(curl -s -X POST https://lldzgkxpoyqauxdcjyaw.supabase.co/storage/v1/object/list/activity-files -H 'apikey: __TRACKED_VAR__' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"prefix\":\"197609/probe_test/\",\"limit\":100}')"
+      "Bash(curl -s -X POST https://lldzgkxpoyqauxdcjyaw.supabase.co/storage/v1/object/list/activity-files -H 'apikey: __TRACKED_VAR__' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"prefix\":\"197609/probe_test/\",\"limit\":100}')",
+      "Bash(node --check js/app.js)"
     ]
   }
 }

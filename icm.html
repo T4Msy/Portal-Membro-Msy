@@ -430,35 +430,47 @@
   <script defer src="js/icm_script.js"></script>
 
   <script>
-    (async function initICMPage() {
-      const profile = await renderSidebar('icm');
-      if (!profile) return;
-
-      // Controle de visibilidade
-      if (typeof Features !== 'undefined' && !Features.guardPage('icm', profile)) return;
-
-      await renderTopBar('ICM — Índice de Capacidade', profile);
-
-      // Expõe contexto para o icm_script.js
-      window.__MSY_PROFILE__ = profile;
-      window.__MSY_DB__      = db;
-
-      // Carrega resultado anterior do Supabase
-      try {
-        const { data: prof } = await db
-          .from('profiles').select('icm').eq('id', profile.id).single();
-        if (prof?.icm?.score) {
-          const p = prof.icm;
-          const date = p.timestamp
-            ? new Date(p.timestamp).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-            : '—';
-          document.getElementById('icm-prev-score').textContent = p.score;
-          document.getElementById('icm-prev-class').textContent = '· ' + (p.classificacao || '—');
-          document.getElementById('icm-prev-date').textContent  = '· ' + date;
-          document.getElementById('icm-previous-banner').hidden = false;
+    // O init precisa rodar DEPOIS dos scripts `defer` (app.js, features.js…).
+    // Scripts inline clássicos executam ANTES dos `defer`, então sem este
+    // listener `renderSidebar`/`renderTopBar`/`db` (expostos em window.MSY)
+    // ainda não existiriam e a sidebar/topbar não renderizariam.
+    document.addEventListener('DOMContentLoaded', () => {
+      (async function initICMPage() {
+        const { renderSidebar, renderTopBar, db } = window.MSY || {};
+        if (typeof renderSidebar !== 'function') {
+          console.error('[MSY][icm] window.MSY indisponível — app.js não carregou.');
+          return;
         }
-      } catch(e) { /* silencioso */ }
-    })();
+
+        const profile = await renderSidebar('icm');
+        if (!profile) return;
+
+        // Controle de visibilidade
+        if (typeof Features !== 'undefined' && !Features.guardPage('icm', profile)) return;
+
+        await renderTopBar('ICM — Índice de Capacidade', profile);
+
+        // Expõe contexto para o icm_script.js
+        window.__MSY_PROFILE__ = profile;
+        window.__MSY_DB__      = db;
+
+        // Carrega resultado anterior do Supabase
+        try {
+          const { data: prof } = await db
+            .from('profiles').select('icm').eq('id', profile.id).single();
+          if (prof?.icm?.score) {
+            const p = prof.icm;
+            const date = p.timestamp
+              ? new Date(p.timestamp).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+              : '—';
+            document.getElementById('icm-prev-score').textContent = p.score;
+            document.getElementById('icm-prev-class').textContent = '· ' + (p.classificacao || '—');
+            document.getElementById('icm-prev-date').textContent  = '· ' + date;
+            document.getElementById('icm-previous-banner').hidden = false;
+          }
+        } catch(e) { /* silencioso */ }
+      })();
+    });
   </script>
 </body>
 </html>

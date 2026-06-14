@@ -447,12 +447,19 @@
      const actBadgeCacheKey = `activity_badge:${profile.id}`;
      let actBadgeCount = MSYSessionCache.get(actBadgeCacheKey);
      if (actBadgeCount === null) {
-       const { count } = await db.from('activities')
-         .select('id', { count: 'exact', head: true })
-         .eq('assigned_to', profile.id)
-         .in('status', ['Pendente', 'Em andamento']);
-       actBadgeCount = count || 0;
-       MSYSessionCache.set(actBadgeCacheKey, actBadgeCount, 2 * 60_000);
+       // Uma falha aqui nunca pode abortar a renderização da sidebar/topbar
+       // (senão a navegação inteira some — o badge é só um detalhe).
+       try {
+         const { count } = await db.from('activities')
+           .select('id', { count: 'exact', head: true })
+           .eq('assigned_to', profile.id)
+           .in('status', ['Pendente', 'Em andamento']);
+         actBadgeCount = count || 0;
+         MSYSessionCache.set(actBadgeCacheKey, actBadgeCount, 2 * 60_000);
+       } catch (err) {
+         console.error('[MSY][sidebar] falha ao carregar badge de atividades', err);
+         actBadgeCount = 0;
+       }
      }
      const actBadge = actBadgeCount > 0 ? actBadgeCount : '';
    
@@ -638,18 +645,25 @@
      const notifCacheKey = `topbar_notifs:${profile.id}`;
      let notifData = MSYSessionCache.get(notifCacheKey);
      if (!notifData) {
-       const [{ data: notifs }, { count: unreadCount }] = await Promise.all([
-         db.from('notifications')
-           .select('*').eq('user_id', profile.id)
-           .is('deleted_at', null)
-           .order('created_at', { ascending: false }).limit(6),
-         db.from('notifications')
-           .select('id', { count: 'exact', head: true }).eq('user_id', profile.id)
-           .eq('read', false)
-           .is('deleted_at', null),
-       ]);
-       notifData = { notifs: notifs || [], unreadCount: unreadCount || 0 };
-       MSYSessionCache.set(notifCacheKey, notifData, 60_000);
+       // A query de notificações nunca pode impedir o topbar de renderizar
+       // (senão o botão de menu some no mobile quando a rede falha).
+       try {
+         const [{ data: notifs }, { count: unreadCount }] = await Promise.all([
+           db.from('notifications')
+             .select('*').eq('user_id', profile.id)
+             .is('deleted_at', null)
+             .order('created_at', { ascending: false }).limit(6),
+           db.from('notifications')
+             .select('id', { count: 'exact', head: true }).eq('user_id', profile.id)
+             .eq('read', false)
+             .is('deleted_at', null),
+         ]);
+         notifData = { notifs: notifs || [], unreadCount: unreadCount || 0 };
+         MSYSessionCache.set(notifCacheKey, notifData, 60_000);
+       } catch (err) {
+         console.error('[MSY][topbar] falha ao carregar notificações', err);
+         notifData = { notifs: [], unreadCount: 0 };
+       }
      }
      const { notifs, unreadCount } = notifData;
 

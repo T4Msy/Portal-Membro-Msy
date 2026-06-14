@@ -68,6 +68,17 @@ body[data-page="icm"] .page-content {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* A intro é mais alta que a tela no celular. Com o flex centralizado
+     (justify-content:center) o topo do título sai da área visível e o
+     scroll não alcança. Alinhar ao topo garante que "ÍNDICE DE /
+     CAPACIDADE / MASAYOSHI" apareça inteiro e role normalmente. */
+  #icm-app #screen-intro {
+    justify-content: flex-start;
+  }
+  #icm-app #screen-intro.active {
+    padding-block: 1.4rem;
+  }
 }
 
 /* Desativa cursor customizado no portal */
