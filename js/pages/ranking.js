@@ -565,6 +565,9 @@ async function initRanking() {
 
       .trono-msg-wrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 2px; }
 
+      /* Wrappers neutros no desktop — só ganham layout próprio no mobile */
+      .trono-medal-stack, .trono-info { display: contents; }
+
       .trono-vazio { padding: 50px; text-align: center; color: rgba(255,255,255,.18); font-size: .84rem; font-style: italic; }
 
       .trono-diario-btn {
@@ -665,21 +668,27 @@ async function initRanking() {
         .trono-pos3 { order: 3; flex: none; width: 100%; }
         .trono-podio-item { flex-direction: row; align-items: center; text-align: left; gap: 0; min-width: 0; }
         .trono-podio-item:hover { transform: none; }
-        .trono-card { flex-direction: row; align-items: center; padding: 14px 16px !important; border-radius: 14px !important; gap: 14px; width: 100%; text-align: left; overflow: hidden; min-width: 0; box-sizing: border-box; }
-        .trono-coroa { position: static; transform: none; font-size: 1.2rem; animation: none; align-self: flex-start; margin-right: -8px; margin-top: -4px; flex-shrink: 0; }
-        .trono-pos1 .trono-avatar { width: 54px !important; height: 54px !important; font-size: 1.1rem !important; flex-shrink: 0; box-shadow: 0 0 18px rgba(201,168,76,.25), 0 0 0 3px rgba(201,168,76,.08); }
-        .trono-avatar { width: 46px !important; height: 46px !important; font-size: .95rem !important; flex-shrink: 0; margin-bottom: 0 !important; }
-        .trono-pos1 .trono-avatar::after { display: none; }
-        .trono-medal { font-size: 1.6rem !important; margin-bottom: 0 !important; flex-shrink: 0; filter: none; animation: none; }
+        .trono-card { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; padding: 14px 16px !important; border-radius: 14px !important; gap: 13px; width: 100%; text-align: left; overflow: hidden; min-width: 0; box-sizing: border-box; }
+
+        /* Coroa empilhada em cima da medalha */
+        .trono-medal-stack { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 0; flex-shrink: 0; }
+        .trono-coroa { position: static; transform: none; animation: none; font-size: 1.15rem; margin: 0 0 -3px 0; align-self: center; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(201,168,76,.5)); }
+        .trono-medal { font-size: 1.7rem !important; margin: 0 !important; flex-shrink: 0; filter: none; animation: none; line-height: 1; }
         .trono-pos1 .trono-medal { font-size: 2rem !important; }
-        .trono-nome { font-size: .82rem !important; margin-bottom: 2px !important; color: rgba(255,255,255,.85) !important; text-shadow: none !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-        .trono-pos1 .trono-nome { font-size: .92rem !important; text-shadow: none !important; }
-        .trono-msgs { font-size: .72rem !important; font-weight: 700; flex-shrink: 0; white-space: nowrap; }
-        .trono-pos1 .trono-msgs { font-size: .82rem !important; }
-        .trono-msg-wrap { align-items: flex-end; gap: 1px; }
-        .trono-periodo { font-size: .58rem; display: block; flex-shrink: 0; white-space: nowrap; }
+
+        .trono-avatar { width: 46px !important; height: 46px !important; font-size: .95rem !important; flex-shrink: 0; margin-bottom: 0 !important; }
+        .trono-pos1 .trono-avatar { width: 52px !important; height: 52px !important; font-size: 1.05rem !important; flex-shrink: 0; box-shadow: 0 0 18px rgba(201,168,76,.25), 0 0 0 3px rgba(201,168,76,.08); }
+        .trono-pos1 .trono-avatar::after { display: none; }
+
+        /* Info em coluna: nome em cima, msgs e data embaixo (nome não corta) */
+        .trono-info { display: flex !important; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1 1 auto; min-width: 0; gap: 3px; }
+        .trono-nome { font-size: .9rem !important; margin: 0 !important; color: rgba(255,255,255,.92) !important; text-shadow: none !important; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; flex: none; }
+        .trono-pos1 .trono-nome { font-size: 1rem !important; color: #fff !important; text-shadow: none !important; }
+        .trono-msg-wrap { flex-direction: column; align-items: flex-start; gap: 1px; }
+        .trono-msgs { font-size: .8rem !important; font-weight: 800; white-space: nowrap; }
+        .trono-pos1 .trono-msgs { font-size: .9rem !important; }
+        .trono-periodo { font-size: .62rem; display: block; white-space: nowrap; }
         .trono-degrau { display: none; }
-        .trono-card { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; }
         .trono-wrap { gap: 18px; }
         .trono-categoria { border-radius: 16px; }
         .rank-main-tabs { margin-bottom: 18px; border-radius: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -819,13 +828,17 @@ async function initRanking() {
                     return `
                     <div class="trono-podio-item ${posClass}">
                       <div class="trono-card">
-                        ${isFirst ? '<span class="trono-coroa">👑</span>' : ''}
-                        <div class="trono-medal">${tronoPosEmojis[origIdx]}</div>
+                        <div class="trono-medal-stack">
+                          ${isFirst ? '<span class="trono-coroa">👑</span>' : ''}
+                          <div class="trono-medal">${tronoPosEmojis[origIdx]}</div>
+                        </div>
                         <div class="trono-avatar">${Utils.getInitials(item.nome)}</div>
-                        <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
-                        <div class="trono-msg-wrap">
-                          <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
-                          ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
+                        <div class="trono-info">
+                          <div class="trono-nome">${Utils.escapeHtml(item.nome)}</div>
+                          <div class="trono-msg-wrap">
+                            <div class="trono-msgs">${Number(item.mensagens).toLocaleString('pt-BR')} msgs</div>
+                            ${item.periodo ? `<div class="trono-periodo">${Utils.escapeHtml(item.periodo)}</div>` : ''}
+                          </div>
                         </div>
                       </div>
                       <div class="trono-degrau">${tronoPosLabels[origIdx]}</div>
