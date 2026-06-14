@@ -2511,12 +2511,16 @@ function renderStoryComposerBody() {
         <div class="story-compose-strip">
           ${state.storyPreviews.map((preview, index) => renderStoryComposerThumb(preview, index)).join('')}
         </div>
-        ${renderStoryComposerControls(item)}
+        <div class="story-tools-wrap">
+          <button type="button" class="follow-btn story-tools-toggle" data-toggle-story-tools aria-expanded="${state.storyComposerEditOpen ? 'true' : 'false'}">
+            <i class="fa-solid fa-sliders"></i> ${state.storyComposerEditOpen ? 'Ocultar ajustes' : 'Ajustar mídia'}
+          </button>
+          ${state.storyComposerEditOpen ? renderStoryComposerControls(item) : ''}
+        </div>
         <div class="story-compose-caption-wrap">
           <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
           <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
         </div>
-        <div class="message-sub">${item.media_type === 'video' ? 'Videos serao exportados localmente antes do upload quando suportado.' : 'Imagens mantem qualidade alta com compressao apenas quando necessaria.'}</div>
         <div class="story-compose-actions">
           <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir midia</button>
           <input id="storyComposerFile" type="file" accept="image/*,video/*" hidden>
@@ -2526,15 +2530,21 @@ function renderStoryComposerBody() {
     </div>`;
 	  openModal(modal);
 	  bindMediaPreviewDiagnostics(modal, item);
-	  bindMediaEditorGestures(modal, item, () => {
-    const zoomLabel = modal.querySelector('[data-story-zoom-label]');
-    const rotationLabel = modal.querySelector('[data-story-rotation-label]');
-    const zoomInput = modal.querySelector('[data-story-edit-field="zoom"]');
-    const rotationInput = modal.querySelector('[data-story-edit-field="rotation"]');
-    if (zoomLabel) zoomLabel.textContent = `${Number(item.editState.zoom || 1).toFixed(2)}x`;
-    if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(item.editState.rotation || 0))}°`;
-    if (zoomInput) zoomInput.value = item.editState.zoom;
-    if (rotationInput) rotationInput.value = item.editState.rotation;
+	  if (state.storyComposerEditOpen) {
+    bindMediaEditorGestures(modal, item, () => {
+      const zoomLabel = modal.querySelector('[data-story-zoom-label]');
+      const rotationLabel = modal.querySelector('[data-story-rotation-label]');
+      const zoomInput = modal.querySelector('[data-story-edit-field="zoom"]');
+      const rotationInput = modal.querySelector('[data-story-edit-field="rotation"]');
+      if (zoomLabel) zoomLabel.textContent = `${Number(item.editState.zoom || 1).toFixed(2)}x`;
+      if (rotationLabel) rotationLabel.textContent = `${Math.round(Number(item.editState.rotation || 0))}°`;
+      if (zoomInput) zoomInput.value = item.editState.zoom;
+      if (rotationInput) rotationInput.value = item.editState.rotation;
+    });
+  }
+  modal.querySelector('[data-toggle-story-tools]')?.addEventListener('click', () => {
+    state.storyComposerEditOpen = !state.storyComposerEditOpen;
+    renderStoryComposerBody();
   });
   modal.querySelector('[data-close-story-composer]')?.addEventListener('click', closeStoryComposer);
   modal.querySelectorAll('[data-story-thumb]').forEach((btn) => btn.addEventListener('click', () => {
@@ -2639,6 +2649,7 @@ async function openStoryComposer() {
     state.storyPreviews = state.storyPreviews.map((item) => ({ ...item, caption: item.caption || '' }));
   }
   state.activeStoryComposerIndex = 0;
+  state.storyComposerEditOpen = false;
   await hydrateStoryComposerVideoMetadata();
   renderStoryComposerBody();
 }
@@ -2654,26 +2665,44 @@ async function buildStoryUploadPayload(item) {
   if (!item?.file) throw new Error('Selecione uma midia para enviar o story.');
   const aspect = item.editState?.aspect || '9:16';
   if (item.media_type === 'video') {
-    if (!item.editState?.exportSupported) {
-      throw new Error('Seu navegador não suporta exportação local segura de vídeo para stories editados.');
+    const es = item.editState || {};
+    const duration = Number(es.duration || 0);
+    const trimmed = Number(es.trimStart || 0) > 0.05
+      || (duration > 0 && Number(es.trimEnd ?? duration) < duration - 0.05);
+    const wantsEdit = trimmed || isMediaEditActive(es);
+    // Só reexporta (webm) quando o usuário editou E o navegador suporta.
+    // Caso contrário envia o vídeo original — funciona em todo navegador (inclusive iOS Safari).
+    if (wantsEdit && es.exportSupported) {
+      try {
+        const editedFile = await exportStoryVideoFile(item.file, es);
+        const media = await uploadSocialMedia(db, state.profile.id, editedFile, 'stories', { skipCompression: true });
+        return {
+          media,
+          options: {
+            media_meta: {
+              kind: 'video', aspect,
+              zoom: 1, rotation: 0, offsetX: 0, offsetY: 0, trimStart: 0, trimEnd: 0,
+              thumbnailTime: Number(es.thumbnailTime || 0),
+              originalAspect: Number(es.originalAspect || 0) || null,
+              exported: true,
+            },
+            thumbnail_url: item.thumbnail_url?.startsWith('blob:') ? media.url : (item.thumbnail_url || media.url),
+          },
+        };
+      } catch (err) {
+        console.warn('[MSY][feed-social] Falha ao exportar vídeo editado, enviando original:', err);
+      }
     }
-    const editedFile = await exportStoryVideoFile(item.file, item.editState);
-    const media = await uploadSocialMedia(db, state.profile.id, editedFile, 'stories', { skipCompression: true });
+    const media = await uploadSocialMedia(db, state.profile.id, item.file, 'stories', { skipCompression: true });
     return {
       media,
       options: {
         media_meta: {
-          kind: 'video',
-          aspect,
-          zoom: 1,
-          rotation: 0,
-          offsetX: 0,
-          offsetY: 0,
-          trimStart: 0,
-          trimEnd: 0,
-          thumbnailTime: Number(item.editState?.thumbnailTime || 0),
-          originalAspect: Number(item.editState?.originalAspect || 0) || null,
-          exported: true,
+          kind: 'video', aspect,
+          zoom: 1, rotation: 0, offsetX: 0, offsetY: 0, trimStart: 0, trimEnd: 0,
+          thumbnailTime: Number(es.thumbnailTime || 0),
+          originalAspect: Number(es.originalAspect || 0) || null,
+          exported: false,
         },
         thumbnail_url: item.thumbnail_url?.startsWith('blob:') ? media.url : (item.thumbnail_url || media.url),
       },

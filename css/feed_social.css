@@ -3877,6 +3877,9 @@ body[data-page="feed"] #storyComposerModal .story-compose-thumb{
   border-radius:12px;
 }
 
+.story-tools-wrap{display:flex;flex-direction:column;gap:10px;min-height:0}
+.story-tools-toggle{width:100%;justify-content:center;gap:8px}
+
 body[data-page="feed"] #storyComposerModal .story-compose-tools{
   display:grid;
   grid-template-columns:1fr;
