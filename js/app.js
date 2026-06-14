@@ -1985,7 +1985,16 @@
      // Submit response
      document.getElementById('submitActivity')?.addEventListener('click', async () => {
        const text = document.getElementById('responseText')?.value.trim();
-       if (!text) { document.getElementById('responseText').style.borderColor = 'var(--red-bright)'; return; }
+       if (!text) {
+         const ta = document.getElementById('responseText');
+         if (ta) {
+           ta.style.borderColor = 'var(--red-bright)';
+           ta.focus();
+           ta.addEventListener('input', () => { ta.style.borderColor = ''; }, { once: true });
+         }
+         Utils.showToast('Escreva uma descrição antes de enviar a resposta.', 'error');
+         return;
+       }
        const btn = document.getElementById('submitActivity');
        btn.disabled = true;
        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
