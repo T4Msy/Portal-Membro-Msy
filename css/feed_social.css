@@ -1056,8 +1056,8 @@ body[data-page="feed"] .social-editor-actions .follow-btn{display:inline-flex;al
   body[data-page="feed"] .post-stats{padding:0 12px 10px!important}
   body[data-page="feed"] .post-comments{padding:10px 12px 13px!important}
   body[data-page="feed"] .comment-body{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.07)}
-  body[data-page="feed"] .post-menu{position:fixed;left:12px;right:12px;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));z-index:920;border-radius:22px;background:rgba(16,16,21,.98);backdrop-filter:blur(20px);box-shadow:0 28px 80px rgba(0,0,0,.6);animation:mobileSheetIn .18s var(--ease) both}
-  body[data-page="feed"] .post-menu button{padding:15px 16px;font-size:.95rem;text-align:center}
+  body[data-page="feed"] .post-menu{position:absolute;left:auto;right:0;top:calc(100% + 6px);bottom:auto;z-index:920;min-width:190px;border-radius:16px;background:rgba(16,16,21,.98);backdrop-filter:blur(20px);box-shadow:0 18px 50px rgba(0,0,0,.55)}
+  body[data-page="feed"] .post-menu button{padding:13px 16px;font-size:.95rem;text-align:left}
 
   body[data-page="feed"] .mobile-action-dock{display:block;position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:760;pointer-events:none}
   body.social-profile-mode[data-page="feed"] .mobile-action-dock,

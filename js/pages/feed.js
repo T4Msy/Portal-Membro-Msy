@@ -1839,11 +1839,14 @@ function renderPostComposerModal() {
   const modal = document.getElementById('mobilePostComposerModal');
   if (!modal) return;
   modal.classList.add('post-create-modal');
-  const step = state.postComposerStep || (state.previews.length ? 'crop' : 'details');
+  let step = state.postComposerStep || (state.previews.length ? 'crop' : 'details');
+  // Vídeo não tem corte: vai direto para os detalhes, exibindo o player.
+  const mainIsVideo = state.previews[0]?.media_type === 'video';
+  if (step === 'crop' && mainIsVideo) { step = 'details'; state.postComposerStep = 'details'; }
   const text = document.getElementById('composerText')?.value || '';
   const canPost = Boolean(text.trim() || state.previews.length);
   const title = step === 'details' ? 'Nova publicacao' : 'Cortar';
-  const left = step === 'details' && state.previews.length
+  const left = step === 'details' && state.previews.length && !mainIsVideo
     ? '<button type="button" class="ig-composer-icon" data-composer-step="crop" aria-label="Voltar"><i class="fa-solid fa-arrow-left"></i></button>'
     : '<button type="button" class="ig-composer-icon" data-cancel-post-composer aria-label="Cancelar publicacao"><i class="fa-solid fa-arrow-left"></i></button>';
   const right = step === 'crop'
@@ -2290,14 +2293,15 @@ function renderEditableMediaNode(item, { scope = 'story', controls = true } = {}
   const aspect = mediaAspectCss(editState.aspect, editState.originalAspect);
   const style = `--editor-aspect:${aspect};--editor-transform:${mediaEditorTransform(editState)}`;
   const activeClass = isMediaEditActive(editState) ? ' is-edited' : ' is-original';
-  const media = item.media_type === 'video'
-    ? `<video class="media-editor-media" src="${Utils.escapeHtml(item.url)}" ${scope === 'story' ? 'controls' : 'muted'} playsinline preload="metadata"></video>`
+  const isVideo = item.media_type === 'video';
+  const media = isVideo
+    ? `<video class="media-editor-media" src="${Utils.escapeHtml(item.url)}" controls playsinline preload="metadata"></video>`
     : `<img class="media-editor-media" src="${Utils.escapeHtml(item.url)}" alt="Preview da mídia">`;
   return `
     <div class="media-editor-crop${activeClass}" style="${style}" data-media-editor="${Utils.escapeHtml(item.id)}" data-media-editor-scope="${scope}">
       <div class="media-editor-viewport">
         ${media}
-        ${controls ? '<div class="media-editor-mask" aria-hidden="true"></div>' : ''}
+        ${controls && !(scope === 'post' && isVideo) ? '<div class="media-editor-mask" aria-hidden="true"></div>' : ''}
         <div class="media-editor-load-error" data-media-load-error hidden>
           <i class="fa-regular fa-image"></i>
           <span>Não foi possível carregar esta imagem.</span>
