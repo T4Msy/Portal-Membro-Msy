@@ -2321,7 +2321,7 @@
          <button type="button" class="activity-attachment-open-btn" id="na-attachment-open-btn">
            <i class="fa-solid fa-folder-open"></i> Escolher arquivos
          </button>
-         <input type="file" id="na-attachments-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" ${isEditing ? 'class="activity-attachment-native-input"' : 'style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"'}>
+         <input type="file" id="na-attachments-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.mp4,.mov,.mkv,.webm,.mp3,.wav,.ogg" ${isEditing ? 'class="activity-attachment-native-input"' : 'style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"'}>
          <div class="activity-attachment-summary" id="na-attachment-summary">Nenhum arquivo selecionado.</div>
          <div class="activity-attachment-grid" id="na-attachment-preview"></div>
        </div>
