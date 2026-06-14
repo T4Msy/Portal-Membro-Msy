@@ -47,7 +47,6 @@ const MSYPerms = {
     // ── Jornal
     { key: 'gerenciar_jornal',      label: 'Gerenciar Jornal, fotos e vídeos', group: 'Jornal', icon: 'fa-newspaper' },
     // ── Feed
-    { key: 'publicar_feed',         label: 'Publicar no Feed',       group: 'Feed',       icon: 'fa-rss' },
     { key: 'moderar_feed',          label: 'Moderar Feed',           group: 'Feed',       icon: 'fa-shield-virus' },
     // ── Sugestões
     { key: 'gerenciar_sugestoes',   label: 'Gerenciar Sugestões',    group: 'Sugestões',  icon: 'fa-lightbulb' },
@@ -243,7 +242,7 @@ async function openPermissionsManager() {
     'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
     'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
     'Jornal':      { icon:'fa-newspaper',     color:'#c9a84c', keys:['gerenciar_jornal'] },
-    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
+    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['moderar_feed'] },
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
@@ -448,7 +447,7 @@ function getPermissionsGroups() {
     'Ranking':     { icon:'fa-ranking-star',  color:'#e879f9', keys:['gerenciar_ranking'] },
     'Biblioteca':  { icon:'fa-book-open',     color:'#34d399', keys:['gerenciar_biblioteca'] },
     'Jornal':      { icon:'fa-newspaper',     color:'#c9a84c', keys:['gerenciar_jornal'] },
-    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['publicar_feed','moderar_feed'] },
+    'Feed':        { icon:'fa-rss',           color:'#38bdf8', keys:['moderar_feed'] },
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
