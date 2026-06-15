@@ -917,7 +917,7 @@ body[data-page="feed"] .activity-copy span{white-space:normal}
   #storyComposerModal .story-compose-slide-preview{height:100%;min-height:0}
   #storyComposerModal .story-compose-slide-preview img,
   #storyComposerModal .story-compose-slide-preview video{width:100%;height:100%;object-fit:contain;max-height:none}
-  #storyComposerModal .story-compose-side{min-height:0;max-height:46dvh;display:grid;grid-template-rows:auto auto minmax(76px,1fr) auto auto;gap:10px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:rgba(13,13,18,.98);border-top:1px solid rgba(255,255,255,.08);overflow:hidden}
+  #storyComposerModal .story-compose-side{min-height:0;max-height:46dvh;display:flex;flex-direction:column;gap:10px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:rgba(13,13,18,.98);border-top:1px solid rgba(255,255,255,.08);overflow-y:auto;-webkit-overflow-scrolling:touch}
   #storyComposerModal .story-compose-head{align-items:center}
   #storyComposerModal .story-compose-head .social-title{font-size:.96rem!important;line-height:1.15}
   #storyComposerModal .story-compose-head .social-subtitle{font-size:.68rem;line-height:1.3}
@@ -928,7 +928,7 @@ body[data-page="feed"] .activity-copy span{white-space:normal}
   #storyComposerModal .story-compose-thumb{width:44px;height:54px;flex-basis:44px;border-radius:10px}
   #storyComposerModal .story-caption-input{min-height:76px;max-height:118px;resize:none;border-radius:18px;background:rgba(255,255,255,.055);font-size:16px}
   #storyComposerModal .story-caption-count{font-size:.68rem}
-  #storyComposerModal .story-compose-actions{position:sticky;bottom:0;padding-top:0;background:rgba(13,13,18,.98)}
+  #storyComposerModal .story-compose-actions{position:sticky;bottom:0;margin-top:auto;padding-top:0;background:rgba(13,13,18,.98)}
   #storyComposerModal .story-publish-btn,
   #storyComposerModal #publishStoryBtn{display:flex!important;width:100%;min-height:50px;border-radius:999px;font-weight:950;background:linear-gradient(135deg,#ff3040,#b91c1c);border-color:rgba(255,255,255,.14);box-shadow:0 16px 34px rgba(255,48,64,.28)}
 }
@@ -3832,8 +3832,8 @@ body[data-page="feed"] #storyComposerModal .media-editor-mask{
 body[data-page="feed"] #storyComposerModal .story-compose-side{
   min-height:0;
   max-height:none;
-  display:grid;
-  grid-template-rows:auto auto auto minmax(92px,1fr) auto auto;
+  display:flex;
+  flex-direction:column;
   gap:13px;
   overflow:auto;
   padding:20px;

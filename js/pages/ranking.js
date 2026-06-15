@@ -311,8 +311,8 @@ async function _tronPublicarJornal(eventos, profileId) {
       if (error) throw error;
     }
   } catch (err) {
+    // Best-effort: a publicação no Jornal nunca deve derrubar o salvamento do ranking.
     console.error('[MSY][ranking] Erro ao publicar eventos no Jornal:', err);
-    throw err;
   }
 }
 
@@ -1094,6 +1094,7 @@ async function initRanking() {
       });
 
       if (error) {
+        console.error('[MSY][ranking] Erro ao salvar weekly_rankings:', error);
         Utils.showToast('Erro ao salvar.', 'error');
         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
         return;
