@@ -2513,8 +2513,9 @@ function renderStoryComposerBody() {
         </div>
         <div class="story-tools-wrap">
           <button type="button" class="follow-btn story-tools-toggle" data-toggle-story-tools aria-expanded="${state.storyComposerEditOpen ? 'true' : 'false'}">
-            <i class="fa-solid fa-sliders"></i> Ajustar mídia
+            <i class="fa-solid fa-sliders"></i> ${state.storyComposerEditOpen ? 'Ocultar ajustes' : 'Ajustar mídia'}
           </button>
+          ${state.storyComposerEditOpen ? `<div class="story-tools-inline">${renderStoryComposerControls(item)}</div>` : ''}
         </div>
         <div class="story-compose-caption-wrap">
           <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
@@ -2526,18 +2527,7 @@ function renderStoryComposerBody() {
           <button class="btn btn-primary social-submit story-publish-btn" id="publishStoryBtn"><i class="fa-solid fa-paper-plane"></i> ${state.activeStoryEditId ? 'Salvar story' : 'Enviar story'}</button>
         </div>
       </div>
-    </div>
-    ${state.storyComposerEditOpen ? `
-      <div class="story-tools-overlay" id="storyToolsOverlay">
-        <div class="story-tools-sheet" role="dialog" aria-label="Ajustes da mídia">
-          <div class="story-tools-sheet-head">
-            <strong><i class="fa-solid fa-sliders"></i> Ajustes</strong>
-            <button type="button" class="social-icon-btn" data-toggle-story-tools aria-label="Fechar ajustes"><i class="fa-solid fa-xmark"></i></button>
-          </div>
-          ${renderStoryComposerControls(item)}
-          <button type="button" class="btn btn-primary story-tools-done" data-toggle-story-tools><i class="fa-solid fa-check"></i> Concluir</button>
-        </div>
-      </div>` : ''}`;
+    </div>`;
 	  openModal(modal);
 	  bindMediaPreviewDiagnostics(modal, item);
 	  if (state.storyComposerEditOpen) {
@@ -2556,13 +2546,6 @@ function renderStoryComposerBody() {
     state.storyComposerEditOpen = !state.storyComposerEditOpen;
     renderStoryComposerBody();
   }));
-  // Fecha ao tocar no fundo escuro (fora da caixa de ajustes)
-  modal.querySelector('#storyToolsOverlay')?.addEventListener('click', (event) => {
-    if (event.target.id === 'storyToolsOverlay') {
-      state.storyComposerEditOpen = false;
-      renderStoryComposerBody();
-    }
-  });
   modal.querySelector('[data-close-story-composer]')?.addEventListener('click', closeStoryComposer);
   modal.querySelectorAll('[data-story-thumb]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeStoryComposerIndex = Number(btn.dataset.storyThumb);
