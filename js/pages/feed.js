@@ -2517,10 +2517,10 @@ function renderStoryComposerBody() {
           </button>
           ${state.storyComposerEditOpen ? `<div class="story-tools-inline">${renderStoryComposerControls(item)}</div>` : ''}
         </div>
-        <div class="story-compose-caption-wrap">
+        ${!state.storyComposerEditOpen ? `<div class="story-compose-caption-wrap">
           <textarea id="storyCaptionInput" class="story-caption-input" maxlength="160" placeholder="Adicionar legenda...">${Utils.escapeHtml(item.caption || '')}</textarea>
           <div class="story-caption-count"><span id="storyCaptionCount">${(item.caption || '').length}</span>/160</div>
-        </div>
+        </div>` : ''}
         <div class="story-compose-actions">
           <button class="follow-btn" type="button" data-story-replace-media><i class="fa-solid fa-image"></i> Substituir midia</button>
           <input id="storyComposerFile" type="file" accept="image/*,video/*" hidden>
