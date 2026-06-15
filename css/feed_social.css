@@ -3880,6 +3880,14 @@ body[data-page="feed"] #storyComposerModal .story-compose-thumb{
 .story-tools-wrap{display:flex;flex-direction:column;gap:10px;min-height:0}
 .story-tools-toggle{width:100%;justify-content:center;gap:8px}
 
+/* Caixa de ajustes sobreposta — escurece tudo atrás */
+.story-tools-overlay{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.66);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .16s ease both}
+.story-tools-sheet{width:100%;max-width:560px;max-height:88dvh;display:flex;flex-direction:column;gap:14px;background:rgba(16,16,22,.99);border:1px solid rgba(255,255,255,.1);border-bottom:0;border-radius:22px 22px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -24px 70px rgba(0,0,0,.7);overflow-y:auto;-webkit-overflow-scrolling:touch;animation:mobileSheetIn .22s var(--ease) both}
+.story-tools-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0}
+.story-tools-sheet-head strong{display:flex;align-items:center;gap:8px;font-family:'Cinzel',serif;font-size:1rem;color:var(--text-1)}
+.story-tools-done{width:100%;min-height:48px;border-radius:999px;justify-content:center;margin-top:2px}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
 body[data-page="feed"] #storyComposerModal .story-compose-tools{
   display:grid;
   grid-template-columns:1fr;
