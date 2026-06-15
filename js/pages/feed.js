@@ -2442,29 +2442,6 @@ function renderStoryComposerControls(item) {
       <input type="range" min="0" max="360" step="1" value="${Number(item.editState?.rotation || 0)}" data-story-edit-field="rotation">
     </div>
     <button type="button" class="follow-btn media-editor-reset" data-media-edit-reset><i class="fa-solid fa-rotate-left"></i> Resetar enquadramento</button>`;
-  if (item.media_type === 'video') {
-    const duration = Number(item.editState?.duration || 0);
-    const trimStart = Number(item.editState?.trimStart || 0);
-    const trimEnd = Number(item.editState?.trimEnd ?? duration ?? 0);
-    return `
-      <div class="story-compose-tools">
-        ${aspectControl}
-        ${transformControls}
-        <div class="form-group story-compose-control">
-          <label class="form-label">Início do vídeo</label>
-          <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${trimStart}" data-story-edit-field="trimStart">
-        </div>
-        <div class="form-group story-compose-control">
-          <label class="form-label">Fim do vídeo</label>
-          <input type="range" min="0.1" max="${Math.max(duration || 0.1, 0.1)}" step="0.1" value="${trimEnd || duration || 0.1}" data-story-edit-field="trimEnd">
-        </div>
-        <div class="form-group story-compose-control">
-          <label class="form-label">Thumbnail</label>
-          <input type="range" min="0" max="${Math.max(duration, 0)}" step="0.1" value="${Number(item.editState?.thumbnailTime || 0)}" data-story-edit-field="thumbnailTime">
-        </div>
-        <div class="message-sub">${item.editState?.exportSupported ? 'Exportação local ativa.' : 'Seu navegador não suporta exportação local segura de vídeo.'}</div>
-      </div>`;
-  }
   return `
     <div class="story-compose-tools">
       ${aspectControl}
