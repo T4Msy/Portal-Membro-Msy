@@ -842,7 +842,7 @@ function taskRow(t, checklist, project, manage) {
 
       ${canCheck ? `<div class="proj-exec">
         <label class="form-label">Observação da execução <span class="proj-optional">(opcional)</span></label>
-        <textarea class="form-textarea proj-exec-note" id="exec-${t.id}" rows="2" placeholder="Ex.: Backend concluído, aguardando validação...">${esc(t.exec_note)}</textarea>
+        <textarea class="form-textarea proj-exec-note" id="exec-${t.id}" rows="4" placeholder="Ex.: Backend concluído, aguardando validação...">${esc(t.exec_note)}</textarea>
         <div class="proj-doc-actions"><button class="btn btn-ghost btn-sm" data-action="save-exec" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-floppy-disk"></i> Salvar nota</button></div>
       </div>` : (t.exec_note ? `<div class="proj-task-obs"><b>Execução:</b> ${esc(t.exec_note)}</div>` : '')}
     </div>

@@ -5569,6 +5569,16 @@ textarea:invalid:not(:placeholder-shown),
   body { padding-bottom: env(safe-area-inset-bottom); }
 }
 
+/* iOS: empurra topbar abaixo da notch/barra de status */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 768px) {
+    .topbar {
+      padding-top: env(safe-area-inset-top);
+      height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    }
+  }
+}
+
 /* Scroll suave em iOS */
 .sidebar-nav, .page-content, .modal-box {
   -webkit-overflow-scrolling: touch;

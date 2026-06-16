@@ -267,6 +267,14 @@
 /* Observação da execução */
 .proj-exec { margin-top: 4px; }
 .proj-optional { font-weight: 400; color: var(--text-3); font-size: .82em; }
+.proj-exec-note {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+}
+@media (max-width: 768px) {
+  .proj-exec-note { min-height: 120px; }
+}
 
 /* Construtor de checklist (modal de nova tarefa) */
 .proj-checkbuilder { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
