@@ -75,6 +75,7 @@
 .ts-review  { background: rgba(168,85,247,.12); color: #c084fc; border-color: rgba(168,85,247,.3); }
 .ts-done    { background: rgba(34,197,94,.12); color: #4ade80; border-color: rgba(34,197,94,.3); }
 .ts-blocked { background: var(--red-subtle); color: var(--red-bright); border-color: var(--border-red); }
+.ts-fix     { background: rgba(245,158,11,.14); color: #fbbf24; border-color: rgba(245,158,11,.35); }
 
 /* ── Avatar ── */
 .proj-avatar { border-radius: 50%; background: var(--gold-subtle); color: var(--black-2); font-weight: 700;
@@ -227,11 +228,124 @@
 .proj-mt-proj { font-size: .72rem; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .proj-mt-proj i { color: var(--gold); }
 
-/* ── Responsivo ── */
+/* ============================================================
+   v2 — VISÕES DE TAREFAS, FLUXO, AGENDA, GOVERNANÇA
+   ============================================================ */
+
+/* Chip somente-leitura */
+.proj-chip-ro { color: var(--text-3); }
+.proj-chip-ro i { color: var(--text-3); }
+
+/* Link dentro do título do painel */
+.proj-panel-title .proj-panel-link {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  font-size: .72rem; font-weight: 600; color: var(--gold); text-transform: none; letter-spacing: 0;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.proj-panel-title .proj-panel-link:hover { color: var(--gold-bright); }
+
+/* Switcher de visões (reusa .filter-btn) */
+.proj-views { display: flex; gap: 8px; flex-wrap: wrap; }
+.proj-view-count { font-size: .66rem; background: rgba(255,255,255,.08); border-radius: 99px; padding: 0 6px; margin-left: 2px; }
+.filter-btn.active .proj-view-count { background: rgba(0,0,0,.18); }
+.proj-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Botões de fluxo de trabalho */
+.proj-flow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 2px; }
+.proj-flow-wait { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; color: #c084fc;
+  background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.3); border-radius: 99px; padding: 6px 12px; }
+
+/* Metadados de tempo da tarefa */
+.proj-task-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: .74rem; color: var(--text-3); }
+.proj-task-meta i { color: var(--gold); margin-right: 4px; }
+
+/* Caixa de ajustes solicitados */
+.proj-review-note { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: var(--radius);
+  padding: 10px 12px; font-size: .82rem; color: var(--text-1); line-height: 1.5; }
+.proj-review-note i { color: #fbbf24; margin-right: 4px; }
+
+/* Observação da execução */
+.proj-exec { margin-top: 4px; }
+.proj-optional { font-weight: 400; color: var(--text-3); font-size: .82em; }
+
+/* Construtor de checklist (modal de nova tarefa) */
+.proj-checkbuilder { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.proj-checkbuilder-item { display: flex; align-items: center; gap: 9px; font-size: .82rem; color: var(--text-1);
+  background: var(--black-4); border: 1px solid var(--border-faint); border-radius: var(--radius-sm); padding: 7px 10px; }
+.proj-checkbuilder-item i { color: var(--text-3); }
+.proj-checkbuilder-item span { flex: 1; }
+
+/* Dica em modais */
+.proj-hint { font-size: .74rem; color: var(--text-3); margin: 6px 0 0; }
+
+/* ── Agenda operacional ── */
+.proj-agenda { display: flex; flex-direction: column; gap: 18px; }
+.proj-agenda-day { display: flex; flex-direction: column; gap: 8px; }
+.proj-agenda-daylabel { display: flex; align-items: center; gap: 8px; font-size: .7rem; font-weight: 700;
+  color: var(--gold); text-transform: uppercase; letter-spacing: .1em; }
+.proj-agenda-daylabel::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border-gold), transparent); }
+.proj-agenda-list { display: flex; flex-direction: column; gap: 8px; }
+.proj-agenda-mini { display: flex; flex-direction: column; gap: 8px; }
+.proj-agenda-item { display: flex; align-items: center; gap: 14px; background: var(--black-4);
+  border: 1px solid var(--border-faint); border-left: 3px solid var(--gold); border-radius: var(--radius);
+  padding: 10px 14px; cursor: pointer; transition: border-color var(--t1) var(--ease); }
+.proj-agenda-item:hover { border-color: var(--border-gold); border-left-color: var(--gold-bright); }
+.proj-agenda-item.overdue { border-left-color: var(--red-bright); }
+.proj-agenda-time { font-size: .9rem; font-weight: 700; color: var(--text-1); min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+.proj-agenda-allday { font-size: .64rem; color: var(--text-3); font-weight: 600; }
+.proj-agenda-main { flex: 1; min-width: 0; }
+.proj-agenda-title { font-size: .86rem; font-weight: 600; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-agenda-sub { display: flex; align-items: center; gap: 6px; font-size: .74rem; color: var(--text-3); margin-top: 2px; }
+
+/* ── Governança de participantes ── */
+.proj-part-actions { display: flex; gap: 6px; }
+.proj-tag-creator { font-size: .62rem; background: rgba(96,165,250,.14); color: #60a5fa; border: 1px solid rgba(96,165,250,.3);
+  border-radius: 99px; padding: 1px 8px; font-weight: 600; }
+
+/* ============================================================
+   RESPONSIVO / MOBILE-FIRST
+   ============================================================ */
 @media (max-width: 900px) {
   .proj-panels { grid-template-columns: 1fr; }
   .proj-resumo { grid-template-columns: 1fr; }
   .proj-form-grid { grid-template-columns: 1fr; }
-  .proj-part { grid-template-columns: 1fr; gap: 10px; }
+  .proj-part { grid-template-columns: 1fr auto; gap: 10px 12px; }
   .proj-chart-row { grid-template-columns: 110px 1fr 40px; }
+}
+
+@media (max-width: 768px) {
+  .proj-h1 { font-size: 1.25rem; }
+  .proj-header { flex-direction: column; align-items: stretch; }
+  .proj-header-actions { width: 100%; }
+  .proj-header-actions .btn { flex: 1; justify-content: center; }
+  /* Abas e visões roláveis horizontalmente */
+  .proj-tabs, .proj-views { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  .proj-views .filter-btn { white-space: nowrap; }
+  .proj-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .proj-toolbar-actions .btn { flex: 1; justify-content: center; }
+  /* Cartões de tarefa */
+  .proj-task-head { gap: 6px 8px; }
+  .proj-task-title { min-width: 100%; order: -1; }
+  .proj-flow { width: 100%; }
+  .proj-flow .btn { flex: 1; justify-content: center; }
+  .proj-task-controls .btn { flex: 1; justify-content: center; }
+}
+
+@media (max-width: 600px) {
+  .proj-stats { grid-template-columns: 1fr 1fr; }
+  .proj-part { grid-template-columns: 1fr; }
+  .proj-part-actions { justify-content: flex-end; }
+  .proj-chart-row { grid-template-columns: 90px 1fr 36px; gap: 8px; }
+  .proj-mt-grid { grid-template-columns: 1fr; }
+  .proj-mini-stats { flex-direction: column; }
+  .proj-agenda-item { gap: 10px; padding: 10px; }
+  /* Alvos de toque confortáveis */
+  .proj-icon-btn { width: 34px; height: 34px; }
+  .proj-check input[type="checkbox"] { width: 20px; height: 20px; }
+}
+
+@media (max-width: 480px) {
+  .proj-stats { grid-template-columns: 1fr; }
+  .proj-detail-actions { flex-wrap: wrap; }
+  .proj-agenda-time { min-width: 42px; font-size: .82rem; }
 }

@@ -1,8 +1,8 @@
 /* ============================================================
-   MSY PORTAL — PAGES/PROJETOS.JS
+   MSY PORTAL — PAGES/PROJETOS.JS  (v2)
    Módulo ES — Gestão de Projetos.
-   Centraliza criação, documentação, participantes, categorias,
-   tarefas, checklist, progresso, histórico e notificações.
+   Fluxo de trabalho com aprovação, rastreamento de tempo, agenda
+   operacional, governança por projeto, documentação e histórico.
    Depende de window.MSY (bridge populado por app.js).
    MSYPerms: const global de modules3.js, acessível pelo escopo global.
    ============================================================ */
@@ -29,14 +29,13 @@ const PROJ_STATUS_CLASS = {
   homologacao: 'st-homolog', concluido: 'st-done', cancelado: 'st-cancel',
 };
 
-const TASK_STATUS = ['nao_iniciada', 'em_andamento', 'em_revisao', 'concluida', 'bloqueada'];
 const TASK_STATUS_LABELS = {
   nao_iniciada: 'Não iniciada', em_andamento: 'Em andamento', em_revisao: 'Em revisão',
-  concluida: 'Concluída', bloqueada: 'Bloqueada',
+  necessita_ajustes: 'Necessita ajustes', concluida: 'Concluída', bloqueada: 'Bloqueada',
 };
 const TASK_STATUS_CLASS = {
   nao_iniciada: 'ts-todo', em_andamento: 'ts-doing', em_revisao: 'ts-review',
-  concluida: 'ts-done', bloqueada: 'ts-blocked',
+  necessita_ajustes: 'ts-fix', concluida: 'ts-done', bloqueada: 'ts-blocked',
 };
 
 const DEFAULT_ROLES = ['Front-end', 'Back-end', 'UX/UI', 'QA', 'Gestor', 'Marketing', 'Conteúdo', 'IA', 'DevOps'];
@@ -58,11 +57,16 @@ const HISTORY_META = {
   status_alterado: { icon: 'fa-arrows-rotate', label: 'Status alterado' },
   participante_adicionado: { icon: 'fa-user-plus', label: 'Participante adicionado' },
   participante_removido: { icon: 'fa-user-minus', label: 'Participante removido' },
+  participante_gestao: { icon: 'fa-user-shield', label: 'Gestão alterada' },
   categoria_criada: { icon: 'fa-folder-plus', label: 'Categoria criada' },
   categoria_removida: { icon: 'fa-folder-minus', label: 'Categoria removida' },
   tarefa_criada: { icon: 'fa-plus', label: 'Tarefa criada' },
   tarefa_editada: { icon: 'fa-pen', label: 'Tarefa atualizada' },
+  tarefa_iniciada: { icon: 'fa-play', label: 'Tarefa iniciada' },
+  tarefa_em_revisao: { icon: 'fa-magnifying-glass', label: 'Revisão solicitada' },
+  tarefa_ajustes: { icon: 'fa-rotate-left', label: 'Ajustes solicitados' },
   tarefa_concluida: { icon: 'fa-circle-check', label: 'Tarefa concluída' },
+  tarefa_reatribuida: { icon: 'fa-user-pen', label: 'Tarefa reatribuída' },
   tarefa_removida: { icon: 'fa-trash', label: 'Tarefa removida' },
   doc_atualizada: { icon: 'fa-file-pen', label: 'Documentação atualizada' },
 };
@@ -74,15 +78,15 @@ const state = {
   profile: null,
   isDiretoria: false,
   canCreate: false,
-  canManageGlobal: false,
-  roleOptions: [],          // catálogo de papéis personalizados
+  roleOptions: [],            // catálogo de papéis personalizados
   currentProjectTab: 'resumo',
+  currentTasksView: 'minhas', // minhas | equipe | revisao | concluidas
 };
 
 const content = () => document.getElementById('pageContent');
 
 /* ──────────────────────────────────────────────
-   HELPERS DE PROGRESSO
+   HELPERS DE PROGRESSO / TEMPO
    ────────────────────────────────────────────── */
 function taskProgress(task, checklist) {
   const items = checklist?.[task.id] || [];
@@ -97,9 +101,36 @@ function avgProgress(tasks, checklist) {
   return Math.round(tasks.reduce((s, t) => s + taskProgress(t, checklist), 0) / tasks.length);
 }
 function isOverdue(task) {
-  if (!task.prazo || task.status === 'concluida' || task.status === 'cancelada') return false;
+  if (!task.prazo || task.status === 'concluida') return false;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return new Date(task.prazo + 'T23:59:59') < today;
+}
+function fmtTime(t) { return t ? String(t).slice(0, 5) : ''; }
+function fmtDuration(seconds) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  if (m) return `${m}m`;
+  return seconds ? `${seconds}s` : '0m';
+}
+function liveSeconds(t) {
+  let s = Number(t.time_spent_seconds || 0);
+  if (t.status === 'em_andamento' && t.period_start) {
+    s += Math.max(0, (Date.now() - new Date(t.period_start).getTime()) / 1000);
+  }
+  return s;
+}
+function cmpDelivery(a, b) {
+  if (a.prazo !== b.prazo) return a.prazo < b.prazo ? -1 : 1;
+  const ah = a.prazo_hora || '99:99', bh = b.prazo_hora || '99:99';
+  if (ah !== bh) return ah < bh ? -1 : 1;
+  return (a.title || '').localeCompare(b.title || '');
+}
+function agendaDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const wd = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+  return `${wd.charAt(0).toUpperCase() + wd.slice(1)} · ${Utils.formatDate(dateStr)}`;
 }
 
 /* ──────────────────────────────────────────────
@@ -125,6 +156,11 @@ function prioBadge(p) {
 }
 function taskStatusBadge(s) {
   return `<span class="proj-tstatus ${TASK_STATUS_CLASS[s] || ''}">${esc(TASK_STATUS_LABELS[s] || s)}</span>`;
+}
+function dueChip(t) {
+  if (!t.prazo) return '';
+  const time = t.prazo_hora ? ` ${fmtTime(t.prazo_hora)}` : '';
+  return `<span class="proj-task-due ${isOverdue(t) ? 'overdue' : ''}"><i class="fa-regular fa-clock"></i> ${Utils.formatDate(t.prazo)}${time}</span>`;
 }
 function loadingHTML(msg = 'Carregando...') {
   return `<div class="loading-container"><i class="fa-solid fa-circle-notch fa-spin"></i> ${esc(msg)}</div>`;
@@ -188,6 +224,12 @@ async function notifyProject(projectId, userIds, message, icon = '📁', link = 
     console.error('[MSY][projetos] Erro ao notificar:', err);
   }
 }
+async function projectManagerIds(projectId) {
+  try {
+    const { data } = await db.from('project_participants').select('user_id').eq('project_id', projectId).eq('is_manager', true);
+    return (data || []).map(m => m.user_id);
+  } catch { return []; }
+}
 async function loadActiveProfiles() {
   try {
     const { data, error } = await db.from('profiles')
@@ -211,14 +253,13 @@ async function loadRoleOptions() {
   }
 }
 function allRoles() {
-  const set = new Set([...DEFAULT_ROLES, ...state.roleOptions]);
-  return Array.from(set);
+  return Array.from(new Set([...DEFAULT_ROLES, ...state.roleOptions]));
 }
+/** Governança por projeto: criador OU participante gestor (independente do portal). */
 function canManage(project, participants = []) {
-  if (state.isDiretoria || state.canManageGlobal) return true;
-  if (!project) return false;
+  if (!project || !state.profile) return false;
   const me = state.profile.id;
-  if (project.created_by === me || project.responsavel_id === me) return true;
+  if (project.created_by === me) return true;
   return participants.some(p => p.user_id === me && p.is_manager);
 }
 
@@ -233,7 +274,6 @@ async function initProjetos() {
   state.profile = profile;
   state.isDiretoria = profile.tier === 'diretoria';
   try {
-    state.canManageGlobal = state.isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_projetos');
     state.canCreate = state.isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['criar_projetos', 'gerenciar_projetos']);
   } catch (err) {
     console.error('[MSY][projetos] Erro ao checar permissões:', err);
@@ -245,6 +285,7 @@ async function initProjetos() {
   const root = content();
   root.addEventListener('click', onClick);
   root.addEventListener('change', onChange);
+  root.addEventListener('keydown', onKeydown);
 
   window.addEventListener('hashchange', route);
   route();
@@ -265,7 +306,7 @@ function route() {
 function goto(hash) { location.hash = hash; }
 
 /* ============================================================
-   F12 — DASHBOARD GERAL
+   DASHBOARD GERAL
    ============================================================ */
 async function renderDashboard() {
   const root = content();
@@ -300,18 +341,19 @@ async function renderDashboard() {
     const ativos = projects.filter(p => !['concluido', 'cancelado'].includes(p.status)).length;
     const concluidos = projects.filter(p => p.status === 'concluido').length;
     const pendentes = tasks.filter(t => t.status !== 'concluida').length;
+    const emRevisao = tasks.filter(t => t.status === 'em_revisao').length;
     const atrasadas = tasks.filter(isOverdue).length;
 
     const cards = `
       <div class="stats-grid proj-stats">
         ${statCard('fa-diagram-project', total, 'Projetos', 'gold-accent')}
         ${statCard('fa-bolt', ativos, 'Ativos', 'blue-accent')}
+        ${statCard('fa-magnifying-glass', emRevisao, 'Em revisão', 'blue-accent')}
         ${statCard('fa-circle-check', concluidos, 'Concluídos', 'green-accent')}
         ${statCard('fa-list-check', pendentes, 'Tarefas pendentes', 'gold-accent')}
         ${statCard('fa-triangle-exclamation', atrasadas, 'Tarefas atrasadas', 'red-accent')}
       </div>`;
 
-    // Gráfico: andamento dos projetos
     const andamento = projects.length ? `
       <div class="proj-panel">
         <div class="proj-panel-title"><i class="fa-solid fa-chart-line"></i> Andamento dos projetos</div>
@@ -327,7 +369,6 @@ async function renderDashboard() {
         </div>
       </div>` : '';
 
-    // Gráfico: produtividade por equipe (tarefas concluídas por responsável)
     const doneByUser = {};
     tasks.filter(t => t.status === 'concluida' && t.assigned_to).forEach(t => {
       doneByUser[t.assigned_to] = (doneByUser[t.assigned_to] || 0) + 1;
@@ -409,7 +450,7 @@ function projectCard(p, tasks, checklist) {
 }
 
 /* ============================================================
-   F1 — CRIAR / EDITAR PROJETO
+   CRIAR / EDITAR PROJETO
    ============================================================ */
 async function openProjectModal(existing = null) {
   const profs = await loadActiveProfiles();
@@ -532,7 +573,6 @@ async function saveProject(existing) {
       const { data, error } = await db.from('projects').insert(payload).select('id').single();
       if (error) throw error;
       const pid = data.id;
-      // criador entra como participante gestor; responsável (se houver) também
       const parts = [{ project_id: pid, user_id: state.profile.id, roles: ['Gestor'], is_manager: true }];
       if (payload.responsavel_id && payload.responsavel_id !== state.profile.id) {
         parts.push({ project_id: pid, user_id: payload.responsavel_id, roles: ['Gestor'], is_manager: true });
@@ -554,7 +594,7 @@ async function saveProject(existing) {
 }
 
 /* ============================================================
-   F2 — PÁGINA DO PROJETO (com sub-abas)
+   PÁGINA DO PROJETO (com sub-abas)
    ============================================================ */
 async function renderProject(projectId) {
   const root = content();
@@ -582,11 +622,14 @@ async function renderProject(projectId) {
       (items || []).forEach(i => { (checklist[i.task_id] ||= []).push(i); });
     }
 
-    const ctx = { project, participants, categories, tasks, docs, checklist, manage: canManage(project, participants) };
+    const manage = canManage(project, participants);
+    const isMember = participants.some(p => p.user_id === state.profile.id);
+    const ctx = { project, participants, categories, tasks, docs, checklist, manage, isMember };
 
     const tabs = [
       { key: 'resumo', label: 'Resumo', icon: 'fa-gauge' },
       { key: 'tarefas', label: 'Tarefas', icon: 'fa-list-check' },
+      { key: 'agenda', label: 'Agenda', icon: 'fa-calendar-day' },
       { key: 'participantes', label: 'Participantes', icon: 'fa-users' },
       { key: 'documentacao', label: 'Documentação', icon: 'fa-book' },
       { key: 'historico', label: 'Histórico', icon: 'fa-clock-rotate-left' },
@@ -597,15 +640,16 @@ async function renderProject(projectId) {
       <div class="proj-shell">
         <div class="proj-detail-top">
           <button class="btn btn-ghost btn-sm" data-action="go-dashboard"><i class="fa-solid fa-arrow-left"></i> Projetos</button>
-          ${ctx.manage ? `
-            <div class="proj-detail-actions">
+          <div class="proj-detail-actions">
+            ${!manage && state.isDiretoria ? `<button class="btn btn-ghost btn-sm" data-action="take-over" data-id="${project.id}"><i class="fa-solid fa-shield-halved"></i> Assumir gestão</button>` : ''}
+            ${manage ? `
               <button class="btn btn-ghost btn-sm" data-action="edit-project" data-id="${project.id}"><i class="fa-solid fa-pen"></i> Editar</button>
-              <button class="btn btn-ghost btn-sm proj-danger" data-action="delete-project" data-id="${project.id}"><i class="fa-solid fa-trash"></i></button>
-            </div>` : ''}
+              <button class="btn btn-ghost btn-sm proj-danger" data-action="delete-project" data-id="${project.id}"><i class="fa-solid fa-trash"></i></button>` : ''}
+          </div>
         </div>
         <div class="proj-detail-head">
           <div>
-            <div class="proj-detail-badges">${projStatusBadge(project.status)} ${prioBadge(project.prioridade)} <span class="proj-chip"><i class="fa-regular fa-flag"></i> ${esc(TIPO_LABELS[project.tipo] || project.tipo)}</span></div>
+            <div class="proj-detail-badges">${projStatusBadge(project.status)} ${prioBadge(project.prioridade)} <span class="proj-chip"><i class="fa-regular fa-flag"></i> ${esc(TIPO_LABELS[project.tipo] || project.tipo)}</span>${manage ? '' : '<span class="proj-chip proj-chip-ro"><i class="fa-solid fa-eye"></i> Somente leitura</span>'}</div>
             <h1 class="proj-h1">${esc(project.name)}</h1>
             ${project.objetivo ? `<p class="proj-sub">${esc(project.objetivo)}</p>` : ''}
           </div>
@@ -626,6 +670,7 @@ async function renderProject(projectId) {
 function renderTab(tab, ctx) {
   switch (tab) {
     case 'tarefas': return renderTasksTab(ctx);
+    case 'agenda': return renderAgendaTab(ctx);
     case 'participantes': return renderParticipantsTab(ctx);
     case 'documentacao': return renderDocsTab(ctx);
     case 'historico': return '<div id="histMount">' + loadingHTML() + '</div>';
@@ -640,9 +685,22 @@ function renderResumoTab(ctx) {
   const done = tasks.filter(t => t.status === 'concluida').length;
   const rm = Array.isArray(project.roadmap) ? project.roadmap : [];
   const field = (label, val) => val ? `<div class="proj-field"><div class="proj-field-l">${esc(label)}</div><div class="proj-field-v">${esc(val)}</div></div>` : '';
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const upcoming = tasks.filter(t => t.prazo && t.status !== 'concluida').sort(cmpDelivery).slice(0, 5);
+  const upcomingHTML = upcoming.length
+    ? upcoming.map(t => agendaItem(t, project.id, true)).join('')
+    : `<div class="proj-empty-sm">Nenhuma entrega prevista.</div>`;
+
   return `
     <div class="proj-resumo">
       <div class="proj-resumo-main">
+        <div class="proj-panel">
+          <div class="proj-panel-title"><i class="fa-solid fa-calendar-day"></i> Próximas entregas
+            <button class="proj-panel-link" data-action="proj-tab" data-tab="agenda" data-pid="${project.id}">ver agenda <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+          <div class="proj-agenda-mini">${upcomingHTML}</div>
+        </div>
         <div class="proj-panel">
           <div class="proj-panel-title"><i class="fa-solid fa-circle-info"></i> Visão geral</div>
           ${field('Descrição', project.description)}
@@ -669,7 +727,7 @@ function renderResumoTab(ctx) {
           </div>
         </div>
         <div class="proj-panel">
-          <div class="proj-panel-title"><i class="fa-solid fa-calendar"></i> Datas</div>
+          <div class="proj-panel-title"><i class="fa-solid fa-calendar"></i> Datas do projeto</div>
           <div class="proj-field"><div class="proj-field-l">Início</div><div class="proj-field-v">${Utils.formatDate(project.data_inicio)}</div></div>
           <div class="proj-field"><div class="proj-field-l">Entrega prevista</div><div class="proj-field-v">${Utils.formatDate(project.data_entrega)}</div></div>
           ${project.responsavel ? `<div class="proj-field"><div class="proj-field-l">Responsável</div><div class="proj-field-v" style="display:flex;align-items:center;gap:8px">${avatarHTML(project.responsavel, 24)} ${esc(project.responsavel.name)}</div></div>` : ''}
@@ -679,87 +737,216 @@ function renderResumoTab(ctx) {
 }
 
 /* ============================================================
-   F4/F5/F6/F8 — TAREFAS por categoria + checklist + progresso
+   AGENDA OPERACIONAL
    ============================================================ */
-function renderTasksTab(ctx) {
-  const { project, categories, tasks, checklist, manage } = ctx;
-  const tasksByCat = {};
-  tasks.forEach(t => { (tasksByCat[t.category_id || 'none'] ||= []).push(t); });
+function agendaItem(t, projectId, compact = false) {
+  return `<div class="proj-agenda-item ${isOverdue(t) ? 'overdue' : ''}" data-action="proj-tab" data-tab="tarefas" data-pid="${projectId}" role="button" tabindex="0">
+    <div class="proj-agenda-time">${t.prazo_hora ? fmtTime(t.prazo_hora) : '<span class="proj-agenda-allday">dia</span>'}</div>
+    <div class="proj-agenda-main">
+      <div class="proj-agenda-title">${esc(t.title)}</div>
+      <div class="proj-agenda-sub">
+        ${t.assignee ? `${avatarHTML(t.assignee, 18)} ${esc(t.assignee.name)}` : '<span class="proj-part-norole">Sem responsável</span>'}
+      </div>
+    </div>
+    ${compact ? '' : taskStatusBadge(t.status)}
+  </div>`;
+}
 
-  const catBlock = (cat) => {
-    const ct = tasksByCat[cat ? cat.id : 'none'] || [];
-    const pct = avgProgress(ct, checklist);
-    const name = cat ? cat.name : 'Sem categoria';
-    const color = cat?.color || 'var(--text-3)';
-    return `<div class="proj-cat">
-      <div class="proj-cat-head">
-        <div class="proj-cat-name"><i class="fa-solid ${esc(cat?.icon || 'fa-inbox')}" style="color:${esc(color)}"></i> ${esc(name)} <span class="proj-cat-count">${ct.length}</span></div>
-        <div class="proj-cat-right">
-          <span class="proj-cat-pct">${pct}%</span>
-          ${cat && manage ? `<button class="proj-icon-btn" data-action="edit-category" data-id="${cat.id}" data-pid="${project.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
-          <button class="proj-icon-btn proj-danger" data-action="delete-category" data-id="${cat.id}" data-pid="${project.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>` : ''}
-          ${manage ? `<button class="btn btn-ghost btn-sm" data-action="add-task" data-pid="${project.id}" data-cat="${cat ? cat.id : ''}"><i class="fa-solid fa-plus"></i> Tarefa</button>` : ''}
-        </div>
-      </div>
-      ${progressBar(pct)}
-      <div class="proj-tasklist">
-        ${ct.length ? ct.map(t => taskRow(t, checklist, project, manage)).join('') : `<div class="proj-empty-sm">Nenhuma tarefa.</div>`}
-      </div>
-    </div>`;
-  };
+function renderAgendaTab(ctx) {
+  const { project, tasks } = ctx;
+  const deliveries = tasks.filter(t => t.prazo).sort(cmpDelivery);
+  if (!deliveries.length) return emptyHTML('Nenhuma entrega com prazo definido. Defina prazos nas tarefas para vê-las aqui.', 'fa-calendar-day');
 
-  return `
-    <div class="proj-tasks">
-      <div class="proj-toolbar">
-        <span class="proj-section-title" style="margin:0">Tarefas por categoria</span>
-        ${manage ? `<button class="btn btn-ghost btn-sm" data-action="add-category" data-pid="${project.id}"><i class="fa-solid fa-folder-plus"></i> Nova categoria</button>` : ''}
-      </div>
-      ${categories.map(c => catBlock(c)).join('')}
-      ${(tasksByCat['none'] || []).length ? catBlock(null) : ''}
-      ${!categories.length && !(tasksByCat['none'] || []).length ? emptyHTML('Crie categorias e tarefas para organizar o trabalho.', 'fa-list-check') : ''}
-    </div>`;
+  const byDate = {};
+  deliveries.forEach(t => { (byDate[t.prazo] ||= []).push(t); });
+
+  return `<div class="proj-agenda">
+    ${Object.keys(byDate).sort().map(date => `
+      <div class="proj-agenda-day">
+        <div class="proj-agenda-daylabel"><i class="fa-regular fa-calendar"></i> ${esc(agendaDateLabel(date))} <span class="proj-cat-count">${byDate[date].length}</span></div>
+        <div class="proj-agenda-list">${byDate[date].map(t => agendaItem(t, project.id)).join('')}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+/* ============================================================
+   TAREFAS — visões + fluxo de trabalho + checklist
+   ============================================================ */
+function flowButtons(t, manage) {
+  const me = state.profile.id;
+  const isAssignee = t.assigned_to === me;
+  const b = [];
+  if (isAssignee && t.status === 'nao_iniciada')
+    b.push(`<button class="btn btn-gold btn-sm" data-action="task-start" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-play"></i> Iniciar</button>`);
+  if (isAssignee && t.status === 'necessita_ajustes')
+    b.push(`<button class="btn btn-gold btn-sm" data-action="task-start" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-rotate-left"></i> Retomar</button>`);
+  if (isAssignee && t.status === 'em_andamento')
+    b.push(`<button class="btn btn-gold btn-sm" data-action="task-request-review" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-paper-plane"></i> Solicitar Revisão</button>`);
+  if (isAssignee && t.status === 'em_revisao')
+    b.push(`<span class="proj-flow-wait"><i class="fa-solid fa-hourglass-half"></i> Aguardando aprovação do gestor</span>`);
+  if (manage && !isAssignee && t.status === 'em_revisao') {
+    b.push(`<button class="btn btn-gold btn-sm" data-action="task-approve" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-check"></i> Aprovar</button>`);
+    b.push(`<button class="btn btn-ghost btn-sm" data-action="task-request-changes" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Ajustes</button>`);
+  }
+  return b.length ? `<div class="proj-flow">${b.join('')}</div>` : '';
 }
 
 function taskRow(t, checklist, project, manage) {
   const items = checklist[t.id] || [];
   const pct = taskProgress(t, checklist);
-  const overdue = isOverdue(t);
-  const canEditTask = manage || t.assigned_to === state.profile.id;
-  return `<div class="proj-task ${t.status === 'concluida' ? 'is-done' : ''}">
+  const isAssignee = t.assigned_to === state.profile.id;
+  const canCheck = manage || isAssignee;       // marcar checklist / editar nota
+  const canEditMeta = manage;                  // editar/excluir/reatribuir tarefa
+  const doneCnt = items.filter(i => i.done).length;
+  return `<div class="proj-task ${t.status === 'concluida' ? 'is-done' : ''}" id="task-${t.id}">
     <div class="proj-task-head" data-action="toggle-task" data-id="${t.id}" role="button" tabindex="0">
       <i class="fa-solid fa-chevron-right proj-task-caret"></i>
       <span class="proj-task-title">${esc(t.title)}</span>
       ${taskStatusBadge(t.status)} ${prioBadge(t.prioridade)}
-      ${t.prazo ? `<span class="proj-task-due ${overdue ? 'overdue' : ''}"><i class="fa-regular fa-clock"></i> ${Utils.formatDate(t.prazo)}</span>` : ''}
+      ${dueChip(t)}
       ${t.assignee ? `<span class="proj-task-assignee" title="${esc(t.assignee.name)}">${avatarHTML(t.assignee, 22)}</span>` : ''}
       <span class="proj-task-pct">${pct}%</span>
     </div>
     <div class="proj-task-body" id="taskbody-${t.id}" hidden>
+      ${t.status === 'necessita_ajustes' && t.review_note ? `<div class="proj-review-note"><i class="fa-solid fa-triangle-exclamation"></i> <b>Ajustes solicitados:</b> ${esc(t.review_note)}</div>` : ''}
       ${t.description ? `<div class="proj-task-desc">${esc(t.description)}</div>` : ''}
       ${t.observacoes ? `<div class="proj-task-obs"><b>Observações:</b> ${esc(t.observacoes)}</div>` : ''}
-      <div class="proj-task-controls">
-        <label class="proj-inline-label">Status
-          <select class="form-select proj-select-sm" data-action="task-status" data-id="${t.id}" data-pid="${project.id}" ${canEditTask ? '' : 'disabled'}>
-            ${TASK_STATUS.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
-          </select>
-        </label>
-        ${manage ? `<button class="btn btn-ghost btn-sm" data-action="edit-task" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-pen"></i> Editar</button>
-        <button class="btn btn-ghost btn-sm proj-danger" data-action="delete-task" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-trash"></i></button>` : ''}
+
+      <div class="proj-task-meta">
+        ${t.started_at ? `<span><i class="fa-solid fa-play"></i> Iniciada ${Utils.formatDateTime(t.started_at)}</span>` : ''}
+        <span><i class="fa-solid fa-stopwatch"></i> ${fmtDuration(liveSeconds(t))}</span>
+        ${t.revisions_count ? `<span><i class="fa-solid fa-rotate"></i> ${t.revisions_count} revisã${t.revisions_count > 1 ? 'ões' : 'o'}</span>` : ''}
+        ${t.completed_at ? `<span><i class="fa-solid fa-flag-checkered"></i> Concluída ${Utils.formatDateTime(t.completed_at)}</span>` : ''}
       </div>
+
+      ${flowButtons(t, manage)}
+
+      ${canEditMeta ? `<div class="proj-task-controls">
+        <button class="btn btn-ghost btn-sm" data-action="reassign-task" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-user-pen"></i> Reatribuir</button>
+        <button class="btn btn-ghost btn-sm" data-action="edit-task" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-pen"></i> Editar</button>
+        <button class="btn btn-ghost btn-sm proj-danger" data-action="delete-task" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-trash"></i></button>
+      </div>` : ''}
+
       <div class="proj-checklist">
-        <div class="proj-checklist-title">Checklist (${items.filter(i => i.done).length}/${items.length})</div>
+        <div class="proj-checklist-title">Checklist (${doneCnt}/${items.length})</div>
         ${items.map(i => `<label class="proj-check ${i.done ? 'done' : ''}">
-          <input type="checkbox" data-action="toggle-check" data-id="${i.id}" data-task="${t.id}" data-pid="${project.id}" ${i.done ? 'checked' : ''} ${canEditTask ? '' : 'disabled'}>
+          <input type="checkbox" data-action="toggle-check" data-id="${i.id}" data-task="${t.id}" data-pid="${project.id}" ${i.done ? 'checked' : ''} ${canCheck ? '' : 'disabled'}>
           <span>${esc(i.text)}</span>
-          ${canEditTask ? `<button class="proj-icon-btn proj-danger proj-check-del" data-action="delete-check" data-id="${i.id}" data-task="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-xmark"></i></button>` : ''}
+          ${canCheck ? `<button class="proj-icon-btn proj-danger proj-check-del" data-action="delete-check" data-id="${i.id}" data-task="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-xmark"></i></button>` : ''}
         </label>`).join('')}
-        ${canEditTask ? `<div class="proj-check-add">
-          <input class="form-input proj-input-sm" id="newcheck-${t.id}" placeholder="Novo item do checklist...">
+        ${canCheck ? `<div class="proj-check-add">
+          <input class="form-input proj-input-sm" id="newcheck-${t.id}" placeholder="Novo item do checklist..." data-action="newcheck-enter" data-task="${t.id}" data-pid="${project.id}">
           <button class="btn btn-ghost btn-sm" data-action="add-check" data-task="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-plus"></i></button>
         </div>` : ''}
       </div>
+
+      ${canCheck ? `<div class="proj-exec">
+        <label class="form-label">Observação da execução <span class="proj-optional">(opcional)</span></label>
+        <textarea class="form-textarea proj-exec-note" id="exec-${t.id}" rows="2" placeholder="Ex.: Backend concluído, aguardando validação...">${esc(t.exec_note)}</textarea>
+        <div class="proj-doc-actions"><button class="btn btn-ghost btn-sm" data-action="save-exec" data-id="${t.id}" data-pid="${project.id}"><i class="fa-solid fa-floppy-disk"></i> Salvar nota</button></div>
+      </div>` : (t.exec_note ? `<div class="proj-task-obs"><b>Execução:</b> ${esc(t.exec_note)}</div>` : '')}
     </div>
   </div>`;
+}
+
+function renderTasksTab(ctx) {
+  const { project, categories, tasks, checklist, manage } = ctx;
+  const view = state.currentTasksView;
+  const me = state.profile.id;
+
+  const views = [
+    { key: 'minhas', label: 'Minhas Tarefas', icon: 'fa-circle-user' },
+    { key: 'equipe', label: 'Equipe', icon: 'fa-users' },
+    { key: 'revisao', label: 'Em Revisão', icon: 'fa-magnifying-glass' },
+    { key: 'concluidas', label: 'Concluídas', icon: 'fa-circle-check' },
+  ];
+  const counts = {
+    minhas: tasks.filter(t => t.assigned_to === me).length,
+    equipe: tasks.length,
+    revisao: tasks.filter(t => t.status === 'em_revisao').length,
+    concluidas: tasks.filter(t => t.status === 'concluida').length,
+  };
+
+  const switcher = `<div class="proj-views">
+    ${views.map(v => `<button class="filter-btn ${view === v.key ? 'active' : ''}" data-action="tasks-view" data-view="${v.key}" data-pid="${project.id}"><i class="fa-solid ${v.icon}"></i> ${v.label} <span class="proj-view-count">${counts[v.key]}</span></button>`).join('')}
+  </div>`;
+
+  const flatList = (list, emptyMsg) => list.length
+    ? `<div class="proj-tasklist">${list.map(t => taskRow(t, checklist, project, manage)).join('')}</div>`
+    : emptyHTML(emptyMsg, 'fa-list-check');
+
+  let bodyHTML = '';
+  if (view === 'minhas') {
+    bodyHTML = flatList(tasks.filter(t => t.assigned_to === me).sort(byStatusThenDue), 'Você não tem tarefas atribuídas neste projeto.');
+  } else if (view === 'revisao') {
+    bodyHTML = flatList(tasks.filter(t => t.status === 'em_revisao').sort(byStatusThenDue), 'Nenhuma tarefa aguardando revisão.');
+  } else if (view === 'concluidas') {
+    bodyHTML = flatList(tasks.filter(t => t.status === 'concluida'), 'Nenhuma tarefa concluída ainda.');
+  } else {
+    // equipe — agrupado por categoria
+    const tasksByCat = {};
+    tasks.forEach(t => { (tasksByCat[t.category_id || 'none'] ||= []).push(t); });
+    const catBlock = (cat) => {
+      const ct = (tasksByCat[cat ? cat.id : 'none'] || []).sort(byStatusThenDue);
+      const pct = avgProgress(ct, checklist);
+      const color = cat?.color || 'var(--text-3)';
+      return `<div class="proj-cat">
+        <div class="proj-cat-head">
+          <div class="proj-cat-name"><i class="fa-solid ${esc(cat?.icon || 'fa-inbox')}" style="color:${esc(color)}"></i> ${esc(cat ? cat.name : 'Sem categoria')} <span class="proj-cat-count">${ct.length}</span></div>
+          <div class="proj-cat-right">
+            <span class="proj-cat-pct">${pct}%</span>
+            ${cat && manage ? `<button class="proj-icon-btn" data-action="edit-category" data-id="${cat.id}" data-pid="${project.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+            <button class="proj-icon-btn proj-danger" data-action="delete-category" data-id="${cat.id}" data-pid="${project.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>` : ''}
+            ${manage ? `<button class="btn btn-ghost btn-sm" data-action="add-task" data-pid="${project.id}" data-cat="${cat ? cat.id : ''}"><i class="fa-solid fa-plus"></i> Tarefa</button>` : ''}
+          </div>
+        </div>
+        ${progressBar(pct)}
+        <div class="proj-tasklist">
+          ${ct.length ? ct.map(t => taskRow(t, checklist, project, manage)).join('') : `<div class="proj-empty-sm">Nenhuma tarefa.</div>`}
+        </div>
+      </div>`;
+    };
+    const blocks = categories.map(c => catBlock(c)).join('') + ((tasksByCat['none'] || []).length ? catBlock(null) : '');
+    bodyHTML = (categories.length || (tasksByCat['none'] || []).length)
+      ? blocks
+      : emptyHTML('Crie categorias e tarefas para organizar o trabalho.', 'fa-list-check');
+  }
+
+  return `
+    <div class="proj-tasks">
+      <div class="proj-toolbar">
+        ${switcher}
+        ${manage ? `<div class="proj-toolbar-actions">
+          <button class="btn btn-ghost btn-sm" data-action="add-category" data-pid="${project.id}"><i class="fa-solid fa-folder-plus"></i> Categoria</button>
+          <button class="btn btn-gold btn-sm" data-action="add-task" data-pid="${project.id}" data-cat=""><i class="fa-solid fa-plus"></i> Nova tarefa</button>
+        </div>` : ''}
+      </div>
+      ${bodyHTML}
+    </div>`;
+}
+
+const STATUS_ORDER = { necessita_ajustes: 0, em_andamento: 1, nao_iniciada: 2, em_revisao: 3, bloqueada: 4, concluida: 5 };
+function byStatusThenDue(a, b) {
+  const sa = STATUS_ORDER[a.status] ?? 9, sb = STATUS_ORDER[b.status] ?? 9;
+  if (sa !== sb) return sa - sb;
+  if (a.prazo && b.prazo) return cmpDelivery(a, b);
+  if (a.prazo) return -1;
+  if (b.prazo) return 1;
+  return 0;
+}
+
+/** Atualiza contagem do checklist e % da tarefa sem recarregar (otimista). */
+function updateChecklistUI(taskId) {
+  const body = document.getElementById(`taskbody-${taskId}`);
+  if (!body) return;
+  const boxes = body.querySelectorAll('.proj-check input[type="checkbox"][data-action="toggle-check"]');
+  const total = boxes.length;
+  const done = [...boxes].filter(b => b.checked).length;
+  const titleEl = body.querySelector('.proj-checklist-title');
+  if (titleEl) titleEl.textContent = `Checklist (${done}/${total})`;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const pctEl = document.querySelector(`#task-${taskId} .proj-task-pct`);
+  if (pctEl) pctEl.textContent = `${pct}%`;
 }
 
 /* ── Categoria modal ── */
@@ -819,7 +1006,7 @@ async function openCategoryModal(projectId, existing = null) {
   });
 }
 
-/* ── Tarefa modal ── */
+/* ── Tarefa modal (criar/editar) ── */
 async function openTaskModal(projectId, categoryId = '', existing = null) {
   const [profs, catsRes] = await Promise.all([
     loadActiveProfiles(),
@@ -829,10 +1016,10 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
   const e = existing || {};
   const selCat = existing ? (e.category_id || '') : categoryId;
   const html = `
-    ${modalHeader(existing ? 'Editar Tarefa' : 'Nova Tarefa')}
+    ${modalHeader(existing ? 'Editar Tarefa' : 'Nova Tarefa', 'Defina responsável, prazo e checklist')}
     <div class="modal-body proj-form">
       <div class="form-group"><label class="form-label">Título *</label>
-        <input class="form-input" id="tk-title" value="${esc(e.title)}"></div>
+        <input class="form-input" id="tk-title" value="${esc(e.title)}" placeholder="Ex.: Criar tela inicial"></div>
       <div class="form-group"><label class="form-label">Descrição</label>
         <textarea class="form-textarea" id="tk-desc" rows="2">${esc(e.description)}</textarea></div>
       <div class="proj-form-grid">
@@ -853,11 +1040,18 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
         <div class="form-group"><label class="form-label">Prazo</label>
           <input type="date" class="form-input" id="tk-prazo" value="${esc(e.prazo)}"></div>
       </div>
-      <div class="form-group"><label class="form-label">Status</label>
-        <select class="form-select" id="tk-status">
-          ${TASK_STATUS.map(s => `<option value="${s}" ${(e.status || 'nao_iniciada') === s ? 'selected' : ''}>${TASK_STATUS_LABELS[s]}</option>`).join('')}
-        </select></div>
-      <div class="form-group"><label class="form-label">Observações</label>
+      <div class="proj-form-grid">
+        <div class="form-group"><label class="form-label">Horário da entrega <span class="proj-optional">(opcional)</span></label>
+          <input type="time" class="form-input" id="tk-hora" value="${esc(fmtTime(e.prazo_hora))}"></div>
+        <div></div>
+      </div>
+      ${existing ? '' : `<div class="form-group"><label class="form-label">Checklist <span class="proj-optional">(opcional)</span></label>
+        <div class="proj-checkbuilder" id="tk-checks"></div>
+        <div class="proj-check-add">
+          <input class="form-input proj-input-sm" id="tk-newcheck" placeholder="Adicionar item e Enter...">
+          <button type="button" class="btn btn-ghost btn-sm" id="tk-addcheck"><i class="fa-solid fa-plus"></i></button>
+        </div></div>`}
+      <div class="form-group"><label class="form-label">Observações <span class="proj-optional">(opcional)</span></label>
         <textarea class="form-textarea" id="tk-obs" rows="2">${esc(e.observacoes)}</textarea></div>
     </div>
     <div class="modal-footer">
@@ -865,6 +1059,28 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
       <button class="btn btn-gold" id="tk-save">Salvar</button>
     </div>`;
   openModal(html, { maxWidth: 600 });
+
+  // Construtor de checklist (somente em nova tarefa)
+  const checkItems = [];
+  if (!existing) {
+    const wrap = document.getElementById('tk-checks');
+    const renderChecks = () => {
+      wrap.innerHTML = checkItems.map((c, idx) => `<div class="proj-checkbuilder-item"><i class="fa-regular fa-square"></i><span>${esc(c)}</span><button type="button" class="proj-icon-btn proj-danger" data-rm="${idx}"><i class="fa-solid fa-xmark"></i></button></div>`).join('');
+    };
+    const addCheck = () => {
+      const inp = document.getElementById('tk-newcheck');
+      const v = inp.value.trim();
+      if (!v) return;
+      checkItems.push(v); inp.value = ''; renderChecks(); inp.focus();
+    };
+    document.getElementById('tk-addcheck').addEventListener('click', addCheck);
+    document.getElementById('tk-newcheck').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addCheck(); } });
+    wrap.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-rm]'); if (!b) return;
+      checkItems.splice(Number(b.dataset.rm), 1); renderChecks();
+    });
+  }
+
   document.getElementById('tk-save').addEventListener('click', async () => {
     const title = document.getElementById('tk-title').value.trim();
     if (!title) { Utils.showToast('Informe o título.', 'error'); return; }
@@ -875,7 +1091,7 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
       assigned_to: document.getElementById('tk-resp').value || null,
       prioridade: document.getElementById('tk-prio').value,
       prazo: document.getElementById('tk-prazo').value || null,
-      status: document.getElementById('tk-status').value,
+      prazo_hora: document.getElementById('tk-hora').value || null,
       observacoes: document.getElementById('tk-obs').value.trim() || null,
     };
     try {
@@ -892,6 +1108,9 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
         payload.created_by = state.profile.id;
         const { data, error } = await db.from('project_tasks').insert(payload).select('id').single();
         if (error) throw error;
+        if (checkItems.length) {
+          await db.from('task_checklist_items').insert(checkItems.map((text, idx) => ({ task_id: data.id, text, order_index: idx })));
+        }
         await logEvent(projectId, 'tarefa_criada', 'task', data.id, { title });
         if (payload.assigned_to) {
           await notifyProject(projectId, [payload.assigned_to], `Nova tarefa atribuída a você: "${title}".`, '📝');
@@ -907,8 +1126,75 @@ async function openTaskModal(projectId, categoryId = '', existing = null) {
   });
 }
 
+/* ── Reatribuir tarefa ── */
+async function openReassignModal(projectId, taskId) {
+  const { data: parts } = await db.from('project_participants')
+    .select('user_id, profile:user_id(name,role)').eq('project_id', projectId);
+  const { data: task } = await db.from('project_tasks').select('title,assigned_to').eq('id', taskId).single();
+  const html = `
+    ${modalHeader('Reatribuir Tarefa', task?.title || '')}
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Novo responsável</label>
+        <select class="form-select" id="ra-user">
+          <option value="">— Sem responsável —</option>
+          ${(parts || []).map(p => `<option value="${p.user_id}" ${task?.assigned_to === p.user_id ? 'selected' : ''}>${esc(p.profile?.name || '—')} ${p.profile?.role ? '— ' + esc(p.profile.role) : ''}</option>`).join('')}
+        </select></div>
+      <p class="proj-hint">Apenas participantes do projeto aparecem aqui.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <button class="btn btn-gold" id="ra-save">Salvar</button>
+    </div>`;
+  openModal(html, { maxWidth: 460 });
+  document.getElementById('ra-save').addEventListener('click', async () => {
+    const uid = document.getElementById('ra-user').value || null;
+    try {
+      const { error } = await db.from('project_tasks').update({ assigned_to: uid, updated_at: new Date().toISOString() }).eq('id', taskId);
+      if (error) throw error;
+      await logEvent(projectId, 'tarefa_reatribuida', 'task', taskId, { title: task?.title });
+      if (uid && uid !== state.profile.id) await notifyProject(projectId, [uid], `Tarefa atribuída a você: "${task?.title}".`, '📝');
+      Utils.showToast('Tarefa reatribuída.', 'success');
+      closeModal();
+      reloadProjectTab(projectId, 'tarefas');
+    } catch (err) {
+      console.error('[MSY][projetos] Erro ao reatribuir:', err);
+      Utils.showToast('Erro ao reatribuir tarefa.', 'error');
+    }
+  });
+}
+
+/* ── Solicitar ajustes (com nota) ── */
+function openChangesModal(projectId, taskId) {
+  const html = `
+    ${modalHeader('Solicitar Ajustes')}
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">O que precisa ser ajustado?</label>
+        <textarea class="form-textarea" id="ch-note" rows="3" placeholder="Descreva os ajustes necessários..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <button class="btn btn-gold" id="ch-save"><i class="fa-solid fa-rotate-left"></i> Solicitar ajustes</button>
+    </div>`;
+  openModal(html, { maxWidth: 480 });
+  document.getElementById('ch-save').addEventListener('click', async () => {
+    const note = document.getElementById('ch-note').value.trim();
+    try {
+      const { data: t } = await db.from('project_tasks').select('title,assigned_to').eq('id', taskId).single();
+      const { error } = await db.rpc('task_request_changes', { p_task_id: taskId, p_note: note || null });
+      if (error) throw error;
+      if (t?.assigned_to) await notifyProject(projectId, [t.assigned_to], `Ajustes solicitados: "${t.title}".${note ? ' ' + note : ''}`, '🔧');
+      Utils.showToast('Ajustes solicitados.', 'success');
+      closeModal();
+      reloadProjectTab(projectId, 'tarefas');
+    } catch (err) {
+      console.error('[MSY][projetos] Erro ao solicitar ajustes:', err);
+      Utils.showToast(err.message || 'Erro ao solicitar ajustes.', 'error');
+    }
+  });
+}
+
 /* ============================================================
-   F3 — PARTICIPANTES
+   PARTICIPANTES (governança)
    ============================================================ */
 function renderParticipantsTab(ctx) {
   const { project, participants, tasks, checklist, manage } = ctx;
@@ -916,11 +1202,12 @@ function renderParticipantsTab(ctx) {
     const myTasks = tasks.filter(t => t.assigned_to === pp.user_id);
     const pct = avgProgress(myTasks, checklist);
     const done = myTasks.filter(t => t.status === 'concluida').length;
+    const isCreator = project.created_by === pp.user_id;
     return `<div class="proj-part">
       <div class="proj-part-id">
         ${avatarHTML(pp.profile, 40)}
         <div>
-          <div class="proj-part-name">${esc(pp.profile?.name || '—')} ${pp.is_manager ? '<span class="proj-tag-mgr">Gestor</span>' : ''}</div>
+          <div class="proj-part-name">${esc(pp.profile?.name || '—')} ${pp.is_manager ? '<span class="proj-tag-mgr">Gestor</span>' : ''} ${isCreator ? '<span class="proj-tag-creator">Criador</span>' : ''}</div>
           <div class="proj-part-role">${esc(pp.profile?.role || '')}</div>
           <div class="proj-part-tags">${(pp.roles || []).map(r => `<span class="proj-roletag">${esc(r)}</span>`).join('') || '<span class="proj-part-norole">Sem papel definido</span>'}</div>
         </div>
@@ -929,7 +1216,11 @@ function renderParticipantsTab(ctx) {
         ${progressBar(pct)}
         <div class="proj-part-prog-meta">${pct}% · ${done}/${myTasks.length} tarefas</div>
       </div>
-      ${manage ? `<button class="proj-icon-btn proj-danger" data-action="remove-participant" data-id="${pp.id}" data-uid="${pp.user_id}" data-pid="${project.id}" title="Remover"><i class="fa-solid fa-user-minus"></i></button>` : ''}
+      ${manage ? `<div class="proj-part-actions">
+        <button class="proj-icon-btn" data-action="toggle-manager" data-id="${pp.id}" data-uid="${pp.user_id}" data-mgr="${pp.is_manager ? 1 : 0}" data-pid="${project.id}" title="${pp.is_manager ? 'Remover gestão' : 'Tornar gestor'}"><i class="fa-solid ${pp.is_manager ? 'fa-user-minus' : 'fa-user-shield'}"></i></button>
+        <button class="proj-icon-btn" data-action="edit-roles" data-id="${pp.id}" data-pid="${project.id}" title="Editar papéis"><i class="fa-solid fa-tags"></i></button>
+        ${isCreator ? '' : `<button class="proj-icon-btn proj-danger" data-action="remove-participant" data-id="${pp.id}" data-uid="${pp.user_id}" data-pid="${project.id}" title="Remover"><i class="fa-solid fa-user-xmark"></i></button>`}
+      </div>` : ''}
     </div>`;
   }).join('');
 
@@ -937,10 +1228,42 @@ function renderParticipantsTab(ctx) {
     <div class="proj-parts">
       <div class="proj-toolbar">
         <span class="proj-section-title" style="margin:0">Participantes (${participants.length})</span>
-        ${manage ? `<button class="btn btn-ghost btn-sm" data-action="add-participant" data-pid="${project.id}"><i class="fa-solid fa-user-plus"></i> Adicionar</button>` : ''}
+        ${manage ? `<button class="btn btn-gold btn-sm" data-action="add-participant" data-pid="${project.id}"><i class="fa-solid fa-user-plus"></i> Adicionar</button>` : ''}
       </div>
       ${participants.length ? rows : emptyHTML('Nenhum participante ainda.', 'fa-users')}
     </div>`;
+}
+
+function rolePickerHTML(selected = []) {
+  const sel = new Set(selected);
+  return `<div class="proj-roles-pick" id="rp-roles">
+    ${allRoles().map(r => `<button type="button" class="proj-rolepick ${sel.has(r) ? 'active' : ''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
+  </div>
+  <div class="form-group proj-newrole">
+    <input class="form-input proj-input-sm" id="rp-newrole" placeholder="Criar papel personalizado...">
+    <button type="button" class="btn btn-ghost btn-sm" id="rp-addrole"><i class="fa-solid fa-plus"></i></button>
+  </div>`;
+}
+function bindRolePicker(initial = []) {
+  const picked = new Set(initial);
+  const wrap = document.getElementById('rp-roles');
+  wrap.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-role]'); if (!b) return;
+    const r = b.dataset.role;
+    if (picked.has(r)) { picked.delete(r); b.classList.remove('active'); }
+    else { picked.add(r); b.classList.add('active'); }
+  });
+  document.getElementById('rp-addrole').addEventListener('click', async () => {
+    const input = document.getElementById('rp-newrole');
+    const name = input.value.trim();
+    if (!name) return;
+    try { await db.from('project_role_options').insert({ name, created_by: state.profile.id }); } catch { /* UNIQUE */ }
+    if (!state.roleOptions.includes(name)) state.roleOptions.push(name);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'proj-rolepick active'; b.dataset.role = name; b.textContent = name;
+    wrap.appendChild(b); picked.add(name); input.value = '';
+  });
+  return picked;
 }
 
 async function openParticipantModal(projectId) {
@@ -950,7 +1273,6 @@ async function openParticipantModal(projectId) {
   ]);
   const existingIds = new Set((existingRes.data || []).map(p => p.user_id));
   const available = profs.filter(p => !existingIds.has(p.id));
-  const roles = allRoles();
   const html = `
     ${modalHeader('Adicionar Participante')}
     <div class="modal-body proj-form">
@@ -959,15 +1281,7 @@ async function openParticipantModal(projectId) {
           <option value="">— Selecionar —</option>
           ${available.map(p => `<option value="${p.id}">${esc(p.name)} — ${esc(p.role || '')}</option>`).join('')}
         </select></div>
-      <div class="form-group"><label class="form-label">Papéis no projeto</label>
-        <div class="proj-roles-pick" id="pp-roles">
-          ${roles.map(r => `<button type="button" class="proj-rolepick" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
-        </div>
-      </div>
-      <div class="form-group proj-newrole">
-        <input class="form-input proj-input-sm" id="pp-newrole" placeholder="Criar papel personalizado...">
-        <button class="btn btn-ghost btn-sm" id="pp-addrole"><i class="fa-solid fa-plus"></i></button>
-      </div>
+      <div class="form-group"><label class="form-label">Papéis no projeto</label>${rolePickerHTML()}</div>
       <label class="proj-check" style="margin-top:6px">
         <input type="checkbox" id="pp-mgr"><span>É gestor do projeto (pode gerenciar tarefas e participantes)</span>
       </label>
@@ -977,29 +1291,7 @@ async function openParticipantModal(projectId) {
       <button class="btn btn-gold" id="pp-save">Adicionar</button>
     </div>`;
   openModal(html, { maxWidth: 520 });
-
-  const picked = new Set();
-  const rolesWrap = document.getElementById('pp-roles');
-  rolesWrap.addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-role]'); if (!b) return;
-    const r = b.dataset.role;
-    if (picked.has(r)) { picked.delete(r); b.classList.remove('active'); }
-    else { picked.add(r); b.classList.add('active'); }
-  });
-  document.getElementById('pp-addrole').addEventListener('click', async () => {
-    const input = document.getElementById('pp-newrole');
-    const name = input.value.trim();
-    if (!name) return;
-    try {
-      await db.from('project_role_options').insert({ name, created_by: state.profile.id });
-    } catch (err) { /* pode já existir (UNIQUE) — segue */ }
-    if (!state.roleOptions.includes(name)) state.roleOptions.push(name);
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'proj-rolepick active'; b.dataset.role = name; b.textContent = name;
-    rolesWrap.appendChild(b);
-    picked.add(name);
-    input.value = '';
-  });
+  const picked = bindRolePicker([]);
   document.getElementById('pp-save').addEventListener('click', async () => {
     const uid = document.getElementById('pp-user').value;
     if (!uid) { Utils.showToast('Selecione um membro.', 'error'); return; }
@@ -1021,8 +1313,36 @@ async function openParticipantModal(projectId) {
   });
 }
 
+async function openRolesModal(projectId, participantId) {
+  const { data: pp } = await db.from('project_participants').select('roles, profile:user_id(name)').eq('id', participantId).single();
+  const current = pp?.roles || [];
+  const html = `
+    ${modalHeader('Editar Papéis', pp?.profile?.name || '')}
+    <div class="modal-body proj-form">
+      <div class="form-group"><label class="form-label">Papéis no projeto</label>${rolePickerHTML(current)}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <button class="btn btn-gold" id="rp-save">Salvar</button>
+    </div>`;
+  openModal(html, { maxWidth: 480 });
+  const picked = bindRolePicker(current);
+  document.getElementById('rp-save').addEventListener('click', async () => {
+    try {
+      const { error } = await db.from('project_participants').update({ roles: Array.from(picked) }).eq('id', participantId);
+      if (error) throw error;
+      Utils.showToast('Papéis atualizados.', 'success');
+      closeModal();
+      reloadProjectTab(projectId, 'participantes');
+    } catch (err) {
+      console.error('[MSY][projetos] Erro ao salvar papéis:', err);
+      Utils.showToast('Erro ao salvar papéis.', 'error');
+    }
+  });
+}
+
 /* ============================================================
-   F10 — DOCUMENTAÇÃO (wiki)
+   DOCUMENTAÇÃO (wiki)
    ============================================================ */
 function renderDocsTab(ctx) {
   const { project, docs, manage } = ctx;
@@ -1030,15 +1350,15 @@ function renderDocsTab(ctx) {
     <div class="proj-section-title" style="margin-top:0">Centro de Documentação</div>
     ${DOC_SECTIONS.map(sec => {
       const d = docs[sec.key];
-      const content = d?.content || '';
+      const contentVal = d?.content || '';
       return `<div class="proj-doc">
         <div class="proj-doc-head"><i class="fa-solid ${sec.icon}"></i> ${esc(sec.label)}
           ${d?.updated_at ? `<span class="proj-doc-meta">atualizado ${Utils.formatDate(d.updated_at)}</span>` : ''}
         </div>
         ${manage
-          ? `<textarea class="form-textarea proj-doc-edit" id="doc-${sec.key}" rows="4" placeholder="Escreva aqui...">${esc(content)}</textarea>
+          ? `<textarea class="form-textarea proj-doc-edit" id="doc-${sec.key}" rows="4" placeholder="Escreva aqui...">${esc(contentVal)}</textarea>
              <div class="proj-doc-actions"><button class="btn btn-ghost btn-sm" data-action="save-doc" data-section="${sec.key}" data-pid="${project.id}"><i class="fa-solid fa-floppy-disk"></i> Salvar</button></div>`
-          : `<div class="proj-doc-view">${content ? esc(content).replace(/\n/g, '<br>') : '<span class="proj-part-norole">Sem conteúdo.</span>'}</div>`
+          : `<div class="proj-doc-view">${contentVal ? esc(contentVal).replace(/\n/g, '<br>') : '<span class="proj-part-norole">Sem conteúdo.</span>'}</div>`
         }
       </div>`;
     }).join('')}
@@ -1064,7 +1384,7 @@ async function saveDoc(projectId, sectionKey) {
 }
 
 /* ============================================================
-   F11 — HISTÓRICO (timeline)
+   HISTÓRICO (timeline)
    ============================================================ */
 async function loadHistory(projectId) {
   const mount = document.getElementById('histMount');
@@ -1097,7 +1417,7 @@ async function loadHistory(projectId) {
 }
 
 /* ============================================================
-   F9 — MINHAS TAREFAS
+   MINHAS TAREFAS (global, todos os projetos)
    ============================================================ */
 async function renderMyTasks() {
   const root = content();
@@ -1129,7 +1449,7 @@ async function renderMyTasks() {
     const card = (t) => {
       const pct = taskProgress(t, checklist);
       return `<div class="proj-mt-card" data-action="open-project" data-id="${t.project_id}" role="button" tabindex="0">
-        <div class="proj-mt-top">${taskStatusBadge(t.status)} ${prioBadge(t.prioridade)} ${t.prazo ? `<span class="proj-task-due ${isOverdue(t) ? 'overdue' : ''}"><i class="fa-regular fa-clock"></i> ${Utils.formatDate(t.prazo)}</span>` : ''}</div>
+        <div class="proj-mt-top">${taskStatusBadge(t.status)} ${prioBadge(t.prioridade)} ${dueChip(t)}</div>
         <div class="proj-mt-title">${esc(t.title)}</div>
         <div class="proj-mt-proj"><i class="fa-solid fa-diagram-project"></i> ${esc(t.project?.name || '—')}</div>
         ${progressBar(pct)}
@@ -1170,10 +1490,24 @@ async function renderMyTasks() {
    ============================================================ */
 function reloadProjectTab(projectId, tab) {
   state.currentProjectTab = tab || state.currentProjectTab;
-  if (location.hash === `#projeto/${projectId}/${state.currentProjectTab}` || location.hash.startsWith(`#projeto/${projectId}`)) {
+  if (location.hash.startsWith(`#projeto/${projectId}`)) {
     renderProject(projectId);
   } else {
     goto(`projeto/${projectId}/${state.currentProjectTab}`);
+  }
+}
+
+/* ── RPC de fluxo + notificações ── */
+async function runFlow(rpc, taskId, pid, { okMsg, notify } = {}) {
+  try {
+    const { error } = await db.rpc(rpc, { p_task_id: taskId });
+    if (error) throw error;
+    if (notify) await notify();
+    if (okMsg) Utils.showToast(okMsg, 'success');
+    reloadProjectTab(pid, 'tarefas');
+  } catch (err) {
+    console.error('[MSY][projetos] Erro no fluxo de tarefa:', err);
+    Utils.showToast(err.message || 'Erro ao executar a ação.', 'error');
   }
 }
 
@@ -1198,6 +1532,11 @@ async function onClick(e) {
       goto(`projeto/${pid}/${el.dataset.tab}`);
       break;
 
+    case 'tasks-view':
+      state.currentTasksView = el.dataset.view;
+      reloadProjectTab(pid, 'tarefas');
+      break;
+
     case 'edit-project': {
       const { data } = await db.from('projects').select('*').eq('id', id).single();
       if (data) openProjectModal(data);
@@ -1214,6 +1553,24 @@ async function onClick(e) {
       } catch (err) {
         console.error('[MSY][projetos] Erro ao excluir projeto:', err);
         Utils.showToast('Erro ao excluir projeto.', 'error');
+      }
+      break;
+    }
+
+    case 'take-over': {
+      const ok = await window.MSYConfirm.show('Assumir a gestão deste projeto? Você entrará como gestor.', { confirmText: 'Assumir', type: 'info' });
+      if (!ok) return;
+      try {
+        const { error } = await db.from('project_participants').insert({
+          project_id: id, user_id: state.profile.id, roles: ['Gestor'], is_manager: true,
+        });
+        if (error) throw error;
+        await logEvent(id, 'participante_gestao', 'participant', null, { user_id: state.profile.id, assumiu: true });
+        Utils.showToast('Você agora gerencia este projeto.', 'success');
+        reloadProjectTab(id, state.currentProjectTab);
+      } catch (err) {
+        console.error('[MSY][projetos] Erro ao assumir gestão:', err);
+        Utils.showToast('Erro ao assumir gestão.', 'error');
       }
       break;
     }
@@ -1246,6 +1603,7 @@ async function onClick(e) {
       if (data) openTaskModal(pid, '', data);
       break;
     }
+    case 'reassign-task': openReassignModal(pid, id); break;
     case 'delete-task': {
       const ok = await window.MSYConfirm.show('Excluir esta tarefa?', { confirmText: 'Excluir', type: 'danger' });
       if (!ok) return;
@@ -1261,6 +1619,31 @@ async function onClick(e) {
       }
       break;
     }
+
+    // ── Fluxo de trabalho ──
+    case 'task-start':
+      runFlow('task_start', id, pid, { okMsg: 'Tarefa iniciada.' });
+      break;
+    case 'task-request-review':
+      runFlow('task_request_review', id, pid, {
+        okMsg: 'Revisão solicitada.',
+        notify: async () => {
+          const { data: t } = await db.from('project_tasks').select('title').eq('id', id).single();
+          const mgrs = await projectManagerIds(pid);
+          await notifyProject(pid, mgrs, `Revisão solicitada: "${t?.title}".`, '🔍');
+        },
+      });
+      break;
+    case 'task-approve':
+      runFlow('task_approve', id, pid, {
+        okMsg: 'Tarefa aprovada.',
+        notify: async () => {
+          const { data: t } = await db.from('project_tasks').select('title,assigned_to').eq('id', id).single();
+          if (t?.assigned_to) await notifyProject(pid, [t.assigned_to], `Sua tarefa foi aprovada: "${t.title}".`, '✅');
+        },
+      });
+      break;
+    case 'task-request-changes': openChangesModal(pid, id); break;
 
     case 'toggle-task': {
       const body = document.getElementById(`taskbody-${id}`);
@@ -1293,7 +1676,36 @@ async function onClick(e) {
       break;
     }
 
+    case 'save-exec': {
+      const ta = document.getElementById(`exec-${id}`);
+      if (!ta) return;
+      try {
+        const { error } = await db.from('project_tasks').update({ exec_note: ta.value.trim() || null, updated_at: new Date().toISOString() }).eq('id', id);
+        if (error) throw error;
+        Utils.showToast('Observação salva.', 'success');
+      } catch (err) {
+        console.error('[MSY][projetos] Erro ao salvar observação:', err);
+        Utils.showToast('Erro ao salvar observação.', 'error');
+      }
+      break;
+    }
+
     case 'add-participant': openParticipantModal(pid); break;
+    case 'edit-roles': openRolesModal(pid, id); break;
+    case 'toggle-manager': {
+      const newVal = el.dataset.mgr !== '1';
+      try {
+        const { error } = await db.from('project_participants').update({ is_manager: newVal }).eq('id', id);
+        if (error) throw error;
+        await logEvent(pid, 'participante_gestao', 'participant', null, { user_id: el.dataset.uid, is_manager: newVal });
+        Utils.showToast(newVal ? 'Participante promovido a gestor.' : 'Gestão removida.', 'success');
+        reloadProjectTab(pid, 'participantes');
+      } catch (err) {
+        console.error('[MSY][projetos] Erro ao alterar gestão:', err);
+        Utils.showToast('Erro ao alterar gestão.', 'error');
+      }
+      break;
+    }
     case 'remove-participant': {
       const ok = await window.MSYConfirm.show('Remover este participante do projeto?', { confirmText: 'Remover', type: 'danger' });
       if (!ok) return;
@@ -1314,44 +1726,43 @@ async function onClick(e) {
   }
 }
 
+function onKeydown(e) {
+  if (e.key !== 'Enter') return;
+  const el = e.target.closest('[data-action="newcheck-enter"]');
+  if (!el) return;
+  e.preventDefault();
+  const text = el.value.trim();
+  if (!text) return;
+  const taskId = el.dataset.task, pid = el.dataset.pid;
+  db.from('task_checklist_items').insert({ task_id: taskId, text })
+    .then(({ error }) => {
+      if (error) throw error;
+      reloadProjectTab(pid, 'tarefas');
+    })
+    .catch(err => {
+      console.error('[MSY][projetos] Erro ao adicionar item:', err);
+      Utils.showToast('Erro ao adicionar item.', 'error');
+    });
+}
+
 async function onChange(e) {
   const el = e.target.closest('[data-action]');
   if (!el) return;
-  const action = el.dataset.action;
-  const pid = el.dataset.pid;
+  if (el.dataset.action !== 'toggle-check') return;
 
-  if (action === 'toggle-check') {
-    const checkId = el.dataset.id;
-    try {
-      const { error } = await db.from('task_checklist_items').update({ done: el.checked }).eq('id', checkId);
-      if (error) throw error;
-      reloadProjectTab(pid, 'tarefas');
-    } catch (err) {
-      console.error('[MSY][projetos] Erro ao atualizar item:', err);
-      Utils.showToast('Erro ao atualizar checklist.', 'error');
-      el.checked = !el.checked;
-    }
-  }
-
-  if (action === 'task-status') {
-    const taskId = el.dataset.id;
-    const newStatus = el.value;
-    try {
-      const { data: prev } = await db.from('project_tasks').select('status,title,assigned_to,created_by').eq('id', taskId).single();
-      const { error } = await db.from('project_tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', taskId);
-      if (error) throw error;
-      if (newStatus === 'concluida' && prev?.status !== 'concluida') {
-        await logEvent(pid, 'tarefa_concluida', 'task', taskId, { title: prev?.title });
-        const notify = [prev?.created_by].filter(u => u && u !== state.profile.id);
-        if (notify.length) await notifyProject(pid, notify, `Tarefa concluída: "${prev?.title}".`, '✅');
-      } else {
-        await logEvent(pid, 'tarefa_editada', 'task', taskId, { title: prev?.title });
-      }
-      reloadProjectTab(pid, 'tarefas');
-    } catch (err) {
-      console.error('[MSY][projetos] Erro ao alterar status:', err);
-      Utils.showToast('Erro ao alterar status. Verifique suas permissões.', 'error');
-    }
+  const checkId = el.dataset.id;
+  const taskId = el.dataset.task;
+  const checked = el.checked;
+  el.closest('.proj-check')?.classList.toggle('done', checked);
+  try {
+    const { error } = await db.from('task_checklist_items').update({ done: checked }).eq('id', checkId);
+    if (error) throw error;
+    updateChecklistUI(taskId);  // otimista, sem recarregar a aba
+  } catch (err) {
+    console.error('[MSY][projetos] Erro ao atualizar item:', err);
+    Utils.showToast('Erro ao atualizar checklist.', 'error');
+    el.checked = !checked;
+    el.closest('.proj-check')?.classList.toggle('done', !checked);
   }
 }
 
