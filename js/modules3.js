@@ -59,6 +59,9 @@ const MSYPerms = {
     // ── Portal
     { key: 'gerenciar_tecnologias', label: 'Gerenciar Tecnologias',  group: 'Portal',     icon: 'fa-microchip' },
     { key: 'gerenciar_icm',         label: 'Gerenciar ICM',          group: 'Portal',     icon: 'fa-brain' },
+    // ── Projetos
+    { key: 'criar_projetos',        label: 'Criar Projetos',         group: 'Projetos',   icon: 'fa-folder-plus' },
+    { key: 'gerenciar_projetos',    label: 'Gerenciar Projetos',     group: 'Projetos',   icon: 'fa-diagram-project' },
     // ── Administração
     { key: 'ver_desempenho',        label: 'Ver Painel de Desempenho', group: 'Admin',    icon: 'fa-chart-line' },
     { key: 'notificar_membros',     label: 'Enviar Notificações',    group: 'Admin',      icon: 'fa-bell' },
@@ -248,6 +251,7 @@ async function openPermissionsManager() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
+    'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
   const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
@@ -453,6 +457,7 @@ function getPermissionsGroups() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
+    'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
 }

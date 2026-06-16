@@ -466,6 +466,7 @@
      const nav = await MSYTabAccess.filterNav([
        { page: 'dashboard',   icon: 'fa-solid fa-gauge',         label: 'Dashboard' },
        { page: 'atividades',  icon: 'fa-solid fa-list-check',    label: 'Atividades', badge: actBadge },
+       { page: 'projetos',    icon: 'fa-solid fa-diagram-project', label: 'Gestão de Projetos' },
        { page: 'comunicados', icon: 'fa-solid fa-bullhorn',      label: 'Comunicados' },
        { page: 'membros',     icon: 'fa-solid fa-users',         label: 'Membros' },
        { page: 'eventos',     icon: 'fa-solid fa-calendar-days', label: 'Eventos' },
