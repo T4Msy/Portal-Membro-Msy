@@ -5573,8 +5573,8 @@ textarea:invalid:not(:placeholder-shown),
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 768px) {
     .topbar {
-      padding-top: env(safe-area-inset-top);
-      height: calc(var(--topbar-h) + env(safe-area-inset-top));
+      padding-top: env(safe-area-inset-top) !important;
+      height: calc(var(--topbar-h) + env(safe-area-inset-top)) !important;
     }
   }
 }
