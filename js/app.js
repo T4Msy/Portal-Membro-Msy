@@ -1034,17 +1034,17 @@
            <div class="small-list">
              ${events.length === 0
                ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum evento agendado.</div></div>`
-               : events.map(ev => `
-                 <div class="small-list-item">
-                   <div class="small-list-icon" style="background:var(--red-subtle);border:1px solid var(--border-red)">
-                     <i class="fa-solid fa-calendar-check" style="color:var(--red-bright)"></i>
-                   </div>
-                   <div class="small-list-info">
-                     <div class="small-list-title">${Utils.escapeHtml(ev.title)}</div>
-                     <div class="small-list-sub">${Utils.formatDate(ev.event_date)} · ${ev.event_time}</div>
-                   </div>
-                   ${ev.mandatory ? '<span class="badge badge-red" style="font-size:.62rem">Obrig.</span>' : ''}
-                 </div>`).join('')
+: events.map(ev => `
+                  <a href="eventos.html?id=${ev.id}" class="small-list-item" style="text-decoration:none;color:inherit">
+                    <div class="small-list-icon" style="background:var(--red-subtle);border:1px solid var(--border-red)">
+                      <i class="fa-solid fa-calendar-check" style="color:var(--red-bright)"></i>
+                    </div>
+                    <div class="small-list-info">
+                      <div class="small-list-title">${Utils.escapeHtml(ev.title)}</div>
+                      <div class="small-list-sub">${Utils.formatDate(ev.event_date)} · ${ev.event_time}</div>
+                    </div>
+                    ${ev.mandatory ? '<span class="badge badge-red" style="font-size:.62rem">Obrig.</span>' : ''}
+                  </a>`).join('')
              }
            </div>
          </div>
