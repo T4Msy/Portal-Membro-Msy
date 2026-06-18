@@ -4524,6 +4524,7 @@
 
        /* Checar permissão de gerenciar eventos (diretoria OU permissão individual) */
        const canCreate = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['criar_eventos','gerenciar_eventos']);
+       const canEdit = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['editar_eventos','gerenciar_eventos']);
        const canDelete = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['excluir_eventos','gerenciar_eventos']);
       const canConclude = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
       const canReview = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['revisar_justificativas_eventos','gerenciar_eventos']);
@@ -4653,7 +4654,7 @@
              <i class="fa-solid fa-calendar-plus"></i> Novo Evento
            </button>
          </div>` : '';
-       const cardOptions = { canDelete, canConclude, canAttendance, canReview, canEdit: canCreate };
+       const cardOptions = { canDelete, canConclude, canAttendance, canReview, canEdit };
 
        if (activeTab === 'concluidos') {
          tab.innerHTML = `
