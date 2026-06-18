@@ -4653,7 +4653,7 @@
              <i class="fa-solid fa-calendar-plus"></i> Novo Evento
            </button>
          </div>` : '';
-       const cardOptions = { canDelete, canConclude, canAttendance, canReview };
+       const cardOptions = { canDelete, canConclude, canAttendance, canReview, canEdit: canCreate };
 
        if (activeTab === 'concluidos') {
          tab.innerHTML = `
@@ -4697,6 +4697,15 @@
        document.querySelectorAll('.events-tab[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
 
        document.getElementById('cancelReqsBtn')?.addEventListener('click', () => openCancelRequestsModal(loadEventos));
+
+       /* Editar */
+       tab.querySelectorAll('.edit-event-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
+           if (ev) openNewEventModal(profile, loadEventos, ev);
+         });
+       });
 
        /* Excluir */
        tab.querySelectorAll('.delete-event-btn').forEach(btn => {
@@ -5263,6 +5272,7 @@
      const canConclude = typeof permissions === 'boolean' ? permissions : !!permissions?.canConclude;
      const canAttendance = typeof permissions === 'boolean' ? permissions : !!permissions?.canAttendance;
      const canReview = typeof permissions === 'boolean' ? permissions : !!permissions?.canReview;
+     const canEdit = typeof permissions === 'boolean' ? permissions : !!permissions?.canEdit;
      const myStatus = normalizeEventPresenceStatus(myPresence);
      const myJustStatus = myPresence?.justificativa_status || null;
      const hasMyJustification = !!(myPresence?.justificativa && String(myPresence.justificativa).trim());
@@ -5306,8 +5316,11 @@
                    ? `<span class="ev-badge ev-badge-obrig"><i class="fa-solid fa-circle-exclamation" style="font-size:.6rem"></i> Obrigatório</span>`
                    : `<span class="ev-badge ev-badge-opt">Opcional</span>`}
                ${isPrivate ? `<span class="ev-badge" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c084fc"><i class="fa-solid fa-lock" style="font-size:.55rem"></i> Diretoria</span>` : ''}
-               ${(canDelete || canConclude) ? `
+               ${(canDelete || canConclude || canEdit) ? `
                  <div style="display:flex;gap:4px;margin-left:4px">
+                   ${canEdit ? `<button class="ev-action-btn edit-event-btn" data-id="${ev.id}" title="Editar evento" style="color:var(--gold)">
+                     <i class="fa-solid fa-pen"></i>
+                   </button>` : ''}
                    ${canConclude ? (!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
                      <i class="fa-solid fa-circle-check"></i>
                    </button>` : `<button class="ev-action-btn ev-unconclude-btn" data-id="${ev.id}" title="Reabrir evento" style="color:var(--text-3)">
@@ -6255,33 +6268,87 @@
      });
    }
 
-   async function openNewEventModal(profile, onSuccess) {
+   async function openNewEventModal(profile, onSuccess, eventToEdit = null) {
+     const isEdit = !!eventToEdit;
      const modal = document.getElementById('newEventModal');
      modal.classList.add('open');
-   
+
+     // Ajusta título do modal e botão conforme o modo (criar/editar)
+     const modalTitleEl = modal.querySelector('.modal-title');
+     if (modalTitleEl) modalTitleEl.innerHTML = isEdit
+       ? `<i class="fa-solid fa-pen-to-square"></i> Editar Evento`
+       : `<i class="fa-solid fa-calendar-plus"></i> Novo Evento`;
+     const saveBtn = document.getElementById('newEventSave');
+     saveBtn.disabled = false;
+     saveBtn.innerHTML = isEdit
+       ? `<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações`
+       : `<i class="fa-solid fa-calendar-plus"></i> Criar Evento`;
+
      // Popular selects de membros
      const { data: membros } = await db.from('profiles').select('id,name,role').eq('status','ativo').order('name');
      const memOpts = (membros||[]).map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)} — ${Utils.escapeHtml(m.role||'')}</option>`).join('');
-   
+
      const creatorSel = document.getElementById('ev-creator');
      creatorSel.innerHTML = `<option value="">Selecione o criador...</option>${memOpts}`;
-   
+
      const helpersWrap = document.getElementById('ev-helpers-wrap');
      helpersWrap.innerHTML = `<select class="form-input form-select ev-helper-sel" style="margin-bottom:6px"><option value="">Nenhum co-criador</option>${memOpts}</select>`;
-   
-     // Adicionar co-criador
+
+     // Adicionar co-criador (linhas extras, além do primeiro select fixo)
      let helperCount = 0;
-     const addHelperBtn = document.getElementById('ev-add-helper');
-     addHelperBtn.onclick = () => {
-       if (helperCount >= 4) { Utils.showToast('Máximo de 5 co-criadores.', 'error'); return; }
+     const addHelperRow = (value = '') => {
+       if (helperCount >= 4) { Utils.showToast('Máximo de 5 co-criadores.', 'error'); return null; }
        helperCount++;
        const row = document.createElement('div');
        row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
        row.innerHTML = `<select class="form-input form-select ev-helper-sel" style="flex:1"><option value="">Co-criador ${helperCount+1}</option>${memOpts}</select><button type="button" class="btn btn-ghost btn-sm" style="color:var(--red-bright);padding:6px 10px;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>`;
        row.querySelector('button').addEventListener('click', () => { row.remove(); helperCount--; });
+       if (value) row.querySelector('select').value = value;
        helpersWrap.appendChild(row);
+       return row;
      };
-   
+     const addHelperBtn = document.getElementById('ev-add-helper');
+     addHelperBtn.onclick = () => addHelperRow();
+
+     // Preenche (edição) ou limpa (criação) os campos do formulário
+     const elTitle = document.getElementById('ev-title');
+     const elDate  = document.getElementById('ev-date');
+     const elTime  = document.getElementById('ev-time');
+     const elType  = document.getElementById('ev-type');
+     const elDesc  = document.getElementById('ev-desc');
+     const elMand  = document.getElementById('ev-mandatory');
+     const elPriv  = document.getElementById('ev-private');
+
+     if (isEdit) {
+       elTitle.value = eventToEdit.title || '';
+       elDate.value  = eventToEdit.event_date || '';
+       elTime.value  = eventToEdit.event_time || '19:00';
+       elType.value  = eventToEdit.type || 'Reunião';
+       elDesc.value  = eventToEdit.description || '';
+       elMand.checked = !!eventToEdit.mandatory;
+       if (elPriv) elPriv.checked = !!eventToEdit.is_private;
+       creatorSel.value = eventToEdit.created_by || '';
+       if (eventToEdit.helper_id) helpersWrap.querySelector('.ev-helper-sel').value = eventToEdit.helper_id;
+       // Co-criadores extras
+       try {
+         const { data: extraHelpers, error: extraErr } = await db.from('event_co_creators')
+           .select('helper_id').eq('event_id', eventToEdit.id);
+         if (extraErr) throw extraErr;
+         (extraHelpers || []).forEach(h => addHelperRow(h.helper_id));
+       } catch (err) {
+         console.error('[MSY][eventos] Erro ao carregar co-criadores:', err);
+       }
+     } else {
+       elTitle.value = '';
+       elDate.value  = '';
+       elTime.value  = '19:00';
+       elType.value  = 'Reunião';
+       elDesc.value  = '';
+       elMand.checked = false;
+       if (elPriv) elPriv.checked = false;
+       creatorSel.value = '';
+     }
+
      document.getElementById('newEventSave').onclick = async () => {
        const title       = document.getElementById('ev-title').value.trim();
        const event_date  = document.getElementById('ev-date').value;
@@ -6293,21 +6360,54 @@
        const creator_id  = document.getElementById('ev-creator').value;
        const helpers     = [...document.querySelectorAll('.ev-helper-sel')].map(s => s.value).filter(Boolean);
        const helper_id   = helpers[0] || null;
-   
+
        if (!title || !event_date) { Utils.showToast('Preencha título e data.', 'error'); return; }
        if (!creator_id) { Utils.showToast('Selecione o criador do evento.', 'error'); return; }
-   
+
        const btn = document.getElementById('newEventSave');
-       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
-   
-       const { data: evData, error } = await db.from('events').insert({
+       btn.disabled = true;
+       btn.innerHTML = isEdit
+         ? '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...'
+         : '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
+
+       const payload = {
          title, event_date, event_time, type,
          description: description || null,
          mandatory, is_private,
          created_by: creator_id,
          helper_id,
-       }).select('id').single();
-   
+       };
+
+       if (isEdit) {
+         const { error } = await db.from('events').update(payload).eq('id', eventToEdit.id);
+         if (!error) {
+           // Reconcilia co-criadores adicionais (substitui a lista)
+           try {
+             await db.from('event_co_creators').delete().eq('event_id', eventToEdit.id);
+             if (helpers.length > 1) {
+               const extra = helpers.slice(1).map(uid => ({ event_id: eventToEdit.id, helper_id: uid }));
+               const { error: insErr } = await db.from('event_co_creators').insert(extra);
+               if (insErr) throw insErr;
+             }
+           } catch (err) {
+             console.error('[MSY][eventos] Erro ao atualizar co-criadores:', err);
+           }
+           modal.classList.remove('open');
+           Utils.showToast('Evento atualizado!');
+           onSuccess();
+         } else {
+           console.error('[MSY][eventos] Erro ao atualizar evento:', error);
+           const msg = error?.message?.includes('row-level security') || error?.code === '42501'
+             ? 'Sem permissão para editar eventos. Verifique as políticas RLS no Supabase.'
+             : (error?.message || 'Erro ao atualizar evento.');
+           Utils.showToast(msg, 'error');
+           btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Alterações';
+         }
+         return;
+       }
+
+       const { data: evData, error } = await db.from('events').insert(payload).select('id').single();
+
        if (!error) {
          // Registrar co-criadores adicionais se houver
          if (helpers.length > 1 && evData?.id) {

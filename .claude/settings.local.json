@@ -15,7 +15,13 @@
       "Bash(curl -s -X DELETE https://lldzgkxpoyqauxdcjyaw.supabase.co/storage/v1/object/activity-files -H 'apikey: __TRACKED_VAR__' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"prefixes\":[\"197609/probe_test/1781408190_doc.pdf\",\"197609/probe_test/1781408191_img.png\"]}')",
       "Bash(curl -s -X POST https://lldzgkxpoyqauxdcjyaw.supabase.co/storage/v1/object/list/activity-files -H 'apikey: __TRACKED_VAR__' -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"prefix\":\"197609/probe_test/\",\"limit\":100}')",
       "Bash(node --check js/app.js)",
-      "Bash(node --check --input-type=module)"
+      "Bash(node --check --input-type=module)",
+      "Bash(python -c ' *)",
+      "Bash(node --check js/pages/ranking.js)",
+      "Bash(node --check js/badges_unificado.js)",
+      "mcp__n8n__get_workflow_details",
+      "Bash(python -)",
+      "mcp__n8n__execute_workflow"
     ]
   }
 }
