@@ -6065,55 +6065,52 @@ body[data-page="atividades"] #activityModal .activity-modal-notif {
   }
 }
 
-/* FIX scroll: o modal de atividade usava display:grid com minmax(0,1fr) num
-   container limitado só por max-height. No Safari/iOS essa faixa não é
-   constrangida, o corpo cresce e o overflow:hidden do modal corta o final
-   (a seção "Estender Prazo" ficava inacessível no celular). Flex-column
-   constrange o corpo de forma confiável em todos os navegadores. */
+/* FIX scroll do modal de atividade — padrão "app shell" comprovado em mobile.
+   O modal usa display:flex column. O HEADER e o FOOTER ficam fixos (flex:0 0
+   auto) e SÓ o CORPO rola, com toque nativo. Em telas grandes o modal encolhe
+   ao conteúdo (max-height limita); no celular ganha altura definida = viewport
+   dinâmico (100dvh), então o rodapé fica sempre visível e nada some atrás da
+   barra do navegador. */
 body[data-page="atividades"] #activityModal .modal {
   display: flex !important;
   flex-direction: column !important;
+  overflow: hidden !important;
 }
 body[data-page="atividades"] #activityModal .modal-header,
 body[data-page="atividades"] #activityModal .modal-footer {
   flex: 0 0 auto !important;
+  position: static !important;
 }
 body[data-page="atividades"] #activityModal .modal-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
 }
 
-/* FIX scroll (mobile): no celular o scroll INTERNO do corpo não é confiável
-   (iOS/alguns navegadores cortam o final). Aqui o OVERLAY inteiro rola — é
-   scroll de documento normal, então "Estender Prazo" e os botões do rodapé
-   ficam SEMPRE alcançáveis. O header continua fixo no topo. */
 @media (max-width: 600px) {
+  /* O overlay não rola; quem rola é o corpo, com altura definida. Isso
+     responde de forma confiável ao arrastar com o dedo (toque). */
   body[data-page="atividades"] #activityModal.modal-overlay.open {
-    overflow-y: auto !important;
-    align-items: flex-start !important;
+    overflow: hidden !important;
+    align-items: stretch !important;
     padding: 0 !important;
-    -webkit-overflow-scrolling: touch !important;
   }
   body[data-page="atividades"] #activityModal .modal {
-    height: auto !important;
-    max-height: none !important;
-    min-height: 100dvh !important;
+    width: 100% !important;
+    /* height:100% = altura EXATA do overlay (position:fixed inset:0). Não usar
+       100dvh: em mobile o overlay fixed segue o viewport com as barras do
+       navegador e pode ser MENOR que 100dvh, deixando o rodapé cortado. */
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
     border-radius: 0 !important;
   }
   body[data-page="atividades"] #activityModal .modal-body {
-    flex: 0 0 auto !important;
-    overflow: visible !important;
-    min-height: 0 !important;
-  }
-  body[data-page="atividades"] #activityModal .modal-header {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 4 !important;
-  }
-  body[data-page="atividades"] #activityModal .modal-footer {
-    position: static !important;
+    /* folga no fim pra última seção (Estender Prazo) limpar a barra do
+       navegador / área segura do aparelho. */
+    padding-bottom: calc(28px + env(safe-area-inset-bottom)) !important;
   }
 }
 
