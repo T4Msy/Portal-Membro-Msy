@@ -329,7 +329,7 @@
      hasExtendedDeadline(act) {
        if (!act.extended_deadline) return false;
        const now = new Date();
-       const ext = new Date(act.extended_deadline + 'T23:59:59');
+       const ext = new Date(act.extended_deadline + 'T' + (act.extended_deadline_time || '23:59:59'));
        return ext >= now;
      },
      isActivityOpen(act) {
@@ -1436,7 +1436,7 @@
    
          let deadlineLabel;
          if (act.status === 'Concluída') deadlineLabel = 'Concluída';
-         else if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}`;
+         else if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}${act.extended_deadline_time ? ' às ' + String(act.extended_deadline_time).slice(0,5) : ''}`;
          else if (passed) deadlineLabel = '🔴 Prazo excedido';
          else if (diff < 0) deadlineLabel = `Vencida há ${Math.abs(diff)} dias`;
          else if (diff === 0) deadlineLabel = 'Vence hoje';
@@ -1799,7 +1799,7 @@
      const anexosDaAtividade = (responses||[]).filter(r => r.file_url && r.file_name);
 
      let deadlineLabel;
-     if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}`;
+     if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}${act.extended_deadline_time ? ' às ' + String(act.extended_deadline_time).slice(0,5) : ''}`;
      else if (passed) deadlineLabel = '🔴 Prazo excedido';
      else if (diff < 0) deadlineLabel = `Vencida há ${Math.abs(diff)} dias`;
      else if (diff === 0) deadlineLabel = 'Vence hoje';
@@ -1912,12 +1912,18 @@
         </div>
          ${act.status !== 'Cancelada' ? `
          <div class="form-group" style="margin-bottom:0">
-           <label class="form-label"><i class="fa-solid fa-calendar-plus"></i> Estender Prazo</label>
-           <div style="display:flex;gap:8px;align-items:center">
-             <input class="form-input" type="date" id="extDeadlineInput" value="${act.extended_deadline||''}" min="${new Date().toISOString().split('T')[0]}" style="max-width:200px">
-             <button class="btn btn-sm btn-outline" id="extDeadlineBtn">Aplicar</button>
+           <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+             <input type="checkbox" id="extDeadlineToggle" ${act.extended_deadline ? 'checked' : ''} style="width:auto;margin:0;cursor:pointer">
+             <span><i class="fa-solid fa-calendar-plus"></i> Deseja estender o prazo?</span>
+           </label>
+           <div id="extDeadlineFields" style="display:${act.extended_deadline ? 'block' : 'none'};margin-top:10px">
+             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+               <input class="form-input" type="date" id="extDeadlineInput" value="${act.extended_deadline||''}" min="${new Date().toISOString().split('T')[0]}" style="max-width:170px">
+               <input class="form-input" type="time" id="extDeadlineTimeInput" value="${act.extended_deadline_time ? String(act.extended_deadline_time).slice(0,5) : ''}" style="max-width:130px">
+               <button class="btn btn-sm btn-outline" id="extDeadlineBtn">Aplicar</button>
+             </div>
+             <div style="font-size:.72rem;color:var(--text-3);margin-top:6px">Define uma nova data e horário de entrega após o original. Se o horário ficar em branco, vale até 23:59.</div>
            </div>
-           <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Define um novo prazo de entrega após o original.</div>
          </div>` : ''}
        ` : ''}
      `;
@@ -2158,6 +2164,14 @@
        setTimeout(() => openNewActivityModal(profile, onSuccess, fullAct), 50);
      });
 
+     const extToggle = document.getElementById('extDeadlineToggle');
+     const extFields = document.getElementById('extDeadlineFields');
+     if (extToggle && extFields) {
+       extToggle.addEventListener('change', () => {
+         extFields.style.display = extToggle.checked ? 'block' : 'none';
+       });
+     }
+
      const extBtn = document.getElementById('extDeadlineBtn');
      if (extBtn) {
        let _extLock = false;
@@ -2165,11 +2179,12 @@
          if (_extLock) return;
          _extLock = true;
          const val = document.getElementById('extDeadlineInput')?.value;
+         const timeVal = document.getElementById('extDeadlineTimeInput')?.value || null;
          if (!val) { Utils.showToast('Selecione uma data.','error'); _extLock = false; return; }
          extBtn.disabled = true;
          extBtn.textContent = '...';
          const { error: extErr } = await db.from('activities')
-           .update({ extended_deadline: val })
+           .update({ extended_deadline: val, extended_deadline_time: timeVal })
            .eq('id', id);
          if (!extErr) {
            Utils.showToast('Prazo estendido!');

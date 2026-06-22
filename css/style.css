@@ -6065,6 +6065,58 @@ body[data-page="atividades"] #activityModal .activity-modal-notif {
   }
 }
 
+/* FIX scroll: o modal de atividade usava display:grid com minmax(0,1fr) num
+   container limitado só por max-height. No Safari/iOS essa faixa não é
+   constrangida, o corpo cresce e o overflow:hidden do modal corta o final
+   (a seção "Estender Prazo" ficava inacessível no celular). Flex-column
+   constrange o corpo de forma confiável em todos os navegadores. */
+body[data-page="atividades"] #activityModal .modal {
+  display: flex !important;
+  flex-direction: column !important;
+}
+body[data-page="atividades"] #activityModal .modal-header,
+body[data-page="atividades"] #activityModal .modal-footer {
+  flex: 0 0 auto !important;
+}
+body[data-page="atividades"] #activityModal .modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* FIX scroll (mobile): no celular o scroll INTERNO do corpo não é confiável
+   (iOS/alguns navegadores cortam o final). Aqui o OVERLAY inteiro rola — é
+   scroll de documento normal, então "Estender Prazo" e os botões do rodapé
+   ficam SEMPRE alcançáveis. O header continua fixo no topo. */
+@media (max-width: 600px) {
+  body[data-page="atividades"] #activityModal.modal-overlay.open {
+    overflow-y: auto !important;
+    align-items: flex-start !important;
+    padding: 0 !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  body[data-page="atividades"] #activityModal .modal {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+  body[data-page="atividades"] #activityModal .modal-body {
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+  }
+  body[data-page="atividades"] #activityModal .modal-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 4 !important;
+  }
+  body[data-page="atividades"] #activityModal .modal-footer {
+    position: static !important;
+  }
+}
+
 /* Member profile modal: keep actions visible and content scrollable on phones. */
 body[data-page="membros"] #memberProfileModal.modal-overlay.open {
   align-items: flex-start !important;
