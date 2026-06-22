@@ -21,7 +21,23 @@
       "Bash(node --check js/badges_unificado.js)",
       "mcp__n8n__get_workflow_details",
       "Bash(python -)",
-      "mcp__n8n__execute_workflow"
+      "mcp__n8n__execute_workflow",
+      "Bash(supabase --version)",
+      "Read(//c/Users/valde/AppData/Roaming/**)",
+      "Read(//c/Users/valde/.supabase/**)",
+      "Bash(supabase db *)",
+      "Bash(npx --version)",
+      "Read(//c/Users/valde/.cache/**)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Read(//c/tmp/msy-scrolltest/**)",
+      "Bash(node run.js)",
+      "Bash(npm init *)",
+      "Bash(npm i *)",
+      "Bash(node *)",
+      "Bash(ls -la sw.js)",
+      "Bash(find . -maxdepth 2 -name \"sw.js\" -not -path \"./node_modules/*\")",
+      "Bash(ls *.js)"
     ]
   }
 }
