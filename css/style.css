@@ -3993,9 +3993,39 @@ textarea:invalid:not(:placeholder-shown),
   overflow: hidden;
 }
 
-.venc-row { transition: border-color var(--t2) var(--ease); }
+.venc-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--black-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-faint);
+  transition: border-color var(--t2) var(--ease);
+}
 .venc-row:hover { border-color: var(--border-gold) !important; }
+.venc-avatar-link { flex-shrink: 0; }
+.venc-info { flex: 1; min-width: 0; }
+.venc-name { font-weight: 600; color: var(--text-1); transition: color var(--t2) var(--ease); }
 .venc-name:hover { color: var(--gold) !important; }
+.venc-role { font-size: .78rem; color: var(--text-3); }
+.venc-obs { font-size: .78rem; color: var(--text-2); margin-top: 4px; font-style: italic; }
+.venc-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.venc-meta { text-align: right; }
+.venc-period { font-size: .9rem; color: var(--gold); font-weight: 600; }
+.venc-date { font-size: .72rem; color: var(--text-3); }
+
+@media (max-width: 600px) {
+  .venc-row { flex-wrap: wrap; padding: 12px 14px; }
+  .venc-actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-faint);
+  }
+  .venc-meta { text-align: left; }
+}
 
 /* -------- ESTRUTURA DA ORDEM -------- */
 

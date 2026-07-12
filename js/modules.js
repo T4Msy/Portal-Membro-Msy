@@ -1363,26 +1363,28 @@ async function initPremiacoes() {
                   ? `<img src="${Utils.escapeHtml(membro.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
                   : (membro.initials || Utils.getInitials(membro.name));
                 return `
-                  <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--black-3);border-radius:var(--radius);border:1px solid var(--border-faint);transition:border-color .2s" class="venc-row">
-                    <a href="perfil.html?id=${membro.id}" style="flex-shrink:0">
+                  <div class="venc-row">
+                    <a href="perfil.html?id=${membro.id}" class="venc-avatar-link">
                       <div class="avatar" style="${avatarStyle}">${avatarContent}</div>
                     </a>
-                    <div style="flex:1">
-                      <a href="perfil.html?id=${membro.id}" style="font-weight:600;color:var(--text-1);transition:color .2s" class="venc-name">
+                    <div class="venc-info">
+                      <a href="perfil.html?id=${membro.id}" class="venc-name">
                         ${Utils.escapeHtml(membro.name)}
                       </a>
-                      <div style="font-size:.78rem;color:var(--text-3)">${Utils.escapeHtml(membro.role)}</div>
-                      ${v.observacao ? `<div style="font-size:.78rem;color:var(--text-2);margin-top:4px;font-style:italic">${Utils.escapeHtml(v.observacao)}</div>` : ''}
+                      <div class="venc-role">${Utils.escapeHtml(membro.role)}</div>
+                      ${v.observacao ? `<div class="venc-obs">${Utils.escapeHtml(v.observacao)}</div>` : ''}
                     </div>
-                    <div style="text-align:right;flex-shrink:0">
-                      <div style="font-size:.9rem;color:var(--gold);font-weight:600">${Utils.escapeHtml(v.periodo)}</div>
-                      <div style="font-size:.72rem;color:var(--text-3)">${Utils.formatDate(v.created_at)}</div>
+                    <div class="venc-actions">
+                      <div class="venc-meta">
+                        <div class="venc-period">${Utils.escapeHtml(v.periodo)}</div>
+                        <div class="venc-date">${Utils.formatDate(v.created_at)}</div>
+                      </div>
+                      ${isDiretoria ? `
+                        <button class="btn btn-ghost btn-sm venc-del-btn" data-id="${v.id}" title="Remover">
+                          <i class="fa-solid fa-trash" style="color:var(--red-bright);font-size:.75rem"></i>
+                        </button>
+                      ` : ''}
                     </div>
-                    ${isDiretoria ? `
-                      <button class="btn btn-ghost btn-sm venc-del-btn" data-id="${v.id}" title="Remover" style="flex-shrink:0">
-                        <i class="fa-solid fa-trash" style="color:var(--red-bright);font-size:.75rem"></i>
-                      </button>
-                    ` : ''}
                   </div>
                 `;
               }).join('')}
