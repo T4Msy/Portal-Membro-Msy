@@ -4342,6 +4342,39 @@
          .ev-badge-done  { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
          .ev-badge-obrig { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
          .ev-badge-opt   { background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.2); color:var(--gold); }
+         .ev-badge-cancel{ background:rgba(220,38,38,.12); border-color:rgba(220,38,38,.35); color:#ef4444; }
+         .ev-cancel-btn { color:#ef4444 !important; border-color: rgba(220,38,38,.25) !important; }
+         .ev-cancel-btn:hover { background: rgba(220,38,38,.12) !important; }
+         .ev-uncancel-btn { color:#10b981 !important; border-color: rgba(16,185,129,.25) !important; }
+         .ev-uncancel-btn:hover { background: rgba(16,185,129,.1) !important; }
+         .ev-cancel-info {
+           margin-bottom: 10px;
+           padding: 10px 14px;
+           background: rgba(220,38,38,.06);
+           border: 1px solid rgba(220,38,38,.22);
+           border-radius: 10px;
+         }
+         .ev-cancel-info-label {
+           font-size: .62rem;
+           font-weight: 700;
+           text-transform: uppercase;
+           letter-spacing: .08em;
+           color: #ef4444;
+           margin-bottom: 6px;
+           display: flex;
+           align-items: center;
+           gap: 6px;
+         }
+         .ev-cancel-info-text {
+           font-size: .82rem;
+           color: var(--text-2);
+           line-height: 1.55;
+         }
+         .ev-cancel-info-meta {
+           font-size: .68rem;
+           color: var(--text-3);
+           margin-top: 8px;
+         }
          .ev-action-btn {
            width: 28px; height: 28px;
            border-radius: 7px;
@@ -4542,12 +4575,13 @@
        const canEdit = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['editar_eventos','gerenciar_eventos']);
        const canDelete = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['excluir_eventos','gerenciar_eventos']);
       const canConclude = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['concluir_eventos','gerenciar_eventos']);
+      const canCancel = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['cancelar_eventos','gerenciar_eventos']);
       const canReview = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['revisar_justificativas_eventos','gerenciar_eventos']);
       const canAttendance = isDiretoria || await MSYPerms.checkAny(profile.id, profile.tier, ['registrar_presencas_eventos','registrar_participantes','gerenciar_presencas','gerenciar_eventos']);
 
        const [{ data: evs, error }, { data: myPresencas }] = await Promise.all([
          db.from('events')
-           .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url)')
+           .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url), canceller:cancelled_by(name,initials,color,avatar_url)')
            .order('event_date', { ascending: false }),
          db.from('event_presencas').select('*').or(`user_id.eq.${profile.id},membro_id.eq.${profile.id}`)
        ]);
@@ -4589,9 +4623,10 @@
 
        // Load confirmed counts for all visible events (visible to all)
        const today    = new Date().toISOString().split('T')[0];
-       const upcoming = (evs||[]).filter(e => e.event_date >= today && e.status !== 'concluido');
+       const cancelled = (evs||[]).filter(e => e.status === 'cancelado');
+       const upcoming = (evs||[]).filter(e => e.event_date >= today && e.status !== 'concluido' && e.status !== 'cancelado');
        const done     = (evs||[]).filter(e => e.status === 'concluido');
-       const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido');
+       const past     = (evs||[]).filter(e => e.event_date < today && e.status !== 'concluido' && e.status !== 'cancelado');
 
        let presCountMap = {};
        let attendanceStatsMap = {};
@@ -4659,6 +4694,12 @@
         const badge = justTab.querySelector('[data-count]');
         if (badge) badge.textContent = String(justificationCount);
       }
+      const cancelTab = document.getElementById('eventCancelledTabBtn');
+      if (cancelTab) {
+        cancelTab.style.display = canCancel ? '' : 'none';
+        const badge = cancelTab.querySelector('[data-count]');
+        if (badge) badge.textContent = String(cancelled.length);
+      }
       const su = document.getElementById('eventsStatUpcoming'); if (su) su.textContent = String(upcoming.length);
       const sd = document.getElementById('eventsStatDone'); if (sd) sd.textContent = String(done.length);
       const sp = document.getElementById('eventsStatPending'); if (sp) sp.textContent = String(justificationCount);
@@ -4669,7 +4710,7 @@
              <i class="fa-solid fa-calendar-plus"></i> Novo Evento
            </button>
          </div>` : '';
-       const cardOptions = { canDelete, canConclude, canAttendance, canReview, canEdit };
+       const cardOptions = { canDelete, canConclude, canCancel, canAttendance, canReview, canEdit };
 
        if (activeTab === 'concluidos') {
          tab.innerHTML = `
@@ -4693,6 +4734,14 @@
           cancelReqs: allCancelReqs,
           canReview
         });
+      } else if (activeTab === 'cancelados' && canCancel) {
+        tab.innerHTML = `
+          ${actionsHtml}
+          ${cancelled.length > 0 ? `
+            <div class="ev-section-label" style="color:#ef4444"><i class="fa-solid fa-ban"></i> Eventos Cancelados</div>
+            ${cancelled.map(ev => renderEventCard(ev, cardOptions, false, myPresMap[ev.id]||null, false, 0)).join('')}
+          ` : `<div class="empty-state" style="padding:44px"><div class="empty-state-icon"><i class="fa-solid fa-ban"></i></div><div class="empty-state-text">Nenhum evento cancelado.</div></div>`}
+        `;
       } else {
         activeTab = 'proximos';
          tab.innerHTML = `
@@ -4749,6 +4798,26 @@
          btn.addEventListener('click', async e => {
            e.stopPropagation();
            const { error } = await db.from('events').update({ status: 'ativo' }).eq('id', btn.dataset.id);
+           if (!error) { Utils.showToast('Evento reaberto.'); loadEventos(); }
+           else Utils.showToast('Erro ao reabrir.', 'error');
+         });
+       });
+
+       /* Cancelar evento (com justificativa) */
+       tab.querySelectorAll('.ev-cancel-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           const ev = [...(evs||[])].find(ev2 => ev2.id === btn.dataset.id);
+           openCancelEventModal(btn.dataset.id, ev?.title || 'este evento', profile, loadEventos);
+         });
+       });
+
+       /* Reabrir evento cancelado */
+       tab.querySelectorAll('.ev-uncancel-btn').forEach(btn => {
+         btn.addEventListener('click', async e => {
+           e.stopPropagation();
+           if (!await MSYConfirm.show('Reabrir este evento cancelado? Ele voltará a aparecer na agenda para todos os membros.', { title: 'Reabrir evento' })) return;
+           const { error } = await db.from('events').update({ status: 'ativo', cancel_reason: null, cancelled_at: null, cancelled_by: null }).eq('id', btn.dataset.id);
            if (!error) { Utils.showToast('Evento reaberto.'); loadEventos(); }
            else Utils.showToast('Erro ao reabrir.', 'error');
          });
@@ -5068,6 +5137,7 @@
            <button class="events-tab" data-tab="concluidos"><i class="fa-solid fa-circle-check"></i> Eventos Concluidos</button>
           <button class="events-tab" data-tab="presencas" id="eventPresenceTabBtn" style="display:none"><i class="fa-solid fa-clipboard-check"></i> Presenças <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
           <button class="events-tab" data-tab="justificativas" id="eventJustificationTabBtn" style="display:none"><i class="fa-solid fa-comment-dots"></i> Justificativas <span data-count style="background:rgba(201,168,76,.14);border:1px solid rgba(201,168,76,.25);color:var(--gold);border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
+          <button class="events-tab" data-tab="cancelados" id="eventCancelledTabBtn" style="display:none"><i class="fa-solid fa-ban"></i> Cancelados <span data-count style="background:rgba(220,38,38,.14);border:1px solid rgba(220,38,38,.3);color:#ef4444;border-radius:999px;padding:1px 7px;font-size:.62rem">0</span></button>
          </div>
          <div id="evTab"></div>
        </div>
@@ -5280,12 +5350,15 @@
    
    function renderEventCard(ev, permissions, isPast = false, myPresence = null, cancelPending = false, presCount = 0) {
      const isDone     = ev.status === 'concluido';
+     const isCancelled = ev.status === 'cancelado';
      const isPrivate  = ev.is_private;
      const creator    = ev.creator;
      const helper     = ev.helper;
+     const canceller  = ev.canceller;
      const canManage = typeof permissions === 'boolean' ? permissions : !!(permissions?.canDelete || permissions?.canConclude || permissions?.canAttendance || permissions?.canReview);
      const canDelete = typeof permissions === 'boolean' ? permissions : !!permissions?.canDelete;
      const canConclude = typeof permissions === 'boolean' ? permissions : !!permissions?.canConclude;
+     const canCancel = typeof permissions === 'boolean' ? permissions : !!permissions?.canCancel;
      const canAttendance = typeof permissions === 'boolean' ? permissions : !!permissions?.canAttendance;
      const canReview = typeof permissions === 'boolean' ? permissions : !!permissions?.canReview;
      const canEdit = typeof permissions === 'boolean' ? permissions : !!permissions?.canEdit;
@@ -5303,8 +5376,8 @@
      };
      const typeMeta = TYPE_META[ev.type] || { color:'#c9a84c', icon:'fa-calendar' };
 
-     /* Opacidade para passados/concluídos */
-     const dimStyle = (isPast || isDone) ? 'opacity:.6;' : '';
+     /* Opacidade para passados/concluídos/cancelados */
+     const dimStyle = (isPast || isDone || isCancelled) ? 'opacity:.6;' : '';
 
      /* Mini avatar */
      const miniAvatar = (m) => m
@@ -5326,22 +5399,29 @@
                ${Utils.escapeHtml(ev.type)}
              </div>
              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-               ${isDone
-                 ? `<span class="ev-badge ev-badge-done"><i class="fa-solid fa-circle-check" style="font-size:.6rem"></i> Concluído</span>`
-                 : ev.mandatory
-                   ? `<span class="ev-badge ev-badge-obrig"><i class="fa-solid fa-circle-exclamation" style="font-size:.6rem"></i> Obrigatório</span>`
-                   : `<span class="ev-badge ev-badge-opt">Opcional</span>`}
+               ${isCancelled
+                 ? `<span class="ev-badge ev-badge-cancel"><i class="fa-solid fa-ban" style="font-size:.6rem"></i> Cancelado</span>`
+                 : isDone
+                   ? `<span class="ev-badge ev-badge-done"><i class="fa-solid fa-circle-check" style="font-size:.6rem"></i> Concluído</span>`
+                   : ev.mandatory
+                     ? `<span class="ev-badge ev-badge-obrig"><i class="fa-solid fa-circle-exclamation" style="font-size:.6rem"></i> Obrigatório</span>`
+                     : `<span class="ev-badge ev-badge-opt">Opcional</span>`}
                ${isPrivate ? `<span class="ev-badge" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c084fc"><i class="fa-solid fa-lock" style="font-size:.55rem"></i> Diretoria</span>` : ''}
-               ${(canDelete || canConclude || canEdit) ? `
+               ${(canDelete || canConclude || canCancel || canEdit) ? `
                  <div style="display:flex;gap:4px;margin-left:4px">
-                   ${canEdit ? `<button class="ev-action-btn edit-event-btn" data-id="${ev.id}" title="Editar evento" style="color:var(--gold)">
+                   ${canEdit && !isCancelled ? `<button class="ev-action-btn edit-event-btn" data-id="${ev.id}" title="Editar evento" style="color:var(--gold)">
                      <i class="fa-solid fa-pen"></i>
                    </button>` : ''}
-                   ${canConclude ? (!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
+                   ${canConclude && !isCancelled ? (!isDone ? `<button class="ev-action-btn ev-conclude-btn" data-id="${ev.id}" title="Marcar como concluído">
                      <i class="fa-solid fa-circle-check"></i>
                    </button>` : `<button class="ev-action-btn ev-unconclude-btn" data-id="${ev.id}" title="Reabrir evento" style="color:var(--text-3)">
                      <i class="fa-solid fa-rotate-left"></i>
                    </button>`) : ''}
+                   ${canCancel ? (!isCancelled && !isDone ? `<button class="ev-action-btn ev-cancel-btn" data-id="${ev.id}" title="Cancelar evento" style="color:#ef4444">
+                     <i class="fa-solid fa-ban"></i>
+                   </button>` : isCancelled ? `<button class="ev-action-btn ev-uncancel-btn" data-id="${ev.id}" title="Reabrir evento cancelado" style="color:#10b981">
+                     <i class="fa-solid fa-rotate-left"></i>
+                   </button>` : '') : ''}
                    ${canDelete ? `<button class="ev-action-btn delete-event-btn" data-id="${ev.id}" title="Excluir evento" style="color:var(--red-bright)">
                      <i class="fa-solid fa-trash"></i>
                    </button>` : ''}
@@ -5350,7 +5430,7 @@
            </div>
 
            <!-- Título -->
-           <div class="ev-card-title ${isDone ? 'ev-title-done' : ''}">${Utils.escapeHtml(ev.title)}</div>
+           <div class="ev-card-title ${isDone || isCancelled ? 'ev-title-done' : ''}">${Utils.escapeHtml(ev.title)}</div>
 
            <!-- Meta: data, hora -->
            <div class="ev-card-meta">
@@ -5360,6 +5440,16 @@
 
            <!-- Descrição -->
            ${ev.description ? `<div class="ev-card-desc">${Utils.escapeHtml(ev.description)}</div>` : ''}
+
+           <!-- Motivo do cancelamento -->
+           ${isCancelled ? `
+             <div class="ev-cancel-info">
+               <div class="ev-cancel-info-label"><i class="fa-solid fa-ban"></i> Motivo do cancelamento</div>
+               <div class="ev-cancel-info-text">${Utils.escapeHtml(ev.cancel_reason || 'Nenhum motivo informado.')}</div>
+               <div class="ev-cancel-info-meta">
+                 ${canceller ? `Cancelado por ${Utils.escapeHtml(canceller.name)} · ` : ''}${Utils.formatDateTime(ev.cancelled_at)}
+               </div>
+             </div>` : ''}
 
            <!-- Criador e co-criador -->
            ${creator || helper ? `
@@ -5379,7 +5469,7 @@
                  </div>` : ''}
              </div>` : ''}
 
-            ${!isPast && !isDone ? `
+            ${!isPast && !isDone && !isCancelled ? `
               <div class="ev-presence-bar" data-evid="${ev.id}">
                 ${myStatus === 'participar' ? `
                    <span class="ev-presence-status ev-presence-status-joined"><i class="fa-solid fa-check"></i> Presença confirmada</span>
@@ -5543,6 +5633,7 @@
           </div>
         </div>
         <div class="events-review-text">${Utils.escapeHtml(r.justificativa || 'Sem justificativa informada.')}</div>
+        <div class="events-review-meta" style="margin-top:4px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(r.created_at)}</div>
         <div class="events-review-actions">
           ${r.status === 'pendente' && !isAnnulled ? `
             <button class="btn btn-sm ev-change-approve" data-rid="${r.id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Cancelamento</button>
@@ -5569,6 +5660,7 @@
           </div>
         </div>
         <div class="events-review-text">${Utils.escapeHtml(p.justificativa || 'Sem justificativa informada.')}</div>
+        <div class="events-review-meta" style="margin-top:4px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(p.response_at || p.created_at)}</div>
         <div class="events-review-actions">
           ${!isAnnulled && p.justificativa_status !== 'aceita' && p.justificativa_status !== 'recusada' ? `
             <button class="btn btn-sm ev-just-approve" data-pid="${p.id}" data-uid="${p.user_id || p.membro_id || ''}" data-event-title="${Utils.escapeHtml(p.ev?.title || 'Evento')}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar Ausencia</button>
@@ -5659,7 +5751,7 @@
            <div style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)">
              <div style="font-size:.65rem;color:var(--text-3);font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Sua resposta</div>
              <div style="font-weight:800;color:var(--text-1)">${statusText}</div>
-             ${showCurrentJustification ? `<div style="font-size:.78rem;color:var(--text-2);line-height:1.55;margin-top:8px">${Utils.escapeHtml(myPresence.justificativa)}</div>` : ''}
+             ${showCurrentJustification ? `<div style="font-size:.78rem;color:var(--text-2);line-height:1.55;margin-top:8px">${Utils.escapeHtml(myPresence.justificativa)}</div><div style="font-size:.66rem;color:var(--text-3);margin-top:6px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(myPresence.response_at || myPresence.created_at)}</div>` : ''}
            </div>
          </div>
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
@@ -5795,7 +5887,8 @@
            <div style="font-size:.82rem;font-weight:600;color:var(--text-1)">${Utils.escapeHtml(r.requester?.name||'—')}</div>
            <span style="font-size:.62rem;padding:2px 8px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b">${r.status === 'pendente' ? 'Pendente' : r.status === 'aprovado' ? 'Aprovado' : 'Recusado'}</span>
          </div>
-         <div style="font-size:.78rem;color:var(--text-2);margin-bottom:8px"><i class="fa-solid fa-comment-dots" style="color:#f59e0b;margin-right:5px;font-size:.7rem"></i>${Utils.escapeHtml(r.justificativa)}</div>
+         <div style="font-size:.78rem;color:var(--text-2);margin-bottom:4px"><i class="fa-solid fa-comment-dots" style="color:#f59e0b;margin-right:5px;font-size:.7rem"></i>${Utils.escapeHtml(r.justificativa)}</div>
+         <div style="font-size:.62rem;color:var(--text-3);margin-bottom:8px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(r.created_at)}</div>
          ${r.status === 'pendente' ? `
            <div style="display:flex;gap:6px">
              <button class="btn btn-sm pd-cr-approve" data-rid="${r.id}" data-uid="${r.user_id}" data-eid="${r.event_id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
@@ -5841,7 +5934,8 @@
          ${sectionLabel('<i class="fa-solid fa-comment-dots"></i> Justificaram Ausência', justificados.length, '#ef4444')}
          ${justificados.map(m => {
            const just = presMap[m.id]?.justificativa;
-           const extra = just ? `<div style="font-size:.72rem;color:var(--text-2);margin-top:3px;padding:4px 8px;background:rgba(220,38,38,.06);border-radius:5px;border-left:2px solid rgba(220,38,38,.3)"><i class="fa-solid fa-comment-dots" style="color:#ef4444;margin-right:4px;font-size:.65rem"></i>${Utils.escapeHtml(just)}</div>` : '';
+           const justAt = presMap[m.id]?.response_at || presMap[m.id]?.created_at;
+           const extra = just ? `<div style="font-size:.72rem;color:var(--text-2);margin-top:3px;padding:4px 8px;background:rgba(220,38,38,.06);border-radius:5px;border-left:2px solid rgba(220,38,38,.3)"><i class="fa-solid fa-comment-dots" style="color:#ef4444;margin-right:4px;font-size:.65rem"></i>${Utils.escapeHtml(just)}<div style="font-size:.6rem;color:var(--text-3);margin-top:3px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(justAt)}</div></div>` : '';
            return memberRow(m, '#ef4444', 'fa-solid fa-comment-dots', extra);
          }).join('')}
        ` : ''}
@@ -5996,7 +6090,7 @@
                  <div style="font-size:.62rem;color:${intent === 'participar' ? '#10b981' : intent === 'nao_participar' ? '#f59e0b' : 'var(--text-3)'};margin-top:2px">${intent === 'participar' ? 'Disse que iria participar' : intent === 'nao_participar' ? 'Disse que nao iria participar' : 'Nao respondeu'}</div>
                </div>
                <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
-                 ${p?.justificativa ? `<button class="pm-btn pm-justif" data-uid="${m.id}" data-justif="${Utils.escapeHtml(p.justificativa)}" title="Ver justificativa" style="width:30px;height:30px;border-radius:7px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.1);cursor:pointer;color:#f59e0b;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s"><i class="fa-solid fa-comment-dots"></i></button>` : ''}
+                 ${p?.justificativa ? `<button class="pm-btn pm-justif" data-uid="${m.id}" data-justif="${Utils.escapeHtml(p.justificativa)}" data-justif-at="${Utils.escapeHtml(Utils.formatDateTime(p.response_at || p.created_at))}" title="Ver justificativa" style="width:30px;height:30px;border-radius:7px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.1);cursor:pointer;color:#f59e0b;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s"><i class="fa-solid fa-comment-dots"></i></button>` : ''}
                  <button class="pm-btn pm-present" data-uid="${m.id}" title="Presente" style="width:30px;height:30px;border-radius:7px;border:1px solid ${status==='presente'?'rgba(16,185,129,.5)':'var(--border-faint)'};background:${status==='presente'?'rgba(16,185,129,.15)':'rgba(255,255,255,.02)'};cursor:pointer;color:${status==='presente'?'#10b981':'var(--text-3)'};font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s">
                    <i class="fa-solid fa-check"></i>
                  </button>
@@ -6098,6 +6192,7 @@
          tip.innerHTML = `<div style="max-width:360px;width:90%;background:#0e0e13;border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,.7)">
            <div style="font-size:.62rem;color:#f59e0b;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:10px"><i class="fa-solid fa-comment-dots"></i> Justificativa</div>
            <div style="font-size:.88rem;color:var(--text-2);line-height:1.6">${Utils.escapeHtml(btn.dataset.justif)}</div>
+           <div style="font-size:.68rem;color:var(--text-3);margin-top:10px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.escapeHtml(btn.dataset.justifAt)}</div>
            <button style="margin-top:16px;width:100%;padding:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;cursor:pointer;font-size:.82rem">Fechar</button>
          </div>`;
          document.body.appendChild(tip);
@@ -6155,6 +6250,64 @@
          onSuccess();
        }
        else { Utils.showToast('Erro ao registrar.', 'error'); btn.disabled = false; }
+     });
+   }
+
+   /* ── Diretoria/perm: modal Cancelar Evento (com justificativa obrigatória) ── */
+   function openCancelEventModal(eventId, eventTitle, profile, onSuccess) {
+     const overlay = document.createElement('div');
+     overlay.className = 'modal-overlay open';
+     overlay.innerHTML = `
+       <div class="modal" style="max-width:460px;background:#0e0e13;border:1px solid rgba(220,38,38,.25)">
+         <div class="modal-header" style="border-bottom:1px solid rgba(220,38,38,.15)">
+           <div class="modal-title" style="color:#ef4444"><i class="fa-solid fa-ban"></i> Cancelar Evento</div>
+           <button class="modal-close" id="cancelEvClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body">
+           <div style="font-size:.81rem;color:var(--text-2);margin-bottom:14px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.15);border-radius:8px;padding:10px 14px">
+             <i class="fa-solid fa-circle-info" style="color:#ef4444;margin-right:6px"></i>
+             O evento <strong>${Utils.escapeHtml(eventTitle)}</strong> será movido para "Eventos Cancelados" e deixará de aparecer na agenda para os membros.
+           </div>
+           <div class="form-group">
+             <label class="form-label">Motivo do cancelamento <span style="color:var(--red-bright)">*</span></label>
+             <textarea class="form-input form-textarea" id="cancelEvReason" style="min-height:100px" placeholder="Explique o motivo do cancelamento..."></textarea>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button class="btn btn-ghost" id="cancelEvBack">Voltar</button>
+           <button class="btn" id="cancelEvSave" style="background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.35);color:#ef4444;position:relative;z-index:1"><i class="fa-solid fa-ban"></i> Confirmar Cancelamento</button>
+         </div>
+       </div>`;
+     document.body.appendChild(overlay);
+     const close = () => overlay.remove();
+     overlay.querySelector('#cancelEvClose').addEventListener('click', close);
+     overlay.querySelector('#cancelEvBack').addEventListener('click', close);
+     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+     overlay.querySelector('#cancelEvSave').addEventListener('click', async (e) => {
+       e.stopPropagation();
+       e.preventDefault();
+       const reason = overlay.querySelector('#cancelEvReason').value.trim();
+       if (!reason) { Utils.showToast('Informe o motivo do cancelamento.', 'error'); return; }
+       const btn = overlay.querySelector('#cancelEvSave');
+       btn.disabled = true;
+       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Cancelando...';
+       try {
+         const { error } = await db.from('events').update({
+           status: 'cancelado',
+           cancel_reason: reason,
+           cancelled_at: new Date().toISOString(),
+           cancelled_by: profile.id
+         }).eq('id', eventId);
+         if (error) throw error;
+         Utils.showToast('Evento cancelado.');
+         close();
+         onSuccess();
+       } catch (err) {
+         console.error('[MSY][eventos] Erro ao cancelar evento:', err);
+         Utils.showToast(err.message || 'Erro ao cancelar evento.', 'error');
+         btn.disabled = false;
+         btn.innerHTML = '<i class="fa-solid fa-ban"></i> Confirmar Cancelamento';
+       }
      });
    }
 
@@ -6253,9 +6406,10 @@
              <div style="font-size:.72rem;color:var(--text-3)"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title||'—')} · ${Utils.formatDate(r.ev?.event_date)}</div>
            </div>
          </div>
-         <div style="font-size:.8rem;color:var(--text-2);background:rgba(255,255,255,.03);border-radius:6px;padding:8px 12px;margin-bottom:10px;border:1px solid var(--border-faint)">
+         <div style="font-size:.8rem;color:var(--text-2);background:rgba(255,255,255,.03);border-radius:6px;padding:8px 12px;margin-bottom:4px;border:1px solid var(--border-faint)">
            <i class="fa-solid fa-comment-dots" style="color:var(--gold);margin-right:6px;font-size:.7rem"></i>${Utils.escapeHtml(r.justificativa)}
          </div>
+         <div style="font-size:.64rem;color:var(--text-3);margin-bottom:10px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(r.created_at)}</div>
          <div style="display:flex;gap:8px">
            <button class="btn btn-sm cr-approve" data-rid="${r.id}" data-uid="${r.user_id}" data-eid="${r.event_id}" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981"><i class="fa-solid fa-check"></i> Aprovar</button>
            <button class="btn btn-sm cr-refuse" data-rid="${r.id}" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button>

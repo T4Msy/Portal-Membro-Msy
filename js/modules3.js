@@ -20,6 +20,7 @@ const MSYPerms = {
     { key: 'criar_eventos',         label: 'Criar Eventos',          group: 'Eventos',    icon: 'fa-calendar-plus' },
     { key: 'editar_eventos',        label: 'Editar Eventos',         group: 'Eventos',    icon: 'fa-pen-to-square' },
     { key: 'excluir_eventos',       label: 'Excluir Eventos',        group: 'Eventos',    icon: 'fa-calendar-xmark' },
+    { key: 'cancelar_eventos',      label: 'Cancelar Eventos',       group: 'Eventos',    icon: 'fa-ban' },
     { key: 'gerenciar_eventos',     label: 'Gerenciar Eventos',      group: 'Eventos',    icon: 'fa-calendar-days' },
     { key: 'concluir_eventos',      label: 'Concluir Eventos',       group: 'Eventos',    icon: 'fa-circle-check' },
     { key: 'revisar_justificativas_eventos', label: 'Revisar Justificativas', group: 'Eventos', icon: 'fa-comments' },
@@ -237,7 +238,7 @@ async function openPermissionsManager() {
   (allPermsData || []).forEach(p => { permsMap[p.user_id] = p.permissions || []; });
 
   const GROUPS = {
-    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
+    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
     'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
     'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
@@ -443,7 +444,7 @@ async function openPermissionsManager() {
 
 function getPermissionsGroups() {
   return {
-    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
+    'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
     'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
     'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
