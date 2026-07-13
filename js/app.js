@@ -1464,10 +1464,10 @@
        }).join('');
    
        grid.querySelectorAll('.open-activity').forEach(el => {
-         el.addEventListener('click', e => { e.stopPropagation(); openActivityModal(el.dataset.id, acts, profile, loadActivities); });
+         el.addEventListener('click', e => { e.stopPropagation(); openActivityModal(el.dataset.id, acts, profile, loadActivities, { canGerenciar, canConcluir }); });
        });
      grid.querySelectorAll('.activity-card').forEach(card => {
-       card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile, loadActivities));
+       card.addEventListener('click', () => openActivityModal(card.dataset.id, acts, profile, loadActivities, { canGerenciar, canConcluir }));
      });
       _focusInternalTarget('id', '.activity-card');
      }
@@ -1764,11 +1764,13 @@
        '<div class="modal-anexos-list">' + items + '</div>';
    }
 
-   async function openActivityModal(id, acts, profile, onSuccess = null) {
+   async function openActivityModal(id, acts, profile, onSuccess = null, permissions = null) {
      const act = acts.find(a => a.id === id);
      if (!act) return;
      const modal = document.getElementById('activityModal');
      const isDiretoria = profile.tier === 'diretoria';
+     const canGerenciar = isDiretoria || !!permissions?.canGerenciar;
+     const canConcluir = isDiretoria || !!permissions?.canConcluir;
      const diff = Utils.daysDiff(act.deadline);
    
      const passed  = Utils.isDeadlinePassed(act);
@@ -1900,17 +1902,17 @@
          </div>
        ` : ''}
    
-       ${isDiretoria ? `
+       ${isDiretoria || canGerenciar || canConcluir ? `
        <div class="divider"></div>
-       <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ações da Diretoria</div>
+       <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">${isDiretoria ? 'Ações da Diretoria' : 'Ações de Gestão'}</div>
        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <button class="btn btn-sm btn-outline" id="editActBtn"><i class="fa-solid fa-pen"></i> Editar</button>
-          ${act.status !== 'Concluída' && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="markDoneBtn"><i class="fa-solid fa-check"></i> Marcar Concluída</button>` : ''}
-          ${act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-ghost" id="cancelActBtn" style="color:var(--red-bright)"><i class="fa-solid fa-ban"></i> Cancelar</button>` : ''}
-          ${act.status === 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="uncancelActBtn" style="color:#22c55e;border-color:rgba(34,197,94,.35)"><i class="fa-solid fa-rotate-left"></i> Descancelar</button>` : ''}
-          <button class="btn btn-sm btn-ghost" id="deleteActBtn" style="color:var(--red-bright);border-color:var(--border-red)"><i class="fa-solid fa-trash"></i> Excluir</button>
+          ${canGerenciar ? `<button class="btn btn-sm btn-outline" id="editActBtn"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
+          ${canConcluir && act.status !== 'Concluída' && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="markDoneBtn"><i class="fa-solid fa-check"></i> Marcar Concluída</button>` : ''}
+          ${canConcluir && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-ghost" id="cancelActBtn" style="color:var(--red-bright)"><i class="fa-solid fa-ban"></i> Cancelar</button>` : ''}
+          ${canConcluir && act.status === 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="uncancelActBtn" style="color:#22c55e;border-color:rgba(34,197,94,.35)"><i class="fa-solid fa-rotate-left"></i> Descancelar</button>` : ''}
+          ${isDiretoria ? `<button class="btn btn-sm btn-ghost" id="deleteActBtn" style="color:var(--red-bright);border-color:var(--border-red)"><i class="fa-solid fa-trash"></i> Excluir</button>` : ''}
         </div>
-         ${act.status !== 'Cancelada' ? `
+         ${canGerenciar && act.status !== 'Cancelada' ? `
          <div class="form-group" style="margin-bottom:0">
            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
              <input type="checkbox" id="extDeadlineToggle" ${act.extended_deadline ? 'checked' : ''} style="width:auto;margin:0;cursor:pointer">
@@ -3387,11 +3389,11 @@
              ${canGerenciarMembros ? `
                <div class="member-card-actions member-card-actions-admin" onclick="event.stopPropagation()">
                  ${m.status === 'pendente' && canAprovar ? `<button class="btn btn-sm btn-primary approve-btn" data-id="${m.id}"><i class="fa-solid fa-check"></i> Aprovar</button>` : ''}
-                 ${m.tier !== 'diretoria' && m.status === 'ativo' ? `
+                 ${m.tier !== 'diretoria' && m.status === 'ativo' && isDiretoria ? `
                    <button class="btn btn-sm btn-outline promote-btn" data-id="${m.id}" title="Elevar à Diretoria">
                      <i class="fa-solid fa-arrow-up"></i> Diretoria
                    </button>` : ''}
-                 ${m.tier === 'diretoria' && m.id !== profile.id ? `
+                 ${m.tier === 'diretoria' && m.id !== profile.id && isDiretoria ? `
                    <button class="btn btn-sm btn-ghost demote-btn" data-id="${m.id}" style="color:#eab308;border-color:rgba(234,179,8,.3)">
                      <i class="fa-solid fa-user-minus"></i>
                    </button>` : ''}

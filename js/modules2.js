@@ -967,9 +967,7 @@ async function initDesempenho() {
   // Este stub é mantido para compatibilidade do router
   const profile = await Auth.requireAuth();
   if (!profile) { window.location.href = 'dashboard.html'; return; }
-  const isDiretoria = profile.tier === 'diretoria';
-  const canVerDesempenho = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'ver_desempenho');
-  if (!canVerDesempenho) { window.location.href = 'dashboard.html'; return; }
+  if (profile.tier !== 'diretoria') { window.location.href = 'dashboard.html'; return; }
   await renderSidebar('desempenho');
   await renderTopBar('Desempenho', profile);
   const content = document.getElementById('pageContent');

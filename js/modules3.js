@@ -28,7 +28,6 @@ const MSYPerms = {
     { key: 'registrar_participantes', label: 'Registrar Participantes', group: 'Presenças', icon: 'fa-user-check' },
     { key: 'gerenciar_presencas',    label: 'Gerenciar Presenças',    group: 'Presenças', icon: 'fa-clipboard-list' },
     { key: 'registrar_presencas_eventos', label: 'Registrar Presencas de Eventos', group: 'Presenças', icon: 'fa-list-check' },
-    { key: 'ver_relatorio_presencas', label: 'Ver Relatório de Presenças', group: 'Presenças', icon: 'fa-chart-bar' },
     // ── Membros
     { key: 'aprovar_membros',       label: 'Aprovar Membros',        group: 'Membros',    icon: 'fa-user-check' },
     { key: 'editar_membros',        label: 'Editar Perfis de Membros', group: 'Membros',  icon: 'fa-user-pen' },
@@ -57,17 +56,9 @@ const MSYPerms = {
     { key: 'gerenciar_reunioes',    label: 'Gerenciar Reuniões',     group: 'Reuniões',   icon: 'fa-handshake' },
     // ── Reconhecimento
     { key: 'gerenciar_premiacoes',  label: 'Gerenciar Premiações',   group: 'Reconhecimento', icon: 'fa-trophy' },
-    // ── Portal
-    { key: 'gerenciar_tecnologias', label: 'Gerenciar Tecnologias',  group: 'Portal',     icon: 'fa-microchip' },
-    { key: 'gerenciar_icm',         label: 'Gerenciar ICM',          group: 'Portal',     icon: 'fa-brain' },
     // ── Projetos
     { key: 'criar_projetos',        label: 'Criar Projetos',         group: 'Projetos',   icon: 'fa-folder-plus' },
     { key: 'gerenciar_projetos',    label: 'Gerenciar Projetos',     group: 'Projetos',   icon: 'fa-diagram-project' },
-    // ── Administração
-    { key: 'ver_desempenho',        label: 'Ver Painel de Desempenho', group: 'Admin',    icon: 'fa-chart-line' },
-    { key: 'notificar_membros',     label: 'Enviar Notificações',    group: 'Admin',      icon: 'fa-bell' },
-    { key: 'gerenciar_permissoes',  label: 'Gerenciar Permissões',   group: 'Admin',      icon: 'fa-shield-halved' },
-    { key: 'gerenciar_abas',        label: 'Gerenciar Abas',         group: 'Admin',      icon: 'fa-table-columns' },
   ],
 
   // Cache de permissões do usuário atual
@@ -239,7 +230,7 @@ async function openPermissionsManager() {
 
   const GROUPS = {
     'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
-    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
+    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
     'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
@@ -251,11 +242,9 @@ async function openPermissionsManager() {
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
-    'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
-    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
-  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
+  const CRITICAL_KEYS = new Set(['remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
@@ -445,7 +434,7 @@ async function openPermissionsManager() {
 function getPermissionsGroups() {
   return {
     'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
-    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos','ver_relatorio_presencas'] },
+    'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
     'Atividades':  { icon:'fa-list-check',    color:'#f59e0b', keys:['criar_atividades','editar_atividades','gerenciar_atividades','concluir_atividades'] },
     'Comunicados': { icon:'fa-bullhorn',      color:'#fb923c', keys:['publicar_comunicados','gerenciar_comunicados'] },
@@ -457,9 +446,7 @@ function getPermissionsGroups() {
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
-    'Portal':      { icon:'fa-microchip',     color:'#2dd4bf', keys:['gerenciar_tecnologias','gerenciar_icm'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
-    'Admin':       { icon:'fa-shield-halved', color:'#f87171', keys:['ver_desempenho','notificar_membros','gerenciar_permissoes','gerenciar_abas'] },
   };
 }
 
@@ -754,7 +741,7 @@ async function renderPermissionsWorkspace(body) {
   allPermsData.forEach(p => { permsMap[p.user_id] = p.permissions || []; });
 
   const GROUPS = getPermissionsGroups();
-  const CRITICAL_KEYS = new Set(['gerenciar_permissoes','notificar_membros','remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
+  const CRITICAL_KEYS = new Set(['remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
