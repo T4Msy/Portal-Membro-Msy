@@ -1400,13 +1400,32 @@
        grid.innerHTML = `<div style="grid-column:1/-1"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i></div></div>`;
    
        let query = db.from('activities')
-         .select('*, assigned_by_profile:assigned_by(name,initials,color), assigned_to_profile:assigned_to(name,initials)')
+         .select('*, assigned_by_profile:assigned_by(name,initials,color)')
          .order('created_at', { ascending: false });
 
        if (activeFilter !== 'Todos') query = query.eq('status', activeFilter);
 
        let { data: acts, error } = await query;
        if (error) { console.error('[MSY][atividades] Erro ao carregar atividades:', error); Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
+
+       const assignedToIds = [...new Set((acts || []).map(a => a.assigned_to).filter(Boolean))];
+       let assignedToMap = {};
+       if (assignedToIds.length) {
+         const { data: assignedProfiles, error: assignedProfilesError } = await db
+           .from('profiles')
+           .select('id,name,initials,color')
+           .in('id', assignedToIds);
+         if (assignedProfilesError) {
+           console.warn('[MSY][atividades] Erro ao carregar responsáveis:', assignedProfilesError);
+         } else {
+           assignedToMap = Object.fromEntries((assignedProfiles || []).map(p => [p.id, p]));
+         }
+       }
+
+       acts = (acts || []).map(act => ({
+         ...act,
+         assigned_to_profile: assignedToMap[act.assigned_to] || null,
+       }));
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
        const needsCollabFilter = !canGerenciar || activeMemberFilter !== 'Todos';

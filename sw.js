@@ -44,7 +44,6 @@ self.addEventListener('activate', (event) => {
           .map((k) => caches.delete(k))
       )
     )
-      .then(() => self.registration.navigationPreload?.enable?.())
       .then(() => self.clients.claim())
   );
 });
