@@ -1406,7 +1406,7 @@
        if (activeFilter !== 'Todos') query = query.eq('status', activeFilter);
 
        let { data: acts, error } = await query;
-       if (error) { Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
+       if (error) { console.error('[MSY][atividades] Erro ao carregar atividades:', error); Utils.showToast('Erro ao carregar atividades.', 'error'); return; }
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
        const needsCollabFilter = !canGerenciar || activeMemberFilter !== 'Todos';
