@@ -1159,7 +1159,7 @@ async function renderSystemAlerts(containerEl) {
   try {
     const [r1,r2,r3,r4,r5,r6] = await Promise.all([
       db.from('profiles').select('id,name,initials,color,avatar_url,join_date,created_at,role').eq('status','ativo'),
-      db.from('activities').select('id,title,deadline,status,assigned_to,closes_at').neq('status','Concluída').neq('status','Cancelada'),
+      db.from('activities').select('id,title,deadline,deadline_time,status,assigned_to,closes_at').neq('status','Concluída').neq('status','Cancelada'),
       db.from('activities').select('assigned_to'),
       db.from('events').select('id,title,event_date,mandatory,type,description,created_by').order('event_date',{ascending:true}),
       db.from('event_presencas').select('event_id,membro_id,status'),
@@ -1191,11 +1191,11 @@ async function renderSystemAlerts(containerEl) {
   const membrosDesaparecidos = membrosAtivos.filter(m => uids60d.has(m.id) && !activeUids.has(m.id));
 
   const atrasadas = atividadesAbertas.filter(a => {
-    const d = new Date(a.closes_at || (a.deadline+'T23:59:59'));
+    const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
     return d < today;
   });
   const vencendo3 = atividadesAbertas.filter(a => {
-    const d = new Date(a.closes_at || (a.deadline+'T23:59:59'));
+    const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
     const diff = (d - today) / 86400000;
     return diff >= 0 && diff <= 3;
   });
@@ -1446,6 +1446,21 @@ async function openAlertDetailModal(type, items, ctx) {
   } else if (type === 'atrasadas' || type === 'vencendo') {
     const isAtr = type === 'atrasadas';
     title.innerHTML = `<i class="fa-solid fa-clock" style="color:${isAtr?'#ef4444':'#f59e0b'}"></i> Atividades ${isAtr?'Atrasadas':'Vencendo em Breve'}`;
+    const activityIds = [...new Set((items || []).map(a => a.id).filter(Boolean))];
+    let collabByActivity = {};
+    if (activityIds.length) {
+      const { data: collabRows } = await db.from('activity_collaborators').select('activity_id,user_id').in('activity_id', activityIds);
+      const collabUserIds = [...new Set((collabRows || []).map(r => r.user_id).filter(Boolean))];
+      let collabProfiles = {};
+      if (collabUserIds.length) {
+        const { data: profs } = await db.from('profiles').select('id,name').in('id', collabUserIds);
+        collabProfiles = Object.fromEntries((profs || []).map(p => [p.id, p]));
+      }
+      collabByActivity = (collabRows || []).reduce((acc, row) => {
+        (acc[row.activity_id] ||= []).push(collabProfiles[row.user_id] || { id: row.user_id, name: '—' });
+        return acc;
+      }, {});
+    }
     body.innerHTML = `
       <div class="sa3-modal-hero ${heroLevel}">
         <div class="sa3-modal-tag ${heroLevel}">${isAtr?'Urgente':'Atenção'}</div>
@@ -1455,16 +1470,21 @@ async function openAlertDetailModal(type, items, ctx) {
       <div class="sa3-modal-sec">
         <div class="sa3-sec-title"><i class="fa-solid fa-list-check"></i> Atividades</div>
         ${items.map(a => {
-          const membro = membrosAtivos.find(m=>m.id===a.assigned_to);
-          const deadline = new Date(a.closes_at||(a.deadline+'T23:59:59'));
-          const diffD = Math.ceil((deadline-today)/86400000);
+          const membrosDaAtividade = [...new Set([a.assigned_to, ...(collabByActivity[a.id] || []).map(m => m.id)].filter(Boolean))];
+          const nomesDest = membrosDaAtividade.map(uid => {
+            const membro = membrosAtivos.find(m => m.id === uid) || (collabByActivity[a.id] || []).find(m => m.id === uid);
+            return membro?.name || null;
+          }).filter(Boolean);
+          const recipientLabel = Utils.formatNameList(nomesDest);
+          const deadline = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
+          const diffD = Utils.daysUntilActivityDeadline(a) ?? 0;
           return `<div class="sa3-row">
             <div>
               <div style="font-weight:600;font-size:.84rem;color:var(--text-1)">${Utils.escapeHtml(a.title)}</div>
-              <div style="font-size:.71rem;color:var(--text-3)">Para: ${membro?Utils.escapeHtml(membro.name):'—'} · Prazo: ${Utils.formatDate(a.deadline)}</div>
+              <div style="font-size:.71rem;color:var(--text-3)">Para: ${Utils.escapeHtml(recipientLabel)} · Prazo: ${Utils.formatActivityDeadline(a)}</div>
             </div>
             <span class="sa3-row-val" style="color:${isAtr?'#ef4444':'#f59e0b'};white-space:nowrap">
-              ${isAtr?Math.abs(diffD)+'d atraso':diffD===0?'Hoje':diffD+'d restantes'}
+              ${isAtr ? (diffD === 0 ? 'Hoje' : Math.abs(diffD) + 'd atraso') : diffD === 0 ? 'Hoje' : diffD + 'd restantes'}
             </span>
           </div>`;
         }).join('')}

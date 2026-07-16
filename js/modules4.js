@@ -143,7 +143,7 @@ async function initDesempenho() {
 
     const [r1,r2,r3,r4,r5,r6] = await Promise.all([
       db.from('profiles').select('id,name,role,initials,color,avatar_url,tier,join_date,created_at').eq('status','ativo').order('name'),
-      db.from('activities').select('id,assigned_to,status,title,deadline,closes_at'),
+      db.from('activities').select('id,assigned_to,status,title,deadline,deadline_time,closes_at'),
       db.from('events').select('id,title,event_date,event_time,type,mandatory,created_by,helper_id,is_private,description,performance_weight,status').gte('event_date',mStart).lte('event_date',mEnd).order('event_date',{ascending:false}),
       db.from('event_presencas').select('event_id,membro_id,user_id,status,response_status,justificativa_status,attendance_status'),
       db.from('weekly_rankings').select('week_start,week_end,entries').lte('week_start',mEnd).gte('week_end',mStart).order('week_start',{ascending:true}),
@@ -216,7 +216,7 @@ async function initDesempenho() {
       if      (a.status === 'Concluída')    actsByM[a.assigned_to].concluidas++;
       else if (a.status === 'Pendente')     actsByM[a.assigned_to].pendentes++;
       else if (a.status === 'Em andamento') actsByM[a.assigned_to].andamento++;
-      if (new Date(a.closes_at || (a.deadline + 'T23:59:59')) < new Date() && a.status !== 'Concluída' && a.status !== 'Cancelada')
+      if ((Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`)) < new Date() && a.status !== 'Concluída' && a.status !== 'Cancelada')
         actsByM[a.assigned_to].atrasadas++;
     });
 
@@ -654,7 +654,7 @@ function buildAlertas(membrosScored, atividades, eventosMes, presencas, evPublic
 
   /* ── ATIVIDADES ── */
   const atrasadas = atividades.filter(a => {
-    const d = new Date(a.closes_at || (a.deadline+'T23:59:59'));
+    const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
     return d < today && a.status !== 'Concluída' && a.status !== 'Cancelada';
   });
   if (atrasadas.length > 0) alertas.push({
@@ -665,7 +665,7 @@ function buildAlertas(membrosScored, atividades, eventosMes, presencas, evPublic
   });
 
   const vencendo = atividades.filter(a => {
-    const d = new Date(a.closes_at || (a.deadline+'T23:59:59'));
+    const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
     const diff = (d - today) / 86400000;
     return diff >= 0 && diff <= 3 && a.status !== 'Concluída';
   });

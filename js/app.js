@@ -315,34 +315,65 @@
        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
          + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
      },
+     formatActivityDeadline(deadlineDate, deadlineTime = null) {
+       if (deadlineDate && typeof deadlineDate === 'object') {
+         return this.formatActivityDeadline(deadlineDate.deadline, deadlineDate.deadline_time);
+       }
+       if (!deadlineDate) return '—';
+       const time = String(deadlineTime || '23:59:59');
+       const normalizedTime = time.length === 5 ? `${time}:00` : time;
+       const d = new Date(`${deadlineDate}T${normalizedTime}`);
+       return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+         + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+     },
+     getActivityDeadlineDate(act) {
+       if (!act?.deadline) return null;
+       const time = String(act.deadline_time || '23:59:59');
+       const normalizedTime = time.length === 5 ? `${time}:00` : time;
+       return new Date(`${act.deadline}T${normalizedTime}`);
+     },
+     daysUntilActivityDeadline(act) {
+       const deadline = this.getActivityDeadlineDate(act);
+       if (!deadline || Number.isNaN(deadline.getTime())) return null;
+       const today = new Date();
+       today.setHours(0, 0, 0, 0);
+       const target = new Date(deadline);
+       target.setHours(0, 0, 0, 0);
+       return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+     },
+     formatNameList(names, maxItems = 3) {
+       const list = (names || []).map(name => String(name || '').trim()).filter(Boolean);
+       if (!list.length) return '—';
+       if (list.length <= maxItems) {
+         if (list.length === 1) return list[0];
+         if (list.length === 2) return `${list[0]} e ${list[1]}`;
+         return `${list.slice(0, -1).join(', ')} e ${list[list.length - 1]}`;
+       }
+       return `${list.slice(0, maxItems).join(', ')} e mais ${list.length - maxItems}`;
+     },
      daysDiff(dateStr) {
        const now    = new Date(); now.setHours(0,0,0,0);
        const target = new Date(dateStr + 'T00:00:00');
        return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
      },
      isDeadlinePassed(act) {
-       const now = new Date();
-       if (act.closes_at) return new Date(act.closes_at) < now;
-       const deadline = new Date(act.deadline + 'T23:59:59');
-       return deadline < now;
+       const deadline = this.getActivityDeadlineDate(act);
+       if (!deadline) return false;
+       return deadline < new Date();
      },
      hasExtendedDeadline(act) {
        if (!act.extended_deadline) return false;
        const now = new Date();
-       const ext = new Date(act.extended_deadline + 'T' + (act.extended_deadline_time || '23:59:59'));
+       const extTime = String(act.extended_deadline_time || '23:59:59');
+       const normalizedTime = extTime.length === 5 ? `${extTime}:00` : extTime;
+       const ext = new Date(`${act.extended_deadline}T${normalizedTime}`);
        return ext >= now;
      },
      isActivityOpen(act) {
        const now = new Date();
        if (act.opens_at && new Date(act.opens_at) > now) return false;
-       if (act.closes_at) {
-         if (new Date(act.closes_at) < now) {
-           return this.hasExtendedDeadline(act);
-         }
-       } else {
-         const deadline = new Date(act.deadline + 'T23:59:59');
-         if (deadline < now) return this.hasExtendedDeadline(act);
-       }
+       const closing = act.closes_at ? new Date(act.closes_at) : this.getActivityDeadlineDate(act);
+       if (closing && closing < now) return this.hasExtendedDeadline(act);
        return true;
      },
      statusBadge(status) {
@@ -1134,7 +1165,7 @@
                  </div>
                  <div class="small-list-info">
                    <div class="small-list-title">${Utils.escapeHtml(a.title)}</div>
-                   <div class="small-list-sub">Limite: ${Utils.formatDate(a.deadline)}</div>
+                  <div class="small-list-sub">Limite: ${Utils.formatActivityDeadline(a)}</div>
                  </div>
                  ${Utils.statusBadge(a.status)}
                </div>`).join('')
@@ -1422,9 +1453,41 @@
          }
        }
 
+       const activityIds = [...new Set((acts || []).map(a => a.id).filter(Boolean))];
+       let collaboratorsByActivity = {};
+       if (activityIds.length) {
+         const { data: collabRows, error: collabRowsError } = await db
+           .from('activity_collaborators')
+           .select('activity_id,user_id')
+           .in('activity_id', activityIds);
+         if (collabRowsError) {
+           console.warn('[MSY][atividades] Erro ao carregar colaboradores:', collabRowsError);
+         } else {
+           const collabUserIds = [...new Set((collabRows || []).map(r => r.user_id).filter(Boolean))];
+           let collabProfilesMap = {};
+           if (collabUserIds.length) {
+             const { data: collabProfiles, error: collabProfilesError } = await db
+               .from('profiles')
+               .select('id,name,initials,color')
+               .in('id', collabUserIds);
+             if (collabProfilesError) {
+               console.warn('[MSY][atividades] Erro ao carregar perfis dos colaboradores:', collabProfilesError);
+             } else {
+               collabProfilesMap = Object.fromEntries((collabProfiles || []).map(p => [p.id, p]));
+             }
+           }
+           collaboratorsByActivity = (collabRows || []).reduce((acc, row) => {
+             if (!row?.activity_id || !row?.user_id) return acc;
+             (acc[row.activity_id] ||= []).push(collabProfilesMap[row.user_id] || { id: row.user_id, name: '—' });
+             return acc;
+           }, {});
+         }
+       }
+
        acts = (acts || []).map(act => ({
          ...act,
          assigned_to_profile: assignedToMap[act.assigned_to] || null,
+         collaborator_profiles: collaboratorsByActivity[act.id] || [],
        }));
 
        // Filtra no cliente: mostra atividades do membro OU colaborativas onde ele é membro
@@ -1448,18 +1511,21 @@
        }
    
        grid.innerHTML = acts.map(act => {
-         const diff = Utils.daysDiff(act.deadline);
+         const diff = Utils.daysUntilActivityDeadline(act);
+         const deadlineDiff = diff ?? 0;
          const passed = Utils.isDeadlinePassed(act);
          const hasExt = Utils.hasExtendedDeadline(act);
-         const urgentClass = diff <= 3 && act.status !== 'Concluída' && !passed ? 'urgent' : '';
-   
+         const urgentClass = diff !== null && diff <= 3 && act.status !== 'Concluída' && !passed ? 'urgent' : '';
+         const recipientNames = [act.assigned_to_profile?.name, ...(act.collaborator_profiles || []).map(p => p?.name)].filter(Boolean);
+         const recipientLabel = Utils.formatNameList(recipientNames);
+
          let deadlineLabel;
          if (act.status === 'Concluída') deadlineLabel = 'Concluída';
-         else if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}${act.extended_deadline_time ? ' às ' + String(act.extended_deadline_time).slice(0,5) : ''}`;
+         else if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatActivityDeadline(act.extended_deadline, act.extended_deadline_time)}`;
          else if (passed) deadlineLabel = '🔴 Prazo excedido';
-         else if (diff < 0) deadlineLabel = `Vencida há ${Math.abs(diff)} dias`;
-         else if (diff === 0) deadlineLabel = 'Vence hoje';
-         else deadlineLabel = `${diff} dias restantes`;
+         else if (deadlineDiff < 0) deadlineLabel = `Vencida há ${Math.abs(deadlineDiff)} dias`;
+         else if (deadlineDiff === 0) deadlineLabel = 'Vence hoje';
+         else deadlineLabel = `${deadlineDiff} dias restantes`;
    
          return `
            <div class="activity-card card-enter" data-id="${act.id}" data-status="${Utils.escapeHtml(act.status)}">
@@ -1467,7 +1533,7 @@
                <div class="activity-card-title">${Utils.escapeHtml(act.title)}</div>
                ${Utils.statusBadge(act.status)}
              </div>
-             ${isDiretoria ? `<div class="activity-card-meta"><span><i class="fa-solid fa-user"></i> Para: ${Utils.escapeHtml(act.assigned_to_profile?.name||'—')}</span></div>` : ''}
+             <div class="activity-card-meta"><span><i class="fa-solid fa-user"></i> Para: ${Utils.escapeHtml(recipientLabel)}</span></div>
              <div class="activity-card-meta">
                <span><i class="fa-solid fa-user-tie"></i> ${Utils.escapeHtml(act.assigned_by_profile?.name||'—')}</span>
              </div>
@@ -1790,7 +1856,8 @@
      const isDiretoria = profile.tier === 'diretoria';
      const canGerenciar = isDiretoria || !!permissions?.canGerenciar;
      const canConcluir = isDiretoria || !!permissions?.canConcluir;
-     const diff = Utils.daysDiff(act.deadline);
+     const diff = Utils.daysUntilActivityDeadline(act);
+     const deadlineDiff = diff ?? 0;
    
      const passed  = Utils.isDeadlinePassed(act);
      const hasExt  = Utils.hasExtendedDeadline(act);
@@ -1798,9 +1865,21 @@
      // Busca co-membros via junction table
      const { data: collabRows } = await db.from('activity_collaborators').select('user_id').eq('activity_id', id);
      const collabMembers   = (collabRows||[]).map(r => r.user_id);
-     const isCollaborative = collabMembers.length > 0;
-     const isOwner = act.assigned_to === profile.id || collabMembers.includes(profile.id);
-     const isLateSubmission = passed && hasExt && canSubmit;
+   const isCollaborative = collabMembers.length > 0;
+   const isOwner = act.assigned_to === profile.id || collabMembers.includes(profile.id);
+   const isLateSubmission = passed && hasExt && canSubmit;
+   const recipientIds = [...new Set([act.assigned_to, ...collabMembers].filter(Boolean))];
+   const recipientNames = [];
+   const recipientMap = {};
+   if (recipientIds.length) {
+     const { data: recipientProfiles } = await db.from('profiles').select('id,name').in('id', recipientIds);
+     (recipientProfiles || []).forEach(p => { recipientMap[p.id] = p; });
+   }
+   recipientIds.forEach(uid => {
+     const name = recipientMap[uid]?.name;
+     if (name) recipientNames.push(name);
+   });
+   const recipientLabel = Utils.formatNameList(recipientNames);
    
      document.getElementById('modalTitle').textContent = act.title;
    
@@ -1819,12 +1898,12 @@
      // Respostas com anexos
      const anexosDaAtividade = (responses||[]).filter(r => r.file_url && r.file_name);
 
-     let deadlineLabel;
-     if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatDate(act.extended_deadline)}${act.extended_deadline_time ? ' às ' + String(act.extended_deadline_time).slice(0,5) : ''}`;
-     else if (passed) deadlineLabel = '🔴 Prazo excedido';
-     else if (diff < 0) deadlineLabel = `Vencida há ${Math.abs(diff)} dias`;
-     else if (diff === 0) deadlineLabel = 'Vence hoje';
-     else deadlineLabel = `${diff} dias restantes`;
+    let deadlineLabel;
+    if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatActivityDeadline(act.extended_deadline, act.extended_deadline_time)}`;
+    else if (passed) deadlineLabel = '🔴 Prazo excedido';
+    else if (deadlineDiff < 0) deadlineLabel = `Vencida há ${Math.abs(deadlineDiff)} dias`;
+    else if (deadlineDiff === 0) deadlineLabel = 'Vence hoje';
+    else deadlineLabel = `${deadlineDiff} dias restantes`;
    
      // Scheduling label
      let scheduleInfo = '';
@@ -1833,7 +1912,7 @@
          <div class="modal-detail-row">
            <i class="fa-solid fa-calendar-clock"></i>
            <span class="modal-detail-label">Disponível:</span>
-           <span>${act.opens_at ? Utils.formatDateTime(act.opens_at) : 'Agora'} → ${act.closes_at ? Utils.formatDateTime(act.closes_at) : Utils.formatDate(act.deadline)}</span>
+           <span>${act.opens_at ? Utils.formatDateTime(act.opens_at) : 'Agora'} → ${act.closes_at ? Utils.formatDateTime(act.closes_at) : Utils.formatActivityDeadline(act)}</span>
          </div>`;
      }
    
@@ -1849,6 +1928,11 @@
          <span class="modal-detail-label">Atribuído por:</span>
          <span>${Utils.escapeHtml(act.assigned_by_profile?.name||'—')}</span>
        </div>
+       <div class="modal-detail-row" style="align-items:flex-start">
+         <i class="fa-solid fa-user-check"></i>
+         <span class="modal-detail-label">${isCollaborative ? 'Destinatários' : 'Recebido por'}:</span>
+         <span style="white-space:normal">${Utils.escapeHtml(recipientLabel)}</span>
+       </div>
        ${isCollaborative ? `
        <div class="modal-detail-row" style="align-items:flex-start">
          <i class="fa-solid fa-users" style="color:var(--gold)"></i>
@@ -1858,9 +1942,9 @@
        <div class="modal-detail-row">
          <i class="fa-solid fa-clock"></i>
          <span class="modal-detail-label">Prazo:</span>
-         <span style="color:${passed && !hasExt ? 'var(--red-bright)' : diff <= 3 && !passed ? 'var(--red-bright)' : 'inherit'}">
-           ${Utils.formatDate(act.deadline)} · ${deadlineLabel}
-         </span>
+           <span style="color:${passed && !hasExt ? 'var(--red-bright)' : deadlineDiff <= 3 && !passed ? 'var(--red-bright)' : 'inherit'}">
+            ${Utils.formatActivityDeadline(act)} · ${deadlineLabel}
+          </span>
        </div>
        ${scheduleInfo}
        <div class="divider"></div>
@@ -1959,10 +2043,8 @@
      modal.classList.add('open');
 
      // Carregar nomes dos membros colaborativos
-     if (isCollaborative) {
-       // Busca nomes de todos: assigned_to + co-membros
-       const allIds = [...new Set([act.assigned_to, ...collabMembers].filter(Boolean))];
-       db.from('profiles').select('id,name').in('id', allIds).then(({ data: cProfs }) => {
+    if (isCollaborative) {
+       db.from('profiles').select('id,name').in('id', recipientIds).then(({ data: cProfs }) => {
          const el = document.getElementById('collab-members-row');
          if (el) el.textContent = (cProfs||[]).map(p => p.name).join(', ') || '—';
        });
@@ -2351,10 +2433,14 @@
            ${_buildMemberDropdown(members, 'na-collab-ids', 'na-collab-wrap', 'na-collab-tags', 'na-collab-placeholder', 'na-collab-dropdown', 'na-collab-opt')}
          </div>
        </div>
-       <div class="activity-modal-grid activity-modal-grid-main" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+       <div class="activity-modal-grid activity-modal-grid-main" style="display:grid;grid-template-columns:1fr 130px 1fr;gap:12px;margin-bottom:14px">
          <div class="form-group">
            <label class="form-label">Prazo *</label>
            <input class="form-input" type="date" id="na-deadline" min="${new Date().toISOString().split('T')[0]}">
+         </div>
+         <div class="form-group">
+           <label class="form-label">Horário *</label>
+           <input class="form-input" type="time" id="na-deadline-time">
          </div>
          <div class="form-group">
            <label class="form-label">Prioridade</label>
@@ -2432,11 +2518,15 @@
      const btnCollab = document.getElementById('na-type-collab');
      const secInd   = document.getElementById('na-section-individual');
      const secCollab = document.getElementById('na-section-collab');
+     const deadlineTimeInput = document.getElementById('na-deadline-time');
      let _isCollab = editingIsCollab;
+
+     if (!isEditing && deadlineTimeInput) deadlineTimeInput.value = '23:59';
 
      if (isEditing) {
        document.getElementById('na-title').value = editingActivity.title || '';
        document.getElementById('na-deadline').value = (editingActivity.deadline || '').slice(0, 10);
+       document.getElementById('na-deadline-time').value = editingActivity.deadline_time ? String(editingActivity.deadline_time).slice(0, 5) : '23:59';
        document.getElementById('na-priority').value = editingActivity.priority || 'Média';
        document.getElementById('na-desc').value = editingActivity.description || '';
        document.getElementById('na-opens').value = editingActivity.opens_at ? editingActivity.opens_at.slice(0, 16) : '';
@@ -2676,6 +2766,7 @@
      document.getElementById('createActivityBtn').addEventListener('click', async () => {
        const title    = document.getElementById('na-title').value.trim();
        const deadline = document.getElementById('na-deadline').value;
+       const deadlineTime = document.getElementById('na-deadline-time').value || '23:59';
        const priority = document.getElementById('na-priority').value;
        const desc     = document.getElementById('na-desc').value.trim();
        const opens    = document.getElementById('na-opens').value;
@@ -2685,8 +2776,8 @@
        if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
        if (document.getElementById('na-notif-email')?.checked) channels.push('email');
 
-       if (!title || !deadline || !desc) {
-         Utils.showToast('Preencha título, prazo e descrição.', 'error'); return;
+       if (!title || !deadline || !deadlineTime || !desc) {
+         Utils.showToast('Preencha título, prazo, horário e descrição.', 'error'); return;
        }
 
      const btn = document.getElementById('createActivityBtn');
@@ -2722,7 +2813,7 @@
            if (collabIds.includes(ownerId)) { await cleanupUploadedAttachments(uploadedAttachments); Utils.showToast('O responsável não pode ser co-membro ao mesmo tempo.', 'error'); btn.disabled = false; btn.innerHTML = idleBtnHtml; return; }
 
            const payload = {
-             title, description: desc, assigned_to: ownerId, assigned_by: editingActivity.assigned_by || profile.id, deadline, priority
+             title, description: desc, assigned_to: ownerId, assigned_by: editingActivity.assigned_by || profile.id, deadline, deadline_time: deadlineTime, priority
            };
            if (opens)  payload.opens_at  = new Date(opens).toISOString();
            if (closes) payload.closes_at = new Date(closes).toISOString();
@@ -2790,7 +2881,7 @@
          }
 
          const payload = {
-           title, description: desc, assigned_to: memberIds[0], assigned_by: editingActivity.assigned_by || profile.id, deadline, priority
+           title, description: desc, assigned_to: memberIds[0], assigned_by: editingActivity.assigned_by || profile.id, deadline, deadline_time: deadlineTime, priority
          };
          if (opens)  payload.opens_at  = new Date(opens).toISOString();
          if (closes) payload.closes_at = new Date(closes).toISOString();
@@ -2840,7 +2931,7 @@
          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
 
          const payload = {
-           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, priority
+           title, description: desc, assigned_to: ownerId, assigned_by: profile.id, deadline, deadline_time: deadlineTime, priority
          };
          if (opens)  payload.opens_at  = new Date(opens).toISOString();
          if (closes) payload.closes_at = new Date(closes).toISOString();
@@ -2856,7 +2947,7 @@
            const allMembers = [ownerId, ...collabIds];
            await Promise.all(allMembers.map(uid =>
              NotifPrefs.dispatch(uid, {
-               message: `Nova atividade colaborativa: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+               message: `Nova atividade colaborativa: "${title}". Prazo: ${Utils.formatActivityDeadline(deadline, deadlineTime)}`,
                type: 'activity', icon: '🤝', link: 'atividades.html', channels,
              })
            ));
@@ -2886,6 +2977,7 @@
 
          const payloads = memberIds.map(memberId => {
            const p = { title, description: desc, assigned_to: memberId, assigned_by: profile.id, deadline, priority };
+           p.deadline_time = deadlineTime;
            if (opens)  p.opens_at  = new Date(opens).toISOString();
            if (closes) p.closes_at = new Date(closes).toISOString();
            return p;
@@ -2898,7 +2990,7 @@
            const attachResult = await attachFilesToActivities(activityIds, uploadedAttachments);
            await Promise.all(memberIds.map(uid =>
              NotifPrefs.dispatch(uid, {
-               message: `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatDate(deadline)}`,
+               message: `Nova atividade atribuída: "${title}". Prazo: ${Utils.formatActivityDeadline(deadline, deadlineTime)}`,
                type: 'activity', icon: '📋', link: 'atividades.html', channels,
              })
            ));

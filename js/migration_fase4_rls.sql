@@ -64,15 +64,7 @@ CREATE POLICY "Membros leem próprias atividades"
   ON public.activities FOR SELECT
   USING (
     auth.role() = 'authenticated'
-    AND (
-      public.is_diretoria()
-      OR assigned_to  = auth.uid()
-      OR assigned_by  = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.activity_collaborators ac
-        WHERE ac.activity_id = id AND ac.user_id = auth.uid()
-      )
-    )
+    AND public.can_access_activity(id)
   );
 
 -- INSERT: diretoria ou quem tem permissão criar_atividades
@@ -412,6 +404,47 @@ CREATE POLICY "Diretoria deleta atas"
 -- ===========================================================
 ALTER TABLE public.activity_responses ENABLE ROW LEVEL SECURITY;
 
+CREATE OR REPLACE FUNCTION public.is_activity_collaborator(
+  p_activity_id uuid,
+  p_user_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.activity_collaborators ac
+    WHERE ac.activity_id = p_activity_id
+      AND ac.user_id = p_user_id
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_access_activity(p_activity_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.activities a
+    WHERE a.id = p_activity_id
+      AND (
+        public.is_diretoria()
+        OR a.assigned_to = auth.uid()
+        OR a.assigned_by = auth.uid()
+        OR public.has_permission('gerenciar_atividades')
+        OR public.has_permission('criar_atividades')
+        OR public.has_permission('editar_atividades')
+        OR public.is_activity_collaborator(a.id, auth.uid())
+      )
+  );
+$$;
+
 -- SELECT: próprias respostas, ou quem é assigned_to/assigned_by da atividade, ou diretoria
 DROP POLICY IF EXISTS "Membros leem respostas relevantes" ON public.activity_responses;
 CREATE POLICY "Membros leem respostas relevantes"
@@ -419,16 +452,11 @@ CREATE POLICY "Membros leem respostas relevantes"
   USING (
     user_id = auth.uid()
     OR public.is_diretoria()
-    OR EXISTS (
-      SELECT 1 FROM public.activities a
-      WHERE a.id = activity_id
-        AND (a.assigned_to = auth.uid() OR a.assigned_by = auth.uid())
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.activity_collaborators ac
-      WHERE ac.activity_id = activity_responses.activity_id
-        AND ac.user_id = auth.uid()
-    )
+    OR public.has_permission('gerenciar_atividades')
+    OR public.has_permission('criar_atividades')
+    OR public.has_permission('editar_atividades')
+    OR public.can_access_activity(activity_id)
+    OR public.is_activity_collaborator(activity_id, auth.uid())
   );
 
 DROP POLICY IF EXISTS "Membros criam próprias respostas" ON public.activity_responses;
@@ -463,11 +491,10 @@ CREATE POLICY "Membros leem colaborações"
   USING (
     user_id = auth.uid()
     OR public.is_diretoria()
-    OR EXISTS (
-      SELECT 1 FROM public.activities a
-      WHERE a.id = activity_id
-        AND (a.assigned_to = auth.uid() OR a.assigned_by = auth.uid())
-    )
+    OR public.has_permission('gerenciar_atividades')
+    OR public.has_permission('criar_atividades')
+    OR public.has_permission('editar_atividades')
+    OR public.can_access_activity(activity_id)
   );
 
 DROP POLICY IF EXISTS "Diretoria/perm insere colaboradores" ON public.activity_collaborators;

@@ -104,7 +104,7 @@ async function initBusca() {
       const [memRes, comRes, actRes, bibRes, evRes] = await Promise.all([
         db.from('profiles').select('id,name,role,initials,color,avatar_url,tier').or(`name.ilike.${likeQ},role.ilike.${likeQ}`).limit(20),
         db.from('comunicados').select('id,title,content,category,created_at').or(`title.ilike.${likeQ},content.ilike.${likeQ}`).limit(20),
-        db.from('activities').select('id,title,description,status,deadline').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
+        db.from('activities').select('id,title,description,status,deadline,deadline_time').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
         db.from('biblioteca_conteudos').select('id,titulo,descricao,categoria,link,created_at').or(`titulo.ilike.${likeQ},descricao.ilike.${likeQ}`).limit(20),
         db.from('events').select('id,title,description,event_date,type').or(`title.ilike.${likeQ},description.ilike.${likeQ}`).limit(20),
       ]);
@@ -173,7 +173,7 @@ async function initBusca() {
           <div class="busca-result-icon"><i class="fa-solid fa-list-check"></i></div>
           <div style="flex:1;min-width:0">
             <div class="busca-result-title">${hl(a.title,q)}</div>
-            <div class="busca-result-sub">${Utils.statusBadge(a.status)} · Prazo: ${Utils.formatDate(a.deadline)}</div>
+            <div class="busca-result-sub">${Utils.statusBadge(a.status)} · Prazo: ${Utils.formatActivityDeadline(a)}</div>
           </div>
         </a>`},
       { key:'biblioteca',label:'Biblioteca',icon:'fa-book-open', render:b=>`
