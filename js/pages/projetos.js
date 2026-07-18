@@ -784,7 +784,7 @@ function flowButtons(t, manage) {
     b.push(`<button class="btn btn-gold btn-sm" data-action="task-request-review" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-paper-plane"></i> Solicitar Revisão</button>`);
   if (isAssignee && t.status === 'em_revisao')
     b.push(`<span class="proj-flow-wait"><i class="fa-solid fa-hourglass-half"></i> Aguardando aprovação do gestor</span>`);
-  if (manage && !isAssignee && t.status === 'em_revisao') {
+  if (manage && t.status === 'em_revisao') {
     b.push(`<button class="btn btn-gold btn-sm" data-action="task-approve" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-check"></i> Aprovar</button>`);
     b.push(`<button class="btn btn-ghost btn-sm" data-action="task-request-changes" data-id="${t.id}" data-pid="${t.project_id}"><i class="fa-solid fa-rotate-left"></i> Solicitar Ajustes</button>`);
   }

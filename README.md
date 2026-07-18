@@ -36,7 +36,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   ├── modules.js      Biblioteca, Premiações, Ordem
 │   ├── modules2.js     Feed, Ranking, Busca, Presenças, Desempenho, Onboarding
 │   ├── modules3.js     Permissões (MSYPerms), Alertas do Sistema
-│   ├── modules4.js     Dashboard de Desempenho (admin)
+│   ├── modules4.js     Recursos compartilhados de eventos e reunioes
 │   ├── badges_unificado.js  Sistema unificado de badges
 │   ├── icm_script.js   Motor de avaliação ICM³ (NÃO TOCAR — complexo e isolado)
 │   ├── icm_perfil.js   Exibição do perfil ICM (NÃO TOCAR)
@@ -74,7 +74,6 @@ Sistema de gestão interna para membros da Masayoshi Order.
 | `feed.html` | Feed | Mural de atividade da ordem |
 | `membros.html` | Membros | Diretório de membros |
 | `ranking.html` | Ranking | Leaderboards semanal e mensal |
-| `desempenho.html` | Desempenho | Métricas de performance (diretoria) |
 | `premiacoes.html` | Premiações | Sistema de badges e conquistas |
 | `comunicados.html` | Comunicados | Mural de anúncios internos |
 | `biblioteca.html` | Biblioteca | Repositório de conteúdos |

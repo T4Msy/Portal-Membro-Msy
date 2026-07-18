@@ -59,6 +59,8 @@ const MSYPerms = {
     // ── Projetos
     { key: 'criar_projetos',        label: 'Criar Projetos',         group: 'Projetos',   icon: 'fa-folder-plus' },
     { key: 'gerenciar_projetos',    label: 'Gerenciar Projetos',     group: 'Projetos',   icon: 'fa-diagram-project' },
+    // â”€â”€ Supervisao
+    { key: 'acessar_supervisao',    label: 'Acesso a Supervisao',    group: 'Supervisao', icon: 'fa-eye' },
   ],
 
   // Cache de permissões do usuário atual
@@ -201,7 +203,7 @@ async function openPermissionsManager() {
   try {
     const { data: membersData, error: membersError } = await db.from('profiles')
       .select('id,name,role,initials,color,avatar_url,tier')
-      .eq('status','ativo').neq('tier','diretoria').order('name');
+      .eq('status','ativo').order('name');
     if (membersError) throw membersError;
     members = membersData || [];
   } catch (err) {
@@ -227,6 +229,19 @@ async function openPermissionsManager() {
   }
   const permsMap = {};
   (allPermsData || []).forEach(p => { permsMap[p.user_id] = p.permissions || []; });
+  try {
+    const { data: supervisionRows, error } = await db.from('supervision_access').select('user_id,allowed');
+    if (error && error.code !== 'PGRST205') throw error;
+    const accessMap = Object.fromEntries((supervisionRows || []).map(row => [row.user_id, row.allowed]));
+    members.forEach(member => {
+      const allowed = member.tier === 'diretoria' ? accessMap[member.id] !== false : accessMap[member.id] === true;
+      if (allowed && !permsMap[member.id]?.includes('acessar_supervisao')) {
+        permsMap[member.id] = [...(permsMap[member.id] || []), 'acessar_supervisao'];
+      }
+    });
+  } catch (err) {
+    console.warn('[MSY][permissoes] acesso a Supervisao indisponivel:', err.message);
+  }
 
   const GROUPS = {
     'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
@@ -243,6 +258,7 @@ async function openPermissionsManager() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
+    'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
   };
   const CRITICAL_KEYS = new Set(['remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
@@ -411,8 +427,13 @@ async function openPermissionsManager() {
       if (!btn) return;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
-      const ok = await MSYPerms.save(memberId, checked);
-      if (ok) {
+      const supervisionAllowed = checked.includes('acessar_supervisao');
+      const standardPermissions = checked.filter(key => key !== 'acessar_supervisao');
+      const [ok, supervisionResult] = await Promise.all([
+        MSYPerms.save(memberId, standardPermissions),
+        db.from('supervision_access').upsert({ user_id: memberId, allowed: supervisionAllowed, updated_at: new Date().toISOString() }),
+      ]);
+      if (ok && !supervisionResult.error) {
         permsMap[memberId] = checked;
         MSYPerms.invalidate();
         btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvo!';
@@ -447,6 +468,7 @@ function getPermissionsGroups() {
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
+    'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
   };
 }
 
@@ -710,7 +732,6 @@ async function renderPermissionsWorkspace(body) {
     const { data: membersData, error: membersError } = await db.from('profiles')
       .select('id,name,role,initials,color,avatar_url,tier')
       .eq('status','ativo')
-      .neq('tier','diretoria')
       .order('name');
     if (membersError) throw membersError;
     members = membersData || [];
@@ -739,6 +760,15 @@ async function renderPermissionsWorkspace(body) {
 
   const permsMap = {};
   allPermsData.forEach(p => { permsMap[p.user_id] = p.permissions || []; });
+  try {
+    const { data: rows, error } = await db.from('supervision_access').select('user_id,allowed');
+    if (error && error.code !== 'PGRST205') throw error;
+    const access = Object.fromEntries((rows || []).map(row => [row.user_id, row.allowed]));
+    members.forEach(member => {
+      const allowed = member.tier === 'diretoria' ? access[member.id] !== false : access[member.id] === true;
+      if (allowed && !permsMap[member.id]?.includes('acessar_supervisao')) permsMap[member.id] = [...(permsMap[member.id] || []), 'acessar_supervisao'];
+    });
+  } catch (err) { console.warn('[MSY][permissoes] Supervisao indisponivel:', err.message); }
 
   const GROUPS = getPermissionsGroups();
   const CRITICAL_KEYS = new Set(['remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
@@ -880,8 +910,13 @@ async function renderPermissionsWorkspace(body) {
       if (!btn) return;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
-      const ok = await MSYPerms.save(memberId, checked);
-      if (ok) {
+      const supervisionAllowed = checked.includes('acessar_supervisao');
+      const standardPermissions = checked.filter(key => key !== 'acessar_supervisao');
+      const [ok, supervisionResult] = await Promise.all([
+        MSYPerms.save(memberId, standardPermissions),
+        db.from('supervision_access').upsert({ user_id: memberId, allowed: supervisionAllowed, updated_at: new Date().toISOString() }),
+      ]);
+      if (ok && !supervisionResult.error) {
         permsMap[memberId] = checked;
         MSYPerms.invalidate();
         syncHeroStats();

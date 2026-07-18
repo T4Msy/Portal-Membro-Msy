@@ -179,6 +179,21 @@
      }
    };
 
+   const MSYSupervisionAccess = {
+     async canAccess(profile) {
+       if (!profile?.id) return false;
+       try {
+         const { data, error } = await db.from('supervision_access')
+           .select('allowed').eq('user_id', profile.id).maybeSingle();
+         if (error && error.code !== 'PGRST205') throw error;
+         return profile.tier === 'diretoria' ? data?.allowed !== false : data?.allowed === true;
+       } catch (err) {
+         console.warn('[MSY][supervisao] regra de acesso indisponivel:', err.message);
+         return profile.tier === 'diretoria';
+       }
+     },
+   };
+
    const MSYTabAccess = {
      ALWAYS_ALLOWED: new Set(['login', 'offline', 'onboarding', 'busca']),
      ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho']),
@@ -206,6 +221,7 @@
 
      async canAccess(pageKey, profile) {
        if (!pageKey || this.ALWAYS_ALLOWED.has(pageKey)) return true;
+       if (pageKey === 'supervisao') return MSYSupervisionAccess.canAccess(profile);
        if (profile?.tier === 'diretoria') return true;
        if (this.ADMIN_ONLY.has(pageKey)) return false;
 
@@ -357,6 +373,7 @@
        return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
      },
      isDeadlinePassed(act) {
+       if (act?.status === 'Em andamento') return false;
        const deadline = this.getActivityDeadlineDate(act);
        if (!deadline) return false;
        return deadline < new Date();
@@ -474,6 +491,8 @@
      }
    
      const isDiretoria = profile.tier === 'diretoria';
+     const canAccessSupervision = await MSYSupervisionAccess.canAccess(profile);
+     sidebar.classList.toggle('sidebar-collapsed', profile.sidebar_collapsed === true);
    
      const actBadgeCacheKey = `activity_badge:${profile.id}`;
      let actBadgeCount = MSYSessionCache.get(actBadgeCacheKey);
@@ -516,6 +535,7 @@
      ], profile);
    
      sidebar.innerHTML = `
+       <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Recolher barra lateral" aria-label="Recolher barra lateral"><i class="fa-solid fa-bars-staggered"></i></button>
        <div class="sidebar-logo">
          <span class="sidebar-logo-mark">MSY</span>
          <div class="sidebar-logo-sep"><span class="sidebar-logo-diamond"></span></div>
@@ -530,6 +550,13 @@
              ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ''}
            </a>
          `).join('')}
+         ${canAccessSupervision ? `
+           <div class="sidebar-section-label sidebar-supervision-label" style="margin-top:8px">Area de Supervisao</div>
+           <a href="supervisao.html?v=20260718-ops4" class="nav-item ${activePage === 'supervisao' ? 'active' : ''}">
+             <i class="fa-solid fa-eye" style="color:var(--red-bright)"></i>
+             <span>Supervisao</span>
+           </a>
+         ` : ''}
          ${isDiretoria ? `
            <div class="sidebar-section-label" style="margin-top:8px">Diretoria</div>
            <a href="admin.html" class="nav-item ${activePage === 'admin' ? 'active' : ''}">
@@ -539,10 +566,6 @@
            <a href="permissoes.html" class="nav-item ${activePage === 'permissoes' ? 'active' : ''}">
              <i class="fa-solid fa-key" style="color:var(--gold)"></i>
              <span>Permissões</span>
-           </a>
-           <a href="desempenho.html" class="nav-item ${activePage === 'desempenho' ? 'active' : ''}">
-             <i class="fa-solid fa-chart-line" style="color:var(--gold)"></i>
-             <span>Desempenho</span>
            </a>
          ` : `
            <a href="onboarding.html" class="nav-item ${activePage === 'onboarding' ? 'active' : ''}" style="margin-top:8px">
@@ -583,6 +606,17 @@
      `;
    
      document.getElementById('logoutBtn').addEventListener('click', () => Auth.logout());
+     document.getElementById('sidebarCollapseBtn')?.addEventListener('click', async () => {
+       const collapsed = !sidebar.classList.contains('sidebar-collapsed');
+       sidebar.classList.toggle('sidebar-collapsed', collapsed);
+       try {
+         const { error } = await db.from('profiles').update({ sidebar_collapsed: collapsed }).eq('id', profile.id);
+         if (error) throw error;
+       } catch (err) {
+         console.error('[MSY][sidebar] erro ao salvar preferencia:', err);
+         Utils.showToast('Nao foi possivel salvar a preferencia da barra lateral.', 'error');
+       }
+     });
 
      document.getElementById('viewAsMemberBtn')?.addEventListener('click', async () => {
        if (await MSYConfirm.show('Ativar modo de visualização como membro?\n\nVocê verá o portal exatamente como um membro comum, sem permissões administrativas.\n\nSuas permissões reais não serão alteradas.')) {
@@ -1006,6 +1040,8 @@
      const events  = eventsRes.data || [];
      const acts    = actsRes.data || [];
      const ranking = rankingRes.data?.[0] || null;
+     // Lembretes pertencem exclusivamente a supervisao.html.
+     const sharedReminders = [];
      const top3    = ranking ? (ranking.entries || []).slice(0, 3) : [];
    
      const { count: totalMembers } = await db.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'ativo');
@@ -1077,6 +1113,21 @@
                     ${ev.mandatory ? '<span class="badge badge-red" style="font-size:.62rem">Obrig.</span>' : ''}
                   </a>`).join('')
              }
+         </div>
+         </div>
+         <div class="card card-enter">
+           <div class="card-title"><i class="fa-solid fa-list-check"></i> Lembretes da CoordenaÃ§Ã£o</div>
+           <div class="small-list">
+             ${sharedReminders.length === 0
+               ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum lembrete em aberto.</div></div>`
+               : sharedReminders.map(reminder => `
+                 <div class="small-list-item">
+                   <div class="small-list-icon" style="background:var(--red-subtle);border:1px solid var(--border-red)"><i class="fa-solid fa-bell" style="color:var(--red-bright)"></i></div>
+                   <div class="small-list-info">
+                     <div class="small-list-title">${Utils.escapeHtml(reminder.title)}</div>
+                     <div class="small-list-sub">${Utils.escapeHtml(reminder.description || 'Lembrete da coordenaÃ§Ã£o')}${reminder.due_at ? ` Â· ${Utils.formatDateTime(reminder.due_at)}` : ''}</div>
+                   </div>
+                 </div>`).join('')}
            </div>
          </div>
        </div>
@@ -9135,6 +9186,7 @@
      Utils,
      Auth,
      ViewMode,
+     SupervisionAccess: MSYSupervisionAccess,
      SessionCache: MSYSessionCache,
      renderSidebar,
      renderTopBar,

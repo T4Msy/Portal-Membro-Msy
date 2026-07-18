@@ -1,0 +1,363 @@
+/* MSY Supervisao - centro operacional independente do portal. */
+'use strict';
+
+(function () {
+  const platform = window.MSY || {};
+  const db = platform.db;
+  const Auth = platform.Auth;
+  const Utils = platform.Utils || { escapeHtml: (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]), getInitials: (name) => String(name || '?').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(), showToast: () => {} };
+  const now = new Date();
+  const state = { profile: null, data: null, route: 'resumo', periodMode: 'geral', referenceDate: now.toISOString().slice(0, 10), centralFilter: 'all', centralSelected: null, centralTracking: null };
+  const root = document.getElementById('supervisionApp');
+  const esc = (value) => Utils.escapeHtml(String(value ?? ''));
+  const statusKey = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isClosed = (activity) => ['concluida', 'cancelada'].includes(statusKey(activity.status));
+  const dateDue = (value) => value ? new Date(`${value}T23:59:59`) : null;
+  const deliveryDeadline = (item) => {
+    const date = item.deadline || item.prazo;
+    if (!date) return null;
+    return new Date(`${date}T${item.deadline_time || '23:59:59'}`);
+  };
+  const scoreTone = (score) => score >= 80 ? 'good' : score >= 60 ? 'gold' : score >= 35 ? 'warn' : 'bad';
+  const grade = (score) => score >= 85 ? 'Excelente' : score >= 68 ? 'Boa' : score >= 45 ? 'Atencao' : 'Critica';
+
+  function periodBounds() {
+    if (state.periodMode === 'geral') return null;
+    const reference = new Date(`${state.referenceDate}T12:00:00`);
+    if (state.periodMode === 'dia') return { start: state.referenceDate, end: state.referenceDate };
+    if (state.periodMode === 'semana') {
+      const mondayOffset = (reference.getDay() + 6) % 7;
+      const start = new Date(reference); start.setDate(reference.getDate() - mondayOffset);
+      const end = new Date(start); end.setDate(start.getDate() + 6);
+      return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+    }
+    const month = state.referenceDate.slice(0, 7);
+    const [year, number] = month.split('-').map(Number);
+    return { start: `${month}-01`, end: `${month}-${String(new Date(year, number, 0).getDate()).padStart(2, '0')}` };
+  }
+
+  function messagePerformance(weeklyMessages) {
+    if (weeklyMessages >= 800) return { score: 100, label: 'Excelente' };
+    if (weeklyMessages >= 400) return { score: 85, label: 'Muito bom' };
+    if (weeklyMessages >= 200) return { score: 70, label: 'Bom' };
+    if (weeklyMessages >= 100) return { score: 55, label: 'Ok' };
+    return { score: Math.round(Math.max(0, weeklyMessages) / 100 * 55), label: 'Abaixo do minimo' };
+  }
+
+  async function init() {
+    if (!Auth || !db) throw new Error('A autenticacao do Portal nao foi carregada. Recarregue a pagina.');
+    const profile = await Auth.requireAuth();
+    if (!profile) return;
+    if (!window.MSY?.SupervisionAccess || !await window.MSY.SupervisionAccess.canAccess(profile)) {
+      Utils.showToast('Voce nao tem permissao para acessar a Supervisao.', 'error');
+      window.location.href = 'dashboard.html';
+      return;
+    }
+    state.profile = profile;
+    root.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-analytics-import]');
+      if (!button) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runLocalAnalytics(button);
+    }, true);
+    root.addEventListener('click', onClick);
+    root.addEventListener('click', (event) => { const button = event.target.closest('[data-analytics-import]'); if (button) importAnalytics(button); });
+    root.addEventListener('click', (event) => { const reminder = event.target.closest('[data-radar-reminder]'); if (!reminder) return; db.from('supervision_reminders').insert({ title: reminder.dataset.radarReminder, description: reminder.dataset.radarDescription || null, category: 'task', origin: 'manual', status: 'open', created_by: state.profile.id }).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast('Lembrete criado.'); await refreshReminders(); } }); });
+    root.addEventListener('click', (event) => { const approval = event.target.closest('[data-reminder-approval]'); if (!approval) return; const approved = approval.dataset.reminderApproval === 'approved'; db.from('supervision_reminders').update({ approval_status: approved ? 'approved' : 'rejected', approved_by: approved ? state.profile.id : null, approved_at: approved ? new Date().toISOString() : null, rejection_reason: approved ? null : 'Dispensado pela coordenacao' }).eq('id', approval.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast(approved ? 'Acao aprovada.' : 'Acao recusada.'); await refreshReminders(); } }); });
+    root.addEventListener('click', handleCentralAction);
+    const reminderObserver = new MutationObserver(() => decorateReminderCards());
+    reminderObserver.observe(root, { childList: true, subtree: true });
+    root.addEventListener('change', onChange);
+    root.addEventListener('submit', onSubmit);
+    root.addEventListener('submit', handleCaseTrackingSubmit);
+    window.addEventListener('hashchange', render);
+    await loadData();
+    render();
+  }
+
+  async function loadData() {
+    try {
+      const bounds = periodBounds();
+      const paymentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      let eventsQuery = db.from('events').select('id,title,event_date,status,mandatory,is_private').order('event_date', { ascending: false });
+      let rankingsQuery = db.from('weekly_rankings').select('week_start,week_end,entries').order('week_start', { ascending: true });
+      if (bounds) {
+        eventsQuery = eventsQuery.gte('event_date', bounds.start).lte('event_date', bounds.end);
+        rankingsQuery = rankingsQuery.lte('week_start', bounds.end).gte('week_end', bounds.start);
+      } else {
+        eventsQuery = eventsQuery.limit(500);
+        rankingsQuery = rankingsQuery.limit(100);
+      }
+      const queries = await Promise.all([
+        db.from('profiles').select('id,name,role,initials,color,avatar_url,status,join_date,created_at').eq('status', 'ativo').order('name'),
+        db.from('activities').select('id,title,status,deadline,deadline_time,closes_at,assigned_to,created_at').order('created_at', { ascending: false }).limit(500),
+        db.from('projects').select('id,name,status,data_entrega,responsavel_id,updated_at,created_at').order('created_at', { ascending: false }).limit(100),
+        db.from('project_tasks').select('id,project_id,title,status,prazo,assigned_to,created_at,updated_at').limit(300),
+        eventsQuery,
+        db.from('event_presencas').select('event_id,membro_id,user_id,status,response_status,justificativa_status,attendance_status').limit(1000),
+        db.from('mensalidades').select('user_id,status,mes_referencia,data_pagamento').eq('mes_referencia', paymentMonth),
+        rankingsQuery,
+        db.from('supervision_message_metrics').select('member_id,metric_date,message_count').order('metric_date', { ascending: true }).limit(10000),
+        db.from('supervision_alerts').select('*').in('status', ['open', 'acknowledged']).order('severity', { ascending: false }).limit(8),
+        db.from('supervision_timeline').select('*').order('occurred_at', { ascending: false }).limit(10),
+        db.from('supervision_reminders').select('*').order('due_at', { ascending: true }).limit(100),
+        db.from('supervision_observations').select('*').order('created_at', { ascending: false }).limit(100),
+      ]);
+      const error = queries.find((query) => query.error && query.error.code !== 'PGRST205')?.error;
+      if (error) throw error;
+      const [profiles, activities, projects, tasks, events, presences, payments, rankings, messageMetrics, alerts, timeline, reminders, observations] = queries;
+      const activityRows = activities.data || [];
+      const activitiesInPeriod = bounds ? activityRows.filter((activity) => {
+        const activityDate = String(isClosed(activity) ? (activity.closes_at || activity.created_at) : (activity.deadline || activity.created_at)).slice(0, 10);
+        return activityDate >= bounds.start && activityDate <= bounds.end;
+      }) : activityRows;
+      const metricRows = (messageMetrics.data || []).filter((metric) => !bounds || (metric.metric_date >= bounds.start && metric.metric_date <= bounds.end));
+      state.data = buildMetrics({ profiles: profiles.data || [], activities: activitiesInPeriod, projects: projects.data || [], tasks: tasks.data || [], events: events.data || [], presences: presences.data || [], payments: payments.data || [], rankings: rankings.data || [], messageMetrics: metricRows, alerts: alerts.data || [], timeline: timeline.data || [], reminders: reminders.data || [], observations: observations.data || [] });
+    } catch (error) {
+      console.error('[MSY][supervisao] Erro ao carregar operacao:', error);
+      state.data = { error: error.message, profiles: [], activities: [], projects: [], events: [], alerts: [], timeline: [], health: 0, factors: [], members: [] };
+    }
+  }
+
+  function buildMetrics(data) {
+    const day = new Date(); day.setHours(0, 0, 0, 0);
+    const openActivities = data.activities.filter((activity) => !isClosed(activity));
+    const lateActivities = openActivities.filter((activity) => statusKey(activity.status) !== 'em andamento' && dateDue(activity.deadline) && dateDue(activity.deadline) < day);
+    const pendingActivities = [...openActivities].sort((a, b) => Number(lateActivities.some((item) => item.id === b.id)) - Number(lateActivities.some((item) => item.id === a.id)) || String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
+    const activeProjects = data.projects.filter((project) => !['concluido', 'cancelado'].includes(statusKey(project.status)));
+    const lateTasks = data.tasks.filter((task) => statusKey(task.status) !== 'concluida' && dateDue(task.prazo) && dateDue(task.prazo) < day);
+    const upcomingEvents = data.events.filter((event) => new Date(`${event.event_date}T23:59:59`) >= day);
+    const pendingPayments = data.profiles.filter((profile) => !data.payments.some((payment) => payment.user_id === profile.id && statusKey(payment.status) === 'pago'));
+    const members = buildMemberPerformance(data, day);
+    const completedActivities = data.activities.filter((activity) => statusKey(activity.status) === 'concluida');
+    const completedLate = completedActivities.filter((activity) => {
+      const completedAt = activity.closes_at ? new Date(activity.closes_at) : null;
+      return completedAt && deliveryDeadline(activity) && completedAt > deliveryDeadline(activity);
+    });
+    const activityRate = completedActivities.length ? (completedActivities.length - completedLate.length) / completedActivities.length : .7;
+    const eventRates = members.map((member) => member.rates.attendance).filter((value) => value !== null);
+    const eventRate = eventRates.length ? eventRates.reduce((sum, value) => sum + value, 0) / eventRates.length / 100 : .7;
+    const projectRate = activeProjects.length ? Math.max(0, 1 - lateTasks.length / Math.max(data.tasks.length, 1)) : 1;
+    const financeRate = data.profiles.length ? 1 - pendingPayments.length / data.profiles.length : 1;
+    const factors = [['Atividades', activityRate, 20], ['Projetos', projectRate, 15], ['Eventos', eventRate, 15], ['Participacao', eventRate, 15], ['Acesso ao Portal', .7, 10], ['Financeiro', financeRate, 10], ['Equipe', 1, 5], ['Crescimento', .7, 5], ['Evolucao', .7, 5]];
+    const health = Math.round(factors.reduce((sum, factor) => sum + factor[1] * factor[2], 0));
+    const persistedMemberObservations = new Set((data.observations || []).map((item) => item.evidence?.memberId).filter(Boolean));
+    const computedObservations = members.filter((member) => !member.activities.all.length && !persistedMemberObservations.has(member.id)).map((member) => ({ title: 'Membro sem atividades abertas', body: `${member.name} nao possui nenhuma atividade aberta atribuida neste momento.`, origin: 'automatic', pending: true }));
+    return { ...data, observations: [...(data.observations || []), ...computedObservations], openActivities, lateActivities, pendingActivities, activeProjects, lateTasks, upcomingEvents, pendingPayments, members, factors, health, computedObservations, radar: buildRadar({ ...data, lateActivities, lateTasks, upcomingEvents, pendingPayments, activeProjects, openActivities, members }, day) };
+  }
+
+  function buildRadar(data, day) {
+    const items = [];
+    const add = (item) => items.push({ severity: 'attention', ...item });
+    data.lateActivities.slice(0, 12).forEach((activity) => add({ severity: 'critical', kind: 'activity', title: `Atividade atrasada: ${activity.title}`, description: 'A entrega passou do prazo e precisa de acompanhamento.', route: 'pendencias', sourceId: activity.id }));
+    data.openActivities.filter((activity) => !isClosed(activity) && statusKey(activity.status) !== 'em andamento' && deliveryDeadline(activity)).forEach((activity) => {
+      const due = deliveryDeadline(activity); const hours = Math.round((due - day) / 3600000);
+      if (hours >= 0 && hours <= 24) add({ severity: 'attention', kind: 'activity', title: `Prazo próximo: ${activity.title}`, description: `Expira em aproximadamente ${hours} hora${hours === 1 ? '' : 's'}.`, route: 'pendencias', sourceId: activity.id });
+    });
+    data.lateTasks.slice(0, 8).forEach((task) => add({ severity: 'critical', kind: 'project', title: `Tarefa de projeto atrasada: ${task.title}`, description: 'A tarefa de Gestão de Projetos está fora do prazo.', route: 'projetos', sourceId: task.id }));
+    data.activeProjects.filter((project) => project.updated_at && (day.getTime() - new Date(project.updated_at).getTime()) > 7 * 86400000).slice(0, 6).forEach((project) => add({ severity: 'attention', kind: 'project', title: `Projeto sem movimentação: ${project.name}`, description: 'Não há atualização registrada há mais de 7 dias.', route: 'projetos', sourceId: project.id }));
+    data.pendingPayments.slice(0, 6).forEach((profile) => add({ severity: 'attention', kind: 'finance', title: `Mensalidade pendente: ${profile.name}`, description: 'O pagamento do mês atual não foi confirmado.', route: 'financeiro', sourceId: profile.id }));
+    data.upcomingEvents.slice(0, 4).forEach((event) => add({ severity: 'info', kind: 'event', title: `Evento próximo: ${event.title}`, description: `Programado para ${new Date(`${event.event_date}T12:00:00`).toLocaleDateString('pt-BR')}.`, route: 'eventos', sourceId: event.id }));
+    (data.alerts || []).forEach((alert) => add({ ...alert, kind: 'alert', route: alert.member_id ? 'desempenho' : 'alertas', sourceId: alert.id }));
+    const rank = { critical: 0, attention: 1, info: 2 };
+    return items.sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9)).slice(0, 10);
+  }
+
+  function buildMemberPerformance(data, day) {
+    const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const names = new Map(data.profiles.map((profile) => [normalize(profile.name), profile.id]));
+    const messages = {};
+    const importedMetrics = data.messageMetrics || [];
+    if (importedMetrics.length) {
+      importedMetrics.forEach((metric) => { if (metric.member_id) messages[metric.member_id] = (messages[metric.member_id] || 0) + (Number(metric.message_count) || 0); });
+    } else {
+      data.rankings.forEach((ranking) => (ranking.entries || []).forEach((entry) => {
+        const sourceName = normalize(entry.name);
+        const id = names.get(sourceName) || [...names.entries()].find(([name]) => name.length > 3 && (sourceName.includes(name) || name.includes(sourceName)))?.[1];
+        if (id) messages[id] = (messages[id] || 0) + (parseInt(entry.messages, 10) || 0);
+      }));
+    }
+    const metricWeeks = new Set(importedMetrics.map((metric) => { const date = new Date(`${metric.metric_date}T12:00:00`); const start = new Date(date.getFullYear(), 0, 1); return `${date.getFullYear()}-${Math.ceil(((date - start) / 86400000 + start.getDay() + 1) / 7)}`; }));
+    const weeksWithRanking = importedMetrics.length ? metricWeeks.size : data.rankings.length;
+    const publicEvents = data.events.filter((event) => !event.is_private);
+    const accountableEvents = publicEvents.filter((event) => statusKey(event.status) === 'concluido' || new Date(`${event.event_date}T23:59:59`) < day);
+    const accountableEventIds = new Set(accountableEvents.map((event) => event.id));
+    return data.profiles.map((profile) => {
+      const activities = data.activities.filter((activity) => activity.assigned_to === profile.id);
+      const projectTasks = data.tasks.filter((task) => task.assigned_to === profile.id);
+      const completedProjectTasks = projectTasks.filter((task) => statusKey(task.status) === 'concluida').map((task) => ({ ...task, title: `[Projeto] ${task.title}`, deadline: task.prazo, status: 'Concluida' }));
+      const openProjectTasks = projectTasks.filter((task) => statusKey(task.status) !== 'concluida').map((task) => ({ ...task, title: `[Projeto] ${task.title}`, deadline: task.prazo, status: statusKey(task.status) === 'em_andamento' ? 'Em andamento' : 'Pendente' }));
+      const completed = [...activities.filter((activity) => statusKey(activity.status) === 'concluida'), ...completedProjectTasks];
+      const late = activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) !== 'em andamento' && dateDue(activity.deadline) && dateDue(activity.deadline) < day);
+      const pending = [...activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) === 'pendente'), ...openProjectTasks.filter((task) => task.status === 'Pendente')];
+      const ongoing = [...activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) === 'em andamento'), ...openProjectTasks.filter((task) => task.status === 'Em andamento')];
+      const presences = data.presences.filter((presence) => accountableEventIds.has(presence.event_id) && (presence.membro_id || presence.user_id) === profile.id);
+      const eventRecords = new Map();
+      presences.forEach((presence) => {
+        const record = eventRecords.get(presence.event_id) || { present: false, absent: false, justified: false, participated: false };
+        const attendance = statusKey(presence.attendance_status || (statusKey(presence.status) === 'confirmado' ? 'presente' : presence.status));
+        const response = statusKey(presence.response_status || presence.status);
+        record.present ||= ['presente', 'confirmado'].includes(attendance) || ['presente', 'confirmado'].includes(statusKey(presence.status));
+        record.absent ||= attendance === 'ausente';
+        record.participated ||= response === 'participar' || statusKey(presence.status) === 'confirmado';
+        record.justified ||= statusKey(presence.justificativa_status) === 'aceita' || response === 'justificado' || statusKey(presence.status) === 'justificado';
+        eventRecords.set(presence.event_id, record);
+      });
+      let present = 0; let absent = 0; let justified = 0; let justifiedOnly = 0; let penalty = 0;
+      eventRecords.forEach((record) => {
+        if (record.present) present++;
+        else if (record.absent) { absent++; penalty += record.participated ? 1 : .6; }
+        if (record.justified) justified++;
+        if (record.justified && !record.present) justifiedOnly++;
+      });
+      const eligible = Math.max(0, accountableEvents.length - justifiedOnly);
+      const attendanceRate = eligible ? Math.round(Math.max(0, Math.min(100, (present - penalty - Math.max(0, accountableEvents.length - eventRecords.size) * .35) / eligible * 100))) : null;
+      const activityTotal = activities.length + projectTasks.length;
+      const lateCompleted = completed.filter((item) => {
+        const completedAt = item.closes_at || item.updated_at;
+        return completedAt && deliveryDeadline(item) && new Date(completedAt) > deliveryDeadline(item);
+      });
+      const onTimeCompleted = completed.length - lateCompleted.length;
+      const activityRate = completed.length ? Math.round(onTimeCompleted / completed.length * 100) : null;
+      const weeklyMessages = weeksWithRanking ? Math.round((messages[profile.id] || 0) / weeksWithRanking) : null;
+      const messageResult = weeklyMessages === null ? null : messagePerformance(weeklyMessages);
+      const messageRate = messageResult?.score ?? null;
+      const components = [messageRate === null ? null : { label: 'Mensagens', value: messageRate, weight: 50, color: '#ef2447', detail: `${weeklyMessages} por semana - ${messageResult.label}` }, activityRate === null ? null : { label: 'Atividades', value: activityRate, weight: 40, color: '#c91a38', detail: `${onTimeCompleted} entregues no prazo, ${lateCompleted.length} fora do prazo` }, attendanceRate === null ? null : { label: 'Eventos', value: attendanceRate, weight: 10, color: '#ff6178', detail: `${present} presencas em ${eligible} eventos` }].filter(Boolean);
+      const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+      const score = totalWeight ? Math.round(components.reduce((sum, component) => sum + component.value * component.weight / totalWeight, 0)) : 0;
+      return { ...profile, score, messages: messages[profile.id] || 0, weeklyMessages, messageLevel: messageResult?.label || 'Sem dados', components, activities: { all: [...activities, ...projectTasks], completed, late, pending, ongoing, lateCompleted: lateCompleted.length, projectCompleted: completedProjectTasks.length }, attendance: { present, absent, justified, total: eligible }, payment: data.payments.find((payment) => payment.user_id === profile.id), rates: { activities: activityRate, attendance: attendanceRate, messages: messageRate } };
+    }).sort((a, b) => b.score - a.score || (b.weeklyMessages || 0) - (a.weeklyMessages || 0) || b.activities.completed.length - a.activities.completed.length);
+  }
+
+  function nav(route, icon, label) { if (['lembretes', 'alertas'].includes(route)) return ''; if (route === 'pendencias') return `<a href="#central" class="${state.route === 'central' ? 'active' : ''}"><i class="fa-solid fa-layer-group"></i>Central Operacional</a>`; return `<a href="#${route}" class="${state.route === route ? 'active' : ''}"><i class="fa-solid ${icon}"></i>${label}</a>`; }
+  function shell(content) { root.innerHTML = `<aside class="sv-rail"><div class="sv-brand"><div class="sv-brand-kicker">Masayoshi Order</div><div class="sv-brand-title">CENTRAL <b>MSY</b></div><div class="sv-brand-mark" aria-hidden="true"></div></div><nav class="sv-nav" aria-label="Navegacao da Supervisao">${nav('resumo', 'fa-gauge-high', 'Resumo')}${nav('huginn', 'fa-crow', 'Huginn')}${nav('pendencias', 'fa-list-check', 'Pendencias')}${nav('lembretes', 'fa-bell-concierge', 'Lembretes')}${nav('desempenho', 'fa-chart-line', 'Desempenho')}${nav('projetos', 'fa-diagram-project', 'Projetos')}${nav('eventos', 'fa-calendar-days', 'Eventos')}${nav('financeiro', 'fa-vault', 'Financeiro')}${nav('analytics', 'fa-chart-simple', 'Analytics')}${nav('timeline', 'fa-timeline', 'Timeline')}${nav('alertas', 'fa-bell', 'Alertas')}</nav><div class="sv-rail-footer"><span class="sv-brand-kicker">Supervisao ativa</span><a class="sv-return" href="dashboard.html"><i class="fa-solid fa-arrow-left"></i> Voltar ao Portal</a></div></aside><section class="sv-workspace"><header class="sv-top"><div><div class="sv-eyebrow">Centro de Operacoes / ${esc(new Date().toLocaleDateString('pt-BR', { dateStyle: 'full' }))}</div><h1 class="sv-title">AREA DE <b>SUPERVISAO</b></h1></div><div class="sv-clock">${esc(state.profile.name)}<br>MSY-OPS // ONLINE</div></header>${content}</section>`; }
+  function rows(items, kind) { if (!items.length) return '<div class="sv-empty">Nenhuma ocorrencia para este momento.</div>'; return `<div class="sv-list">${items.map((item) => `<div class="sv-row"><i class="fa-solid ${kind === 'alert' ? 'fa-triangle-exclamation' : 'fa-circle-dot'}"></i><div class="sv-row-main"><b>${esc(item.title || item.message || item.event_type || 'Atualizacao operacional')}</b><span>${esc(item.description || item.occurred_at || item.deadline || item.created_at || '')}</span></div><span class="sv-badge">${esc(item.severity || item.status || 'ativo')}</span></div>`).join('')}</div>`; }
+  function stats(d) { const values = [['fa-users', d.profiles.length, 'membros ativos'], ['fa-list-check', d.openActivities.length, 'atividades abertas'], ['fa-triangle-exclamation', d.lateActivities.length, 'atividades atrasadas'], ['fa-diagram-project', d.activeProjects.length, 'projetos em andamento'], ['fa-calendar-days', d.upcomingEvents.length, 'eventos futuros'], ['fa-vault', d.pendingPayments.length, 'pagamentos pendentes']]; return `<section class="sv-stat-grid">${values.map(([icon, value, label]) => `<div class="sv-stat sv-corner"><i class="fa-solid ${icon}"></i><strong>${value}</strong><span>${label}</span></div>`).join('')}</section>`; }
+  function radar() { const items = state.data.radar || []; if (!items.length) return '<section class="sv-radar sv-corner"><div class="sv-radar-head"><div><div class="sv-eyebrow">Radar diário</div><h2>Nenhuma ação urgente agora</h2><p>A varredura operacional não encontrou pendências prioritárias.</p></div><span class="sv-radar-count">0 abertos</span></div></section>'; const labels = { critical: 'crítico', attention: 'atenção', info: 'informativo' }; return `<section class="sv-radar sv-corner"><div class="sv-radar-head"><div><div class="sv-eyebrow">Radar diário // ações prioritárias</div><h2>O que precisa de atenção agora?</h2><p>Itens reunidos automaticamente a partir de toda a operação.</p></div><span class="sv-radar-count">${items.length} itens</span></div><div class="sv-radar-grid">${items.map((item) => `<article class="sv-radar-item ${esc(item.severity)}"><span class="sv-radar-dot"></span><div><b>${esc(item.title)}</b><p>${esc(item.description || '')}</p><small>${labels[item.severity] || 'operacional'}</small></div><div class="sv-radar-actions"><button class="sv-icon-button" data-route="${esc(item.route || 'alertas')}" title="Abrir registro"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button class="sv-icon-button" data-radar-reminder="${esc(item.title)}" data-radar-description="${esc(item.description || '')}" title="Criar lembrete"><i class="fa-regular fa-bell"></i></button></div></article>`).join('')}</div></section>`; }
+  function operationalCenter() { const d = state.data; const radarItems = d.radar || []; const reminders = (d.reminders || []).filter((item) => item.status === 'open').slice(0, 5); const pending = (d.pendingActivities || []).slice(0, 5).map((item) => ({ ...item, severity: d.lateActivities.some((late) => late.id === item.id) ? 'critical' : 'attention', description: item.deadline ? `Prazo: ${new Date(`${item.deadline}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem prazo definido', route: 'pendencias' })); const alerts = (d.alerts || []).slice(0, 5).map((item) => ({ ...item, severity: item.severity === 'critical' ? 'critical' : 'attention', route: 'alertas' })); const all = [...radarItems, ...reminders.map((item) => ({ ...item, title: `Lembrete: ${item.title}`, description: item.description || 'Acao operacional pendente.', severity: 'attention', route: 'lembretes' })), ...pending, ...alerts]; const unique = all.filter((item, index, list) => index === list.findIndex((other) => `${other.title}|${other.sourceId || other.id || ''}` === `${item.title}|${item.sourceId || item.id || ''}`)).slice(0, 14); const labels = { critical: 'critico', attention: 'atencao', info: 'informativo' }; return `<section class="sv-command-center sv-corner"><div class="sv-command-head"><div><div class="sv-eyebrow">Central operacional</div><h2>Tudo que precisa de atencao</h2><p>Radar, lembretes, alertas e pendencias reunidos em uma unica fila de trabalho.</p></div><span class="sv-radar-count">${unique.length} abertos</span></div><div class="sv-command-list">${unique.map((item) => `<article class="sv-command-item ${esc(item.severity || 'attention')}"><span class="sv-radar-dot"></span><div><b>${esc(item.title || 'Ocorrencia operacional')}</b><p>${esc(item.description || '')}</p><small>${labels[item.severity] || 'operacional'}</small></div><div class="sv-radar-actions"><button class="sv-icon-button" data-route="${esc(item.route || 'alertas')}" title="Abrir registro"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button class="sv-icon-button" data-radar-reminder="${esc(item.title || '')}" data-radar-description="${esc(item.description || '')}" title="Criar lembrete"><i class="fa-regular fa-bell"></i></button></div></article>`).join('') || '<div class="sv-empty">Nenhuma ocorrencia para este momento.</div>'}</div></section>`; }
+  function overview() { const d = state.data; if (d.error) return `<div class="sv-corner sv-panel"><div class="sv-panel-title"><i class="fa-solid fa-lock"></i>Integracao pendente</div><p class="sv-empty">${esc(d.error)}</p></div>`; const factors = d.factors.slice(0, 5).map(([label, value]) => `<div class="sv-factor"><span>${label}</span><span>${Math.round(value * 100)}%</span></div>`).join(''); return `<section class="sv-health sv-corner"><button class="sv-huginn" data-route="huginn" style="--health:${d.health}" aria-label="Ver composicao do Huginn"><span><span class="sv-score">${d.health}<small>%</small></span><span class="sv-grade">${grade(d.health)}</span></span></button><div><div class="sv-eyebrow">Huginn // Saude Organizacional</div><h2>Como esta a Masayoshi agora?</h2><p>Huginn observa atividades, projetos, eventos, participacao e financeiro. A nota e calculada automaticamente.</p><div class="sv-actions"><button class="sv-button" data-route="huginn">Abrir diagnostico</button><button class="sv-button" data-route="desempenho">Ver desempenho</button><button class="sv-button" data-route="central">Abrir Central Operacional</button></div></div><div class="sv-factor-list">${factors}</div></section>${stats(d)}`; }
+  function centralCases() {
+    const d = state.data;
+    const profiles = new Map((d.profiles || []).map((profile) => [profile.id, profile]));
+    const items = [];
+    const add = (item) => items.push(item);
+    (d.pendingActivities || []).forEach((activity) => {
+      const late = d.lateActivities.some((item) => item.id === activity.id);
+      const profile = profiles.get(activity.assigned_to);
+      add({ id: `activity:${activity.id}`, source: 'atividade', priority: late ? 'critical' : 'attention', title: activity.title, description: late ? 'A atividade ultrapassou o prazo e precisa de uma decisao.' : 'Atividade aberta aguardando entrega.', due: activity.deadline, owner: profile?.name || null, memberId: activity.assigned_to, route: 'desempenho', raw: activity });
+    });
+    (d.alerts || []).forEach((alert) => {
+      const profile = profiles.get(alert.member_id);
+      add({ id: `alert:${alert.id}`, source: 'alerta', priority: alert.severity === 'critical' ? 'critical' : 'attention', title: alert.title, description: alert.description || 'Alerta detectado pela Supervisao.', due: null, owner: profile?.name || null, memberId: alert.member_id, route: 'desempenho', raw: alert });
+    });
+    (d.reminders || []).filter((item) => item.status === 'open').forEach((reminder) => {
+      const assignedTo = reminder.metadata?.assigned_to;
+      const isFinance = reminder.category === 'finance';
+      add({ id: `reminder:${reminder.id}`, source: isFinance ? 'finance' : 'lembrete', priority: isFinance ? 'info' : reminder.approval_status === 'pending_approval' ? 'attention' : 'info', title: reminder.title, description: reminder.description || 'Acao criada pela coordenacao.', due: reminder.due_at, owner: profiles.get(assignedTo)?.name || null, assignedTo, pendingApproval: !isFinance && reminder.approval_status === 'pending_approval', route: 'central', raw: reminder });
+    });
+    (d.radar || []).filter((item) => item.kind !== 'activity' && item.kind !== 'alert').forEach((item) => add({ id: `radar:${item.kind || 'operacao'}:${item.sourceId || item.title}`, source: item.kind || 'operacao', priority: item.kind === 'finance' ? 'info' : item.severity || 'attention', title: item.title, description: item.description || 'Situacao identificada automaticamente.', due: null, owner: null, route: item.route || 'central', raw: item }));
+    const seen = new Set();
+    const rank = { critical: 0, attention: 1, info: 2 };
+    const sourceRank = { atividade: 0, event: 1, project: 2, alerta: 3, lembrete: 4, member_activity_inactive: 5, finance: 9 };
+    return items.filter((item) => {
+      const key = `${item.source}:${item.raw?.id || item.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).sort((a, b) => (rank[a.priority] ?? 9) - (rank[b.priority] ?? 9) || (sourceRank[a.source] ?? 6) - (sourceRank[b.source] ?? 6) || String(a.due || '9999').localeCompare(String(b.due || '9999')));
+  }
+  function centralFilteredCases() { const today = new Date().toISOString().slice(0, 10); const cases = centralCases(); if (state.centralFilter === 'critical') return cases.filter((item) => item.priority === 'critical'); if (state.centralFilter === 'today') return cases.filter((item) => item.due && String(item.due).slice(0, 10) <= today); if (state.centralFilter === 'unassigned') return cases.filter((item) => !item.owner); if (state.centralFilter === 'approval') return cases.filter((item) => item.pendingApproval); return cases; }
+  function centralDetail(item) { if (!item) return `<aside class="sv-case-detail sv-corner"><div class="sv-case-empty"><i class="fa-solid fa-crosshairs"></i><b>Selecione um caso</b><p>Abra uma ocorrencia da fila para ver contexto, decisao sugerida e historico.</p></div></aside>`; const labels = { atividade: 'Atividade', alerta: 'Alerta inteligente', lembrete: 'Lembrete', project: 'Projeto', finance: 'Financeiro', event: 'Evento', member_activity_inactive: 'Membro' }; const actions = item.source === 'lembrete' ? `<button class="sv-button" data-case-action="complete" data-case-id="${esc(item.id)}"><i class="fa-solid fa-check"></i> Concluir</button><button class="sv-button" data-case-action="dismiss" data-case-id="${esc(item.id)}"><i class="fa-solid fa-ban"></i> Dispensar</button>` : item.source === 'alerta' ? `<button class="sv-button" data-case-action="resolve" data-case-id="${esc(item.id)}"><i class="fa-solid fa-check"></i> Resolver alerta</button>` : `<button class="sv-button" data-case-action="track" data-case-id="${esc(item.id)}"><i class="fa-solid fa-plus"></i> Criar acompanhamento</button>`; return `<aside class="sv-case-detail sv-corner"><button class="sv-icon-button sv-case-close" data-case-action="close" title="Fechar"><i class="fa-solid fa-xmark"></i></button><div class="sv-case-detail-meta"><span class="${esc(item.priority)}">${esc(item.priority === 'critical' ? 'critico' : item.priority === 'attention' ? 'atencao' : 'informativo')}</span><span>${esc(labels[item.source] || 'Operacao')}</span></div><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><dl><div><dt>Responsavel</dt><dd>${esc(item.owner || 'Sem responsavel')}</dd></div><div><dt>Prazo</dt><dd>${item.due ? esc(new Date(`${String(item.due).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')) : 'Sem prazo definido'}</dd></div><div><dt>Decisao sugerida</dt><dd>${item.priority === 'critical' ? 'Assumir e resolver hoje.' : 'Acompanhar e definir o proximo passo.'}</dd></div></dl><div class="sv-case-detail-actions">${item.memberId ? `<button class="sv-button" data-member="${esc(item.memberId)}"><i class="fa-solid fa-user"></i> Ver membro</button>` : ''}${item.route && item.route !== 'central' ? `<button class="sv-button" data-route="${esc(item.route)}"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir origem</button>` : ''}${actions}</div></aside>`; }
+  function trackingModal(item) { if (!item) return ''; const members = (state.data.profiles || []).map((profile) => `<option value="${esc(profile.id)}" ${item.memberId === profile.id ? 'selected' : ''}>${esc(profile.name)}</option>`).join(''); return `<div class="sv-tracking-overlay"><form class="sv-tracking-modal sv-corner" data-case-tracking-form><button type="button" class="sv-icon-button sv-tracking-close" data-case-tracking-close title="Fechar"><i class="fa-solid fa-xmark"></i></button><div class="sv-eyebrow">Assumir caso operacional</div><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><input type="hidden" name="caseId" value="${esc(item.id)}"><label>Responsavel<select class="sv-input" name="assignedTo" required><option value="">Selecionar membro</option>${members}</select></label><label>Prazo do acompanhamento<input class="sv-input" name="dueAt" type="datetime-local" required></label><label>Orientacao<input class="sv-input" name="note" maxlength="500" placeholder="Qual sera o proximo passo?"></label><div class="sv-tracking-actions"><button type="button" class="sv-button" data-case-tracking-close>Cancelar</button><button type="submit" class="sv-button">Criar acompanhamento</button></div></form></div>`; }
+  function centralPage() { const cases = centralFilteredCases(); const selected = cases.find((item) => item.id === state.centralSelected) || null; const tracking = centralCases().find((item) => item.id === state.centralTracking) || null; const filters = [['all', 'Todos'], ['critical', 'Criticos'], ['today', 'Hoje'], ['approval', 'Aprovacao'], ['unassigned', 'Sem responsavel']]; return `<section class="sv-ops-head"><div><div class="sv-eyebrow">Central operacional // inbox da coordenacao</div><h2>O que esta travando a Masayoshi agora?</h2><p>Uma fila unica de casos operacionais. Cada item concentra contexto, decisao e proximo passo.</p></div><div class="sv-ops-summary"><b>${cases.filter((item) => item.priority === 'critical').length}</b><span>criticos</span><b>${cases.length}</b><span>na fila</span></div></section><section class="sv-ops-shell"><aside class="sv-ops-filters"><span class="sv-eyebrow">Visao</span>${filters.map(([key, label]) => `<button class="${state.centralFilter === key ? 'active' : ''}" data-central-filter="${key}">${label}<b>${key === 'all' ? centralCases().length : key === 'critical' ? centralCases().filter((item) => item.priority === 'critical').length : key === 'today' ? centralCases().filter((item) => item.due && String(item.due).slice(0, 10) <= new Date().toISOString().slice(0, 10)).length : key === 'approval' ? centralCases().filter((item) => item.pendingApproval).length : centralCases().filter((item) => !item.owner).length}</b></button>`).join('')}</aside><div class="sv-case-list"><div class="sv-case-list-head"><span>Casos operacionais</span><small>${cases.length} encontrados</small></div>${cases.map((item) => `<button class="sv-case ${item.priority} ${state.centralSelected === item.id ? 'selected' : ''}" data-case-select="${esc(item.id)}"><span class="sv-case-priority"></span><span class="sv-case-main"><b>${esc(item.title)}</b><small>${esc(item.description)}</small><em>${esc(item.source)}${item.owner ? ` · ${esc(item.owner)}` : ''}${item.due ? ` · ${esc(String(item.due).slice(0, 10))}` : ''}</em></span><i class="fa-solid fa-chevron-right"></i></button>`).join('') || '<div class="sv-empty">Nenhum caso nesta visao.</div>'}</div>${centralDetail(selected)}</section>${trackingModal(tracking)}`; }
+  function periodLabel() { const bounds = periodBounds(); if (!bounds) return 'Historico geral'; if (state.periodMode === 'dia') return new Date(`${bounds.start}T12:00:00`).toLocaleDateString('pt-BR'); if (state.periodMode === 'semana') return `${new Date(`${bounds.start}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${bounds.end}T12:00:00`).toLocaleDateString('pt-BR')}`; return new Date(`${bounds.start}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); }
+  function performance() { const d = state.data; if (d.error) return overview(); const inputType = state.periodMode === 'mes' ? 'month' : 'date'; const inputValue = state.periodMode === 'mes' ? state.referenceDate.slice(0, 7) : state.referenceDate; return `<section class="sv-performance-head"><div><div class="sv-eyebrow">Acompanhamento individual / ${esc(periodLabel())}</div><h2>Desempenho da equipe</h2><p>Atividades oficiais, eventos, mensalidade e participacao em um unico lugar.</p></div><div class="sv-period-controls"><div class="sv-period-tabs" role="group" aria-label="Periodo de desempenho">${['geral', 'mes', 'semana', 'dia'].map((mode) => `<button class="${state.periodMode === mode ? 'active' : ''}" data-performance-mode="${mode}">${mode === 'mes' ? 'Mes' : mode.charAt(0).toUpperCase() + mode.slice(1)}</button>`).join('')}</div>${state.periodMode === 'geral' ? '' : `<label class="sv-period"><i class="fa-regular fa-calendar"></i><input type="${inputType}" value="${inputValue}" data-performance-date></label>`}</div></section><section class="sv-member-grid">${d.members.map((member) => `<button class="sv-member sv-corner" data-member="${member.id}"><span class="sv-avatar">${member.avatar_url ? `<img src="${esc(member.avatar_url)}" alt="">` : esc(member.initials || Utils.getInitials(member.name))}</span><span class="sv-member-score ${scoreTone(member.score)}">${member.score}<small>/100</small></span><h3>${esc(member.name)}</h3><p>${esc(member.role || 'Membro')} - ${member.score ? `${member.score}% desempenho` : 'sem dados no periodo'}</p><div class="sv-score-track"><i style="width:${member.score}%"></i></div><div class="sv-member-metrics"><span><b>${member.activities.completed.length}/${member.activities.all.length}</b>concluidas</span><span><b>${member.activities.late.length}</b>atrasadas</span><span><b>${member.rates.attendance === null ? '-' : `${member.rates.attendance}%`}</b>eventos</span></div></button>`).join('')}</section>`; }
+  function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
+  function decorateReminderCards() { const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
+  function analyticsPage() { const todayValue = new Date().toISOString().slice(0, 10); return `<section class="sv-analytics-legacy"><header class="sv-analytics-header"><p class="sv-analytics-eyebrow">SISTEMA ANALITICO INTERNO</p><div class="sv-analytics-crest"><i></i><svg viewBox="0 0 40 60" aria-hidden="true"><path d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path class="sv-wine-fill" d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path d="M20 34v18M12 52h16"/></svg><i></i></div><h1><span>Msy</span> <b>-</b> <span>Analytics</span></h1><div class="sv-analytics-subtitle"><i></i><em>Intelligence System</em><i></i></div><div class="sv-analytics-mode"><button class="active" type="button" data-analytics-mode="weekly"><strong>◇</strong><span>Semanal</span><small>Weekly Report</small></button><div><i></i><b>◇</b><i></i></div><button type="button" data-analytics-mode="monthly"><strong>◉</strong><span>Mensal</span><small>Monthly Insights</small></button></div><div class="sv-analytics-motto"><b></b><em>O sangue faz o parente, mas so a lealdade faz a familia.</em><b></b></div></header><section class="sv-analytics-panel"><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span id="analyticsSectionLabel">Parametros de Analise - Semanal</span><i></i></div><div class="sv-analytics-form"><label>Data Inicio<input id="analyticsStart" type="date" value="${todayValue}"></label><label>Data Fim<input id="analyticsEnd" type="date" value="${todayValue}"></label><label>Arquivo do Chat (.txt)<span class="sv-analytics-file"><span><i class="fa-regular fa-file-lines"></i><b id="analyticsFileLabel">Selecionar arquivo...</b></span><input id="analyticsFile" type="file" accept=".txt,text/plain"></span></label></div><select id="analyticsMode" class="sv-analytics-native-mode" aria-hidden="true" tabindex="-1"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select><button class="sv-analytics-submit" data-analytics-import><span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i></button></section></section>`; }
+  async function importAnalytics(button) { const file = document.getElementById('analyticsFile')?.files?.[0]; const inicio = document.getElementById('analyticsStart')?.value; const fim = document.getElementById('analyticsEnd')?.value; const mode = document.getElementById('analyticsMode')?.value; if (!file || !inicio || !fim) { Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error'); return; } if (inicio > fim) { Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error'); return; } if (file.size > 35 * 1024 * 1024) { Utils.showToast('O arquivo excede o limite de 35 MB.', 'error'); return; } button.disabled = true; button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>'; try { const chat = await file.text(); const { data: sessionData } = await db.auth.getSession(); const url = typeof MSY_CONFIG !== 'undefined' ? MSY_CONFIG.SUPABASE_URL : null; if (!url || !sessionData.session?.access_token) throw new Error('Sessao ou configuracao do Portal indisponivel.'); const response = await fetch(`${url}/functions/v1/supervision-analytics`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` }, body: JSON.stringify({ chat, inicio, fim, mode, fileName: file.name }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || 'Falha ao processar o historico.'); Utils.showToast(`${payload.metricCount || 0} metricas importadas com sucesso.`); await loadData(); location.hash = 'desempenho'; } catch (error) { console.error('[MSY][supervisao] analytics:', error); Utils.showToast(error.message || 'Nao foi possivel importar o historico.', 'error'); button.disabled = false; button.innerHTML = '<span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i>'; } }
+  function huginn() { const d = state.data; return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid fa-crow"></i>Huginn: composicao da saude</div><div class="sv-factor-list">${d.factors.map(([label, value, weight]) => `<div class="sv-factor"><span>${label} <em>(${weight}% do indice)</em></span><span>${Math.round(value * 100)}%</span></div>`).join('')}</div></section>`; }
+  function activityRow(activity, tone) { return `<div class="sv-detail-row"><span class="sv-status-dot ${tone}"></span><div><b>${esc(activity.title || 'Atividade sem titulo')}</b><small>${activity.deadline ? `Prazo: ${new Date(`${activity.deadline}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem prazo definido'}</small></div><span>${esc(activity.status || 'Pendente')}</span></div>`; }
+  function remindersPage() { const d = state.data; const open = (d.reminders || []).filter((item) => item.status === 'open'); const observations = (d.observations || []).filter((item) => item.status === 'active'); const card = (item) => `<article class="sv-reminder sv-corner"><div class="sv-reminder-meta"><span>${esc(item.origin === 'automatic' ? 'automatico' : 'manual')}</span><span>${esc(item.category)}</span></div><h3>${esc(item.title)}</h3><p>${esc(item.description || '')}</p>${item.due_at ? `<small><i class="fa-regular fa-clock"></i> ${new Date(item.due_at).toLocaleString('pt-BR')}</small>` : ''}${item.whatsapp_message ? `<textarea class="sv-whatsapp-text" readonly>${esc(item.whatsapp_message)}</textarea><button class="sv-button" data-copy-whatsapp="${item.id}"><i class="fa-regular fa-copy"></i> Copiar mensagem</button>` : ''}<div class="sv-reminder-actions"><button class="sv-icon-button" title="Concluir" data-reminder-action="completed" data-reminder-id="${item.id}"><i class="fa-solid fa-check"></i></button><button class="sv-icon-button" title="Dispensar" data-reminder-action="dismissed" data-reminder-id="${item.id}"><i class="fa-solid fa-ban"></i></button></div></article>`; return `<section class="sv-reminders-head"><div><div class="sv-eyebrow">Central operacional</div><h2>Lembretes e observacoes</h2><p>Itens automáticos da varredura horaria e registros manuais da coordenação.</p></div><span class="sv-open-count">${open.length} abertos</span></section><section class="sv-reminder-forms"><form class="sv-corner sv-panel" data-reminder-form><div class="sv-panel-title"><i class="fa-solid fa-plus"></i>Novo lembrete</div><input class="sv-input" name="title" required maxlength="140" placeholder="O que precisa ser feito?"><textarea class="sv-input" name="description" maxlength="800" placeholder="Detalhes opcionais"></textarea><div class="sv-form-row"><select class="sv-input" name="category"><option value="task">Tarefa</option><option value="activity">Cobranca de atividade</option><option value="event_message">Mensagem de evento</option></select><input class="sv-input" name="dueAt" type="datetime-local"></div><button class="sv-button" type="submit">Criar lembrete</button></form><form class="sv-corner sv-panel" data-observation-form><div class="sv-panel-title"><i class="fa-solid fa-book-open"></i>Nova observacao</div><input class="sv-input" name="title" required maxlength="140" placeholder="Titulo da observacao"><textarea class="sv-input" name="body" required maxlength="1200" placeholder="Informacao que ajudara a coordenacao no futuro"></textarea><button class="sv-button" type="submit">Registrar observacao</button></form></section><section class="sv-reminder-layout"><div><div class="sv-panel-title"><i class="fa-solid fa-list-check"></i>Itens abertos</div><div class="sv-reminder-grid">${open.map(card).join('') || '<div class="sv-empty">Nenhum lembrete aberto.</div>'}</div></div><div><div class="sv-panel-title"><i class="fa-solid fa-lightbulb"></i>Observacoes inteligentes</div><div class="sv-observation-list">${observations.map((item) => `<article class="sv-observation"><b>${esc(item.title)}</b><p>${esc(item.body)}</p><small>${esc(item.origin === 'automatic' ? 'Gerada automaticamente' : 'Registro manual')}</small><button class="sv-icon-button" title="Arquivar" data-observation-id="${item.id}"><i class="fa-solid fa-box-archive"></i></button></article>`).join('') || '<div class="sv-empty">Nenhuma observacao registrada.</div>'}</div></div></section>`; }
+  function memberModal(member) { const paid = statusKey(member.payment?.status) === 'pago'; const paymentLabel = member.payment ? (paid ? 'Mensalidade paga' : 'Mensalidade pendente') : 'Sem registro de mensalidade'; const insight = member.activities.late.length ? `${member.activities.late.length} atividade${member.activities.late.length > 1 ? 's' : ''} atrasada${member.activities.late.length > 1 ? 's' : ''} precisa de acompanhamento.` : member.score >= 80 ? 'Desempenho consistente no periodo analisado.' : 'Acompanhe as proximas entregas para evoluir a nota.'; const components = member.components.map((component) => `<div class="sv-component"><div><span>${component.label}</span><b>${component.value}%</b></div><div class="sv-component-track"><i style="width:${component.value}%;background:${component.color}"></i></div><small>${component.detail} - peso ${component.weight}%</small></div>`).join('') || '<p class="sv-empty">Ainda nao ha dados suficientes para calcular componentes.</p>'; return `<div class="sv-modal-overlay open" data-close-modal><section class="sv-member-modal" role="dialog" aria-modal="true" aria-label="Desempenho de ${esc(member.name)}"><header class="sv-modal-header"><div><div class="sv-eyebrow">Supervisao individual</div><h2>${esc(member.name)}</h2></div><button class="sv-icon-button" data-close-member aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></header><div class="sv-modal-scroll"><section class="sv-member-hero"><div class="sv-avatar sv-avatar-large">${member.avatar_url ? `<img src="${esc(member.avatar_url)}" alt="">` : esc(member.initials || Utils.getInitials(member.name))}</div><div><b>${esc(member.role || 'Membro')}</b><p>${insight}</p></div><div class="sv-detail-score ${scoreTone(member.score)}"><strong>${member.score}</strong><span>/100</span><small>${grade(member.score)}</small></div></section><section class="sv-detail-overview"><div class="sv-ring" style="--score:${member.score}"><span>${member.score}%<small>geral</small></span></div><div class="sv-components"><div class="sv-panel-title"><i class="fa-solid fa-chart-pie"></i>Composicao do desempenho</div>${components}</div></section><section class="sv-detail-stats"><div><b>${member.activities.completed.length}</b><span>atividades feitas</span></div><div><b>${member.activities.pending.length + member.activities.ongoing.length}</b><span>para entregar</span></div><div class="${member.activities.late.length ? 'bad' : 'good'}"><b>${member.activities.late.length}</b><span>atrasadas</span></div><div class="${paid ? 'good' : 'warn'}"><b><i class="fa-solid ${paid ? 'fa-circle-check' : 'fa-clock'}"></i></b><span>${paymentLabel}</span></div><div><b>${member.rates.attendance === null ? '-' : `${member.rates.attendance}%`}</b><span>participacao em eventos</span></div></section><section class="sv-detail-columns"><div class="sv-detail-section"><div class="sv-panel-title"><i class="fa-solid fa-list-check"></i>Atividades a entregar</div>${[...member.activities.late, ...member.activities.pending, ...member.activities.ongoing].slice(0, 6).map((activity) => activityRow(activity, member.activities.late.some((late) => late.id === activity.id) ? 'bad' : 'warn')).join('') || '<p class="sv-empty">Nenhuma atividade pendente.</p>'}</div><div class="sv-detail-section"><div class="sv-panel-title"><i class="fa-solid fa-circle-check"></i>Atividades concluidas</div>${member.activities.completed.slice(0, 6).map((activity) => activityRow(activity, 'good')).join('') || '<p class="sv-empty">Nenhuma atividade concluida no registro.</p>'}</div></section><section class="sv-detail-section sv-event-summary"><div class="sv-panel-title"><i class="fa-solid fa-calendar-check"></i>Participacao em eventos</div><div><b>${member.attendance.present}</b> presencas - <b>${member.attendance.absent}</b> ausencias - <b>${member.attendance.justified}</b> justificadas <span>(${member.attendance.total} eventos avaliados)</span></div></section></div></section></div>`; }
+  function handleCentralAction(event) { const filter = event.target.closest('[data-central-filter]'); if (filter) { state.centralFilter = filter.dataset.centralFilter; state.centralSelected = null; render(); return; } const selected = event.target.closest('[data-case-select]'); if (selected) { state.centralSelected = selected.dataset.caseSelect; render(); return; } if (event.target.closest('[data-case-tracking-close]')) { state.centralTracking = null; render(); return; } const action = event.target.closest('[data-case-action]'); if (!action) return; if (action.dataset.caseAction === 'close') { state.centralSelected = null; render(); return; } const item = centralCases().find((candidate) => candidate.id === action.dataset.caseId); if (!item) return; if (action.dataset.caseAction === 'track') { state.centralTracking = item.id; render(); return; } if (item.source === 'lembrete') { const status = action.dataset.caseAction === 'complete' ? 'completed' : 'dismissed'; db.from('supervision_reminders').update({ status, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', item.raw.id).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast(status === 'completed' ? 'Lembrete concluido.' : 'Lembrete dispensado.'); state.centralSelected = null; await refreshReminders(); } }); return; } if (item.source === 'alerta' && action.dataset.caseAction === 'resolve') { db.from('supervision_alerts').update({ status: 'resolved', resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', item.raw.id).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast('Alerta resolvido.'); state.centralSelected = null; await refreshReminders(); } }); } }
+  async function handleCaseTrackingSubmit(event) { const form = event.target; if (!form.matches('[data-case-tracking-form]')) return; event.preventDefault(); const values = new FormData(form); const item = centralCases().find((candidate) => candidate.id === values.get('caseId')); if (!item) return; const assignedTo = String(values.get('assignedTo') || ''); const dueAt = String(values.get('dueAt') || ''); if (!assignedTo || !dueAt) { Utils.showToast('Selecione o responsavel e o prazo.', 'error'); return; } const note = String(values.get('note') || '').trim(); const { error } = await db.from('supervision_reminders').insert({ title: `Acompanhar: ${item.title}`, description: note || item.description, category: 'task', origin: 'manual', status: 'open', due_at: new Date(dueAt).toISOString(), metadata: { assigned_to: assignedTo, case_id: item.id, case_source: item.source }, created_by: state.profile.id }); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast('Acompanhamento atribuido com prazo.'); state.centralTracking = null; state.centralSelected = null; await refreshReminders(); }
+  function render() { state.route = (location.hash.replace('#', '') || 'resumo').split('/')[0]; const d = state.data || {}; const pages = { resumo: overview, central: centralPage, huginn, pendencias: () => centralPage(), lembretes: remindersPage, desempenho: performance, projetos: () => simplePage('Projetos acompanhados', 'fa-diagram-project', d.projects || []), eventos: () => simplePage('Eventos monitorados', 'fa-calendar-days', d.events || []), financeiro: () => simplePage('Situacao financeira', 'fa-vault', (d.pendingPayments || []).map((profile) => ({ title: profile.name, description: 'Mensalidade pendente', status: 'pendente' }))), analytics: analyticsPage, timeline: () => simplePage('Timeline Inteligente', 'fa-timeline', d.timeline || []), alertas: () => centralPage() }; shell((pages[state.route] || pages.resumo)()); }
+  async function changePeriod(mode, value) { state.periodMode = mode || state.periodMode; if (value) state.referenceDate = state.periodMode === 'mes' ? `${value}-01` : value; root.innerHTML = '<div class="sv-boot"><span></span><p>Atualizando desempenho...</p></div>'; await loadData(); render(); }
+  function onChange(event) { const input = event.target.closest('[data-performance-date]'); if (input?.value) changePeriod(null, input.value); const file = event.target.closest('#analyticsFile'); if (file) { const label = document.getElementById('analyticsFileLabel'); if (label) label.textContent = file.files?.[0]?.name || 'Selecionar arquivo...'; } }
+  async function refreshReminders() { await loadData(); render(); }
+  async function onSubmit(event) { const form = event.target; if (!form.matches('[data-reminder-form],[data-observation-form]')) return; event.preventDefault(); const values = new FormData(form); const isReminder = form.matches('[data-reminder-form]'); const payload = isReminder ? { title: values.get('title'), description: values.get('description') || null, category: values.get('category'), due_at: values.get('dueAt') ? new Date(String(values.get('dueAt'))).toISOString() : null, origin: 'manual', created_by: state.profile.id } : { title: values.get('title'), body: values.get('body'), origin: 'manual', created_by: state.profile.id }; const { error } = await db.from(isReminder ? 'supervision_reminders' : 'supervision_observations').insert(payload); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast(isReminder ? 'Lembrete criado.' : 'Observacao registrada.'); await refreshReminders(); }
+  function onClick(event) { const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
+  function readAnalyticsFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Nao foi possivel ler o arquivo.'));
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  function analyticsDate(value, mode) {
+    if (mode === 'weekly') return value;
+    const [year, month, day] = String(value).split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  function sanitizeAnalyticsHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    template.content.querySelectorAll('script,style,iframe,object,embed,link').forEach((node) => node.remove());
+    template.content.querySelectorAll('*').forEach((node) => [...node.attributes].forEach((attribute) => {
+      if (/^on/i.test(attribute.name) || /^(src|href)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
+    }));
+    return template.innerHTML;
+  }
+
+  function renderLocalAnalyticsResult(html) {
+    root.querySelector('[data-analytics-local-result]')?.remove();
+    const panel = root.querySelector('.sv-analytics-panel');
+    if (!panel) return;
+    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-local-result><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span>Resultado da Analise</span><i></i></div><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
+  }
+
+  async function runLocalAnalytics(button) {
+    const file = document.getElementById('analyticsFile')?.files?.[0];
+    const inicio = document.getElementById('analyticsStart')?.value;
+    const fim = document.getElementById('analyticsEnd')?.value;
+    const mode = document.getElementById('analyticsMode')?.value || 'weekly';
+    if (!file || !inicio || !fim) { Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error'); return; }
+    if (inicio > fim) { Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error'); return; }
+    if (file.size > 35 * 1024 * 1024) { Utils.showToast('O arquivo excede o limite de 35 MB.', 'error'); return; }
+    button.disabled = true;
+    button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>';
+    try {
+      const chat = await readAnalyticsFile(file);
+      const endpoint = mode === 'monthly'
+        ? 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/relatorio-mensal'
+        : 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/analisar-chat';
+      const response = await window.fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat, inicio: analyticsDate(inicio, mode), fim: analyticsDate(fim, mode) }),
+      });
+      if (!response.ok) throw new Error(`O MSY Analytics respondeu HTTP ${response.status}.`);
+      const payload = await response.json();
+      if (!payload?.html) throw new Error('O MSY Analytics nao retornou a tabela de desempenho.');
+      renderLocalAnalyticsResult(payload.html);
+      Utils.showToast('Tabela de desempenho criada.');
+    } catch (error) {
+      console.error('[MSY][supervisao] analytics local:', error);
+      const detail = error instanceof TypeError
+        ? 'A requisicao foi bloqueada ou o tunel do n8n esta desligado.'
+        : (error.message || 'O webhook nao respondeu.');
+      Utils.showToast(`MSY Analytics indisponivel. ${detail}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.innerHTML = '<span>Iniciar Analise</span><i></i>';
+    }
+  }
+
+  root.innerHTML = '<div class="sv-boot"><span></span><p>Inicializando Supervisao...</p></div>';
+  init().catch((error) => { console.error('[MSY][supervisao] inicializacao:', error); root.innerHTML = `<section class="sv-fatal sv-corner"><div class="sv-eyebrow">Supervisao indisponivel</div><h1>O centro operacional nao carregou.</h1><p>${esc(error?.message || 'Verifique a conexao e a migration da Supervisao.')}</p><a class="sv-button" href="dashboard.html">Voltar ao Portal</a></section>`; });
+}());

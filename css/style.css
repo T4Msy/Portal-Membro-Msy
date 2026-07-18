@@ -1132,6 +1132,23 @@ select option:hover,
   overflow: hidden;
 }
 
+/* Lembretes sao exclusivos da Area de Supervisao. */
+body[data-page="dashboard"] .dash-grid > .card:nth-child(3) { display: none; }
+.sidebar-collapse-btn {
+  position:absolute;right:10px;top:10px;z-index:2;width:28px;height:28px;border:1px solid var(--border-faint);
+  border-radius:var(--radius);background:var(--black-3);color:var(--text-3);cursor:pointer;
+}
+.sidebar-collapse-btn:hover { color:var(--red-bright);border-color:var(--border-red); }
+.sidebar.sidebar-collapsed { width:68px; }
+.sidebar.sidebar-collapsed .sidebar-logo { padding:52px 8px 16px; }
+.sidebar.sidebar-collapsed .sidebar-logo-sub,.sidebar.sidebar-collapsed .sidebar-logo-sep,
+.sidebar.sidebar-collapsed .sidebar-section-label,.sidebar.sidebar-collapsed .nav-item span,
+.sidebar.sidebar-collapsed .nav-badge,.sidebar.sidebar-collapsed .sidebar-user-info,
+.sidebar.sidebar-collapsed .sidebar-user>i,.sidebar.sidebar-collapsed .logout-btn { display:none; }
+.sidebar.sidebar-collapsed .nav-item { justify-content:center;padding:11px; }
+.sidebar.sidebar-collapsed .sidebar-user { justify-content:center;padding:8px; }
+.sidebar.sidebar-collapsed + .sidebar-overlay + .main-wrapper { margin-left:68px; }
+
 /* Vertical accent line */
 .sidebar::after {
   content: '';
