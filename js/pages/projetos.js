@@ -80,7 +80,8 @@ const state = {
   canCreate: false,
   roleOptions: [],            // catálogo de papéis personalizados
   currentProjectTab: 'resumo',
-  currentTasksView: 'minhas', // minhas | equipe | revisao | concluidas
+  currentTasksView: null,      // minhas | equipe | revisao | concluidas
+  currentProjectId: null,
 };
 
 const content = () => document.getElementById('pageContent');
@@ -104,6 +105,9 @@ function isOverdue(task) {
   if (!task.prazo || task.status === 'concluida') return false;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return new Date(task.prazo + 'T23:59:59') < today;
+}
+function isPendingTask(task) {
+  return task.status !== 'concluida';
 }
 function fmtTime(t) { return t ? String(t).slice(0, 5) : ''; }
 function fmtDuration(seconds) {
@@ -624,6 +628,10 @@ async function renderProject(projectId) {
 
     const manage = canManage(project, participants);
     const isMember = participants.some(p => p.user_id === state.profile.id);
+    if (state.currentProjectId !== project.id) {
+      state.currentProjectId = project.id;
+      state.currentTasksView = manage ? 'equipe' : 'minhas';
+    }
     const ctx = { project, participants, categories, tasks, docs, checklist, manage, isMember };
 
     const tabs = [
@@ -754,7 +762,7 @@ function agendaItem(t, projectId, compact = false) {
 
 function renderAgendaTab(ctx) {
   const { project, tasks } = ctx;
-  const deliveries = tasks.filter(t => t.prazo).sort(cmpDelivery);
+  const deliveries = tasks.filter(t => t.prazo && isPendingTask(t)).sort(cmpDelivery);
   if (!deliveries.length) return emptyHTML('Nenhuma entrega com prazo definido. Defina prazos nas tarefas para vê-las aqui.', 'fa-calendar-day');
 
   const byDate = {};
@@ -857,13 +865,13 @@ function renderTasksTab(ctx) {
 
   const views = [
     { key: 'minhas', label: 'Minhas Tarefas', icon: 'fa-circle-user' },
-    { key: 'equipe', label: 'Equipe', icon: 'fa-users' },
+    { key: 'equipe', label: 'Pendentes da Equipe', icon: 'fa-users' },
     { key: 'revisao', label: 'Em Revisão', icon: 'fa-magnifying-glass' },
     { key: 'concluidas', label: 'Concluídas', icon: 'fa-circle-check' },
   ];
   const counts = {
-    minhas: tasks.filter(t => t.assigned_to === me).length,
-    equipe: tasks.length,
+    minhas: tasks.filter(t => t.assigned_to === me && isPendingTask(t)).length,
+    equipe: tasks.filter(isPendingTask).length,
     revisao: tasks.filter(t => t.status === 'em_revisao').length,
     concluidas: tasks.filter(t => t.status === 'concluida').length,
   };
@@ -878,7 +886,7 @@ function renderTasksTab(ctx) {
 
   let bodyHTML = '';
   if (view === 'minhas') {
-    bodyHTML = flatList(tasks.filter(t => t.assigned_to === me).sort(byStatusThenDue), 'Você não tem tarefas atribuídas neste projeto.');
+    bodyHTML = flatList(tasks.filter(t => t.assigned_to === me && isPendingTask(t)).sort(byStatusThenDue), 'Você não tem tarefas pendentes atribuídas neste projeto.');
   } else if (view === 'revisao') {
     bodyHTML = flatList(tasks.filter(t => t.status === 'em_revisao').sort(byStatusThenDue), 'Nenhuma tarefa aguardando revisão.');
   } else if (view === 'concluidas') {
@@ -886,7 +894,7 @@ function renderTasksTab(ctx) {
   } else {
     // equipe — agrupado por categoria
     const tasksByCat = {};
-    tasks.forEach(t => { (tasksByCat[t.category_id || 'none'] ||= []).push(t); });
+    tasks.filter(isPendingTask).forEach(t => { (tasksByCat[t.category_id || 'none'] ||= []).push(t); });
     const catBlock = (cat) => {
       const ct = (tasksByCat[cat ? cat.id : 'none'] || []).sort(byStatusThenDue);
       const pct = avgProgress(ct, checklist);
