@@ -5059,13 +5059,10 @@
          btn.addEventListener('click', async () => {
            btn.disabled = true;
            const accepted = btn.classList.contains('ev-just-approve');
-           const { error } = await db.from('event_presencas').update({
-             justificativa_status: accepted ? 'aceita' : 'recusada',
-             justificativa_reviewed_by: profile.id,
-             justificativa_reviewed_at: new Date().toISOString(),
-             status: accepted ? 'justificado' : 'nao_participar',
-             response_status: 'nao_participar'
-           }).eq('id', btn.dataset.pid);
+           const { error } = await db.rpc('review_event_justification', {
+             p_presence_id: btn.dataset.pid,
+             p_accepted: accepted
+           });
            if (!error) {
              if (btn.dataset.uid) {
                await db.rpc('notify_member', {
