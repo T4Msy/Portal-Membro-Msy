@@ -79,7 +79,7 @@ async function initReunioes() {
       tab.innerHTML = `
         ${isManager ? `<div style="margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" id="newMeetBtn"><i class="fa-solid fa-calendar-plus"></i> Nova Reunião</button>
-          <button class="btn btn-gold" id="agendarMeetBtn"><i class="fa-solid fa-user-clock"></i> Agendar com Membros</button>
+          <button class="btn btn-gold" id="agendarMeetBtn"><i class="fa-solid fa-user-clock"></i> Agendar com Membro</button>
         </div>` : ''}
         ${futurePersonal.length ? section('Reuniões ativas', futurePersonal.map(personalCard).join(''), 'fa-user-clock') : ''}
         ${futureGeneral.length ? section('Próximas reuniões gerais', futureGeneral.map(generalCard).join(''), 'fa-calendar-days') : ''}
@@ -188,15 +188,21 @@ async function initReunioes() {
   }
 
   async function openScheduleModal(prefill = {}) {
-    const members = await activeMembers(); const select = document.getElementById('ag-members');
-    select.innerHTML = members.map(member => `<option value="${member.id}" ${member.id === prefill.userId ? 'selected' : ''}>${Utils.escapeHtml(member.name)}</option>`).join('');
+    const members = await activeMembers(); const select = document.getElementById('ag-member');
+    select.innerHTML = `<option value="">Selecionar membro...</option>` + members.map(member => `<option value="${member.id}" ${member.id === prefill.userId ? 'selected' : ''}>${Utils.escapeHtml(member.name)}</option>`).join('');
     document.getElementById('ag-request-id').value = prefill.requestId || '';
+    document.getElementById('ag-request-member').textContent = prefill.userId
+      ? `Solicitante: ${members.find(member => member.id === prefill.userId)?.name || 'Membro'}`
+      : '';
+    document.getElementById('ag-member-group').style.display = prefill.userId ? 'none' : '';
+    document.getElementById('ag-description-group').style.display = prefill.userId ? 'none' : '';
     document.getElementById('ag-date').value = ''; document.getElementById('ag-time').value = '19:00'; document.getElementById('ag-desc').value = prefill.description || '';
     document.getElementById('agendarModal').classList.add('open');
   }
 
   async function saveScheduledMeeting() {
-    const ids = [...document.getElementById('ag-members').selectedOptions].map(option => option.value);
+    const memberId = document.getElementById('ag-member').value;
+    const ids = memberId ? [memberId] : [];
     const meeting_date = document.getElementById('ag-date').value; const meeting_time = document.getElementById('ag-time').value; const requestId = document.getElementById('ag-request-id').value || null;
     if (!ids.length || !meeting_date || !meeting_time) return Utils.showToast('Selecione membros, data e horário.', 'error');
     const { data: meeting, error } = await db.from('scheduled_meetings').insert({ created_by: profile.id, assigned_to: ids[0], meeting_date, meeting_time, description: document.getElementById('ag-desc').value.trim() || null, status: 'agendada', meeting_request_id: requestId }).select().single();
@@ -210,11 +216,11 @@ async function initReunioes() {
 
   async function openParticipantModal(meeting) {
     if (!meeting) return; const members = await activeMembers(); const existing = new Set((meeting.participants || []).map(item => item.user_id));
-    const select = document.getElementById('participant-members'); select.innerHTML = members.filter(member => !existing.has(member.id)).map(member => `<option value="${member.id}">${Utils.escapeHtml(member.name)}</option>`).join('');
+    const select = document.getElementById('participant-members'); select.innerHTML = `<option value="">Selecionar membro...</option>` + members.filter(member => !existing.has(member.id)).map(member => `<option value="${member.id}">${Utils.escapeHtml(member.name)}</option>`).join('');
     document.getElementById('participant-meeting-id').value = meeting.id; document.getElementById('participantModal').classList.add('open');
   }
   document.getElementById('participantSave')?.addEventListener('click', async () => {
-    const ids = [...document.getElementById('participant-members').selectedOptions].map(option => option.value); const meetingId = document.getElementById('participant-meeting-id').value;
+    const memberId = document.getElementById('participant-members').value; const ids = memberId ? [memberId] : []; const meetingId = document.getElementById('participant-meeting-id').value;
     if (!ids.length) return Utils.showToast('Selecione pelo menos um membro.', 'error');
     const { error } = await db.from('scheduled_meeting_participants').insert(ids.map(user_id => ({ meeting_id: meetingId, user_id, added_by: profile.id })));
     if (error) return Utils.showToast('Erro ao adicionar membros.', 'error'); await notifyParticipants(meetingId, ids, 'Você foi incluído em uma reunião com a Diretoria.'); document.getElementById('participantModal').classList.remove('open'); Utils.showToast('Participantes adicionados.'); loadMeetings();
@@ -251,6 +257,27 @@ function _injectMeetingModals(isManager) {
   const wrap = document.createElement('div');
   wrap.innerHTML = `<div class="modal-overlay" id="solicitarModal"><div class="modal"><div class="modal-header"><div class="modal-title">Solicitar Reunião</div><button class="modal-close" id="solModalClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Motivo *</label><input class="form-input" id="sol-motivo"></div><div class="form-group"><label class="form-label">Descrição</label><textarea class="form-input form-textarea" id="sol-desc"></textarea></div><div class="form-group"><label class="form-label">Sugestão de data/horário</label><input class="form-input" id="sol-data"></div></div><div class="modal-footer"><button class="btn btn-ghost" id="solModalCancel">Cancelar</button><button class="btn btn-primary" id="solModalSave">Enviar</button></div></div></div>${isManager ? `<div class="modal-overlay" id="newMeetModal"><div class="modal"><div class="modal-header"><div class="modal-title">Nova Reunião</div><button class="modal-close" onclick="document.getElementById('newMeetModal').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="nm-title"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="nm-date"></div><div class="form-group"><label class="form-label">Horário</label><input class="form-input" type="time" id="nm-time" value="19:00"></div></div><div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="nm-type"><option value="geral">Geral</option><option value="diretoria">Diretoria</option></select></div><div class="form-group"><label class="form-label">Pauta</label><textarea class="form-input form-textarea" id="nm-desc"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary" id="newMeetSave">Criar</button></div></div></div><div class="modal-overlay" id="agendarModal"><div class="modal"><div class="modal-header"><div class="modal-title">Agendar Reunião com Membros</div><button class="modal-close" id="agendarClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="ag-request-id"><div class="form-group"><label class="form-label">Participantes *</label><select class="form-input" id="ag-members" multiple size="6"></select><div class="form-hint">Use Ctrl/Cmd para selecionar mais de um membro.</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="ag-date"></div><div class="form-group"><label class="form-label">Horário *</label><input class="form-input" type="time" id="ag-time" value="19:00"></div></div><div class="form-group"><label class="form-label">Pauta</label><textarea class="form-input form-textarea" id="ag-desc"></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" id="agendarCancel">Cancelar</button><button class="btn btn-gold" id="agendarSave">Agendar</button></div></div></div><div class="modal-overlay" id="participantModal"><div class="modal"><div class="modal-header"><div class="modal-title">Adicionar Participantes</div><button class="modal-close" id="participantClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="participant-meeting-id"><div class="form-group"><label class="form-label">Membros</label><select class="form-input" id="participant-members" multiple size="8"></select></div></div><div class="modal-footer"><button class="btn btn-ghost" id="participantCancel">Cancelar</button><button class="btn btn-primary" id="participantSave">Adicionar</button></div></div></div><div class="modal-overlay" id="newAtaModal"><div class="modal"><div class="modal-header"><div class="modal-title">Nova Ata</div><button class="modal-close" id="newAtaClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="ata-title"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="ata-date"></div><div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="ata-type"><option value="geral">Geral</option><option value="diretoria">Diretoria</option></select></div></div><div class="form-group"><label class="form-label">Quem pode ver</label><select class="form-input" id="ata-viewers" multiple size="6"></select><div class="form-hint">Apenas os membros escolhidos, além da gestão, verão a ata.</div></div><div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input form-textarea" id="ata-content"></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" id="newAtaCancel">Cancelar</button><button class="btn btn-primary" id="newAtaSave">Salvar Ata</button></div></div></div><div class="modal-overlay" id="ataAccessModal"><div class="modal"><div class="modal-header"><div class="modal-title">Acesso à Ata</div><button class="modal-close" id="ataAccessClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="access-minute-id"><div class="form-group"><label class="form-label">Membros autorizados</label><select class="form-input" id="ata-access-members" multiple size="9"></select></div></div><div class="modal-footer"><button class="btn btn-ghost" id="ataAccessCancel">Cancelar</button><button class="btn btn-primary" id="ataAccessSave">Salvar acessos</button></div></div></div>` : ''}<div class="modal-overlay" id="ataViewModal"><div class="modal"><div class="modal-header"><div class="modal-title" id="ataViewTitle"></div><button class="modal-close" id="ataViewClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="ataViewBody"></div><div class="modal-footer"><button class="btn btn-outline" id="ataViewCancel">Fechar</button></div></div></div>`;
   [...wrap.children].forEach(element => document.body.appendChild(element));
+  if (isManager) {
+    const initialMember = document.getElementById('ag-members');
+    if (initialMember) {
+      initialMember.id = 'ag-member';
+      initialMember.removeAttribute('multiple');
+      initialMember.removeAttribute('size');
+      initialMember.closest('.modal').querySelector('.modal-title').textContent = 'Agendar Reunião';
+      const group = initialMember.closest('.form-group');
+      group.id = 'ag-member-group';
+      group.querySelector('.form-label').textContent = 'Membro inicial *';
+      group.querySelector('.form-hint')?.remove();
+      group.insertAdjacentHTML('afterend', '<div id="ag-request-member" class="meet-card-meta" style="margin:-4px 0 12px"></div>');
+      document.getElementById('ag-desc').closest('.form-group').id = 'ag-description-group';
+    }
+    const extraMember = document.getElementById('participant-members');
+    if (extraMember) {
+      extraMember.removeAttribute('multiple');
+      extraMember.removeAttribute('size');
+      extraMember.closest('.form-group').querySelector('.form-label').textContent = 'Adicionar membro';
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
