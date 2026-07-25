@@ -5059,10 +5059,22 @@
          btn.addEventListener('click', async () => {
            btn.disabled = true;
            const accepted = btn.classList.contains('ev-just-approve');
-           const { error } = await db.rpc('review_event_justification', {
+           let { error } = await db.rpc('review_event_justification', {
              p_presence_id: btn.dataset.pid,
              p_accepted: accepted
            });
+           // Projetos que ainda nao receberam a migration da RPC continuam
+           // podendo revisar pela policy ja existente de justificativas.
+           if (error && (error.code === 'PGRST202' || error.status === 404)) {
+             const fallback = await db.from('event_presencas').update({
+               justificativa_status: accepted ? 'aceita' : 'recusada',
+               justificativa_reviewed_by: profile.id,
+               justificativa_reviewed_at: new Date().toISOString(),
+               status: accepted ? 'justificado' : 'nao_participar',
+               response_status: 'nao_participar'
+             }).eq('id', btn.dataset.pid);
+             error = fallback.error;
+           }
            if (!error) {
              if (btn.dataset.uid) {
                await db.rpc('notify_member', {
@@ -5078,6 +5090,18 @@
              loadEventos();
            }
            else { Utils.showToast('Erro ao revisar justificativa.', 'error'); btn.disabled = false; }
+         });
+       });
+
+       tab.querySelectorAll('[data-justification-filter]').forEach(btn => {
+         btn.addEventListener('click', () => {
+           const filter = btn.dataset.justificationFilter;
+           tab.querySelectorAll('[data-justification-filter]').forEach(filterBtn => {
+             filterBtn.classList.toggle('active', filterBtn === btn);
+           });
+           tab.querySelectorAll('[data-justification-status]').forEach(card => {
+             card.hidden = filter !== 'todas' && card.dataset.justificationStatus !== filter;
+           });
          });
        });
 
@@ -5778,11 +5802,22 @@
       return { label: 'Pendente', color: '#f59e0b', bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.28)' };
     };
     const statusBadge = (meta) => `<span class="ev-badge" style="background:${meta.bg};border-color:${meta.border};color:${meta.color}">${meta.label}</span>`;
+    const reviewFilter = (status) => {
+      if (status === 'aprovado' || status === 'aceita') return 'aprovadas';
+      if (status === 'recusado' || status === 'recusada') return 'recusadas';
+      return 'pendentes';
+    };
+    const counts = { pendentes: 0, aprovadas: 0, recusadas: 0 };
+    const addToCount = (status, annulled) => {
+      if (!annulled) counts[reviewFilter(status)] += 1;
+    };
     const cancelCards = (cancelReqs || []).map(r => {
       const isAnnulled = !!r.justificativa_anulada;
       const meta = reviewStatus(isAnnulled ? 'anulada' : r.status);
+      const filterStatus = isAnnulled ? 'anuladas' : reviewFilter(r.status);
+      addToCount(r.status, isAnnulled);
       return `
-      <div class="events-review-card">
+      <div class="events-review-card" data-justification-status="${filterStatus}"${filterStatus !== 'pendentes' ? ' hidden' : ''}>
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(r.requester?.name || 'Membro')}</div>
@@ -5808,8 +5843,10 @@
     const justCards = (eventJustifs || []).map(p => {
       const isAnnulled = !!p.justificativa_anulada;
       const meta = reviewStatus(isAnnulled ? 'anulada' : (p.justificativa_status || 'pendente'));
+      const filterStatus = isAnnulled ? 'anuladas' : reviewFilter(p.justificativa_status || 'pendente');
+      addToCount(p.justificativa_status || 'pendente', isAnnulled);
       return `
-      <div class="events-review-card">
+      <div class="events-review-card" data-justification-status="${filterStatus}"${filterStatus !== 'pendentes' ? ' hidden' : ''}>
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
@@ -5833,11 +5870,18 @@
     }).join('');
 
     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa registrada.</div></div>`;
+    const total = counts.pendentes + counts.aprovadas + counts.recusadas;
     const reviewCards = `${cancelCards}${justCards}`;
     return `
       ${actionsHtml}
       <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas</div>
       ${canReview && reviewCards ? `
+        <div class="events-justification-filters" role="tablist" aria-label="Filtrar justificativas">
+          <button class="events-justification-filter active" type="button" data-justification-filter="pendentes">Pendentes <span>${counts.pendentes}</span></button>
+          <button class="events-justification-filter" type="button" data-justification-filter="aprovadas">Aprovadas <span>${counts.aprovadas}</span></button>
+          <button class="events-justification-filter" type="button" data-justification-filter="recusadas">Recusadas <span>${counts.recusadas}</span></button>
+          <button class="events-justification-filter" type="button" data-justification-filter="todas">Todas <span>${total}</span></button>
+        </div>
         <div class="events-director-grid">
           ${reviewCards}
         </div>` : empty}
