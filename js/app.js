@@ -5059,32 +5059,27 @@
          btn.addEventListener('click', async () => {
            btn.disabled = true;
            const accepted = btn.classList.contains('ev-just-approve');
-           let { error } = await db.rpc('review_event_justification', {
-             p_presence_id: btn.dataset.pid,
-             p_accepted: accepted
-           });
-           // Projetos que ainda nao receberam a migration da RPC continuam
-           // podendo revisar pela policy ja existente de justificativas.
-           if (error && (error.code === 'PGRST202' || error.status === 404)) {
-             const fallback = await db.from('event_presencas').update({
-               justificativa_status: accepted ? 'aceita' : 'recusada',
-               justificativa_reviewed_by: profile.id,
-               justificativa_reviewed_at: new Date().toISOString(),
-               status: accepted ? 'justificado' : 'nao_participar',
-               response_status: 'nao_participar'
-             }).eq('id', btn.dataset.pid);
-             error = fallback.error;
-           }
+           // A revisao usa a policy de permissao da propria tabela. Isso evita
+           // depender da RPC que nao existe em alguns ambientes do Supabase.
+           const { error } = await db.from('event_presencas').update({
+             justificativa_status: accepted ? 'aceita' : 'recusada',
+             justificativa_reviewed_by: profile.id,
+             justificativa_reviewed_at: new Date().toISOString(),
+             status: accepted ? 'justificado' : 'nao_participar',
+             response_status: 'nao_participar'
+           }).eq('id', btn.dataset.pid);
            if (!error) {
              if (btn.dataset.uid) {
-               await db.rpc('notify_member', {
+               try {
+                 await db.rpc('notify_member', {
                  p_user_id: btn.dataset.uid,
                  p_message: accepted
                    ? `Sua ausencia em "${btn.dataset.eventTitle}" foi aprovada pela Diretoria.`
                    : `Sua ausencia em "${btn.dataset.eventTitle}" foi recusada pela Diretoria.`,
                  p_type: 'event',
                  p_icon: accepted ? '✅' : '⚠️'
-               }).catch(() => {});
+                 });
+               } catch (_) { /* A notificacao nao deve impedir a revisao. */ }
              }
              Utils.showToast(accepted ? 'Ausencia aprovada.' : 'Ausencia recusada.');
              loadEventos();
