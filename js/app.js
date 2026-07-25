@@ -5063,10 +5063,7 @@
            // depender da RPC que nao existe em alguns ambientes do Supabase.
            const { error } = await db.from('event_presencas').update({
              justificativa_status: accepted ? 'aceita' : 'recusada',
-             justificativa_reviewed_by: profile.id,
-             justificativa_reviewed_at: new Date().toISOString(),
-             status: accepted ? 'justificado' : 'nao_participar',
-             response_status: 'nao_participar'
+             status: accepted ? 'justificado' : 'nao_participar'
            }).eq('id', btn.dataset.pid);
            if (!error) {
              if (btn.dataset.uid) {
@@ -5084,7 +5081,11 @@
              Utils.showToast(accepted ? 'Ausencia aprovada.' : 'Ausencia recusada.');
              loadEventos();
            }
-           else { Utils.showToast('Erro ao revisar justificativa.', 'error'); btn.disabled = false; }
+           else {
+             console.error('[MSY][eventos] Erro ao revisar justificativa:', error);
+             Utils.showToast(error.message || 'Erro ao revisar justificativa.', 'error');
+             btn.disabled = false;
+           }
          });
        });
 
