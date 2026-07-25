@@ -6063,9 +6063,12 @@
        return s === 'participar' || s === 'confirmado';
      });
      const justificados = membros.filter(m => {
-       const s = presMap[m.id]?.status;
-       return s === 'nao_participar' || s === 'ausente' || s === 'justificado';
+       const presence = presMap[m.id];
+       const s = presence?.status;
+       return presence?.justificativa && presence.justificativa_status !== 'recusada'
+         && (s === 'nao_participar' || s === 'ausente' || s === 'justificado');
      });
+     const recusados = membros.filter(m => presMap[m.id]?.justificativa_status === 'recusada');
      const semResp = membros.filter(m => !presMap[m.id]);
      const cancelPend = cancelReqs.filter(r => r.status === 'pendente');
 
@@ -6108,7 +6111,7 @@
      const body = overlay.querySelector('#pdBody');
      body.innerHTML = `
        <!-- Resumo -->
-       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px">
+       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:4px">
          <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18);border-radius:10px;padding:10px;text-align:center">
            <div style="font-size:1.3rem;font-weight:700;color:#10b981">${confirmados.length}</div>
            <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Confirmados</div>
@@ -6116,6 +6119,10 @@
          <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.18);border-radius:10px;padding:10px;text-align:center">
            <div style="font-size:1.3rem;font-weight:700;color:#ef4444">${justificados.length}</div>
            <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Justificados</div>
+         </div>
+         <div style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.18);border-radius:10px;padding:10px;text-align:center">
+           <div style="font-size:1.3rem;font-weight:700;color:#ef4444">${recusados.length}</div>
+           <div style="font-size:.62rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Recusados</div>
          </div>
          <div style="background:rgba(255,255,255,.03);border:1px solid var(--border-faint);border-radius:10px;padding:10px;text-align:center">
            <div style="font-size:1.3rem;font-weight:700;color:var(--text-3)">${semResp.length}</div>
@@ -6140,6 +6147,16 @@
            const justAt = presMap[m.id]?.response_at || presMap[m.id]?.created_at;
            const extra = just ? `<div style="font-size:.72rem;color:var(--text-2);margin-top:3px;padding:4px 8px;background:rgba(220,38,38,.06);border-radius:5px;border-left:2px solid rgba(220,38,38,.3)"><i class="fa-solid fa-comment-dots" style="color:#ef4444;margin-right:4px;font-size:.65rem"></i>${Utils.escapeHtml(just)}<div style="font-size:.6rem;color:var(--text-3);margin-top:3px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(justAt)}</div></div>` : '';
            return memberRow(m, '#ef4444', 'fa-solid fa-comment-dots', extra);
+         }).join('')}
+       ` : ''}
+
+       ${recusados.length ? `
+         ${sectionLabel('<i class="fa-solid fa-xmark"></i> Justificativas recusadas', recusados.length, '#ef4444')}
+         ${recusados.map(m => {
+           const just = presMap[m.id]?.justificativa;
+           const justAt = presMap[m.id]?.response_at || presMap[m.id]?.created_at;
+           const extra = just ? `<div style="font-size:.72rem;color:var(--text-2);margin-top:3px;padding:4px 8px;background:rgba(220,38,38,.06);border-radius:5px;border-left:2px solid rgba(220,38,38,.3)"><i class="fa-solid fa-comment-dots" style="color:#ef4444;margin-right:4px;font-size:.65rem"></i>${Utils.escapeHtml(just)}<div style="font-size:.6rem;color:var(--text-3);margin-top:3px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(justAt)}</div></div>` : '';
+           return memberRow(m, '#ef4444', 'fa-solid fa-xmark-circle', extra);
          }).join('')}
        ` : ''}
 
