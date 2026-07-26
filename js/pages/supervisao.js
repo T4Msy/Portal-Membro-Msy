@@ -277,14 +277,22 @@
   function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
   function decorateReminderCards() { const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
   function analyticsPage() { const todayValue = new Date().toISOString().slice(0, 10); return `<section class="sv-analytics-legacy"><header class="sv-analytics-header"><p class="sv-analytics-eyebrow">SISTEMA ANALITICO INTERNO</p><div class="sv-analytics-crest"><i></i><svg viewBox="0 0 40 60" aria-hidden="true"><path d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path class="sv-wine-fill" d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path d="M20 34v18M12 52h16"/></svg><i></i></div><h1><span>Msy</span> <b>-</b> <span>Analytics</span></h1><div class="sv-analytics-subtitle"><i></i><em>Intelligence System</em><i></i></div><div class="sv-analytics-mode"><button class="active" type="button" data-analytics-mode="weekly"><strong>◇</strong><span>Semanal</span><small>Weekly Report</small></button><div><i></i><b>◇</b><i></i></div><button type="button" data-analytics-mode="monthly"><strong>◉</strong><span>Mensal</span><small>Monthly Insights</small></button></div><div class="sv-analytics-motto"><b></b><em>O sangue faz o parente, mas so a lealdade faz a familia.</em><b></b></div></header><section class="sv-analytics-panel"><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span id="analyticsSectionLabel">Parametros de Analise - Semanal</span><i></i></div><div class="sv-analytics-form"><label>Data Inicio<input id="analyticsStart" type="date" value="${todayValue}"></label><label>Data Fim<input id="analyticsEnd" type="date" value="${todayValue}"></label><label>Arquivo do Chat (.txt)<span class="sv-analytics-file"><span><i class="fa-regular fa-file-lines"></i><b id="analyticsFileLabel">Selecionar arquivo...</b></span><input id="analyticsFile" type="file" accept=".txt,text/plain"></span></label></div><select id="analyticsMode" class="sv-analytics-native-mode" aria-hidden="true" tabindex="-1"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select><button class="sv-analytics-submit" data-analytics-import><span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i></button></section></section>`; }
-  function renderAnalyticsResult(payload, inicio, fim) {
-    const participants = Array.isArray(payload?.participants) ? payload.participants : [];
-    const total = Number(payload?.total_messages) || participants.reduce((sum, item) => sum + (Number(item.message_count) || 0), 0);
+  function sanitizeAnalyticsHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    template.content.querySelectorAll('script,style,iframe,object,embed,link').forEach((node) => node.remove());
+    template.content.querySelectorAll('*').forEach((node) => [...node.attributes].forEach((attribute) => {
+      if (/^on/i.test(attribute.name) || /^(src|href)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
+    }));
+    return template.innerHTML;
+  }
+
+  function renderAnalyticsResult(html, inicio, fim) {
     root.querySelector('[data-analytics-result]')?.remove();
     const panel = root.querySelector('.sv-analytics-panel');
     if (!panel) return;
-    const rows = participants.map((item, index) => `<tr><td>${index + 1}</td><td>${esc(item.name)}</td><td>${Number(item.message_count).toLocaleString('pt-BR')}</td></tr>`).join('');
-    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-section-title"><span>Mensagens por participante</span><i></i></div><p>${esc(new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR'))} a ${esc(new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR'))} · ${participants.length} participante${participants.length === 1 ? '' : 's'} · ${total.toLocaleString('pt-BR')} mensagens</p><div class="sv-analytics-result"><table><thead><tr><th>#</th><th>Participante</th><th>Mensagens</th></tr></thead><tbody>${rows}</tbody></table></div></section>`);
+    const period = `${new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR')}`;
+    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-section-title"><span>Mensagens por participante</span><i></i></div><p>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
   }
 
   async function countGroupMessages(button) {
@@ -299,11 +307,16 @@
     button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>';
     try {
       const chat = await file.text();
-      const response = await fetch('https://warm-polls-treasury-gay.trycloudflare.com/webhook/analisar-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat, inicio, fim, mode }) });
+      const webhook = mode === 'monthly'
+        ? 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/relatorio-mensal'
+        : 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/analisar-chat';
+      const [yearStart, monthStart, dayStart] = inicio.split('-');
+      const [yearEnd, monthEnd, dayEnd] = fim.split('-');
+      const response = await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat, inicio: mode === 'monthly' ? `${dayStart}/${monthStart}/${yearStart}` : inicio, fim: mode === 'monthly' ? `${dayEnd}/${monthEnd}/${yearEnd}` : fim }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Falha ao analisar o historico.');
-      if (!Array.isArray(payload.participants) || !payload.participants.length) throw new Error('Nenhuma mensagem foi encontrada no periodo informado.');
-      renderAnalyticsResult(payload, inicio, fim);
+      if (!payload.html) throw new Error('O MSY Analytics nao retornou a tabela de mensagens.');
+      renderAnalyticsResult(payload.html, inicio, fim);
       Utils.showToast('Tabela de mensagens criada.');
     } catch (error) {
       console.error('[MSY][supervisao] analytics:', error);
