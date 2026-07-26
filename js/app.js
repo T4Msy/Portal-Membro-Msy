@@ -692,6 +692,27 @@
      },
    };
 
+   async function showSupervisionAlertCard(profile) {
+     if (!profile?.id || document.getElementById('supervisionAlertOverlay')) return;
+     try {
+       const { data: alerts, error } = await db.from('notifications')
+         .select('id,message,icon,target_url,created_at,metadata')
+         .eq('user_id', profile.id).eq('read', false).eq('target_type', 'supervision_case')
+         .is('deleted_at', null).order('created_at', { ascending: false }).limit(4);
+       if (error || !(alerts || []).length) return;
+       const esc = Utils.escapeHtml;
+       const overlay = document.createElement('div');
+       overlay.id = 'supervisionAlertOverlay';
+       overlay.className = 'supervision-alert-overlay';
+       overlay.innerHTML = `<section class="supervision-alert-card" role="dialog" aria-modal="true" aria-label="Alertas da Supervisão"><div class="supervision-alert-kicker"><i class="fa-solid fa-tower-broadcast"></i> Supervisão ativa</div><h2>Há casos que precisam da coordenação</h2><p>Estes alertas são visíveis apenas para a equipe de Supervisão.</p><div class="supervision-alert-list">${alerts.map((alert) => `<button data-supervision-alert="${alert.id}" data-url="${esc(alert.target_url || 'supervisao.html#central')}"><span>${alert.icon || '⚠️'}</span><b>${esc(alert.message)}</b><i class="fa-solid fa-arrow-right"></i></button>`).join('')}</div><div class="supervision-alert-actions"><button class="btn btn-ghost btn-sm" data-supervision-dismiss>Ver depois</button><button class="btn btn-sm" data-supervision-open> Abrir Central</button></div></section>`;
+       document.body.appendChild(overlay);
+       const markRead = () => db.from('notifications').update({ read: true }).in('id', alerts.map((alert) => alert.id)).eq('user_id', profile.id);
+       overlay.querySelector('[data-supervision-dismiss]').addEventListener('click', async () => { await markRead(); overlay.remove(); });
+       overlay.querySelector('[data-supervision-open]').addEventListener('click', async () => { await markRead(); window.location.href = 'supervisao.html#central'; });
+       overlay.querySelectorAll('[data-supervision-alert]').forEach((button) => button.addEventListener('click', async () => { await markRead(); window.location.href = button.dataset.url; }));
+     } catch (err) { console.warn('[MSY][supervisao] não foi possível abrir os alertas:', err.message); }
+   }
+
    function _focusInternalTarget(paramName = 'id', selector = '[data-id]') {
      const targetId = new URLSearchParams(window.location.search).get(paramName);
      if (!targetId) return;
@@ -806,6 +827,7 @@
      const overlay = document.getElementById('sidebarOverlay');
      toggle?.addEventListener('click', () => { sidebar?.classList.toggle('open'); overlay?.classList.toggle('visible'); });
      overlay?.addEventListener('click', () => { sidebar?.classList.remove('open'); overlay?.classList.remove('visible'); });
+     showSupervisionAlertCard(profile);
    }
    
    /* ============================================================

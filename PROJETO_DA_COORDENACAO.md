@@ -96,6 +96,14 @@ A varredura da Supervisao deve encontrar automaticamente:
 
 Lembretes e observacoes sao compartilhados entre todos que possuem acesso a Supervisao. Eles nao sao notificacoes para todos os membros do Portal.
 
+## Operacao premium e alertas
+
+- A Central Operacional trabalha com casos persistentes: cada caso possui origem, prioridade, responsavel, prazo, estado e historico.
+- Encerrar ou dispensar um caso exige um registro curto da decisao.
+- A Diretoria cadastra a Equipe de Supervisao e define quem opera casos ou apenas observa.
+- Apenas integrantes dessa equipe recebem alertas de prioridade critica ou de atencao: card central ao abrir o Portal, inbox e push quando o dispositivo estiver inscrito.
+- A varredura automatica somente identifica e cria sinais; ela nunca comunica membros ou encerra casos automaticamente.
+
 ## MSY Analytics
 
 Referencia original: `supervisao/MSY-ANALYTICS/`.

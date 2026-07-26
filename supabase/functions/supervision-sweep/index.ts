@@ -53,8 +53,15 @@ Deno.serve(async (req) => {
   for (const reminder of reminders) {
     const { data: existing } = await db.from('supervision_reminders').select('id').eq('fingerprint', reminder.fingerprint).maybeSingle()
     if (existing) continue
-    const { data: created, error } = await db.from('supervision_reminders').insert(reminder).select('id,title').single()
-    if (!error && created) written++
+    const { data: created, error } = await db.from('supervision_reminders').insert(reminder).select('id,title,description,due_at,category,approval_status').single()
+    if (!error && created) {
+      written++
+      await db.rpc('upsert_supervision_case', {
+        p_source_type: 'reminder', p_source_id: created.id, p_source_key: created.id,
+        p_priority: created.category === 'finance' ? 'info' : (created.approval_status === 'pending_approval' ? 'attention' : 'info'),
+        p_title: created.title, p_description: created.description, p_member_id: null, p_due_at: created.due_at,
+      })
+    }
   }
   const overdue = (activities ?? []).filter((activity) => new Date(`${activity.deadline}T${activity.deadline_time || '23:59'}:00`) < now)
   let observations = 0
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
       await db.from('supervision_alerts').update({ status: 'resolved', resolved_at: now.toISOString(), updated_at: now.toISOString() }).eq('fingerprint', fingerprint).in('status', ['open', 'acknowledged'])
       continue
     }
-    const { error } = await db.from('supervision_alerts').upsert({
+    const { data: alert, error } = await db.from('supervision_alerts').upsert({
       fingerprint,
       severity: 'attention',
       title: 'Membro sem movimentacao em atividades',
@@ -159,8 +166,15 @@ Deno.serve(async (req) => {
       member_id: profile.id,
       status: 'open',
       updated_at: now.toISOString(),
-    }, { onConflict: 'fingerprint' })
-    if (!error) inactivityAlerts++
+    }, { onConflict: 'fingerprint' }).select('id,title,description,member_id,severity').single()
+    if (!error && alert) {
+      inactivityAlerts++
+      await db.rpc('upsert_supervision_case', {
+        p_source_type: 'alert', p_source_id: alert.id, p_source_key: alert.id,
+        p_priority: alert.severity, p_title: alert.title, p_description: alert.description,
+        p_member_id: alert.member_id, p_due_at: null,
+      })
+    }
   }
   return json({ scannedAt: now.toISOString(), candidates: reminders.length, created: written, observations, inactivityAlerts })
 })
