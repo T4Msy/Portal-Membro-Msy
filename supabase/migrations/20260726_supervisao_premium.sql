@@ -1,6 +1,21 @@
 -- Supervisao Premium: equipe, casos operacionais, auditoria e notificacoes.
 -- Execute depois das migrations 20260717_* da Supervisao.
 
+-- Mantem esta migration executavel tambem quando a migration de aprovacao
+-- ainda nao foi aplicada no projeto remoto.
+ALTER TABLE public.supervision_reminders
+  ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'approved',
+  ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS approved_at timestamptz,
+  ADD COLUMN IF NOT EXISTS rejection_reason text;
+
+ALTER TABLE public.supervision_reminders
+  DROP CONSTRAINT IF EXISTS supervision_reminders_approval_status_check;
+
+ALTER TABLE public.supervision_reminders
+  ADD CONSTRAINT supervision_reminders_approval_status_check
+  CHECK (approval_status IN ('pending_approval', 'approved', 'rejected'));
+
 CREATE TABLE IF NOT EXISTS public.supervision_team (
   user_id uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   role text NOT NULL DEFAULT 'coordinator' CHECK (role IN ('coordinator', 'observer')),
@@ -163,6 +178,12 @@ ON CONFLICT (source_type, source_key) DO NOTHING;
 ALTER TABLE public.supervision_team ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supervision_cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.supervision_case_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Supervisao: le equipe" ON public.supervision_team;
+DROP POLICY IF EXISTS "Supervisao: diretoria gerencia equipe" ON public.supervision_team;
+DROP POLICY IF EXISTS "Supervisao: le casos" ON public.supervision_cases;
+DROP POLICY IF EXISTS "Supervisao: coordena casos" ON public.supervision_cases;
+DROP POLICY IF EXISTS "Supervisao: le historico de casos" ON public.supervision_case_history;
 
 CREATE POLICY "Supervisao: le equipe" ON public.supervision_team FOR SELECT TO authenticated USING (public.can_access_supervision());
 CREATE POLICY "Supervisao: diretoria gerencia equipe" ON public.supervision_team FOR ALL TO authenticated USING (public.is_diretoria()) WITH CHECK (public.is_diretoria());

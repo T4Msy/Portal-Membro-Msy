@@ -54,15 +54,8 @@
       return;
     }
     state.profile = profile;
-    root.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-analytics-import]');
-      if (!button) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      runLocalAnalytics(button);
-    }, true);
     root.addEventListener('click', onClick);
-    root.addEventListener('click', (event) => { const button = event.target.closest('[data-analytics-import]'); if (button) importAnalytics(button); });
+    root.addEventListener('click', (event) => { const button = event.target.closest('[data-analytics-import]'); if (button) countGroupMessages(button); });
     root.addEventListener('click', (event) => { const reminder = event.target.closest('[data-radar-reminder]'); if (!reminder) return; db.from('supervision_reminders').insert({ title: reminder.dataset.radarReminder, description: reminder.dataset.radarDescription || null, category: 'task', origin: 'manual', status: 'open', created_by: state.profile.id }).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast('Lembrete criado.'); await refreshReminders(); } }); });
     root.addEventListener('click', (event) => { const approval = event.target.closest('[data-reminder-approval]'); if (!approval) return; const approved = approval.dataset.reminderApproval === 'approved'; db.from('supervision_reminders').update({ approval_status: approved ? 'approved' : 'rejected', approved_by: approved ? state.profile.id : null, approved_at: approved ? new Date().toISOString() : null, rejection_reason: approved ? null : 'Dispensado pela coordenacao' }).eq('id', approval.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast(approved ? 'Acao aprovada.' : 'Acao recusada.'); await refreshReminders(); } }); });
     root.addEventListener('click', handleCentralAction);
@@ -284,7 +277,42 @@
   function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
   function decorateReminderCards() { const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
   function analyticsPage() { const todayValue = new Date().toISOString().slice(0, 10); return `<section class="sv-analytics-legacy"><header class="sv-analytics-header"><p class="sv-analytics-eyebrow">SISTEMA ANALITICO INTERNO</p><div class="sv-analytics-crest"><i></i><svg viewBox="0 0 40 60" aria-hidden="true"><path d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path class="sv-wine-fill" d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path d="M20 34v18M12 52h16"/></svg><i></i></div><h1><span>Msy</span> <b>-</b> <span>Analytics</span></h1><div class="sv-analytics-subtitle"><i></i><em>Intelligence System</em><i></i></div><div class="sv-analytics-mode"><button class="active" type="button" data-analytics-mode="weekly"><strong>◇</strong><span>Semanal</span><small>Weekly Report</small></button><div><i></i><b>◇</b><i></i></div><button type="button" data-analytics-mode="monthly"><strong>◉</strong><span>Mensal</span><small>Monthly Insights</small></button></div><div class="sv-analytics-motto"><b></b><em>O sangue faz o parente, mas so a lealdade faz a familia.</em><b></b></div></header><section class="sv-analytics-panel"><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span id="analyticsSectionLabel">Parametros de Analise - Semanal</span><i></i></div><div class="sv-analytics-form"><label>Data Inicio<input id="analyticsStart" type="date" value="${todayValue}"></label><label>Data Fim<input id="analyticsEnd" type="date" value="${todayValue}"></label><label>Arquivo do Chat (.txt)<span class="sv-analytics-file"><span><i class="fa-regular fa-file-lines"></i><b id="analyticsFileLabel">Selecionar arquivo...</b></span><input id="analyticsFile" type="file" accept=".txt,text/plain"></span></label></div><select id="analyticsMode" class="sv-analytics-native-mode" aria-hidden="true" tabindex="-1"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select><button class="sv-analytics-submit" data-analytics-import><span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i></button></section></section>`; }
-  async function importAnalytics(button) { const file = document.getElementById('analyticsFile')?.files?.[0]; const inicio = document.getElementById('analyticsStart')?.value; const fim = document.getElementById('analyticsEnd')?.value; const mode = document.getElementById('analyticsMode')?.value; if (!file || !inicio || !fim) { Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error'); return; } if (inicio > fim) { Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error'); return; } if (file.size > 35 * 1024 * 1024) { Utils.showToast('O arquivo excede o limite de 35 MB.', 'error'); return; } button.disabled = true; button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>'; try { const chat = await file.text(); const { data: sessionData } = await db.auth.getSession(); const url = typeof MSY_CONFIG !== 'undefined' ? MSY_CONFIG.SUPABASE_URL : null; if (!url || !sessionData.session?.access_token) throw new Error('Sessao ou configuracao do Portal indisponivel.'); const response = await fetch(`${url}/functions/v1/supervision-analytics`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` }, body: JSON.stringify({ chat, inicio, fim, mode, fileName: file.name }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || 'Falha ao processar o historico.'); Utils.showToast(`${payload.metricCount || 0} metricas importadas com sucesso.`); await loadData(); location.hash = 'desempenho'; } catch (error) { console.error('[MSY][supervisao] analytics:', error); Utils.showToast(error.message || 'Nao foi possivel importar o historico.', 'error'); button.disabled = false; button.innerHTML = '<span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i>'; } }
+  function renderAnalyticsResult(payload, inicio, fim) {
+    const participants = Array.isArray(payload?.participants) ? payload.participants : [];
+    const total = Number(payload?.total_messages) || participants.reduce((sum, item) => sum + (Number(item.message_count) || 0), 0);
+    root.querySelector('[data-analytics-result]')?.remove();
+    const panel = root.querySelector('.sv-analytics-panel');
+    if (!panel) return;
+    const rows = participants.map((item, index) => `<tr><td>${index + 1}</td><td>${esc(item.name)}</td><td>${Number(item.message_count).toLocaleString('pt-BR')}</td></tr>`).join('');
+    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-section-title"><span>Mensagens por participante</span><i></i></div><p>${esc(new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR'))} a ${esc(new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR'))} · ${participants.length} participante${participants.length === 1 ? '' : 's'} · ${total.toLocaleString('pt-BR')} mensagens</p><div class="sv-analytics-result"><table><thead><tr><th>#</th><th>Participante</th><th>Mensagens</th></tr></thead><tbody>${rows}</tbody></table></div></section>`);
+  }
+
+  async function countGroupMessages(button) {
+    const file = document.getElementById('analyticsFile')?.files?.[0];
+    const inicio = document.getElementById('analyticsStart')?.value;
+    const fim = document.getElementById('analyticsEnd')?.value;
+    const mode = document.getElementById('analyticsMode')?.value;
+    if (!file || !inicio || !fim) return Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error');
+    if (inicio > fim) return Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error');
+    if (file.size > 35 * 1024 * 1024) return Utils.showToast('O arquivo excede o limite de 35 MB.', 'error');
+    button.disabled = true;
+    button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>';
+    try {
+      const chat = await file.text();
+      const response = await fetch('https://warm-polls-treasury-gay.trycloudflare.com/webhook/analisar-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat, inicio, fim, mode }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Falha ao analisar o historico.');
+      if (!Array.isArray(payload.participants) || !payload.participants.length) throw new Error('Nenhuma mensagem foi encontrada no periodo informado.');
+      renderAnalyticsResult(payload, inicio, fim);
+      Utils.showToast('Tabela de mensagens criada.');
+    } catch (error) {
+      console.error('[MSY][supervisao] analytics:', error);
+      Utils.showToast(error.message || 'Nao foi possivel analisar o historico.', 'error');
+    } finally {
+      button.disabled = false;
+      button.innerHTML = '<span>Iniciar Analise</span><i></i>';
+    }
+  }
   function huginn() { const d = state.data; return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid fa-crow"></i>Huginn: composicao da saude</div><div class="sv-factor-list">${d.factors.map(([label, value, weight]) => `<div class="sv-factor"><span>${label} <em>(${weight}% do indice)</em></span><span>${Math.round(value * 100)}%</span></div>`).join('')}</div></section>`; }
   function activityRow(activity, tone) { return `<div class="sv-detail-row"><span class="sv-status-dot ${tone}"></span><div><b>${esc(activity.title || 'Atividade sem titulo')}</b><small>${activity.deadline ? `Prazo: ${new Date(`${activity.deadline}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem prazo definido'}</small></div><span>${esc(activity.status || 'Pendente')}</span></div>`; }
   function remindersPage() { const d = state.data; const open = (d.reminders || []).filter((item) => item.status === 'open'); const observations = (d.observations || []).filter((item) => item.status === 'active'); const card = (item) => `<article class="sv-reminder sv-corner"><div class="sv-reminder-meta"><span>${esc(item.origin === 'automatic' ? 'automatico' : 'manual')}</span><span>${esc(item.category)}</span></div><h3>${esc(item.title)}</h3><p>${esc(item.description || '')}</p>${item.due_at ? `<small><i class="fa-regular fa-clock"></i> ${new Date(item.due_at).toLocaleString('pt-BR')}</small>` : ''}${item.whatsapp_message ? `<textarea class="sv-whatsapp-text" readonly>${esc(item.whatsapp_message)}</textarea><button class="sv-button" data-copy-whatsapp="${item.id}"><i class="fa-regular fa-copy"></i> Copiar mensagem</button>` : ''}<div class="sv-reminder-actions"><button class="sv-icon-button" title="Concluir" data-reminder-action="completed" data-reminder-id="${item.id}"><i class="fa-solid fa-check"></i></button><button class="sv-icon-button" title="Dispensar" data-reminder-action="dismissed" data-reminder-id="${item.id}"><i class="fa-solid fa-ban"></i></button></div></article>`; return `<section class="sv-reminders-head"><div><div class="sv-eyebrow">Central operacional</div><h2>Lembretes e observacoes</h2><p>Itens automáticos da varredura horaria e registros manuais da coordenação.</p></div><span class="sv-open-count">${open.length} abertos</span></section><section class="sv-reminder-forms"><form class="sv-corner sv-panel" data-reminder-form><div class="sv-panel-title"><i class="fa-solid fa-plus"></i>Novo lembrete</div><input class="sv-input" name="title" required maxlength="140" placeholder="O que precisa ser feito?"><textarea class="sv-input" name="description" maxlength="800" placeholder="Detalhes opcionais"></textarea><div class="sv-form-row"><select class="sv-input" name="category"><option value="task">Tarefa</option><option value="activity">Cobranca de atividade</option><option value="event_message">Mensagem de evento</option></select><input class="sv-input" name="dueAt" type="datetime-local"></div><button class="sv-button" type="submit">Criar lembrete</button></form><form class="sv-corner sv-panel" data-observation-form><div class="sv-panel-title"><i class="fa-solid fa-book-open"></i>Nova observacao</div><input class="sv-input" name="title" required maxlength="140" placeholder="Titulo da observacao"><textarea class="sv-input" name="body" required maxlength="1200" placeholder="Informacao que ajudara a coordenacao no futuro"></textarea><button class="sv-button" type="submit">Registrar observacao</button></form></section><section class="sv-reminder-layout"><div><div class="sv-panel-title"><i class="fa-solid fa-list-check"></i>Itens abertos</div><div class="sv-reminder-grid">${open.map(card).join('') || '<div class="sv-empty">Nenhum lembrete aberto.</div>'}</div></div><div><div class="sv-panel-title"><i class="fa-solid fa-lightbulb"></i>Observacoes inteligentes</div><div class="sv-observation-list">${observations.map((item) => `<article class="sv-observation"><b>${esc(item.title)}</b><p>${esc(item.body)}</p><small>${esc(item.origin === 'automatic' ? 'Gerada automaticamente' : 'Registro manual')}</small><button class="sv-icon-button" title="Arquivar" data-observation-id="${item.id}"><i class="fa-solid fa-box-archive"></i></button></article>`).join('') || '<div class="sv-empty">Nenhuma observacao registrada.</div>'}</div></div></section>`; }
@@ -297,75 +325,6 @@
   async function refreshReminders() { await loadData(); render(); }
   async function onSubmit(event) { const form = event.target; if (!form.matches('[data-reminder-form],[data-observation-form],[data-team-form]')) return; event.preventDefault(); const values = new FormData(form); if (form.matches('[data-team-form]')) { if (state.profile.tier !== 'diretoria') return Utils.showToast('Somente a diretoria gerencia a equipe.', 'error'); const { error } = await db.rpc('set_supervision_team_member', { p_user_id: values.get('userId'), p_role: values.get('role'), p_receive_alerts: values.get('receiveAlerts') === 'on' }); if (error) return Utils.showToast(error.message, 'error'); Utils.showToast('Equipe de Supervisão atualizada.'); return refreshReminders(); } const isReminder = form.matches('[data-reminder-form]'); const payload = isReminder ? { title: values.get('title'), description: values.get('description') || null, category: values.get('category'), due_at: values.get('dueAt') ? new Date(String(values.get('dueAt'))).toISOString() : null, origin: 'manual', created_by: state.profile.id } : { title: values.get('title'), body: values.get('body'), origin: 'manual', created_by: state.profile.id }; const { error } = await db.from(isReminder ? 'supervision_reminders' : 'supervision_observations').insert(payload); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast(isReminder ? 'Lembrete criado.' : 'Observacao registrada.'); await refreshReminders(); }
   function onClick(event) { const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
-  function readAnalyticsFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(reader.error || new Error('Nao foi possivel ler o arquivo.'));
-      reader.readAsText(file, 'UTF-8');
-    });
-  }
-
-  function analyticsDate(value, mode) {
-    if (mode === 'weekly') return value;
-    const [year, month, day] = String(value).split('-');
-    return `${day}/${month}/${year}`;
-  }
-
-  function sanitizeAnalyticsHtml(html) {
-    const template = document.createElement('template');
-    template.innerHTML = String(html || '');
-    template.content.querySelectorAll('script,style,iframe,object,embed,link').forEach((node) => node.remove());
-    template.content.querySelectorAll('*').forEach((node) => [...node.attributes].forEach((attribute) => {
-      if (/^on/i.test(attribute.name) || /^(src|href)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
-    }));
-    return template.innerHTML;
-  }
-
-  function renderLocalAnalyticsResult(html) {
-    root.querySelector('[data-analytics-local-result]')?.remove();
-    const panel = root.querySelector('.sv-analytics-panel');
-    if (!panel) return;
-    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-local-result><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span>Resultado da Analise</span><i></i></div><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
-  }
-
-  async function runLocalAnalytics(button) {
-    const file = document.getElementById('analyticsFile')?.files?.[0];
-    const inicio = document.getElementById('analyticsStart')?.value;
-    const fim = document.getElementById('analyticsEnd')?.value;
-    const mode = document.getElementById('analyticsMode')?.value || 'weekly';
-    if (!file || !inicio || !fim) { Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error'); return; }
-    if (inicio > fim) { Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error'); return; }
-    if (file.size > 35 * 1024 * 1024) { Utils.showToast('O arquivo excede o limite de 35 MB.', 'error'); return; }
-    button.disabled = true;
-    button.innerHTML = '<span><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>';
-    try {
-      const chat = await readAnalyticsFile(file);
-      const endpoint = mode === 'monthly'
-        ? 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/relatorio-mensal'
-        : 'https://warm-polls-treasury-gay.trycloudflare.com/webhook/analisar-chat';
-      const response = await window.fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat, inicio: analyticsDate(inicio, mode), fim: analyticsDate(fim, mode) }),
-      });
-      if (!response.ok) throw new Error(`O MSY Analytics respondeu HTTP ${response.status}.`);
-      const payload = await response.json();
-      if (!payload?.html) throw new Error('O MSY Analytics nao retornou a tabela de desempenho.');
-      renderLocalAnalyticsResult(payload.html);
-      Utils.showToast('Tabela de desempenho criada.');
-    } catch (error) {
-      console.error('[MSY][supervisao] analytics local:', error);
-      const detail = error instanceof TypeError
-        ? 'A requisicao foi bloqueada ou o tunel do n8n esta desligado.'
-        : (error.message || 'O webhook nao respondeu.');
-      Utils.showToast(`MSY Analytics indisponivel. ${detail}`, 'error');
-    } finally {
-      button.disabled = false;
-      button.innerHTML = '<span>Iniciar Analise</span><i></i>';
-    }
-  }
-
   root.innerHTML = '<div class="sv-boot"><span></span><p>Inicializando Supervisao...</p></div>';
   init().catch((error) => { console.error('[MSY][supervisao] inicializacao:', error); root.innerHTML = `<section class="sv-fatal sv-corner"><div class="sv-eyebrow">Supervisao indisponivel</div><h1>O centro operacional nao carregou.</h1><p>${esc(error?.message || 'Verifique a conexao e a migration da Supervisao.')}</p><a class="sv-button" href="dashboard.html">Voltar ao Portal</a></section>`; });
 }());
