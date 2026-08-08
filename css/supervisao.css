@@ -43,7 +43,8 @@
 .sv-analytics-picker-item{height:38px;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;font:14px 'Cormorant Garamond',serif;color:#555;cursor:pointer;transition:color .15s;user-select:none}
 .sv-analytics-picker-item.active{color:#e01122;font-weight:700;text-shadow:0 0 14px rgba(139,0,0,.6)}
 .sv-analytics-picker-readout{margin-top:10px;font:10px 'JetBrains Mono',monospace;color:#777;letter-spacing:1px;text-align:center}
-@media(max-width:720px){.sv-analytics-monthpicker-body{padding:0 12px}}
+@media(max-width:720px){.sv-analytics-monthpicker-body{padding:0 12px}.sv-analytics-form input[type=date],.sv-analytics-search input{font-size:16px}}
+@media(max-width:380px){.sv-analytics-picker-col-year{flex-basis:72px}}
 
 /* Filter panel (member tags + search) shown once a report renders. */
 .sv-analytics-filter{margin-top:20px}
@@ -74,6 +75,7 @@
 .sv-analytics-relatorio p{margin-bottom:10px}
 .sv-analytics-relatorio ul{padding-left:20px;margin-bottom:10px}
 .sv-analytics-relatorio li{margin-bottom:6px}
+@media(max-width:720px){.sv-analytics-results-head{align-items:flex-start}.sv-analytics-results-head>i{display:none}.sv-analytics-btn{flex:1 1 auto;text-align:center}.sv-analytics-ia textarea{font-size:16px}}
 
 /* Full-screen loading overlay shown while a report is being processed. */
 .sv-analytics-loading-overlay{position:fixed;inset:0;background:rgba(4,4,4,.95);backdrop-filter:blur(6px);z-index:10500;display:flex;align-items:center;justify-content:center;animation:svAnalyticsFadeIn .3s ease}
