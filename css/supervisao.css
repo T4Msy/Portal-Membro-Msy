@@ -74,3 +74,21 @@
 .sv-analytics-relatorio p{margin-bottom:10px}
 .sv-analytics-relatorio ul{padding-left:20px;margin-bottom:10px}
 .sv-analytics-relatorio li{margin-bottom:6px}
+
+/* Full-screen loading overlay shown while a report is being processed. */
+.sv-analytics-loading-overlay{position:fixed;inset:0;background:rgba(4,4,4,.95);backdrop-filter:blur(6px);z-index:10500;display:flex;align-items:center;justify-content:center;animation:svAnalyticsFadeIn .3s ease}
+.sv-analytics-loading-content{display:flex;flex-direction:column;align-items:center;gap:22px}
+.sv-analytics-loading-wine-wrap{position:relative;width:140px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.sv-analytics-loading-wine-svg{width:100px;height:170px;filter:drop-shadow(0 0 14px rgba(139,0,0,.55)) drop-shadow(0 0 40px rgba(139,0,0,.2));animation:svAnalyticsWineBreathe 2.5s ease-in-out infinite}
+@keyframes svAnalyticsWineBreathe{0%,100%{filter:drop-shadow(0 0 14px rgba(139,0,0,.55)) drop-shadow(0 0 40px rgba(139,0,0,.2));transform:scale(1)}50%{filter:drop-shadow(0 0 32px rgba(192,0,26,.85)) drop-shadow(0 0 70px rgba(139,0,0,.35));transform:scale(1.03)}}
+.sv-analytics-wine-fill-bar{width:110px;height:3px;background:#161616;border-radius:2px;overflow:hidden}
+.sv-analytics-wine-fill-progress{height:100%;width:0;background:linear-gradient(to right,#5a0000,#c0001a);border-radius:2px;transition:width .3s ease;box-shadow:0 0 8px rgba(139,0,0,.6)}
+.sv-analytics-loading-title{font:700 12px 'Cinzel',serif;color:#c0001a;letter-spacing:8px;text-transform:uppercase;animation:svAnalyticsBlink 2s ease-in-out infinite}
+.sv-analytics-loading-sub{font:italic 16px 'Cormorant Garamond',serif;color:rgba(192,0,26,.8);letter-spacing:1px}
+.sv-analytics-loading-dots{display:flex;gap:10px}
+.sv-analytics-loading-dots span{width:5px;height:5px;border-radius:50%;background:#8b0000;animation:svAnalyticsDotPulse 1.4s ease-in-out infinite}
+.sv-analytics-loading-dots span:nth-child(2){animation-delay:.2s}
+.sv-analytics-loading-dots span:nth-child(3){animation-delay:.4s}
+@keyframes svAnalyticsDotPulse{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+@keyframes svAnalyticsFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes svAnalyticsBlink{0%,100%{opacity:1}50%{opacity:.4}}
