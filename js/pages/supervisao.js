@@ -7,7 +7,7 @@
   const Auth = platform.Auth;
   const Utils = platform.Utils || { escapeHtml: (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]), getInitials: (name) => String(name || '?').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(), showToast: () => {} };
   const now = new Date();
-  const state = { profile: null, data: null, route: 'resumo', periodMode: 'geral', referenceDate: now.toISOString().slice(0, 10), centralFilter: 'all', centralSelected: null, centralTracking: null };
+  const state = { profile: null, data: null, route: 'resumo', periodMode: 'geral', referenceDate: now.toISOString().slice(0, 10), centralFilter: 'all', centralSelected: null, centralTracking: null, analyticsMode: 'weekly', analyticsSummary: '' };
   const root = document.getElementById('supervisionApp');
   const esc = (value) => Utils.escapeHtml(String(value ?? ''));
   const statusKey = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -231,7 +231,7 @@
   function stats(d) { const values = [['fa-users', d.profiles.length, 'membros ativos'], ['fa-list-check', d.openActivities.length, 'atividades abertas'], ['fa-triangle-exclamation', d.lateActivities.length, 'atividades atrasadas'], ['fa-diagram-project', d.activeProjects.length, 'projetos em andamento'], ['fa-calendar-days', d.upcomingEvents.length, 'eventos futuros'], ['fa-vault', d.pendingPayments.length, 'pagamentos pendentes']]; return `<section class="sv-stat-grid">${values.map(([icon, value, label]) => `<div class="sv-stat sv-corner"><i class="fa-solid ${icon}"></i><strong>${value}</strong><span>${label}</span></div>`).join('')}</section>`; }
   function radar() { const items = state.data.radar || []; if (!items.length) return '<section class="sv-radar sv-corner"><div class="sv-radar-head"><div><div class="sv-eyebrow">Radar diário</div><h2>Nenhuma ação urgente agora</h2><p>A varredura operacional não encontrou pendências prioritárias.</p></div><span class="sv-radar-count">0 abertos</span></div></section>'; const labels = { critical: 'crítico', attention: 'atenção', info: 'informativo' }; return `<section class="sv-radar sv-corner"><div class="sv-radar-head"><div><div class="sv-eyebrow">Radar diário // ações prioritárias</div><h2>O que precisa de atenção agora?</h2><p>Itens reunidos automaticamente a partir de toda a operação.</p></div><span class="sv-radar-count">${items.length} itens</span></div><div class="sv-radar-grid">${items.map((item) => `<article class="sv-radar-item ${esc(item.severity)}"><span class="sv-radar-dot"></span><div><b>${esc(item.title)}</b><p>${esc(item.description || '')}</p><small>${labels[item.severity] || 'operacional'}</small></div><div class="sv-radar-actions"><button class="sv-icon-button" data-route="${esc(item.route || 'alertas')}" title="Abrir registro"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button class="sv-icon-button" data-radar-reminder="${esc(item.title)}" data-radar-description="${esc(item.description || '')}" title="Criar lembrete"><i class="fa-regular fa-bell"></i></button></div></article>`).join('')}</div></section>`; }
   function operationalCenter() { const d = state.data; const radarItems = d.radar || []; const reminders = (d.reminders || []).filter((item) => item.status === 'open').slice(0, 5); const pending = (d.pendingActivities || []).slice(0, 5).map((item) => ({ ...item, severity: d.lateActivities.some((late) => late.id === item.id) ? 'critical' : 'attention', description: item.deadline ? `Prazo: ${new Date(`${item.deadline}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem prazo definido', route: 'pendencias' })); const alerts = (d.alerts || []).slice(0, 5).map((item) => ({ ...item, severity: item.severity === 'critical' ? 'critical' : 'attention', route: 'alertas' })); const all = [...radarItems, ...reminders.map((item) => ({ ...item, title: `Lembrete: ${item.title}`, description: item.description || 'Acao operacional pendente.', severity: 'attention', route: 'lembretes' })), ...pending, ...alerts]; const unique = all.filter((item, index, list) => index === list.findIndex((other) => `${other.title}|${other.sourceId || other.id || ''}` === `${item.title}|${item.sourceId || item.id || ''}`)).slice(0, 14); const labels = { critical: 'critico', attention: 'atencao', info: 'informativo' }; return `<section class="sv-command-center sv-corner"><div class="sv-command-head"><div><div class="sv-eyebrow">Central operacional</div><h2>Tudo que precisa de atencao</h2><p>Radar, lembretes, alertas e pendencias reunidos em uma unica fila de trabalho.</p></div><span class="sv-radar-count">${unique.length} abertos</span></div><div class="sv-command-list">${unique.map((item) => `<article class="sv-command-item ${esc(item.severity || 'attention')}"><span class="sv-radar-dot"></span><div><b>${esc(item.title || 'Ocorrencia operacional')}</b><p>${esc(item.description || '')}</p><small>${labels[item.severity] || 'operacional'}</small></div><div class="sv-radar-actions"><button class="sv-icon-button" data-route="${esc(item.route || 'alertas')}" title="Abrir registro"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button class="sv-icon-button" data-radar-reminder="${esc(item.title || '')}" data-radar-description="${esc(item.description || '')}" title="Criar lembrete"><i class="fa-regular fa-bell"></i></button></div></article>`).join('') || '<div class="sv-empty">Nenhuma ocorrencia para este momento.</div>'}</div></section>`; }
-  function overview() { const d = state.data; if (d.error) return `<div class="sv-corner sv-panel"><div class="sv-panel-title"><i class="fa-solid fa-lock"></i>Integracao pendente</div><p class="sv-empty">${esc(d.error)}</p></div>`; const factors = d.factors.slice(0, 5).map(([label, value]) => `<div class="sv-factor"><span>${label}</span><span>${Math.round(value * 100)}%</span></div>`).join(''); return `<section class="sv-health sv-corner"><button class="sv-huginn" data-route="huginn" style="--health:${d.health}" aria-label="Ver composicao do Huginn"><span><span class="sv-score">${d.health}<small>%</small></span><span class="sv-grade">${grade(d.health)}</span></span></button><div><div class="sv-eyebrow">Huginn // Saude Organizacional</div><h2>Como esta a Masayoshi agora?</h2><p>Huginn observa atividades, projetos, eventos, participacao e financeiro. A nota e calculada automaticamente.</p><div class="sv-actions"><button class="sv-button" data-route="huginn">Abrir diagnostico</button><button class="sv-button" data-route="desempenho">Ver desempenho</button><button class="sv-button" data-route="central">Abrir Central Operacional</button></div></div><div class="sv-factor-list">${factors}</div></section>${stats(d)}`; }
+  function overview() { const d = state.data; if (d.error) return `<div class="sv-corner sv-panel"><div class="sv-panel-title"><i class="fa-solid fa-lock"></i>Integracao pendente</div><p class="sv-empty">${esc(d.error)}</p></div>`; const factors = d.factors.slice(0, 5).map(([label, value]) => `<div class="sv-factor"><span>${label}</span><span>${Math.round(value * 100)}%</span></div>`).join(''); return `<section class="sv-health sv-corner"><button class="sv-huginn" data-route="huginn" style="--health:${d.health}" aria-label="Ver composicao do Huginn"><span><span class="sv-score">${d.health}<small>%</small></span><span class="sv-score-caption">de saude</span><span class="sv-grade sv-grade-${scoreTone(d.health)}">${grade(d.health)}</span></span></button><div><div class="sv-eyebrow">Huginn // Saude Organizacional</div><h2>Como esta a Masayoshi agora?</h2><p>Huginn observa atividades, projetos, eventos, participacao e financeiro. A nota e calculada automaticamente.</p><div class="sv-actions"><button class="sv-button" data-route="huginn">Abrir diagnostico</button><button class="sv-button" data-route="desempenho">Ver desempenho</button><button class="sv-button" data-route="central">Abrir Central Operacional</button></div></div><div class="sv-factor-list">${factors}</div></section>${stats(d)}`; }
   function centralCases() {
     const d = state.data;
     const profiles = new Map((d.profiles || []).map((profile) => [profile.id, profile]));
@@ -276,7 +276,307 @@
   function teamPage() { const d = state.data; const team = d.team || []; const byId = new Map((d.profiles || []).map((p) => [p.id, p])); const rows = team.map((member) => { const profile = byId.get(member.user_id) || {}; return `<article class="sv-team-member"><div class="sv-avatar">${profile.avatar_url ? `<img src="${esc(profile.avatar_url)}" alt="">` : esc(profile.initials || Utils.getInitials(profile.name || '?'))}</div><div><b>${esc(profile.name || 'Membro removido')}</b><small>${esc(profile.role || '')} · ${member.role === 'coordinator' ? 'Coordenação' : 'Observador'}</small></div><span class="sv-team-alert ${member.receive_alerts ? 'on' : ''}">${member.receive_alerts ? 'Alertas ativos' : 'Sem alertas'}</span></article>`; }).join('') || '<div class="sv-empty">Nenhuma pessoa foi adicionada à equipe operacional.</div>'; const options = (d.profiles || []).map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} — ${esc(profile.role || 'Membro')}</option>`).join(''); return `<section class="sv-team-head"><div><div class="sv-eyebrow">Diretoria / governança da operação</div><h2>Equipe de Supervisão</h2><p>Somente integrantes desta equipe recebem os alertas críticos e de atenção no Portal e no celular.</p></div><span class="sv-open-count">${team.length} integrantes</span></section><section class="sv-team-layout"><form class="sv-corner sv-panel" data-team-form><div class="sv-panel-title"><i class="fa-solid fa-user-plus"></i>Adicionar ou atualizar integrante</div><label class="sv-label">Membro<select class="sv-input" name="userId" required><option value="">Selecionar membro</option>${options}</select></label><label class="sv-label">Papel<select class="sv-input" name="role"><option value="coordinator">Coordenação — pode operar casos</option><option value="observer">Observador — somente consulta</option></select></label><label class="sv-check"><input type="checkbox" name="receiveAlerts" checked> Receber alertas críticos e de atenção</label><button class="sv-button" type="submit">Salvar integrante</button><p class="sv-form-help">Salvar também libera o acesso à Supervisão para este membro.</p></form><section class="sv-corner sv-panel"><div class="sv-panel-title"><i class="fa-solid fa-users"></i>Equipe atual</div><div class="sv-team-list">${rows}</div></section></section>`; }
   function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
   function decorateReminderCards() { const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
-  function analyticsPage() { const todayValue = new Date().toISOString().slice(0, 10); return `<section class="sv-analytics-legacy"><header class="sv-analytics-header"><p class="sv-analytics-eyebrow">SISTEMA ANALITICO INTERNO</p><div class="sv-analytics-crest"><i></i><svg viewBox="0 0 40 60" aria-hidden="true"><path d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path class="sv-wine-fill" d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path d="M20 34v18M12 52h16"/></svg><i></i></div><h1><span>Msy</span> <b>-</b> <span>Analytics</span></h1><div class="sv-analytics-subtitle"><i></i><em>Intelligence System</em><i></i></div><div class="sv-analytics-mode"><button class="active" type="button" data-analytics-mode="weekly"><strong>◇</strong><span>Semanal</span><small>Weekly Report</small></button><div><i></i><b>◇</b><i></i></div><button type="button" data-analytics-mode="monthly"><strong>◉</strong><span>Mensal</span><small>Monthly Insights</small></button></div><div class="sv-analytics-motto"><b></b><em>O sangue faz o parente, mas so a lealdade faz a familia.</em><b></b></div></header><section class="sv-analytics-panel"><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span id="analyticsSectionLabel">Parametros de Analise - Semanal</span><i></i></div><div class="sv-analytics-form"><label>Data Inicio<input id="analyticsStart" type="date" value="${todayValue}"></label><label>Data Fim<input id="analyticsEnd" type="date" value="${todayValue}"></label><label>Arquivo do Chat (.txt)<span class="sv-analytics-file"><span><i class="fa-regular fa-file-lines"></i><b id="analyticsFileLabel">Selecionar arquivo...</b></span><input id="analyticsFile" type="file" accept=".txt,text/plain"></span></label></div><select id="analyticsMode" class="sv-analytics-native-mode" aria-hidden="true" tabindex="-1"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select><button class="sv-analytics-submit" data-analytics-import><span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i></button></section></section>`; }
+  const ANALYTICS_NAME_MAP = [{ canonical: 'Xitter', aliases: ['marlon'] }, { canonical: 'Tales', aliases: ['t4les', 'tales'] }, { canonical: 'Marcos', aliases: ['marcos flausino', 'mfl4', 'marcos'] }, { canonical: 'Mariana', aliases: ['mariana msy', 'missmoon', 'mariana'] }, { canonical: 'Hariany', aliases: ['hariany msy', 'hariany'] }, { canonical: 'Felipe', aliases: ['felipe flausino', 'felipe msy', 'felipe'] }, { canonical: 'Matheus', aliases: ['matheus lucas', 'matheus'] }, { canonical: 'Naíra', aliases: ['nana msy', 'naíra', 'naira'] }, { canonical: 'Ph', aliases: ['pedro (ph)', 'pedro ph', 'ph'] }, { canonical: 'Pepeu', aliases: ['pepeu msy', 'pepeu'] }];
+  const ANALYTICS_IGNORE_NAMES = ['você', 'masayoshi'];
+  function normalizeAnalyticsName(raw) {
+    const clean = raw.replace(/\u{1F377}/gu, '').replace(/[​-‍﻿]/g, '').trim();
+    const cleanLower = clean.toLowerCase();
+    if (ANALYTICS_IGNORE_NAMES.some((ignored) => cleanLower.includes(ignored))) return null;
+    for (const entry of ANALYTICS_NAME_MAP) {
+      if (entry.aliases.some((alias) => cleanLower.includes(alias))) return `${entry.canonical} 🍷`;
+    }
+    return `${clean} 🍷`;
+  }
+  function normalizeAnalyticsTable(table) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const numCols = table.querySelectorAll('thead th').length;
+    const totalCol = numCols - 2;
+    const avgCol = numCols - 1;
+    const seen = new Map();
+    Array.from(tbody.querySelectorAll('tr')).forEach((row) => {
+      const cell = row.cells[0];
+      if (!cell) return;
+      const medalMatch = cell.innerHTML.match(/^(🥇|🥈|🥉)/);
+      const medal = medalMatch ? medalMatch[1] : '';
+      const rawText = cell.innerText.replace(/🥇|🥈|🥉/g, '').trim();
+      const normalized = normalizeAnalyticsName(rawText);
+      if (normalized === null) { row.remove(); return; }
+      const existing = seen.get(normalized);
+      if (!existing) { cell.innerHTML = medal ? `${medal} ${normalized}` : normalized; seen.set(normalized, row); return; }
+      for (let col = 1; col <= totalCol && col < row.cells.length; col++) {
+        const a = parseFloat(String(existing.cells[col]?.innerText || '').replace(',', '.')) || 0;
+        const b = parseFloat(String(row.cells[col]?.innerText || '').replace(',', '.')) || 0;
+        if (existing.cells[col]) existing.cells[col].innerText = String(Math.floor(a + b));
+      }
+      const numPeriods = numCols - 3;
+      if (existing.cells[avgCol] && numPeriods > 0) { const total = parseFloat(String(existing.cells[totalCol]?.innerText || '').replace(',', '.')) || 0; existing.cells[avgCol].innerText = (total / numPeriods).toFixed(1); }
+      row.remove();
+    });
+  }
+  const ANALYTICS_WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  function parseAnalyticsHeaderDate(txt, fallbackStart, index) {
+    let match = txt.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+    if (match) return new Date(match[3] ? parseInt(match[3], 10) : new Date().getFullYear(), parseInt(match[2], 10) - 1, parseInt(match[1], 10));
+    match = txt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+    if (fallbackStart) return new Date(fallbackStart.getFullYear(), fallbackStart.getMonth(), fallbackStart.getDate() + index);
+    return null;
+  }
+  function injectAnalyticsWeekdays(table, inicioValue) {
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    if (headers.length < 3) return;
+    const dateHeaders = headers.slice(1, headers.length - 2);
+    const [year, month, day] = String(inicioValue || '').split('-').map(Number);
+    const startDate = year ? new Date(year, month - 1, day) : null;
+    dateHeaders.forEach((th, index) => {
+      const date = parseAnalyticsHeaderDate(th.innerText.trim(), startDate, index);
+      if (!date) return;
+      const dayIndex = date.getDay();
+      const weekend = dayIndex === 0 || dayIndex === 6;
+      th.innerHTML = `<span class="sv-day${weekend ? ' weekend' : ''}">${ANALYTICS_WEEKDAYS_PT[dayIndex]}</span>`;
+    });
+  }
+  function recalcAnalyticsFooter(table, rows) {
+    const footerCells = table.querySelectorAll('tfoot td');
+    const numCols = table.querySelectorAll('thead th').length;
+    const visibleRows = rows.filter((row) => row.style.display !== 'none' && !row.cells[0].innerText.toLowerCase().includes('total'));
+    for (let col = 1; col < numCols; col++) {
+      let sum = 0;
+      visibleRows.forEach((row) => { sum += parseFloat(String(row.cells[col]?.innerText || '').replace(',', '.')) || 0; });
+      if (col === numCols - 1) { const numPeriods = numCols - 3; const avg = numPeriods > 0 ? (sum / numPeriods).toFixed(1) : sum.toFixed(1); if (footerCells[col]) footerCells[col].innerHTML = `<strong>${avg}</strong>`; }
+      else if (footerCells[col]) footerCells[col].innerHTML = `<strong>${Math.floor(sum)}</strong>`;
+    }
+  }
+  function setupAnalyticsFilters(table) {
+    const section = root.querySelector('[data-analytics-filter]');
+    const container = root.querySelector('[data-analytics-tags]');
+    const search = root.querySelector('[data-analytics-search]');
+    if (!section || !container || !search || !table) return;
+    section.style.display = 'block';
+    container.innerHTML = '';
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const members = [...new Set(rows.map((row) => row.cells[0].innerText.replace(/🥇|🥈|🥉/g, '').trim()).filter((name) => name && !name.toLowerCase().includes('total')))];
+    members.forEach((name) => {
+      const tag = document.createElement('button');
+      tag.type = 'button';
+      tag.className = 'sv-analytics-tag active';
+      tag.textContent = name;
+      tag.addEventListener('click', () => { tag.classList.toggle('active'); applyAnalyticsFilters(); });
+      container.appendChild(tag);
+    });
+    search.value = '';
+    search.oninput = applyAnalyticsFilters;
+  }
+  function applyAnalyticsFilters() {
+    const table = root.querySelector('[data-analytics-result] table');
+    const search = root.querySelector('[data-analytics-search]');
+    if (!table || !search) return;
+    const term = search.value.toLowerCase();
+    const activeTags = Array.from(root.querySelectorAll('.sv-analytics-tag.active')).map((tag) => tag.textContent);
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    rows.forEach((row) => {
+      const name = row.cells[0].innerText.replace(/🥇|🥈|🥉/g, '').trim();
+      if (name.toLowerCase().includes('total')) return;
+      row.style.display = activeTags.includes(name) && name.toLowerCase().includes(term) ? '' : 'none';
+    });
+    recalcAnalyticsFooter(table, rows);
+    if (state.analyticsMode !== 'monthly') extractWeeklyAnalyticsData();
+  }
+  function extractWeeklyAnalyticsData() {
+    const rows = root.querySelectorAll('[data-analytics-result] tbody tr');
+    let resumo = '--- DADOS DA SEMANA ---\n';
+    rows.forEach((row) => {
+      if (row.style.display === 'none') return;
+      const cells = row.cells;
+      const nome = cells[0]?.innerText?.replace(/🥇|🥈|🥉/g, '').trim();
+      if (!nome || nome.toLowerCase().includes('total')) return;
+      const total = cells[cells.length - 2]?.innerText || '';
+      const media = cells[cells.length - 1]?.innerText || '';
+      resumo += `Membro: ${nome} | Total: ${total} | Média: ${media}/dia\n`;
+    });
+    state.analyticsSummary = resumo;
+  }
+  function buildLocalAnalyticsReport() {
+    const linhas = String(state.analyticsSummary || '').split('\n').map((line) => line.trim()).filter((line) => line.startsWith('Membro:'));
+    if (!linhas.length) return '<p style="color:#c0001a;font-family:\'JetBrains Mono\',monospace;font-size:11px;">Analise o chat primeiro para gerar o relatorio.</p>';
+    const membros = [];
+    linhas.forEach((linha) => {
+      const nomeMatch = linha.match(/^Membro:\s*(.*?)\s*\|/);
+      const totalMatch = linha.match(/Total:\s*([0-9]+)/);
+      const mediaMatch = linha.match(/Média:\s*([0-9.]+)/);
+      if (nomeMatch && totalMatch && mediaMatch) membros.push({ nome: nomeMatch[1], total: +totalMatch[1] });
+    });
+    if (!membros.length) return '<p style="color:#c0001a;">Nao foi possivel interpretar os dados.</p>';
+    membros.sort((a, b) => b.total - a.total);
+    const top3 = membros.slice(0, 3);
+    const totalGrupo = membros.reduce((sum, membro) => sum + membro.total, 0);
+    const mediaGrupo = totalGrupo / membros.length;
+    const inicio = document.getElementById('analyticsStart')?.value || '---';
+    const fim = document.getElementById('analyticsEnd')?.value || '---';
+    const periodo = inicio && fim ? `${esc(inicio)} ate ${esc(fim)}` : '---';
+    const qualidade = mediaGrupo >= 120 ? 'consistente' : mediaGrupo >= 60 ? 'estavel' : 'irregular';
+    const medalhas = ['🥇', '🥈', '🥉'];
+    const descTop3 = ['Foi o membro com maior constancia no periodo, mantendo presenca frequente e participacao distribuida. Demonstrou disciplina e compromisso continuo com a movimentacao do grupo.', 'Apresentou desempenho solido no periodo, com boa regularidade e participacao consistente. Contribuiu de forma relevante para a estabilidade do grupo.', 'Mostrou evolucao clara ao longo do periodo, mantendo maior presenca e engajamento. Um progresso positivo e digno de reconhecimento.'];
+    const blocoTop3 = top3.map((membro, index) => `<h3>${medalhas[index]} ${esc(membro.nome)}</h3><p>${descTop3[index]}</p>`).join('');
+    const instrucao = String(root.querySelector('[data-analytics-prompt]')?.value || '').trim();
+    const blocoInstrucao = instrucao ? `<h3>Observacao Adicional</h3><p>${esc(instrucao)}</p>` : '';
+    return `<h3>𓂀 𝓜𝓢𝓨 — 𝓓𝓘𝓡𝓔𝓣𝓞𝓡𝓘𝓐 𓂀</h3><p><b>Relatorio da Supervisao — Masayoshi</b></p><p><b>Periodo analisado:</b> ${periodo}</p><p><b>Total de mensagens no periodo:</b> ${totalGrupo.toLocaleString('pt-BR')}</p><h3>⸻</h3><h3>Visao Geral</h3><p>Durante o periodo analisado, a Masayoshi apresentou um ritmo <b>${qualidade}</b>, com atividade distribuida entre os membros.</p><h3>⸻</h3><h3>Destaques do Periodo</h3>${blocoTop3}<h3>⸻</h3>${blocoInstrucao}<h3>Mensagem Final</h3><p>Constancia ao longo do tempo e o que transforma um bom grupo em uma ordem solida.</p><p style="margin-top:16px;font-style:italic;color:#c0001a;">Vida longa a Masayoshi. 🍷</p>`;
+  }
+  function copyAnalyticsTable() {
+    const table = root.querySelector('[data-analytics-result] table');
+    const button = root.querySelector('[data-analytics-copy]');
+    if (!table || !button) return;
+    let tsv = Array.from(table.querySelectorAll('thead th')).map((th) => th.innerText.trim()).join('\t') + '\n';
+    table.querySelectorAll('tbody tr').forEach((row) => { if (row.style.display === 'none') return; tsv += Array.from(row.cells).map((cell) => cell.innerText.trim().replace(/🥇|🥈|🥉/g, '').trim()).join('\t') + '\n'; });
+    tsv += Array.from(table.querySelectorAll('tfoot td')).map((cell) => cell.innerText.trim()).join('\t') + '\n';
+    navigator.clipboard.writeText(tsv).then(() => {
+      button.classList.add('copiado');
+      button.textContent = 'Copiado';
+      setTimeout(() => { button.classList.remove('copiado'); button.textContent = 'Copiar para Excel'; }, 2500);
+    }).catch((error) => { console.error('[MSY][supervisao] analytics copy:', error); Utils.showToast('Nao foi possivel copiar a tabela.', 'error'); });
+  }
+  async function downloadAnalyticsPdf() {
+    const box = root.querySelector('[data-analytics-result]');
+    const table = box?.querySelector('table');
+    const button = root.querySelector('[data-analytics-pdf]');
+    if (!box || !table || !button) return;
+    if (typeof html2canvas === 'undefined' || !window.jspdf) { Utils.showToast('Biblioteca de PDF nao carregou. Recarregue a pagina.', 'error'); return; }
+    const original = button.textContent;
+    button.textContent = 'Gerando...';
+    button.disabled = true;
+    const fullWidth = Math.max(table.scrollWidth, box.clientWidth);
+    const clone = box.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.left = '-99999px';
+    clone.style.top = '0';
+    clone.style.width = `${fullWidth}px`;
+    clone.style.overflow = 'visible';
+    document.body.appendChild(clone);
+    try {
+      if (document.fonts?.ready) { try { await document.fonts.ready; } catch (fontError) { /* fonts ja carregadas ou indisponiveis */ } }
+      const canvas = await html2canvas(clone, { backgroundColor: '#080808', scale: 2, logging: false, useCORS: true, windowWidth: fullWidth });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+      pdf.setFillColor(8, 8, 8);
+      pdf.rect(0, 0, canvas.width, canvas.height, 'F');
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(buildAnalyticsPdfFilename());
+      button.textContent = 'Baixado';
+      setTimeout(() => { button.textContent = original; }, 2500);
+    } catch (error) {
+      console.error('[MSY][supervisao] analytics pdf:', error);
+      button.textContent = original;
+      Utils.showToast('Nao foi possivel gerar o PDF.', 'error');
+    } finally {
+      document.body.removeChild(clone);
+      button.disabled = false;
+    }
+  }
+  function buildAnalyticsPdfFilename() {
+    const sanitize = (value) => String(value || '').replace(/\//g, '-').replace(/[^0-9A-Za-z-]/g, '');
+    const inicio = sanitize(document.getElementById('analyticsStart')?.value);
+    const fim = sanitize(document.getElementById('analyticsEnd')?.value);
+    const modo = state.analyticsMode === 'monthly' ? 'Mensal' : 'Semanal';
+    return `MSY-Analytics_${modo}${inicio && fim ? `_${inicio}_a_${fim}` : ''}.pdf`;
+  }
+  const ANALYTICS_MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  function analyticsPickerYears() { const current = new Date().getFullYear(); return [current - 2, current - 1, current, current + 1]; }
+  function computeMonthlyAnalyticsRange(monthIndex, year) {
+    const first = new Date(year, monthIndex, 1);
+    const last = new Date(year, monthIndex + 1, 0);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    const end = new Date(last);
+    end.setDate(last.getDate() - ((last.getDay() - 6 + 7) % 7));
+    const toIso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return { startIso: toIso(start), endIso: toIso(end) };
+  }
+  function pickerCenterIndex(column) {
+    const itemHeight = 38;
+    const center = column.scrollTop + column.clientHeight / 2;
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    Array.from(column.children).forEach((item, index) => {
+      const distance = Math.abs(item.offsetTop + itemHeight / 2 - center);
+      if (distance < closestDistance) { closestDistance = distance; closestIndex = index; }
+    });
+    return closestIndex;
+  }
+  function updateAnalyticsPickerReadout() {
+    const monthCol = root.querySelector('[data-picker-col="mes"]');
+    const yearCol = root.querySelector('[data-picker-col="ano"]');
+    const readout = root.querySelector('[data-analytics-picker-readout]');
+    if (!monthCol || !yearCol || !readout) return;
+    const monthIndex = pickerCenterIndex(monthCol);
+    const year = analyticsPickerYears()[pickerCenterIndex(yearCol)];
+    Array.from(monthCol.children).forEach((item, index) => item.classList.toggle('active', index === monthIndex));
+    Array.from(yearCol.children).forEach((item, index) => item.classList.toggle('active', index === pickerCenterIndex(yearCol)));
+    const range = computeMonthlyAnalyticsRange(monthIndex, year);
+    const startInput = document.getElementById('analyticsStart');
+    const endInput = document.getElementById('analyticsEnd');
+    if (startInput) startInput.value = range.startIso;
+    if (endInput) endInput.value = range.endIso;
+    const fmt = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR');
+    readout.textContent = `${fmt(range.startIso)} a ${fmt(range.endIso)} (semanas completas de domingo a sabado)`;
+  }
+  function enableAnalyticsPickerDrag(column) {
+    let dragging = false;
+    let moved = false;
+    let startY = 0;
+    let startScroll = 0;
+    const onMove = (event) => {
+      moved = true;
+      column.scrollTop = startScroll - (event.clientY - startY);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      column.classList.remove('dragging');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      column.scrollTo({ top: pickerCenterIndex(column) * 38, behavior: 'smooth' });
+      if (moved) setTimeout(() => { if (state.analyticsMode === 'monthly') updateAnalyticsPickerReadout(); }, 200);
+    };
+    column.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      dragging = true;
+      moved = false;
+      startY = event.clientY;
+      startScroll = column.scrollTop;
+      column.classList.add('dragging');
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+  function initAnalyticsPicker() {
+    const monthCol = root.querySelector('[data-picker-col="mes"]');
+    const yearCol = root.querySelector('[data-picker-col="ano"]');
+    if (!monthCol || !yearCol) return;
+    if (!monthCol.dataset.pickerReady) {
+      monthCol.dataset.pickerReady = 'true';
+      let debounce = null;
+      const onScroll = () => { clearTimeout(debounce); debounce = setTimeout(() => { if (state.analyticsMode === 'monthly') updateAnalyticsPickerReadout(); }, 120); };
+      [monthCol, yearCol].forEach((column) => {
+        column.addEventListener('scroll', onScroll);
+        enableAnalyticsPickerDrag(column);
+        Array.from(column.children).forEach((item, index) => item.addEventListener('click', () => { if (!column.classList.contains('dragging')) column.scrollTo({ top: index * 38, behavior: 'smooth' }); }));
+      });
+    }
+    if (!monthCol.dataset.pickerPositioned && monthCol.offsetParent !== null) {
+      monthCol.dataset.pickerPositioned = 'true';
+      const today = new Date();
+      monthCol.scrollTop = today.getMonth() * 38;
+      yearCol.scrollTop = analyticsPickerYears().indexOf(today.getFullYear()) * 38;
+    }
+    if (state.analyticsMode === 'monthly') updateAnalyticsPickerReadout();
+  }
+  function analyticsPage() {
+    const todayValue = new Date().toISOString().slice(0, 10);
+    const monthItems = ANALYTICS_MONTH_NAMES.map((name) => `<div class="sv-analytics-picker-item">${name}</div>`).join('');
+    const yearItems = analyticsPickerYears().map((year) => `<div class="sv-analytics-picker-item">${year}</div>`).join('');
+    return `<section class="sv-analytics-legacy"><header class="sv-analytics-header"><p class="sv-analytics-eyebrow">SISTEMA ANALITICO INTERNO</p><div class="sv-analytics-crest"><i></i><svg viewBox="0 0 40 60" aria-hidden="true"><path d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path class="sv-wine-fill" d="M8 2h24l-4 22a12 12 0 0 1-24 0L8 2Z"/><path d="M20 34v18M12 52h16"/></svg><i></i></div><h1><span>Msy</span> <b>-</b> <span>Analytics</span></h1><div class="sv-analytics-subtitle"><i></i><em>Intelligence System</em><i></i></div><div class="sv-analytics-mode"><button class="active" type="button" data-analytics-mode="weekly"><strong>◇</strong><span>Semanal</span><small>Weekly Report</small></button><div><i></i><b>◇</b><i></i></div><button type="button" data-analytics-mode="monthly"><strong>◉</strong><span>Mensal</span><small>Monthly Insights</small></button></div><div class="sv-analytics-motto"><b></b><em>O sangue faz o parente, mas so a lealdade faz a familia.</em><b></b></div></header><section class="sv-analytics-panel"><span class="sv-analytics-corner tl"></span><span class="sv-analytics-corner tr"></span><span class="sv-analytics-corner bl"></span><span class="sv-analytics-corner br"></span><div class="sv-analytics-section-title"><span id="analyticsSectionLabel">Parametros de Analise - Semanal</span><i></i></div><div class="sv-analytics-form"><label class="sv-analytics-weekly-field" data-analytics-weekly>Data Inicio<input id="analyticsStart" type="date" value="${todayValue}"></label><label class="sv-analytics-weekly-field" data-analytics-weekly>Data Fim<input id="analyticsEnd" type="date" value="${todayValue}"></label><label>Arquivo do Chat (.txt)<span class="sv-analytics-file"><span><i class="fa-regular fa-file-lines"></i><b id="analyticsFileLabel">Selecionar arquivo...</b></span><input id="analyticsFile" type="file" accept=".txt,text/plain"></span></label></div><div class="sv-analytics-monthpicker" data-analytics-monthly style="display:none"><div class="sv-analytics-monthpicker-label">Periodo mensal (domingo a sabado)</div><div class="sv-analytics-monthpicker-body"><div class="sv-analytics-picker-mask"></div><div class="sv-analytics-picker-col" data-picker-col="mes">${monthItems}</div><div class="sv-analytics-picker-col sv-analytics-picker-col-year" data-picker-col="ano">${yearItems}</div></div><p class="sv-analytics-picker-readout" data-analytics-picker-readout></p></div><select id="analyticsMode" class="sv-analytics-native-mode" aria-hidden="true" tabindex="-1"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select><button class="sv-analytics-submit" data-analytics-import><span>◇ &nbsp; Iniciar Analise &nbsp; ◇</span><i></i></button></section><section class="sv-analytics-panel" data-analytics-filter style="display:none"><div class="sv-analytics-section-title"><span>Filtros de Membros</span><i></i></div><div class="sv-analytics-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Buscar membro..." data-analytics-search></div><div class="sv-analytics-tags" data-analytics-tags></div></section></section>`;
+  }
   function sanitizeAnalyticsHtml(html) {
     const template = document.createElement('template');
     template.innerHTML = String(html || '');
@@ -289,10 +589,22 @@
 
   function renderAnalyticsResult(html, inicio, fim) {
     root.querySelector('[data-analytics-result]')?.remove();
-    const panel = root.querySelector('.sv-analytics-panel');
-    if (!panel) return;
+    root.querySelector('[data-analytics-ia]')?.remove();
+    const filterPanel = root.querySelector('[data-analytics-filter]');
+    if (!filterPanel) return;
     const period = `${new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR')}`;
-    panel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-section-title"><span>Mensagens por participante</span><i></i></div><p>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
+    filterPanel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-results-head"><span>Mensagens por participante</span><i></i><button type="button" class="sv-analytics-btn" data-analytics-copy>Copiar para Excel</button><button type="button" class="sv-analytics-btn" data-analytics-pdf>Baixar PDF</button></div><p>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
+    const resultSection = root.querySelector('[data-analytics-result]');
+    if (state.analyticsMode === 'weekly' && resultSection) {
+      resultSection.insertAdjacentHTML('afterend', '<section class="sv-analytics-panel sv-analytics-ia" data-analytics-ia><div class="sv-analytics-section-title"><span>Relatorio Inteligente</span><i></i></div><label class="sv-analytics-ia-label">Instrucao personalizada (opcional)</label><textarea placeholder="Ex: destaque quem merece reconhecimento." data-analytics-prompt></textarea><button type="button" class="sv-analytics-submit" data-analytics-generate-report><span>Gerar Relatorio</span><i></i></button><div class="sv-analytics-relatorio" data-analytics-relatorio></div></section>');
+    }
+    const table = root.querySelector('[data-analytics-result] table');
+    if (table) {
+      normalizeAnalyticsTable(table);
+      if (state.analyticsMode === 'weekly') injectAnalyticsWeekdays(table, inicio);
+      setupAnalyticsFilters(table);
+      if (state.analyticsMode === 'weekly') extractWeeklyAnalyticsData();
+    }
   }
 
   async function countGroupMessages(button) {
@@ -300,6 +612,7 @@
     const inicio = document.getElementById('analyticsStart')?.value;
     const fim = document.getElementById('analyticsEnd')?.value;
     const mode = document.getElementById('analyticsMode')?.value;
+    state.analyticsMode = mode;
     if (!file || !inicio || !fim) return Utils.showToast('Selecione o arquivo e o periodo da analise.', 'error');
     if (inicio > fim) return Utils.showToast('O periodo inicial nao pode ser maior que o final.', 'error');
     if (file.size > 35 * 1024 * 1024) return Utils.showToast('O arquivo excede o limite de 35 MB.', 'error');
@@ -332,12 +645,12 @@
   function memberModal(member) { const paid = statusKey(member.payment?.status) === 'pago'; const paymentLabel = member.payment ? (paid ? 'Mensalidade paga' : 'Mensalidade pendente') : 'Sem registro de mensalidade'; const insight = member.activities.late.length ? `${member.activities.late.length} atividade${member.activities.late.length > 1 ? 's' : ''} atrasada${member.activities.late.length > 1 ? 's' : ''} precisa de acompanhamento.` : member.score >= 80 ? 'Desempenho consistente no periodo analisado.' : 'Acompanhe as proximas entregas para evoluir a nota.'; const components = member.components.map((component) => `<div class="sv-component"><div><span>${component.label}</span><b>${component.value}%</b></div><div class="sv-component-track"><i style="width:${component.value}%;background:${component.color}"></i></div><small>${component.detail} - peso ${component.weight}%</small></div>`).join('') || '<p class="sv-empty">Ainda nao ha dados suficientes para calcular componentes.</p>'; return `<div class="sv-modal-overlay open" data-close-modal><section class="sv-member-modal" role="dialog" aria-modal="true" aria-label="Desempenho de ${esc(member.name)}"><header class="sv-modal-header"><div><div class="sv-eyebrow">Supervisao individual</div><h2>${esc(member.name)}</h2></div><button class="sv-icon-button" data-close-member aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></header><div class="sv-modal-scroll"><section class="sv-member-hero"><div class="sv-avatar sv-avatar-large">${member.avatar_url ? `<img src="${esc(member.avatar_url)}" alt="">` : esc(member.initials || Utils.getInitials(member.name))}</div><div><b>${esc(member.role || 'Membro')}</b><p>${insight}</p></div><div class="sv-detail-score ${scoreTone(member.score)}"><strong>${member.score}</strong><span>/100</span><small>${grade(member.score)}</small></div></section><section class="sv-detail-overview"><div class="sv-ring" style="--score:${member.score}"><span>${member.score}%<small>geral</small></span></div><div class="sv-components"><div class="sv-panel-title"><i class="fa-solid fa-chart-pie"></i>Composicao do desempenho</div>${components}</div></section><section class="sv-detail-stats"><div><b>${member.activities.completed.length}</b><span>atividades feitas</span></div><div><b>${member.activities.pending.length + member.activities.ongoing.length}</b><span>para entregar</span></div><div class="${member.activities.late.length ? 'bad' : 'good'}"><b>${member.activities.late.length}</b><span>atrasadas</span></div><div class="${paid ? 'good' : 'warn'}"><b><i class="fa-solid ${paid ? 'fa-circle-check' : 'fa-clock'}"></i></b><span>${paymentLabel}</span></div><div><b>${member.rates.attendance === null ? '-' : `${member.rates.attendance}%`}</b><span>participacao em eventos</span></div></section><section class="sv-detail-columns"><div class="sv-detail-section"><div class="sv-panel-title"><i class="fa-solid fa-list-check"></i>Atividades a entregar</div>${[...member.activities.late, ...member.activities.pending, ...member.activities.ongoing].slice(0, 6).map((activity) => activityRow(activity, member.activities.late.some((late) => late.id === activity.id) ? 'bad' : 'warn')).join('') || '<p class="sv-empty">Nenhuma atividade pendente.</p>'}</div><div class="sv-detail-section"><div class="sv-panel-title"><i class="fa-solid fa-circle-check"></i>Atividades concluidas</div>${member.activities.completed.slice(0, 6).map((activity) => activityRow(activity, 'good')).join('') || '<p class="sv-empty">Nenhuma atividade concluida no registro.</p>'}</div></section><section class="sv-detail-section sv-event-summary"><div class="sv-panel-title"><i class="fa-solid fa-calendar-check"></i>Participacao em eventos</div><div><b>${member.attendance.present}</b> presencas - <b>${member.attendance.absent}</b> ausencias - <b>${member.attendance.justified}</b> justificadas <span>(${member.attendance.total} eventos avaliados)</span></div></section></div></section></div>`; }
   function handleCentralAction(event) { const filter = event.target.closest('[data-central-filter]'); if (filter) { state.centralFilter = filter.dataset.centralFilter; state.centralSelected = null; render(); return; } const selected = event.target.closest('[data-case-select]'); if (selected) { state.centralSelected = selected.dataset.caseSelect; render(); return; } if (event.target.closest('[data-case-tracking-close]')) { state.centralTracking = null; render(); return; } const action = event.target.closest('[data-case-action]'); if (!action) return; if (action.dataset.caseAction === 'close') { state.centralSelected = null; render(); return; } const item = centralCases().find((candidate) => candidate.id === action.dataset.caseId); if (!item) return; if (action.dataset.caseAction === 'track') { state.centralTracking = item.id; render(); return; } if (item.source === 'lembrete') { const status = action.dataset.caseAction === 'complete' ? 'completed' : 'dismissed'; db.from('supervision_reminders').update({ status, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', item.raw.id).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast(status === 'completed' ? 'Lembrete concluido.' : 'Lembrete dispensado.'); state.centralSelected = null; await refreshReminders(); } }); return; } if (item.source === 'alerta' && action.dataset.caseAction === 'resolve') { db.from('supervision_alerts').update({ status: 'resolved', resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', item.raw.id).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast('Alerta resolvido.'); state.centralSelected = null; await refreshReminders(); } }); } }
   async function handleCaseTrackingSubmit(event) { const form = event.target; if (!form.matches('[data-case-tracking-form]')) return; event.preventDefault(); const values = new FormData(form); const item = centralCases().find((candidate) => candidate.id === values.get('caseId')); if (!item) return; const assignedTo = String(values.get('assignedTo') || ''); const dueAt = String(values.get('dueAt') || ''); if (!assignedTo || !dueAt) { Utils.showToast('Selecione o responsavel e o prazo.', 'error'); return; } const note = String(values.get('note') || '').trim(); if (item.persistent) { const status = String(values.get('status') || 'in_progress'); const { error } = await db.rpc('update_supervision_case', { p_case_id: item.id, p_status: status, p_assigned_to: assignedTo, p_due_at: new Date(dueAt).toISOString(), p_next_step: status === 'in_progress' ? note : null, p_note: note }); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast(status === 'in_progress' ? 'Caso assumido e atribuído com prazo.' : 'Caso encerrado com registro.'); state.centralTracking = null; state.centralSelected = null; return refreshReminders(); } const { error } = await db.from('supervision_reminders').insert({ title: `Acompanhar: ${item.title}`, description: note || item.description, category: 'task', origin: 'manual', status: 'open', due_at: new Date(dueAt).toISOString(), metadata: { assigned_to: assignedTo, case_id: item.id, case_source: item.source }, created_by: state.profile.id }); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast('Acompanhamento atribuido com prazo.'); state.centralTracking = null; state.centralSelected = null; await refreshReminders(); }
-  function render() { state.route = (location.hash.replace('#', '') || 'resumo').split('/')[0]; const d = state.data || {}; const pages = { resumo: overview, central: centralPage, huginn, pendencias: () => centralPage(), lembretes: remindersPage, desempenho: performance, projetos: () => simplePage('Projetos acompanhados', 'fa-diagram-project', d.projects || []), eventos: () => simplePage('Eventos monitorados', 'fa-calendar-days', d.events || []), financeiro: () => simplePage('Situacao financeira', 'fa-vault', (d.pendingPayments || []).map((profile) => ({ title: profile.name, description: 'Mensalidade pendente', status: 'pendente' }))), analytics: analyticsPage, timeline: () => simplePage('Timeline Inteligente', 'fa-timeline', d.timeline || []), equipe: teamPage, alertas: () => centralPage() }; shell((pages[state.route] || pages.resumo)()); }
+  function render() { state.route = (location.hash.replace('#', '') || 'resumo').split('/')[0]; const d = state.data || {}; const pages = { resumo: overview, central: centralPage, huginn, pendencias: () => centralPage(), lembretes: remindersPage, desempenho: performance, projetos: () => simplePage('Projetos acompanhados', 'fa-diagram-project', d.projects || []), eventos: () => simplePage('Eventos monitorados', 'fa-calendar-days', d.events || []), financeiro: () => simplePage('Situacao financeira', 'fa-vault', (d.pendingPayments || []).map((profile) => ({ title: profile.name, description: 'Mensalidade pendente', status: 'pendente' }))), analytics: analyticsPage, timeline: () => simplePage('Timeline Inteligente', 'fa-timeline', d.timeline || []), equipe: teamPage, alertas: () => centralPage() }; shell((pages[state.route] || pages.resumo)()); if (state.route === 'analytics') initAnalyticsPicker(); }
   async function changePeriod(mode, value) { state.periodMode = mode || state.periodMode; if (value) state.referenceDate = state.periodMode === 'mes' ? `${value}-01` : value; root.innerHTML = '<div class="sv-boot"><span></span><p>Atualizando desempenho...</p></div>'; await loadData(); render(); }
   function onChange(event) { const input = event.target.closest('[data-performance-date]'); if (input?.value) changePeriod(null, input.value); const file = event.target.closest('#analyticsFile'); if (file) { const label = document.getElementById('analyticsFileLabel'); if (label) label.textContent = file.files?.[0]?.name || 'Selecionar arquivo...'; } }
   async function refreshReminders() { await loadData(); render(); }
   async function onSubmit(event) { const form = event.target; if (!form.matches('[data-reminder-form],[data-observation-form],[data-team-form]')) return; event.preventDefault(); const values = new FormData(form); if (form.matches('[data-team-form]')) { if (state.profile.tier !== 'diretoria') return Utils.showToast('Somente a diretoria gerencia a equipe.', 'error'); const { error } = await db.rpc('set_supervision_team_member', { p_user_id: values.get('userId'), p_role: values.get('role'), p_receive_alerts: values.get('receiveAlerts') === 'on' }); if (error) return Utils.showToast(error.message, 'error'); Utils.showToast('Equipe de Supervisão atualizada.'); return refreshReminders(); } const isReminder = form.matches('[data-reminder-form]'); const payload = isReminder ? { title: values.get('title'), description: values.get('description') || null, category: values.get('category'), due_at: values.get('dueAt') ? new Date(String(values.get('dueAt'))).toISOString() : null, origin: 'manual', created_by: state.profile.id } : { title: values.get('title'), body: values.get('body'), origin: 'manual', created_by: state.profile.id }; const { error } = await db.from(isReminder ? 'supervision_reminders' : 'supervision_observations').insert(payload); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast(isReminder ? 'Lembrete criado.' : 'Observacao registrada.'); await refreshReminders(); }
-  function onClick(event) { const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
+  function onClick(event) { const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; state.analyticsMode = mode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; root.querySelectorAll('[data-analytics-weekly]').forEach((field) => { field.style.display = mode === 'monthly' ? 'none' : ''; }); const picker = root.querySelector('[data-analytics-monthly]'); if (picker) { picker.style.display = mode === 'monthly' ? 'block' : 'none'; if (mode === 'monthly') initAnalyticsPicker(); } root.querySelector('[data-analytics-result]')?.remove(); const filter = root.querySelector('[data-analytics-filter]'); if (filter) filter.style.display = 'none'; root.querySelector('[data-analytics-ia]')?.remove(); return; } const analyticsCopy = event.target.closest('[data-analytics-copy]'); if (analyticsCopy) { copyAnalyticsTable(); return; } const analyticsPdf = event.target.closest('[data-analytics-pdf]'); if (analyticsPdf) { downloadAnalyticsPdf(); return; } const analyticsReport = event.target.closest('[data-analytics-generate-report]'); if (analyticsReport) { const output = root.querySelector('[data-analytics-relatorio]'); if (output) { output.innerHTML = buildLocalAnalyticsReport(); output.scrollIntoView({ behavior: 'smooth' }); } return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
   root.innerHTML = '<div class="sv-boot"><span></span><p>Inicializando Supervisao...</p></div>';
   init().catch((error) => { console.error('[MSY][supervisao] inicializacao:', error); root.innerHTML = `<section class="sv-fatal sv-corner"><div class="sv-eyebrow">Supervisao indisponivel</div><h1>O centro operacional nao carregou.</h1><p>${esc(error?.message || 'Verifique a conexao e a migration da Supervisao.')}</p><a class="sv-button" href="dashboard.html">Voltar ao Portal</a></section>`; });
 }());
