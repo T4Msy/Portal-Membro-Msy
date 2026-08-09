@@ -1,7 +1,36 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
+import webpush from 'npm:web-push@3.6.7'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+// Envia push so quando um caso realmente critico e criado (atividade vencida/muito
+// proxima do prazo, mensalidade com 20+ dias de atraso) - nunca um resumo agendado.
+async function maybeSendCriticalPush(db: ReturnType<typeof createClient>, caseId: string, title: string) {
+  const { data: claimed } = await db.from('supervision_cases')
+    .update({ critical_push_sent_at: new Date().toISOString() })
+    .eq('id', caseId).eq('priority', 'critical').is('critical_push_sent_at', null)
+    .select('id').maybeSingle()
+  if (!claimed) return
+  const { data: team } = await db.from('supervision_team').select('user_id').eq('receive_alerts', true)
+  const teamIds = (team ?? []).map((member: { user_id: string }) => member.user_id)
+  if (!teamIds.length) return
+  const { data: subs } = await db.from('push_subscriptions').select('id,endpoint,p256dh,auth_key').in('user_id', teamIds)
+  if (!subs?.length) return
+  const vapidPublic = Deno.env.get('VAPID_PUBLIC_KEY')
+  const vapidPrivate = Deno.env.get('VAPID_PRIVATE_KEY')
+  if (!vapidPublic || !vapidPrivate) return
+  webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT') ?? 'mailto:admin@portalmsy.site', vapidPublic, vapidPrivate)
+  const payload = JSON.stringify({ title: '🚨 Caso critico na Supervisao', body: title, url: `supervisao.html#central/${caseId}` })
+  for (const sub of subs as { id: string; endpoint: string; p256dh: string; auth_key: string }[]) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } }, payload, { TTL: 86_400 })
+    } catch (e: unknown) {
+      const statusCode = typeof e === 'object' && e !== null && 'statusCode' in e ? (e as { statusCode?: number }).statusCode : undefined
+      if (statusCode === 410 || statusCode === 404) await db.from('push_subscriptions').delete().eq('id', sub.id)
+    }
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
@@ -49,19 +78,31 @@ Deno.serve(async (req) => {
   for (const profile of profiles ?? []) {
     if (!paidUsers.has(profile.id)) reminders.push({ fingerprint: `finance:${profile.id}:${paymentMonth}`, title: `Confirmar mensalidade: ${profile.name}`, description: `Nao ha pagamento confirmado para ${paymentMonth}.`, category: 'finance', origin: 'automatic', approval_status: 'pending_approval', source_type: 'profile', source_id: profile.id })
   }
+  // Reavalia a prioridade a cada execucao (nao so na criacao) - uma atividade
+  // criada como "atencao" 20h antes do prazo precisa poder virar "critica" na
+  // rodada seguinte, sem depender de o lembrete ser recriado (fingerprint fixo).
   let written = 0
   for (const reminder of reminders) {
-    const { data: existing } = await db.from('supervision_reminders').select('id').eq('fingerprint', reminder.fingerprint).maybeSingle()
-    if (existing) continue
-    const { data: created, error } = await db.from('supervision_reminders').insert(reminder).select('id,title,description,due_at,category,approval_status').single()
-    if (!error && created) {
+    const { data: existing } = await db.from('supervision_reminders').select('id,title,description,due_at,category,approval_status').eq('fingerprint', reminder.fingerprint).maybeSingle()
+    let reminderRow = existing
+    if (!reminderRow) {
+      const { data: created, error } = await db.from('supervision_reminders').insert(reminder).select('id,title,description,due_at,category,approval_status').single()
+      if (error || !created) continue
       written++
-      await db.rpc('upsert_supervision_case', {
-        p_source_type: 'reminder', p_source_id: created.id, p_source_key: created.id,
-        p_priority: created.category === 'finance' ? 'info' : (created.approval_status === 'pending_approval' ? 'attention' : 'info'),
-        p_title: created.title, p_description: created.description, p_member_id: null, p_due_at: created.due_at,
-      })
+      reminderRow = created
     }
+    const imminentOrOverdue = reminderRow.due_at ? new Date(reminderRow.due_at).getTime() <= now.getTime() + 3 * 60 * 60 * 1000 : false
+    const priority = reminderRow.category === 'activity' && imminentOrOverdue
+      ? 'critical'
+      : reminderRow.category === 'finance' && now.getDate() >= 20
+        ? 'critical'
+        : (reminderRow.approval_status === 'pending_approval' ? 'attention' : 'info')
+    const caseId = await db.rpc('upsert_supervision_case', {
+      p_source_type: 'reminder', p_source_id: reminderRow.id, p_source_key: reminderRow.id,
+      p_priority: priority,
+      p_title: reminderRow.title, p_description: reminderRow.description, p_member_id: null, p_due_at: reminderRow.due_at,
+    })
+    if (priority === 'critical' && caseId.data) await maybeSendCriticalPush(db, caseId.data as string, reminderRow.title)
   }
   const overdue = (activities ?? []).filter((activity) => new Date(`${activity.deadline}T${activity.deadline_time || '23:59'}:00`) < now)
   let observations = 0
