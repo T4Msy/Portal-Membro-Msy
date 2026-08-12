@@ -37,7 +37,23 @@
       "Bash(node *)",
       "Bash(ls -la sw.js)",
       "Bash(find . -maxdepth 2 -name \"sw.js\" -not -path \"./node_modules/*\")",
-      "Bash(ls *.js)"
+      "Bash(ls *.js)",
+      "Bash(ls -la \"/c/Users/valde/Downloads/Pasta para o claude.zip\" 2>&1)",
+      "Bash(mkdir -p \"/c/Users/valde/AppData/Local/Temp/claude/C--Users-valde-Portal-Membro-Msy/c18af5a2-8170-4251-8e51-6f219119e3fc/scratchpad/msy_analytics\")",
+      "Bash(unzip -o \"/c/Users/valde/Downloads/Pasta para o claude.zip\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(cp \"/c/Users/valde/AppData/Local/Temp/claude/C--Users-valde-Portal-Membro-Msy/c18af5a2-8170-4251-8e51-6f219119e3fc/scratchpad/test_analytics.html\" \"/c/Users/valde/Portal-Membro-Msy/_test_analytics_harness.html\")",
+      "Bash(sed -i \"s#file:///C:/Users/valde/Portal-Membro-Msy/css/supervisao.css#css/supervisao.css#\" \"/c/Users/valde/Portal-Membro-Msy/_test_analytics_harness.html\")",
+      "Bash(rm -f \"/c/Users/valde/Portal-Membro-Msy/_test_analytics_harness.html\" \"/c/Users/valde/Portal-Membro-Msy/.claude/launch.json\")",
+      "Bash(rmdir \"/c/Users/valde/Portal-Membro-Msy/.claude\")",
+      "Bash(grep -o 'class=\"\\\\${.sv-analytics-file.}\"[^<]*' js/pages/supervisao.js)",
+      "Bash(grep -o '<button class=\"sv-huginn\"[^Z]\\\\{1,400\\\\}' js/pages/supervisao.js)",
+      "Bash(grep -o '<button class=\"sv-huginn\"[^<]*<span>[^<]*<span class=\"sv-score\">[^Z]\\\\{1,200\\\\}</button>' js/pages/supervisao.js)",
+      "Bash(python3 -c ' *)",
+      "mcp__b372fdb9-234d-47f8-94af-b50b594004db__list_tables",
+      "Bash(rm -f \"/c/Users/valde/Portal-Membro-Msy/_test_projects.html\")",
+      "Bash(sed -i 's/20260809-briefing3/20260809-briefing4/g' supervisao.html)"
     ]
   }
 }

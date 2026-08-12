@@ -4767,7 +4767,7 @@
 
        const [{ data: evs, error }, { data: myPresencas }] = await Promise.all([
          db.from('events')
-           .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url), canceller:cancelled_by(name,initials,color,avatar_url)')
+           .select('*, creator:created_by(name,initials,color,avatar_url), helper:helper_id(name,initials,color,avatar_url), co_creators:event_co_creators(helper_id,helper:helper_id(name,initials,color,avatar_url)), canceller:cancelled_by(name,initials,color,avatar_url)')
            .order('event_date', { ascending: false }),
          db.from('event_presencas').select('*').or(`user_id.eq.${profile.id},membro_id.eq.${profile.id}`)
        ]);
@@ -5558,7 +5558,11 @@
      const isCancelled = ev.status === 'cancelado';
      const isPrivate  = ev.is_private;
      const creator    = ev.creator;
-     const helper     = ev.helper;
+     const helpers    = [
+       ...(ev.helper ? [{ helper_id: ev.helper_id, profile: ev.helper }] : []),
+       ...(ev.co_creators || []).map(item => ({ helper_id: item.helper_id, profile: item.helper }))
+     ].filter((item, index, list) => item.profile && list.findIndex(candidate => candidate.helper_id === item.helper_id) === index)
+       .map(item => item.profile);
      const canceller  = ev.canceller;
      const canManage = typeof permissions === 'boolean' ? permissions : !!(permissions?.canDelete || permissions?.canConclude || permissions?.canAttendance || permissions?.canReview);
      const canDelete = typeof permissions === 'boolean' ? permissions : !!permissions?.canDelete;
@@ -5656,8 +5660,8 @@
                </div>
              </div>` : ''}
 
-           <!-- Criador e co-criador -->
-           ${creator || helper ? `
+           <!-- Criador e co-criadores -->
+           ${creator || helpers.length ? `
              <div class="ev-card-crew">
                ${creator ? `
                  <div class="ev-crew-item">
@@ -5665,13 +5669,13 @@
                    <span class="ev-crew-label">Criador</span>
                    <span class="ev-crew-name">${Utils.escapeHtml(creator.name)}</span>
                  </div>` : ''}
-               ${helper ? `
+               ${helpers.map(helper => `
                  <div class="ev-crew-sep"></div>
                  <div class="ev-crew-item">
                    ${miniAvatar(helper)}
                    <span class="ev-crew-label">Co-criador</span>
                    <span class="ev-crew-name">${Utils.escapeHtml(helper.name)}</span>
-                 </div>` : ''}
+                 </div>`).join('')}
              </div>` : ''}
 
             ${!isPast && !isDone && !isCancelled ? `
