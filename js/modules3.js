@@ -16,6 +16,14 @@
 const MSYPerms = {
   // Todas as permissões disponíveis no portal
   ALL: [
+    // A consulta própria é padrão para todos os membros ativos.
+    { key: 'commission.view_own', label: 'Ver próprias comissões (padrão)', group: 'Comissionamento', icon: 'fa-coins' },
+    { key: 'commission.view_all', label: 'Ver todas as comissões', group: 'Comissionamento', icon: 'fa-coins' },
+    { key: 'commission.create', label: 'Criar cálculos', group: 'Comissionamento', icon: 'fa-plus' },
+    { key: 'commission.edit', label: 'Editar cálculos e comprovações', group: 'Comissionamento', icon: 'fa-pen' },
+    { key: 'commission.approve', label: 'Aprovar distribuições', group: 'Comissionamento', icon: 'fa-check' },
+    { key: 'commission.mark_paid', label: 'Registrar quitação e pagamentos', group: 'Comissionamento', icon: 'fa-coins' },
+    { key: 'commission.delete', label: 'Cancelar cálculos sem pagamentos', group: 'Comissionamento', icon: 'fa-ban' },
     // ── Eventos
     { key: 'criar_eventos',         label: 'Criar Eventos',          group: 'Eventos',    icon: 'fa-calendar-plus' },
     { key: 'editar_eventos',        label: 'Editar Eventos',         group: 'Eventos',    icon: 'fa-pen-to-square' },
@@ -244,6 +252,7 @@ async function openPermissionsManager() {
   }
 
   const GROUPS = {
+    'Comissionamento': { icon:'fa-coins', color:'#c9a84c', keys:['commission.view_own','commission.view_all','commission.create','commission.edit','commission.approve','commission.mark_paid','commission.delete'] },
     'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
     'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
@@ -454,6 +463,7 @@ async function openPermissionsManager() {
 
 function getPermissionsGroups() {
   return {
+    'Comissionamento': { icon:'fa-coins', color:'#c9a84c', keys:['commission.view_own','commission.view_all','commission.create','commission.edit','commission.approve','commission.mark_paid','commission.delete'] },
     'Eventos':     { icon:'fa-calendar-days', color:'#60a5fa', keys:['criar_eventos','editar_eventos','excluir_eventos','cancelar_eventos','gerenciar_eventos','concluir_eventos','revisar_justificativas_eventos'] },
     'Presenças':   { icon:'fa-clipboard-list',color:'#10b981', keys:['registrar_participantes','gerenciar_presencas','registrar_presencas_eventos'] },
     'Membros':     { icon:'fa-users',         color:'#a78bfa', keys:['aprovar_membros','editar_membros','remover_membros'] },
@@ -532,7 +542,7 @@ async function initPermissoesPage() {
 }
 
 const MSY_TAB_CATALOG = [
-  ['dashboard', 'Dashboard'], ['atividades', 'Atividades'], ['comunicados', 'Comunicados'],
+  ['dashboard', 'Dashboard'], ['atividades', 'Atividades'], ['comissionamento', 'Comissionamento'], ['comunicados', 'Comunicados'],
   ['membros', 'Membros'], ['eventos', 'Eventos'], ['reunioes', 'Reuniões'],
   ['ranking', 'Ranking'], ['jornal', 'Jornal da Masayoshi'], ['feed', 'Feed'],
   ['sugestoes', 'Sugestões'], ['biblioteca', 'Biblioteca'], ['premiacoes', 'Premiações'],
@@ -676,7 +686,7 @@ async function renderTabAccessWorkspace(body) {
       allowed_tiers: [],
       allowed_roles: [...row.querySelectorAll('[data-tab-role]:checked')].map((input) => input.dataset.tabRole),
       allowed_user_ids: [...row.querySelectorAll('[data-tab-user]:checked')].map((input) => input.dataset.tabUser),
-      required_permissions: [],
+      required_permissions: rules.find((rule) => rule.page_key === row.dataset.tabRow)?.required_permissions || [],
       updated_at: new Date().toISOString(),
     }));
     Utils.setButtonLoading?.(btn, true, '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...');

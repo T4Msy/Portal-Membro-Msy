@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "test:commission": "node --test tests/commission-calculator.test.mjs",
     "supabase:login": "bash scripts/supabase-login.sh",
     "supabase:fix-story-likes": "bash scripts/apply-story-reaction-policy.sh"
   },

@@ -61,6 +61,22 @@ Execute este checklist manualmente **antes de promover qualquer deploy** para ga
 
 ## Checklist Expandido (antes de releases maiores)
 
+### Comissionamento
+
+- [ ] Diretoria acessa Dashboard, Projetos, Novo cálculo e Histórico; membro acessa apenas Minhas comissões
+- [ ] Projeto de R$ 1.200, pesos 35/30/20/15 e participações 100/75/100/100: execução 273/175,50/156/117; indicação 120; MSY total 358,50
+- [ ] Custos são descontados antes das porcentagens e todos os totais fecham em centavos
+- [ ] Pesos incompletos salvam rascunho, mas não permitem análise/aprovação
+- [ ] Aprovar grava responsável e versão; membro passa a visualizar somente os próprios valores
+- [ ] Pagamento fica bloqueado até registrar quitação integral do cliente
+- [ ] Execução e indicação podem ser pagas separadamente, em datas diferentes
+- [ ] Primeiro pagamento bloqueia alteração financeira/cancelamento; clique repetido não duplica pagamento
+- [ ] Revisão antes do primeiro pagamento exige nova aprovação e preserva a versão anterior
+- [ ] Chamadas diretas às tabelas/RPCs não expõem valores de colegas nem permitem alterações sem permissão
+- [ ] Membro desativado não perde registros históricos de pagamentos
+- [ ] Formulário, tabelas e resumo funcionam em celular, desktop, tema claro/escuro e teclado
+- [ ] Login, sidebar, Gestão de Projetos e gerenciador de permissões continuam funcionando
+
 ### Módulos Principais
 - [ ] `biblioteca.html` → carrega conteúdos, filtros funcionam
 - [ ] `ranking.html` → leaderboard carrega com dados
