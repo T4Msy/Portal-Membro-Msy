@@ -190,6 +190,20 @@ Esta política passa a valer para todas as mudanças futuras. A documentação d
 
 **Pendências ou cuidados para deploy:** publicar `js/modules3.js` e testar a transição entre seleção, edição e retorno no portal.
 
+## Correção de abas ocultas — 2026-09-13
+
+**O que mudou:** uma aba marcada como oculta, incluindo `Jornal da Masayoshi`, agora é bloqueada antes de qualquer verificação alternativa de permissão. O teaser do Jornal no dashboard também respeita essa regra.
+
+**Por que mudou:** a verificação RPC podia autorizar uma página antes da regra local de visibilidade ser aplicada, fazendo uma aba oculta aparecer para membros.
+
+**Arquivos e serviços afetados:** `js/app.js`, `tab_permissions`, navegação lateral, proteção de páginas e teaser do dashboard.
+
+**Como funciona:** as regras de abas são carregadas do banco a cada nova página; se `visible` estiver como `false`, o menu, o teaser e o acesso pela página são negados para membros.
+
+**Validação realizada:** ordem das regras revisada e sintaxe JavaScript verificada localmente.
+
+**Pendências ou cuidados para deploy:** publicar `js/app.js`, atualizar o portal sem cache e testar com uma conta de membro após ocultar o Jornal.
+
 ## Responsividade de Permissões — 2026-09-13
 
 **O que mudou:** foram adicionados ajustes específicos para celular ao seletor de membros, à configuração individual e ao editor expansível de abas.

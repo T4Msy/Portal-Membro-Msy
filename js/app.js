@@ -201,17 +201,11 @@
 
      async rules() {
        if (this._rules) return this._rules;
-       const cached = MSYSessionCache.get('tab_permissions');
-       if (cached) {
-         this._rules = cached;
-         return this._rules;
-       }
        try {
          const { data, error } = await db.from('tab_permissions').select('*');
          if (error) throw error;
          this._rules = {};
          (data || []).forEach((rule) => { this._rules[rule.page_key] = rule; });
-         MSYSessionCache.set('tab_permissions', this._rules, 5 * 60_000);
        } catch (err) {
          console.warn('[MSY][tabs] Configuração de abas indisponível, usando fallback local:', err.message);
          this._rules = {};
@@ -227,6 +221,7 @@
 
        const rules = await this.rules();
        const rule = rules[pageKey];
+       if (rule?.visible === false) return false;
        if (rule && !rule.required_permissions?.length) {
          try {
            const { data, error } = await db.rpc('can_access_tab', { p_page_key: pageKey });
@@ -238,7 +233,6 @@
        if (!rule) {
          return typeof Features !== 'undefined' ? Features.isEnabled(pageKey, profile) : true;
        }
-       if (rule.visible === false) return false;
        const allowedTiers = Array.isArray(rule.allowed_tiers) ? rule.allowed_tiers : [];
        const allowedRoles = Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [];
        const allowedUsers = Array.isArray(rule.allowed_user_ids) ? rule.allowed_user_ids : [];
@@ -8077,6 +8071,12 @@
    async function _initJornalTeaser() {
      const container = document.getElementById('jornalTeaserContainer');
      if (!container) return;
+
+     const profile = await Auth.getProfile();
+     if (!await MSYTabAccess.canAccess('jornal', profile)) {
+       container.remove();
+       return;
+     }
 
      const fallback = () => {
        container.innerHTML = `
