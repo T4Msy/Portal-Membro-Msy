@@ -3516,9 +3516,12 @@
      const canRemover  = isDiretoria || await MSYPerms.check(profile.id, profile.tier, 'remover_membros');
      const canGerenciarMembros = canAprovar || canEditar || canRemover;
    
-     const { data: membersRaw, error } = await db.from('profiles')
-       .select('*')
-       .order('name', { ascending: true });
+     const [membersResult, winnersResult, premiacoesResult] = await Promise.all([
+       db.from('profiles').select('*').order('name', { ascending: true }),
+       db.from('premiacao_vencedores').select('membro_id, premiacao_id'),
+       db.from('premiacoes').select('id, titulo, icone, imagem_url').eq('ativo', true),
+     ]);
+     const { data: membersRaw, error } = membersResult;
    
      // Ordem de prioridade: Fundador > Coordenador Geral > demais Diretoria > demais membros
      const getRolePriority = m => {
@@ -3537,6 +3540,29 @@
        : [];
    
      if (error) { Utils.showToast('Erro ao carregar membros.', 'error'); return; }
+
+     if (winnersResult.error || premiacoesResult.error) {
+       console.warn('[MSY][membros] Não foi possível carregar as insígnias:', winnersResult.error || premiacoesResult.error);
+     }
+     const awardsById = new Map((premiacoesResult.data || []).map((award) => [award.id, award]));
+     const awardsByMember = new Map();
+     (winnersResult.data || []).forEach((winner) => {
+       const award = awardsById.get(winner.premiacao_id);
+       if (!award) return;
+       const memberAwards = awardsByMember.get(winner.membro_id) || [];
+       if (!memberAwards.some((item) => item.id === award.id)) memberAwards.push(award);
+       awardsByMember.set(winner.membro_id, memberAwards);
+     });
+     const renderMemberAwards = (memberId) => {
+       const awards = awardsByMember.get(memberId) || [];
+       if (!awards.length) return '';
+       return `<div class="member-card-badges" aria-label="Insígnias conquistadas">${awards.slice(0, 3).map((award) => `
+         <span class="member-card-badge" title="${Utils.escapeHtml(award.titulo)}">
+           ${award.imagem_url
+             ? `<img src="${Utils.escapeHtml(award.imagem_url)}" alt="${Utils.escapeHtml(award.titulo)}">`
+             : Utils.escapeHtml(award.icone || '🏆')}
+         </span>`).join('')}</div>`;
+     };
    
      content.innerHTML = `
        <div class="page-header">
@@ -3567,6 +3593,7 @@
                <div class="member-join" style="font-size:.68rem;color:var(--text-3);margin-bottom:3px"><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(m.join_date)}</div>
                <div class="member-role-text">${Utils.escapeHtml(m.role)}</div>
                <div class="member-tier-badge">${Utils.tierBadge(m.tier)}</div>
+               ${renderMemberAwards(m.id)}
              </div>
              <div class="member-card-actions member-card-actions-primary" onclick="event.stopPropagation()">
                ${m.status === 'ativo' ? `<a class="btn btn-sm btn-outline" href="feed.html?profile=${m.id}" title="Abrir perfil social"><i class="fa-solid fa-user-plus"></i> Perfil Social</a>` : ''}
@@ -3953,8 +3980,11 @@
            ? `<span class="mpb-qty">×${b.meta.quantidade}</span>` : '';
          const glow = b.origem === 'recorde' ? `filter:drop-shadow(0 0 8px ${b.color}99)` : '';
          const tip  = b.meta?.tooltip || b.desc || '';
+         const visual = b.image
+           ? `<img class="mpb-icon-img" src="${Utils.escapeHtml(b.image)}" alt="">`
+           : b.icon;
          return `<div class="mpb-item" title="${Utils.escapeHtml(tip)}" style="--bc:${b.color}">
-           <div class="mpb-icon" style="${glow}">${b.icon}</div>
+           <div class="mpb-icon" style="${glow}">${visual}</div>
            <div class="mpb-info">
              <div class="mpb-label">${Utils.escapeHtml(b.label)}</div>
              <div class="mpb-sub">${b.origem === 'recorde' ? 'Recorde' : b.origem === 'icm' ? 'ICM' : (b.meta?.importancia || 'Premiação')}</div>
@@ -4211,12 +4241,7 @@
       PAGE: TECNOLOGIAS
       ============================================================ */
    const TECHNOLOGIES = [
-     { id:1, name:'Corvus',                icon:'🦅', description:'Assistente de IA institucional da MSY. Chat com memória, base de conhecimento e integrações avançadas.', status:'Online', url:'https://t4msy.github.io/Corvus-2.0/' },
-     { id:2, name:'MSY Analytics', icon:'📊', description:'Painel de métricas e KPIs coletivos da Ordem, atualizado semanalmente via análise de WhatsApp.', status:'Online', url:'https://t4msy.github.io/MSY-ANALYTICS/' },
-     { id:3, name:'Índice De Capacidade Masayoshi',  icon:'🧠', description:'Sistema de avaliação comportamental com lógica adaptativa, análise de padrões e coerência. Desenvolvido para identificar alinhamento com a Masayoshi.', status:'Online', url:'https://t4msy.github.io/ICM-TESTE/' },
-     { id:4, name:'ProvaGen',              icon:'📝', description:'Sistema automatizado de geração de avaliações internas via IA multi-modelo.', status:'Online', url:'https://t4msy.github.io/Gerador-de-Provas/' },
-     { id:5, name:'NeverMind Studio',      icon:'🎬', description:'Central de produção de conteúdo e mídia da MSY. Pipeline editorial e social em desenvolvimento.', status:'Em breve', url:'#' },
-     { id:6, name:'Britannia Hub',         icon:'🏛️', description:'Portal da camada comunitária da Masayoshi. Conector entre a Ordem e o mundo externo.', status:'Em breve', url:'#' },
+     { id:1, name:'Corvus',                icon:'🦅', description:'Assistente de IA institucional da MSY. Chat com memória, base de conhecimento e integrações avançadas.', status:'Online', url:'https://corvus-2-0.vercel.app/' },
    ];
    
    async function initTecnologias() {
@@ -7022,91 +7047,91 @@
      ).length;
    
      content.innerHTML = `
-       <div class="admin-shell">
-       <section class="admin-hero card-enter">
-         <div class="admin-hero-main">
-           <div class="admin-kicker"><i class="fa-solid fa-shield-halved"></i> Centro administrativo</div>
-           <div class="page-header-title">Painel Administrativo</div>
-           <div class="page-header-sub">Operação, membros, permissões e configurações centrais da plataforma.</div>
-           <div class="admin-hero-actions">
-             <button class="btn btn-primary" id="addMemberBtn"><i class="fa-solid fa-user-plus"></i> Adicionar membro</button>
-             <button class="btn btn-outline" id="notifyAllBtn"><i class="fa-solid fa-bell"></i> Notificar todos</button>
-             <a class="btn btn-ghost" href="permissoes.html"><i class="fa-solid fa-table-columns"></i> Gerenciar abas</a>
-           </div>
+       <div class="admin-shell admin-redesign">
+       <header class="admin-command-header">
+         <div>
+           <div class="admin-kicker"><i class="fa-solid fa-shield-halved"></i> Masayoshi Order · comando</div>
+           <h1>Painel administrativo</h1>
+           <p>Uma visão clara da operação, membros e decisões da Ordem.</p>
          </div>
-         <div class="admin-hero-status ${pendingMembers > 0 ? 'attention' : 'stable'}">
-           <span>${pendingMembers > 0 ? 'Atenção requerida' : 'Operação estável'}</span>
-           <strong>${pendingMembers > 0 ? `${pendingMembers} pendente${pendingMembers > 1 ? 's' : ''}` : `${activeMembers || 0} ativos`}</strong>
+         <div class="admin-command-actions">
+           <button class="btn btn-primary" id="addMemberBtn"><i class="fa-solid fa-user-plus"></i> Adicionar membro</button>
+           <button class="admin-header-action" id="notifyAllBtn"><i class="fa-solid fa-bell"></i><span>Notificar</span></button>
+           <a class="admin-header-action" href="permissoes.html"><i class="fa-solid fa-sliders"></i><span>Abas</span></a>
          </div>
+       </header>
+
+       <section class="admin-overview" aria-label="Resumo da operação">
+         <div class="admin-overview-state ${pendingMembers > 0 ? 'attention' : 'stable'}">
+           <i class="fa-solid ${pendingMembers > 0 ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i>
+           <div><span>${pendingMembers > 0 ? 'Ação necessária' : 'Operação estável'}</span><strong>${pendingMembers > 0 ? `${pendingMembers} aprovação${pendingMembers > 1 ? 'ões' : ''} pendente${pendingMembers > 1 ? 's' : ''}` : 'Nenhuma aprovação pendente'}</strong></div>
+         </div>
+         <div class="admin-metric"><strong>${activeMembers||0}</strong><span>Membros ativos</span></div>
+         <div class="admin-metric"><strong>${totalActs||0}</strong><span>Atividades</span></div>
+         <div class="admin-metric"><strong>${totalComs||0}</strong><span>Comunicados</span></div>
        </section>
 
-       <div class="stats-grid" style="margin-bottom:28px">
-         <div class="stat-card gold-accent card-enter"><div class="stat-icon gold"><i class="fa-solid fa-users"></i></div><div class="stat-info"><div class="stat-value">${activeMembers||0}</div><div class="stat-label">Membros Ativos</div></div></div>
-         <div class="stat-card red-accent card-enter"><div class="stat-icon red"><i class="fa-solid fa-user-clock"></i></div><div class="stat-info"><div class="stat-value">${pendingMembers||0}</div><div class="stat-label">Pendentes Aprovação</div></div></div>
-         <div class="stat-card blue-accent card-enter"><div class="stat-icon blue"><i class="fa-solid fa-list-check"></i></div><div class="stat-info"><div class="stat-value">${totalActs||0}</div><div class="stat-label">Atividades Total</div></div></div>
-         <div class="stat-card green-accent card-enter"><div class="stat-icon green"><i class="fa-solid fa-bullhorn"></i></div><div class="stat-info"><div class="stat-value">${totalComs||0}</div><div class="stat-label">Comunicados</div></div></div>
-       </div>
-
-       <section class="admin-workspace-grid">
-         <div class="card card-enter admin-actions-card">
-           <div class="card-title"><i class="fa-solid fa-bolt"></i> Ações por área</div>
-           <div class="admin-actions-grid">
-             <a href="membros.html" class="admin-action-tile"><i class="fa-solid fa-users"></i><span>Membros</span><small>Perfis, cargos e situação</small></a>
-             <a href="atividades.html" class="admin-action-tile"><i class="fa-solid fa-list-check"></i><span>Atividades</span><small>Tarefas, anexos e prazos</small></a>
-             <a href="comunicados.html" class="admin-action-tile"><i class="fa-solid fa-bullhorn"></i><span>Comunicados</span><small>Publicações oficiais</small></a>
-             <a href="eventos.html" class="admin-action-tile"><i class="fa-solid fa-calendar-days"></i><span>Eventos</span><small>Agenda e presença</small></a>
-             <button class="admin-action-tile" id="pagManualBtn"><i class="fa-solid fa-hand-holding-dollar"></i><span>Pagamento manual</span><small>Registrar mensalidade</small></button>
-             <button class="admin-action-tile" id="viewAsMemberAdminBtn"><i class="fa-solid fa-eye"></i><span>Visão de membro</span><small>Simular acesso comum</small></button>
+       <section class="admin-stage">
+         ${pendingMembers > 0 ? `
+         <section class="admin-approval-flow">
+           <div class="admin-flow-heading">
+             <div><span>Fila prioritária</span><h2>Aprovações pendentes</h2></div>
+             <b>${pendingMembers}</b>
            </div>
-         </div>
+           <div class="admin-flow-list">
+             ${(pendingList||[]).map(m => `
+               <div class="admin-member-row">
+                 <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${m.initials||'?'}</div>
+                 <div>
+                   <strong>${Utils.escapeHtml(m.name)}</strong>
+                   <span>Cadastrado em ${Utils.formatDate(m.created_at)}</span>
+                 </div>
+                 <button class="btn btn-primary btn-sm quick-approve" data-id="${m.id}">Aprovar</button>
+               </div>`).join('')}
+           </div>
+         </section>` : `
+         <section class="admin-approval-flow admin-flow-clear">
+           <i class="fa-solid fa-shield-heart"></i><div><span>Fila prioritária</span><h2>Operação em dia</h2><p>Nenhum membro aguarda aprovação.</p></div>
+         </section>`}
 
-         <div class="card card-enter admin-tabs-card">
-           <div class="card-title"><i class="fa-solid fa-table-columns"></i> Controle de abas</div>
+         <aside class="admin-shortcuts">
+           <span>Operações</span>
+           <a href="membros.html"><i class="fa-solid fa-users"></i><b>Membros</b><em>Gerenciar perfis</em><i class="fa-solid fa-arrow-right"></i></a>
+           <a href="atividades.html"><i class="fa-solid fa-list-check"></i><b>Atividades</b><em>Tarefas e prazos</em><i class="fa-solid fa-arrow-right"></i></a>
+           <a href="eventos.html"><i class="fa-solid fa-calendar-days"></i><b>Eventos</b><em>Agenda e presença</em><i class="fa-solid fa-arrow-right"></i></a>
+           <a href="comunicados.html"><i class="fa-solid fa-bullhorn"></i><b>Comunicados</b><em>Publicações oficiais</em><i class="fa-solid fa-arrow-right"></i></a>
+           <button id="pagManualBtn"><i class="fa-solid fa-hand-holding-dollar"></i><b>Pagamento manual</b><em>Registrar mensalidade</em><i class="fa-solid fa-arrow-right"></i></button>
+           <button id="viewAsMemberAdminBtn"><i class="fa-solid fa-eye"></i><b>Visão de membro</b><em>Simular acesso comum</em><i class="fa-solid fa-arrow-right"></i></button>
+         </aside>
+       </section>
+
+       <section class="admin-footer-grid">
+         <section class="admin-tabs-panel">
+           <span>Configuração de acesso</span>
+           <h2>Controle de abas</h2>
            <div class="admin-tabs-summary">
              <div><strong>${tabConfig.length || 0}</strong><span>abas cadastradas</span></div>
              <div><strong>${hiddenTabs}</strong><span>ocultas</span></div>
              <div><strong>${restrictedTabs}</strong><span>restritas</span></div>
            </div>
-           <p class="admin-card-copy">Defina quais abas aparecem para membros comuns e quais páginas exigem cargo, função ou permissão individual.</p>
-           <a href="permissoes.html#abas" class="btn btn-primary"><i class="fa-solid fa-sliders"></i> Configurar visibilidade</a>
-         </div>
-       </section>
-
-       <section class="admin-lists-grid">
-         <div class="card card-enter">
-           <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Cadastros recentes</div>
-           <div class="small-list">
+           <p>Defina visibilidade e acessos específicos de cada área do portal.</p>
+           <a href="permissoes.html#abas">Configurar permissões <i class="fa-solid fa-arrow-right"></i></a>
+         </section>
+         <section class="admin-recent-panel">
+           <span>Movimentação recente</span>
+           <h2>Novos cadastros</h2>
+           <div class="admin-recent-list">
              ${(recentMembers||[]).length === 0 ? `<div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum cadastro recente.</div></div>` : (recentMembers||[]).map(m => `
-               <div class="small-list-item">
+               <div class="admin-member-row">
                  <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${m.avatar_url ? `<img src="${m.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (m.initials||Utils.getInitials(m.name))}</div>
-                 <div class="small-list-info">
-                   <div class="small-list-title">${Utils.escapeHtml(m.name)}</div>
-                   <div class="small-list-sub">${Utils.escapeHtml(m.role || 'Membro')} · ${Utils.formatDate(m.created_at)}</div>
+                 <div>
+                   <strong>${Utils.escapeHtml(m.name)}</strong>
+                   <span>${Utils.escapeHtml(m.role || 'Membro')} · ${Utils.formatDate(m.created_at)}</span>
                  </div>
                  <span class="badge ${m.status === 'ativo' ? 'badge-done' : 'badge-pending'}">${Utils.escapeHtml(m.status || 'novo')}</span>
                </div>`).join('')}
            </div>
-         </div>
-
-       ${pendingMembers > 0 ? `
-         <div class="card card-enter admin-pending-card">
-           <div class="card-title" style="color:var(--red-bright)"><i class="fa-solid fa-triangle-exclamation"></i> Membros Aguardando Aprovação (${pendingMembers})</div>
-           <div class="small-list">
-             ${(pendingList||[]).map(m => `
-               <div class="small-list-item">
-                 <div class="avatar" style="background:linear-gradient(135deg,${m.color||'#7f1d1d'},#1a1a1a)">${m.initials||'?'}</div>
-                 <div class="small-list-info">
-                   <div class="small-list-title">${Utils.escapeHtml(m.name)}</div>
-                   <div class="small-list-sub">Cadastrado em ${Utils.formatDate(m.created_at)}</div>
-                 </div>
-                 <button class="btn btn-primary btn-sm quick-approve" data-id="${m.id}">Aprovar</button>
-               </div>`).join('')}
-           </div>
-         </div>` : `
-         <div class="card card-enter admin-pending-card is-clear">
-           <div class="card-title"><i class="fa-solid fa-circle-check"></i> Aprovações</div>
-           <div class="empty-state" style="padding:20px"><div class="empty-state-text">Nenhum membro aguardando aprovação.</div></div>
-         </div>`}
+         </section>
        </section>
 
        </div>

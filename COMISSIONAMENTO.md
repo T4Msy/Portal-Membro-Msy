@@ -13,13 +13,15 @@ O módulo usa o Portal existente: `comissionamento.html`, navegação e temas co
 - Um pagamento corresponde ao valor integral aprovado de uma pessoa e tipo (execução ou indicação). Datas podem diferir entre pagamentos.
 - Salvar revisão financeira revoga aprovação; versões anteriores permanecem. Mudar o bruto também revoga a quitação. Qualquer pagamento bloqueia edição financeira/cancelamento.
 - Cancelamento exige motivo e preserva histórico. Comissões zeradas não geram pagamentos; projeto quitado sem obrigações positivas fica concluído.
-- Limites de entrada: R$ 1 bilhão por projeto, 200 participantes, 100 custos, arquivos até 10 MB. Não há nomes fixos no código de produção.
+- Limites de entrada: R$ 1 bilhão por projeto, 200 participantes e 100 custos. Não há nomes fixos no código de produção.
+- Ao selecionar Tales, Xitter, Pepeu ou João, o Portal preenche o cargo e o peso padrão: Squad Leader/35%, Arquiteto/30%, QA (Quality Assurance)/20% e Gestor de Projetos/15%. A participação nunca é preenchida automaticamente; deve ser definida manualmente.
+- A aba Projetos usa cards clicáveis. O card abre o detalhamento completo do cálculo.
 
 ## Banco e interfaces
 
-A migração aditiva é `supabase/migrations/20260908000000_commission.sql`.
+As migrations são aplicadas em sequência: `20260908000000_commission.sql` (base), `20260908000001_commission_permissions_and_manual_participation.sql` (permissões e participação manual), `20260908000002_commission_referral_recipient.sql` (responsável pela indicação), `20260908000003_commission_delete_drafts.sql` (RPC de exclusão) e `20260908000004_commission_delete_paid.sql` (libera exclusão administrativa de qualquer status). Se a base já foi aplicada, não deve ser executada novamente.
 
-Entradas de projeto, indicação e custos ficam num documento JSON versionado em `commission_projects.input`. O resultado calculado fica em `result`. Evita tabelas intermediárias sem uso independente, mantendo o conjunto financeiro atômico. Participantes, pagamentos, evidências, revisões e histórico têm tabelas próprias. `projects` é apenas vínculo opcional; seus dados não sincronizam distribuições aprovadas.
+Entradas de projeto, indicação e custos ficam num documento JSON versionado em `commission_projects.input`. O resultado calculado fica em `result`. Evita tabelas intermediárias sem uso independente, mantendo o conjunto financeiro atômico. Participantes, pagamentos, revisões e histórico têm tabelas próprias. `projects` é apenas vínculo opcional; seus dados não sincronizam distribuições aprovadas.
 
 `commission_command(p_action, p_id, p_version, p_payload)` oferece `create`, `save`, `review`, `approve`, `settle`, `pay` e `cancel`. Recebe entradas e recalcula valores; ignora valores de pagamento enviados pelo cliente. `p_version` detecta edição concorrente; UUID fornecido na criação torna retries idempotentes. Cada comando bloqueia a linha e grava histórico na mesma transação.
 
@@ -37,9 +39,9 @@ Permissões no gerenciador existente:
 | `commission.edit` | Edição e envio para análise nos cálculos acessíveis |
 | `commission.approve` | Aprovação e definição final de participação |
 | `commission.mark_paid` | Quitação do cliente e pagamentos aos membros |
-| `commission.delete` | Cancelamento antes do primeiro pagamento |
+| `commission.delete` | Cancelamento e exclusão definitiva, inclusive de registros pagos |
 
-Diretoria tem todos os acessos, seguindo o Portal. Para qualquer membro fora da diretoria, a diretoria deve conceder `commission.view_own` para a aba aparecer. Para delegar edição/aprovação/pagamentos em projetos de terceiros, conceder também `view_all` e as permissões da operação. A visibilidade da aba usa `tab_permissions`, portanto também pode ser restringida por tier, cargo ou pessoa no workspace existente de acesso às abas. Modo de visualização de membro mostra somente a consulta pessoal.
+Diretoria tem todos os acessos, seguindo o Portal. Para qualquer membro fora da diretoria, a diretoria deve conceder `commission.view_own` para a aba aparecer. Para delegar edição/aprovação/pagamentos em projetos de terceiros, conceder também `view_all` e as permissões da operação. A visibilidade da aba usa `tab_permissions`, portanto também pode ser restringida por tier, cargo ou pessoa no workspace existente de acesso às abas. Modo de visualização de membro mostra somente a consulta pessoal. A exclusão é destrutiva e remove pagamentos, revisões e histórico do registro confirmado.
 
 ## Validação realizada nesta sessão
 

@@ -98,7 +98,7 @@ Granular permissions stored in `member_permissions.permissions` (JSON array). Ch
 | `js/app.js` | ~8800 lines: Auth, Utils, ViewMode, Sidebar, TopBar, all page init functions |
 | `js/modules.js` | Biblioteca, Premiações, Ordem |
 | `js/modules2.js` | Feed, Ranking, Busca, Presenças, Desempenho, Onboarding |
-| `js/modules3.js` | MSYPerms, MSYTabAccess, System Alerts |
+| `js/modules3.js` | MSYPerms, MSYTabAccess |
 | `js/modules4.js` | Recursos compartilhados de eventos e reunioes |
 | `js/icm_script.js` | **FROZEN** — ICM³ evaluation engine (1705 lines) |
 | `js/icm_perfil.js` | **FROZEN** — ICM profile display |

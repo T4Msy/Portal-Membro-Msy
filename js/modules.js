@@ -653,6 +653,12 @@ async function initPremiacoes() {
     const grupos = {};
     ['Anual','Mensal','Semanal','Especial'].forEach(i => { grupos[i] = []; });
     (premiacoes || []).forEach(p => { (grupos[p.importancia] || (grupos['Outro'] = [])).push(p); });
+    grupos.Especial.sort((left, right) => {
+      const isLeftContribution = left.titulo === 'Contribuição Especial';
+      const isRightContribution = right.titulo === 'Contribuição Especial';
+      if (isLeftContribution !== isRightContribution) return isLeftContribution ? -1 : 1;
+      return left.titulo.localeCompare(right.titulo, 'pt-BR');
+    });
 
     const gruposHtml = Object.entries(grupos)
       .filter(([, items]) => items.length > 0)
@@ -666,7 +672,9 @@ async function initPremiacoes() {
           <div class="prem-list-grid">
             ${items.map(p => `
               <div class="prem-card" data-id="${p.id}">
-                <div class="prem-card-icon">${p.icone || '🏆'}</div>
+                <div class="prem-card-icon">${p.imagem_url
+                  ? `<img class="prem-card-image" src="${Utils.escapeHtml(p.imagem_url)}" alt="">`
+                  : p.icone || '🏆'}</div>
                 <div class="prem-card-body">
                   <div class="prem-card-imp" style="color:${IMPORTANCIA_COLORS[p.importancia]}">${p.importancia}</div>
                   <div class="prem-card-title">${Utils.escapeHtml(p.titulo)}</div>
@@ -1318,8 +1326,7 @@ async function initPremiacoes() {
       <!-- Info card -->
       <div class="card" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-bottom:28px;padding:24px">
         <div style="font-size:4rem;line-height:1">${prem.icone || '🏆'}</div>
-        ${prem.imagem_url ? `<img src="${Utils.escapeHtml(prem.imagem_url)}" alt="${Utils.escapeHtml(prem.titulo)}"
-          style="height:80px;width:80px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border-gold)">` : ''}
+        ${prem.imagem_url ? `<img class="prem-detail-image" src="${Utils.escapeHtml(prem.imagem_url)}" alt="${Utils.escapeHtml(prem.titulo)}">` : ''}
         <div style="flex:1">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
             <span class="badge" style="background:${impColor}22;color:${impColor};border:1px solid ${impColor}44">

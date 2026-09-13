@@ -35,7 +35,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   ├── app.js          Core: auth, utils, sidebar, topbar, init de todas as páginas
 │   ├── modules.js      Biblioteca, Premiações, Ordem
 │   ├── modules2.js     Feed, Ranking, Busca, Presenças, Desempenho, Onboarding
-│   ├── modules3.js     Permissões (MSYPerms), Alertas do Sistema
+│   ├── modules3.js     Permissões (MSYPerms)
 │   ├── modules4.js     Recursos compartilhados de eventos e reunioes
 │   ├── badges_unificado.js  Sistema unificado de badges
 │   ├── icm_script.js   Motor de avaliação ICM³ (NÃO TOCAR — complexo e isolado)
@@ -167,6 +167,14 @@ Dois níveis:
 2. **Granular** (`member_permissions.permissions`): array JSON de permissões específicas
 
 Gerenciado via `MSYPerms` em `js/modules3.js`.
+
+## Insígnias e Premiações
+
+Toda insígnia deve ser registrada em Premiações & Reconhecimento com seu motivo e critério de concessão. Consulte `INSIGNIAS.md` antes de criar ou distribuir uma nova insígnia.
+
+## Documentação de Mudanças
+
+Toda alteração no Portal MSY deve registrar o que mudou, por que mudou, arquivos afetados, funcionamento, validação e pendências. Consulte `DOCUMENTACAO_DE_MUDANCAS.md` antes de modificar o projeto.
 
 ---
 

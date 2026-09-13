@@ -273,7 +273,7 @@ async function openPermissionsManager() {
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
-  let selectedId = members[0].id;
+  let selectedId = null;
   let filterQ = '';
 
   function renderPanel(memberId, current) {
@@ -321,6 +321,7 @@ async function openPermissionsManager() {
     });
     return `
       <div class="pm-panel-head">
+        <button type="button" class="pm-back-member" id="pmBackToMembers"><i class="fa-solid fa-arrow-left"></i> Escolher membro</button>
         <div class="pm-panel-member-info">
           <div class="avatar" style="width:40px;height:40px;font-size:.75rem;background:linear-gradient(135deg,${member.color||'#7f1d1d'},#1a1a1a);border:2px solid var(--border-gold)">
             ${member.avatar_url?`<img src="${member.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:(member.initials||Utils.getInitials(member.name))}
@@ -346,8 +347,53 @@ async function openPermissionsManager() {
   }
 
   function mount() {
-    const current = permsMap[selectedId] || [];
     const filtered = filterQ ? members.filter(m => m.name.toLowerCase().includes(filterQ.toLowerCase())) : members;
+    body.classList.toggle('pm-selecting', !selectedId);
+    body.classList.toggle('pm-configuring', Boolean(selectedId));
+
+    if (!selectedId) {
+      body.innerHTML = `
+        <div class="pm-member-picker">
+          <div class="pm-member-picker-head">
+            <div>
+              <div class="pm-picker-kicker">Etapa 1 de 2</div>
+              <h3>Escolha um membro</h3>
+              <p>Selecione a pessoa antes de visualizar ou alterar as permissões.</p>
+            </div>
+            <span>${members.length} membros ativos</span>
+          </div>
+          <div class="pm-sidebar-search pm-picker-search"><input type="text" id="pmSearch" placeholder="Buscar membro..." value="${Utils.escapeHtml(filterQ)}"></div>
+          <div class="pm-member-choice-list">
+            ${filtered.map(member => {
+              const count = (permsMap[member.id] || []).length;
+              return `<button type="button" class="pm-member-choice" data-mid="${member.id}">
+                <div class="avatar" style="width:38px;height:38px;font-size:.68rem;background:linear-gradient(135deg,${member.color||'#7f1d1d'},#1a1a1a)">
+                  ${member.avatar_url ? `<img src="${member.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (member.initials || Utils.getInitials(member.name))}
+                </div>
+                <div><strong>${Utils.escapeHtml(member.name)}</strong><span>${Utils.escapeHtml(member.role || 'Membro')} · ${count} permiss${count === 1 ? 'ão' : 'ões'}</span></div>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>`;
+            }).join('')}
+            ${filtered.length === 0 ? `<div class="pm-picker-empty">Nenhum membro encontrado.</div>` : ''}
+          </div>
+        </div>`;
+
+      document.getElementById('pmSearch')?.addEventListener('input', event => {
+        filterQ = event.target.value;
+        mount();
+      });
+      body.querySelectorAll('.pm-member-choice').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedId = button.dataset.mid;
+          filterQ = '';
+          mount();
+        });
+      });
+      syncHeroStats();
+      return;
+    }
+
+    const current = permsMap[selectedId] || [];
     body.innerHTML = `
       <div class="pm-sidebar">
         <div class="pm-sidebar-head">⚔ Membros da Ordem</div>
@@ -533,6 +579,10 @@ async function initPermissoesPage() {
     </div>`;
 
   const body = document.getElementById('permsManagerBody');
+  const tabAccessWorkspace = document.getElementById('tabAccessBody')?.closest('.permissions-workspace');
+  body?.addEventListener('msy:permission-member-selection', (event) => {
+    if (tabAccessWorkspace) tabAccessWorkspace.hidden = Boolean(event.detail?.selected);
+  });
   await renderPermissionsWorkspace(body);
   await renderTabAccessWorkspace(document.getElementById('tabAccessBody'));
   document.getElementById('tabAccessReload')?.addEventListener('click', () => renderTabAccessWorkspace(document.getElementById('tabAccessBody')));
@@ -607,44 +657,52 @@ async function renderTabAccessWorkspace(body) {
     <div class="tab-access-list">
       ${rules.map((rule) => `
         <div class="tab-access-row" data-tab-row="${Utils.escapeHtml(rule.page_key)}">
-          <div class="tab-access-main">
-            <label class="pm-toggle" title="Mostrar aba">
-              <input type="checkbox" class="pm-toggle-input" data-tab-field="visible" ${rule.visible !== false ? 'checked' : ''}>
-              <span class="pm-toggle-track"></span>
-            </label>
-            <div>
-              <strong>${Utils.escapeHtml(rule.label)} ${accessBadge(rule)}</strong>
-              <span>${Utils.escapeHtml(rule.page_key)}.html</span>
-            </div>
-          </div>
-          <div class="tab-access-fields">
-            <div class="tab-access-field">
-              <span class="tab-access-field-label">Cargos/Funções</span>
-              <button type="button" class="tab-picker-trigger" data-picker-trigger="roles">
-                <span data-picker-label="roles">${selectedSummary((rule.allowed_roles || []).length, 'Selecionar cargos')}</span>
-                <i class="fa-solid fa-chevron-down"></i>
-              </button>
-              <div class="tab-picker-menu" data-picker-menu="roles">
-                ${roles.length ? roles.map((role) => `
-                  <label class="tab-picker-option">
-                    <input type="checkbox" data-tab-role="${Utils.escapeHtml(role)}" ${(rule.allowed_roles || []).includes(role) ? 'checked' : ''}>
-                    <span>${Utils.escapeHtml(role)}</span>
-                  </label>`).join('') : '<div class="tab-picker-empty">Nenhum cargo encontrado.</div>'}
+          <button type="button" class="tab-access-trigger" aria-expanded="false">
+            <div class="tab-access-main">
+              <div>
+                <strong>${Utils.escapeHtml(rule.label)} ${accessBadge(rule)}</strong>
+                <span>${Utils.escapeHtml(rule.page_key)}.html</span>
               </div>
             </div>
-            <div class="tab-access-field tab-access-field-wide">
-              <span class="tab-access-field-label">Membros liberados</span>
-              <button type="button" class="tab-picker-trigger" data-picker-trigger="members">
-                <span data-picker-label="members">${selectedSummary((rule.allowed_user_ids || []).length, 'Selecionar membros')}</span>
-                <i class="fa-solid fa-chevron-down"></i>
-              </button>
-              <div class="tab-picker-menu tab-picker-menu-members" data-picker-menu="members">
-                ${members.length ? members.map((member) => `
-                  <label class="tab-picker-option">
-                    <input type="checkbox" data-tab-user="${member.id}" ${(rule.allowed_user_ids || []).includes(member.id) ? 'checked' : ''}>
-                    <span>${Utils.escapeHtml(member.name)}</span>
-                    <small>${Utils.escapeHtml(member.role || 'Membro')}</small>
-                  </label>`).join('') : '<div class="tab-picker-empty">Nenhum membro ativo encontrado.</div>'}
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div class="tab-access-editor">
+            <div class="tab-access-visibility">
+              <div><strong>Exibição da aba</strong><span>Defina se ela aparece no menu dos membros.</span></div>
+              <label class="pm-toggle" title="Mostrar aba">
+                <input type="checkbox" class="pm-toggle-input" data-tab-field="visible" ${rule.visible !== false ? 'checked' : ''}>
+                <span class="pm-toggle-track"></span>
+              </label>
+            </div>
+            <div class="tab-access-fields">
+              <div class="tab-access-field">
+                <span class="tab-access-field-label">Cargos/Funções</span>
+                <button type="button" class="tab-picker-trigger" data-picker-trigger="roles">
+                  <span data-picker-label="roles">${selectedSummary((rule.allowed_roles || []).length, 'Selecionar cargos')}</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <div class="tab-picker-menu" data-picker-menu="roles">
+                  ${roles.length ? roles.map((role) => `
+                    <label class="tab-picker-option">
+                      <input type="checkbox" data-tab-role="${Utils.escapeHtml(role)}" ${(rule.allowed_roles || []).includes(role) ? 'checked' : ''}>
+                      <span>${Utils.escapeHtml(role)}</span>
+                    </label>`).join('') : '<div class="tab-picker-empty">Nenhum cargo encontrado.</div>'}
+                </div>
+              </div>
+              <div class="tab-access-field tab-access-field-wide">
+                <span class="tab-access-field-label">Membros liberados</span>
+                <button type="button" class="tab-picker-trigger" data-picker-trigger="members">
+                  <span data-picker-label="members">${selectedSummary((rule.allowed_user_ids || []).length, 'Selecionar membros')}</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <div class="tab-picker-menu tab-picker-menu-members" data-picker-menu="members">
+                  ${members.length ? members.map((member) => `
+                    <label class="tab-picker-option">
+                      <input type="checkbox" data-tab-user="${member.id}" ${(rule.allowed_user_ids || []).includes(member.id) ? 'checked' : ''}>
+                      <span>${Utils.escapeHtml(member.name)}</span>
+                      <small>${Utils.escapeHtml(member.role || 'Membro')}</small>
+                    </label>`).join('') : '<div class="tab-picker-empty">Nenhum membro ativo encontrado.</div>'}
+                </div>
               </div>
             </div>
           </div>
@@ -655,6 +713,19 @@ async function renderTabAccessWorkspace(body) {
     const show = btn.dataset.tabsBulk === 'show';
     body.querySelectorAll('[data-tab-field="visible"]').forEach((input) => { input.checked = show; });
     body.querySelectorAll('.tab-access-row').forEach((row) => updateTabAccessBadge(row));
+  }));
+
+  body.querySelectorAll('.tab-access-trigger').forEach((trigger) => trigger.addEventListener('click', () => {
+    const row = trigger.closest('[data-tab-row]');
+    const willOpen = !row?.classList.contains('open');
+    body.querySelectorAll('.tab-access-row.open').forEach((node) => {
+      node.classList.remove('open');
+      node.querySelector('.tab-access-trigger')?.setAttribute('aria-expanded', 'false');
+    });
+    if (willOpen) {
+      row?.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+    }
   }));
 
   body.querySelectorAll('[data-picker-trigger]').forEach((trigger) => trigger.addEventListener('click', (event) => {
@@ -785,7 +856,7 @@ async function renderPermissionsWorkspace(body) {
   const LABELS = {};
   MSYPerms.ALL.forEach(p => { LABELS[p.key] = { label: p.label, icon: p.icon }; });
 
-  let selectedId = members[0].id;
+  let selectedId = null;
   let filterQ = '';
 
   const syncHeroStats = () => {
@@ -839,6 +910,7 @@ async function renderPermissionsWorkspace(body) {
 
     return `
       <div class="pm-panel-head">
+        <button type="button" class="pm-back-member" id="pmBackToMembers"><i class="fa-solid fa-arrow-left"></i> Escolher membro</button>
         <div class="pm-panel-member-info">
           <div class="avatar" style="width:40px;height:40px;font-size:.75rem;background:linear-gradient(135deg,${member.color||'#7f1d1d'},#1a1a1a);border:2px solid var(--border-gold)">
             ${member.avatar_url ? `<img src="${member.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (member.initials || Utils.getInitials(member.name))}
@@ -945,8 +1017,57 @@ async function renderPermissionsWorkspace(body) {
   }
 
   function mount() {
-    const current = permsMap[selectedId] || [];
     const filtered = filterQ ? members.filter(m => m.name.toLowerCase().includes(filterQ.toLowerCase())) : members;
+    body.classList.toggle('pm-selecting', !selectedId);
+    body.classList.toggle('pm-configuring', Boolean(selectedId));
+    body.dispatchEvent(new CustomEvent('msy:permission-member-selection', {
+      bubbles: true,
+      detail: { selected: Boolean(selectedId) },
+    }));
+
+    if (!selectedId) {
+      body.innerHTML = `
+        <div class="pm-member-picker">
+          <div class="pm-member-picker-head">
+            <div>
+              <div class="pm-picker-kicker">Etapa 1 de 2</div>
+              <h3>Escolha um membro</h3>
+              <p>Selecione a pessoa antes de visualizar ou alterar as permissões.</p>
+            </div>
+            <span>${members.length} membros ativos</span>
+          </div>
+          <div class="pm-sidebar-search pm-picker-search"><input type="text" id="pmSearch" placeholder="Buscar membro..." value="${Utils.escapeHtml(filterQ)}"></div>
+          <div class="pm-member-choice-list">
+            ${filtered.map(member => {
+              const count = (permsMap[member.id] || []).length;
+              return `<button type="button" class="pm-member-choice" data-mid="${member.id}">
+                <div class="avatar" style="width:38px;height:38px;font-size:.68rem;background:linear-gradient(135deg,${member.color||'#7f1d1d'},#1a1a1a)">
+                  ${member.avatar_url ? `<img src="${member.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : (member.initials || Utils.getInitials(member.name))}
+                </div>
+                <div><strong>${Utils.escapeHtml(member.name)}</strong><span>${Utils.escapeHtml(member.role || 'Membro')} · ${count} permiss${count === 1 ? 'ão' : 'ões'}</span></div>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>`;
+            }).join('')}
+            ${filtered.length === 0 ? `<div class="pm-picker-empty">Nenhum membro encontrado.</div>` : ''}
+          </div>
+        </div>`;
+
+      document.getElementById('pmSearch')?.addEventListener('input', event => {
+        filterQ = event.target.value;
+        mount();
+      });
+      body.querySelectorAll('.pm-member-choice').forEach(button => {
+        button.addEventListener('click', () => {
+          selectedId = button.dataset.mid;
+          filterQ = '';
+          mount();
+        });
+      });
+      syncHeroStats();
+      return;
+    }
+
+    const current = permsMap[selectedId] || [];
     body.innerHTML = `
       <div class="pm-sidebar">
         <div class="pm-sidebar-head"><i class="fa-solid fa-users"></i> Membros da Ordem</div>
@@ -979,6 +1100,10 @@ async function renderPermissionsWorkspace(body) {
         selectedId = el.dataset.mid;
         mount();
       });
+    });
+    document.getElementById('pmBackToMembers')?.addEventListener('click', () => {
+      selectedId = null;
+      mount();
     });
     bindPanelEvents(selectedId);
     syncHeroStats();
@@ -1873,6 +1998,8 @@ async function renderPresencasComPermissao(profile, canManage, canReport) {
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page;
+
+  if (page === 'admin') return;
 
   if (page === 'permissoes') {
     initPermissoesPage().catch(err => {

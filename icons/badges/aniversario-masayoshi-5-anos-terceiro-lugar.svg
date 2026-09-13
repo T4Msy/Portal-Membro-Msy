@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Aniversário da Masayoshi — 3º lugar">
+  <defs>
+    <radialGradient id="background" cx="50%" cy="42%" r="70%"><stop stop-color="#442010"/><stop offset=".6" stop-color="#190d0a"/><stop offset="1" stop-color="#07070a"/></radialGradient>
+    <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f3c781"/><stop offset=".45" stop-color="#ad6932"/><stop offset="1" stop-color="#60351d"/></linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="122" fill="url(#background)" stroke="url(#metal)" stroke-width="8"/>
+  <path fill="none" stroke="#c7192d" stroke-width="3" d="M40 141c24-27 49-39 88-41M216 141c-24-27-49-39-88-41" opacity=".65"/>
+  <path fill="#161116" stroke="url(#metal)" stroke-width="5" stroke-linejoin="round" d="m128 62 43 43-14 62-29 28-29-28-14-62z"/>
+  <path fill="#cf822f" d="m128 82 14 21-14 14-14-14z"/>
+  <path fill="#050507" d="m106 132 22-24 22 24-22 24z"/>
+  <circle cx="118" cy="127" r="4" fill="#f3c781"/><circle cx="138" cy="127" r="4" fill="#f3c781"/>
+  <text x="128" y="180" fill="url(#metal)" font-family="Georgia,serif" font-size="64" font-weight="bold" text-anchor="middle">3</text>
+</svg>

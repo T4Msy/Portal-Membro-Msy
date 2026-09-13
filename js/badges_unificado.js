@@ -155,12 +155,18 @@
   /* ── FONTE 1: PREMIAÇÕES ─────────────────────────────────── */
   async function _fetchPremiacao(userId) {
     try {
-      const { data, error } = await db.rpc('get_member_badges', { p_user_id: userId });
+      const [{ data, error }, { data: premiacoes, error: premiacoesError }] = await Promise.all([
+        db.rpc('get_member_badges', { p_user_id: userId }),
+        db.from('premiacoes').select('titulo, imagem_url').eq('ativo', true),
+      ]);
       if (error || !data) return [];
+      if (premiacoesError) throw premiacoesError;
+      const imagesByTitle = new Map((premiacoes || []).map((premiacao) => [premiacao.titulo, premiacao.imagem_url]));
       return data.map(b => ({
         key:    `premiacao-${b.titulo.toLowerCase().replace(/\s+/g, '-')}`,
         label:  b.titulo,
         icon:   b.icone || '🏆',
+        image:  imagesByTitle.get(b.titulo) || null,
         color:  PREMIACAO_COLORS[b.importancia] || '#c9a84c',
         desc:   `${b.quantidade}× conquistada`,
         origem: 'premiacao',
