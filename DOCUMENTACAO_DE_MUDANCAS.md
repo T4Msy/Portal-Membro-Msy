@@ -204,6 +204,34 @@ Esta política passa a valer para todas as mudanças futuras. A documentação d
 
 **Pendências ou cuidados para deploy:** publicar `js/app.js`, atualizar o portal sem cache e testar com uma conta de membro após ocultar o Jornal.
 
+## Guia de níveis em Premiações — 2026-09-13
+
+**O que mudou:** foi incluído um guia em `Premiações & Reconhecimento` para explicar os níveis Comum, Raro, Épico e Lendário, suas cores e os totais de insígnias necessários.
+
+**Por que mudou:** tornar claro para todos os membros como as conquistas refletem no nível visual do perfil.
+
+**Arquivos e serviços afetados:** `js/modules.js`, `css/style.css` e a tela `premiacoes.html`.
+
+**Como funciona:** o guia mostra a progressão 0–9, 10+, 50+ e 100+ insígnias e explica a regra de contagem usada no perfil.
+
+**Validação realizada:** sintaxe JavaScript e integridade do diff verificadas localmente.
+
+**Pendências ou cuidados para deploy:** publicar `js/modules.js` e `css/style.css`; conferir o guia em desktop e celular.
+
+## Total de insígnias no perfil — 2026-09-13
+
+**O que mudou:** o cabeçalho `Insígnias Conquistadas` do perfil do membro passou a exibir o total de insígnias ao lado do título.
+
+**Por que mudou:** deixar visível a contagem que define o nível Comum, Raro, Épico ou Lendário do membro.
+
+**Arquivos e serviços afetados:** `js/app.js`, `css/style.css` e o modal de perfil em `membros.html`.
+
+**Como funciona:** o total exibido usa o mesmo cálculo ponderado do nível visual, sem uma nova consulta ou contador paralelo.
+
+**Validação realizada:** sintaxe JavaScript e integridade do diff verificadas localmente.
+
+**Pendências ou cuidados para deploy:** publicar `js/app.js` e `css/style.css`; abrir um perfil com insígnias para conferir a contagem.
+
 ## Responsividade de Permissões — 2026-09-13
 
 **O que mudou:** foram adicionados ajustes específicos para celular ao seletor de membros, à configuração individual e ao editor expansível de abas.

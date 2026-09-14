@@ -701,6 +701,19 @@ async function initPremiacoes() {
           </button>
         ` : ''}
       </div>
+      <section class="member-rarity-guide" aria-labelledby="memberRarityGuideTitle">
+        <div class="member-rarity-guide-copy">
+          <div class="member-rarity-guide-kicker"><i class="fa-solid fa-shield-halved"></i> Níveis de reconhecimento</div>
+          <h2 id="memberRarityGuideTitle">A evolução do membro pelas insignias</h2>
+          <p>As insignias conquistadas formam o nível visual exibido no perfil do membro. Premiações contam pela quantidade recebida; recordes, constância e ICM contam uma vez cada.</p>
+        </div>
+        <div class="member-rarity-levels">
+          <div class="member-rarity-level member-rarity-level--comum"><span>Comum</span><strong>0–9</strong><small>insignias</small></div>
+          <div class="member-rarity-level member-rarity-level--raro"><span>Raro</span><strong>10+</strong><small>insignias</small></div>
+          <div class="member-rarity-level member-rarity-level--epico"><span>Épico</span><strong>50+</strong><small>insignias</small></div>
+          <div class="member-rarity-level member-rarity-level--lendario"><span>Lendário</span><strong>100+</strong><small>insignias</small></div>
+        </div>
+      </section>
       <div class="filters-bar" style="margin-bottom:20px" id="premSubTabs">
         <button class="filter-btn active" data-subtab="recordes"><i class="fa-solid fa-crown"></i> Recordes</button>
         <button class="filter-btn" data-subtab="premiacoes"><i class="fa-solid fa-trophy"></i> Premiações</button>

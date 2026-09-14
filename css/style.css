@@ -4240,6 +4240,74 @@ textarea:invalid:not(:placeholder-shown),
 
 /* -------- PREMIAÇÕES -------- */
 
+.member-rarity-guide {
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: center;
+  margin: 0 0 24px;
+  padding: 22px 24px;
+  border: 1px solid var(--border-faint);
+  border-left: 2px solid var(--gold);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(110deg, rgba(201,168,76,.07), transparent 44%), var(--black-3);
+}
+.member-rarity-guide-kicker {
+  color: var(--gold);
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.member-rarity-guide-kicker i { margin-right: 6px; }
+.member-rarity-guide h2 {
+  margin: 8px 0;
+  color: var(--text-1);
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+}
+.member-rarity-guide p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: .78rem;
+  line-height: 1.55;
+}
+.member-rarity-levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.member-rarity-level {
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.025);
+  text-align: center;
+}
+.member-rarity-level span,
+.member-rarity-level strong,
+.member-rarity-level small { display: block; }
+.member-rarity-level span { color: var(--text-2); font-size: .66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.member-rarity-level strong { margin: 6px 0 3px; font-family: 'Cinzel', serif; font-size: 1.2rem; }
+.member-rarity-level small { color: var(--text-3); font-size: .6rem; }
+.member-rarity-level--comum strong { color: var(--text-2); }
+.member-rarity-level--raro { border-color: rgba(234,179,8,.38); background: rgba(234,179,8,.06); }
+.member-rarity-level--raro strong { color: #fbbf24; }
+.member-rarity-level--epico { border-color: rgba(139,92,246,.4); background: rgba(139,92,246,.07); }
+.member-rarity-level--epico strong { color: #c084fc; }
+.member-rarity-level--lendario { border-color: rgba(220,38,38,.45); background: rgba(220,38,38,.08); }
+.member-rarity-level--lendario strong { color: #f87171; }
+
+@media (max-width: 780px) {
+  .member-rarity-guide { grid-template-columns: 1fr; gap: 18px; }
+}
+
+@media (max-width: 480px) {
+  .member-rarity-guide { padding: 18px; }
+  .member-rarity-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .prem-list-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -5873,6 +5941,19 @@ textarea:invalid:not(:placeholder-shown),
   text-transform: uppercase; letter-spacing: .08em;
   font-weight: 700; margin-bottom: 12px;
   display: flex; align-items: center; gap: 7px;
+}
+.mpb-header span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid rgba(201,168,76,.34);
+  border-radius: 999px;
+  background: rgba(201,168,76,.1);
+  color: var(--gold-bright);
+  font-family: 'Cinzel', serif;
+  font-size: .7rem;
 }
 .mpb-grid {
   display: flex; flex-wrap: wrap; gap: 8px;

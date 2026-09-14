@@ -3950,6 +3950,7 @@
      const stats   = statsRes.data || { total: 0, concluidas: 0, andamento: 0, pendentes: 0 };
      const nivel   = cardData.nivel;
      const badges  = cardData.badges;
+     const badgeTotal = cardData.total || 0;
 
      const joinDate = new Date(m.join_date + 'T00:00:00');
      const now = new Date();
@@ -4048,7 +4049,7 @@
        </div>
 
        <div class="mpb-section">
-         <div class="mpb-header"><i class="fa-solid fa-medal"></i> Insígnias Conquistadas</div>
+         <div class="mpb-header"><i class="fa-solid fa-medal"></i> Insígnias Conquistadas <span>${badgeTotal}</span></div>
          <div class="mpb-grid">${renderBadgesList(badges)}</div>
        </div>
      `;
