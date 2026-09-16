@@ -3,6 +3,9 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
 import webpush from 'npm:web-push@3.6.7'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+const normalizedStatus = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+const isClosedActivity = (status: unknown) => ['concluida', 'cancelada'].includes(normalizedStatus(status))
+const isInProgressActivity = (status: unknown) => normalizedStatus(status) === 'em andamento'
 
 // Envia push so quando um caso realmente critico e criado (atividade vencida/muito
 // proxima do prazo, mensalidade com 20+ dias de atraso) - nunca um resumo agendado.
@@ -45,12 +48,14 @@ Deno.serve(async (req) => {
   const tomorrow = in24h.toISOString().slice(0, 10)
   const threeDays = in3d.toISOString().slice(0, 10)
   const paymentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const [{ data: activities }, { data: events }, { data: profiles }, { data: openAssignments }, { data: activityHistory }, { data: projectTaskHistory }, { data: openProjectAssignments }, { data: projects }, { data: payments }, { data: eventHistory }, { data: presenceHistory }, { data: messageMetrics }] = await Promise.all([
-    db.from('activities').select('id,title,deadline,deadline_time,status,assigned_to').not('status', 'in', '(Concluída,Cancelada,Em andamento)').not('deadline', 'is', null),
+  const [{ data: activities }, { data: events }, { data: profiles }, { data: openAssignments }, { data: activityHistory }, { data: activityResponses }, { data: activityTimeline }, { data: projectTaskHistory }, { data: openProjectAssignments }, { data: projects }, { data: payments }, { data: eventHistory }, { data: presenceHistory }, { data: messageMetrics }] = await Promise.all([
+    db.from('activities').select('id,title,deadline,deadline_time,status,assigned_to').not('deadline', 'is', null),
     db.from('events').select('id,title,event_date,event_time,status').gte('event_date', today).lte('event_date', threeDays).not('status', 'in', '(concluido,cancelado)'),
     db.from('profiles').select('id,name,role').eq('status', 'ativo'),
-    db.from('activities').select('assigned_to').not('status', 'in', '(Concluída,Cancelada)').not('assigned_to', 'is', null),
-    db.from('activities').select('assigned_to,created_at,closes_at,deadline,deadline_time,status').not('assigned_to', 'is', null).order('created_at', { ascending: false }).limit(5000),
+    db.from('activities').select('assigned_to,status').not('assigned_to', 'is', null),
+    db.from('activities').select('id,assigned_to,created_at,closes_at,deadline,deadline_time,status').not('assigned_to', 'is', null).order('created_at', { ascending: false }).limit(5000),
+    db.from('activity_responses').select('activity_id,created_at').order('created_at', { ascending: false }).limit(10000),
+    db.from('supervision_timeline').select('subject_id,occurred_at').eq('source_type', 'activity').order('occurred_at', { ascending: false }).limit(10000),
     db.from('project_tasks').select('assigned_to,updated_at').eq('status', 'concluida').not('assigned_to', 'is', null).order('updated_at', { ascending: false }).limit(5000),
     db.from('project_tasks').select('assigned_to').neq('status', 'concluida').not('assigned_to', 'is', null),
     db.from('projects').select('id,name,updated_at,status').not('status', 'in', '(concluido,cancelado)'),
@@ -59,8 +64,9 @@ Deno.serve(async (req) => {
     db.from('event_presencas').select('event_id,membro_id,user_id,status,response_status,justificativa_status,attendance_status').limit(10000),
     db.from('supervision_message_metrics').select('member_id,metric_date,message_count').gte('metric_date', new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10)).limit(20000),
   ])
+  const actionableActivities = (activities ?? []).filter((activity) => !isClosedActivity(activity.status) && !isInProgressActivity(activity.status))
   const reminders = [] as Record<string, unknown>[]
-  for (const activity of activities ?? []) {
+  for (const activity of actionableActivities) {
     const due = new Date(`${activity.deadline}T${activity.deadline_time || '23:59'}:00`)
     if (due <= in24h) reminders.push({ fingerprint: `activity:${activity.id}:${activity.deadline}`, title: due < now ? `Atividade atrasada: ${activity.title}` : `Cobrar atividade proxima do prazo: ${activity.title}`, description: due < now ? 'A atividade passou do prazo e precisa de acompanhamento.' : `Expira em menos de 24 horas (${due.toLocaleString('pt-BR')}).`, category: 'activity', origin: 'automatic', approval_status: 'pending_approval', due_at: due.toISOString(), source_type: 'activity', source_id: activity.id })
   }
@@ -104,7 +110,7 @@ Deno.serve(async (req) => {
     })
     if (priority === 'critical' && caseId.data) await maybeSendCriticalPush(db, caseId.data as string, reminderRow.title)
   }
-  const overdue = (activities ?? []).filter((activity) => new Date(`${activity.deadline}T${activity.deadline_time || '23:59'}:00`) < now)
+  const overdue = actionableActivities.filter((activity) => new Date(`${activity.deadline}T${activity.deadline_time || '23:59'}:00`) < now)
   let observations = 0
   const recordObservation = async (fingerprint: string, title: string, body: string, evidence: Record<string, unknown>) => {
     const { error } = await db.from('supervision_observations').upsert({ fingerprint, title, body, origin: 'automatic', evidence: { ...evidence, scannedAt: now.toISOString() } }, { onConflict: 'fingerprint', ignoreDuplicates: true })
@@ -120,27 +126,45 @@ Deno.serve(async (req) => {
     }, { onConflict: 'fingerprint', ignoreDuplicates: true })
     if (!error) observations++
   }
-  const activeAssignments = new Set([...(openAssignments ?? []), ...(openProjectAssignments ?? [])].map((activity) => activity.assigned_to).filter(Boolean))
-  for (const profile of profiles ?? []) {
-    if (activeAssignments.has(profile.id)) continue
-    const { error } = await db.from('supervision_observations').upsert({
-      fingerprint: `member-without-activities:${profile.id}`,
-      title: 'Membro sem atividades abertas',
-      body: `${profile.name} nao possui nenhuma atividade aberta atribuida neste momento. Verifique se precisa de uma nova responsabilidade.`,
-      origin: 'automatic',
-      evidence: { memberId: profile.id, scannedAt: now.toISOString() },
-    }, { onConflict: 'fingerprint', ignoreDuplicates: true })
-    if (!error) observations++
-  }
   const historyByMember = new Map<string, number>()
+  const activityOwnerById = new Map<string, string>()
   for (const activity of activityHistory ?? []) {
+    if (activity.id && activity.assigned_to) activityOwnerById.set(activity.id, activity.assigned_to)
     const timestamp = new Date(activity.closes_at || activity.created_at).getTime()
     if (Number.isNaN(timestamp)) continue
     historyByMember.set(activity.assigned_to, Math.max(historyByMember.get(activity.assigned_to) || 0, timestamp))
   }
+  for (const response of activityResponses ?? []) {
+    const memberId = activityOwnerById.get(response.activity_id)
+    const timestamp = new Date(response.created_at).getTime()
+    if (memberId && !Number.isNaN(timestamp)) historyByMember.set(memberId, Math.max(historyByMember.get(memberId) || 0, timestamp))
+  }
+  for (const event of activityTimeline ?? []) {
+    const timestamp = new Date(event.occurred_at).getTime()
+    if (event.subject_id && !Number.isNaN(timestamp)) historyByMember.set(event.subject_id, Math.max(historyByMember.get(event.subject_id) || 0, timestamp))
+  }
   for (const task of projectTaskHistory ?? []) {
     const timestamp = new Date(task.updated_at).getTime()
     if (!Number.isNaN(timestamp)) historyByMember.set(task.assigned_to, Math.max(historyByMember.get(task.assigned_to) || 0, timestamp))
+  }
+  const activeAssignments = new Set([...(openAssignments ?? []).filter((activity) => !isClosedActivity(activity.status)), ...(openProjectAssignments ?? [])].map((activity) => activity.assigned_to).filter(Boolean))
+  const recentActivityLimit = now.getTime() - 10 * 86_400_000
+  for (const profile of profiles ?? []) {
+    const fingerprint = `member-without-activities:${profile.id}`
+    const hasRecentCompletedWork = (historyByMember.get(profile.id) || 0) >= recentActivityLimit
+    if (activeAssignments.has(profile.id) || hasRecentCompletedWork) {
+      await db.from('supervision_observations').update({ status: 'archived', archived_at: now.toISOString() }).eq('fingerprint', fingerprint).eq('status', 'active')
+      continue
+    }
+    const { error } = await db.from('supervision_observations').upsert({
+      fingerprint,
+      title: 'Membro sem atividades recentes',
+      body: `${profile.name} nao possui atividade aberta nem conclusao registrada nos ultimos 10 dias. Verifique se precisa de uma nova responsabilidade.`,
+      origin: 'automatic',
+      status: 'active',
+      evidence: { memberId: profile.id, scannedAt: now.toISOString() },
+    }, { onConflict: 'fingerprint' })
+    if (!error) observations++
   }
   const eventById = new Map((eventHistory ?? []).map((event) => [event.id, event]))
   const attendanceByEvent = new Map<string, Set<string>>()
