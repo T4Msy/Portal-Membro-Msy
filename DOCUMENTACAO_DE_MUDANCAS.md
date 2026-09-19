@@ -25,7 +25,7 @@ O registro deve informar, no mínimo:
 
 **Arquivos e servicos afetados:** `js/app.js` e `eventos.html`.
 
-**Como funciona:** o novo envio atualiza a justificativa existente, define o status como `pendente` e notifica a Diretoria. A justificativa entra na aba Justificativas com as acoes de aprovar ou recusar.
+**Como funciona:** o novo envio atualiza a justificativa existente, define o status como `pendente` e notifica a Diretoria. A justificativa entra na aba Justificativas com as acoes de aprovar ou recusar. Em bases que ainda nao possuem `response_status`, o salvamento compativel tambem redefine `justificativa_status` como `pendente`.
 
 **Validacao realizada:** sintaxe de `js/app.js` verificada com `node --check` e diff validado com `git diff --check`.
 

@@ -4308,6 +4308,10 @@
            : row.status,
        justificativa: row.justificativa || null
      };
+     const reviewCompatibleRow = {
+       ...legacyRow,
+       justificativa_status: row.justificativa_status || null
+     };
 
      const { data: existing, error: findError } = await db.from('event_presencas')
        .select('id')
@@ -4321,7 +4325,13 @@
          .eq('event_id', row.event_id)
          .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`);
        if (!modern.error) return modern;
-       console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+       console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema de revisao:', modern.error);
+       const reviewCompatible = await db.from('event_presencas')
+         .update(reviewCompatibleRow)
+         .eq('event_id', row.event_id)
+         .or(`user_id.eq.${memberId},membro_id.eq.${memberId}`);
+       if (!reviewCompatible.error) return reviewCompatible;
+       console.warn('[MSY][eventos] Presenca com schema de revisao falhou; tentando schema legado:', reviewCompatible.error);
        return db.from('event_presencas')
          .update(legacyRow)
          .eq('event_id', row.event_id)
@@ -4329,7 +4339,10 @@
      }
      const modern = await db.from('event_presencas').insert(row);
      if (!modern.error) return modern;
-     console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema legado:', modern.error);
+     console.warn('[MSY][eventos] Presenca com schema moderno falhou; tentando schema de revisao:', modern.error);
+     const reviewCompatible = await db.from('event_presencas').insert(reviewCompatibleRow);
+     if (!reviewCompatible.error) return reviewCompatible;
+     console.warn('[MSY][eventos] Presenca com schema de revisao falhou; tentando schema legado:', reviewCompatible.error);
      return db.from('event_presencas').insert(legacyRow);
    }
 
