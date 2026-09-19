@@ -5064,6 +5064,13 @@
          });
        });
 
+       tab.querySelectorAll('.pres-resubmit-btn').forEach(btn => {
+         btn.addEventListener('click', e => {
+           e.stopPropagation();
+           openSkipModal(btn.dataset.id, profile, loadEventos);
+         });
+       });
+
         /* PRESENÇA — Solicitar Troca */
        tab.querySelectorAll('.pres-cancel-btn').forEach(btn => {
          btn.addEventListener('click', e => {
@@ -5712,6 +5719,8 @@
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}" data-justificativa-aceita="true"><i class="fa-solid fa-check"></i> Agora vou participar</button>
                     ` : myJustStatus === 'recusada' ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-comment-dots"></i> Justificativa recusada</span>
+                      <span class="ev-presence-status" style="font-size:.68rem;color:var(--text-2)"><i class="fa-solid fa-circle-info"></i> Envie uma nova justificativa para análise.</span>
+                      <button class="ev-presence-btn ev-presence-btn-skip pres-resubmit-btn" data-id="${ev.id}"><i class="fa-solid fa-paper-plane"></i> Enviar nova justificativa</button>
                       <button class="ev-presence-btn ev-presence-btn-join pres-join-btn" data-id="${ev.id}"><i class="fa-solid fa-check"></i> Agora vou participar</button>
                     ` : !hasMyJustification ? `
                       <span class="ev-presence-status ev-presence-status-skip"><i class="fa-solid fa-xmark"></i> Não vai participar</span>
@@ -6001,11 +6010,13 @@
            <div style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)">
              <div style="font-size:.65rem;color:var(--text-3);font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Sua resposta</div>
              <div style="font-weight:800;color:var(--text-1)">${statusText}</div>
+             ${justStatus === 'recusada' ? `<div style="font-size:.78rem;color:#fca5a5;line-height:1.55;margin-top:8px"><i class="fa-solid fa-circle-info"></i> Sua justificativa anterior foi recusada. Envie uma nova justificativa para análise.</div>` : ''}
              ${showCurrentJustification ? `<div style="font-size:.78rem;color:var(--text-2);line-height:1.55;margin-top:8px">${Utils.escapeHtml(myPresence.justificativa)}</div><div style="font-size:.66rem;color:var(--text-3);margin-top:6px"><i class="fa-regular fa-clock"></i> Enviada em ${Utils.formatDateTime(myPresence.response_at || myPresence.created_at)}</div>` : ''}
            </div>
          </div>
           <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
            ${canChangeToParticipating ? `<button class="btn btn-primary pres-join-btn" data-id="${ev.id}" ${justStatus === 'aceita' ? 'data-justificativa-aceita="true"' : ''}><i class="fa-solid fa-check"></i> Vou Participar</button>` : ''}
+           ${ev.status !== 'concluido' && justStatus === 'recusada' ? `<button class="btn" id="detailResubmitBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-paper-plane"></i> Enviar nova justificativa</button>` : ''}
             ${ev.status !== 'concluido' && !status ? `<button class="btn" id="detailSkipBtn" style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);color:#ef4444"><i class="fa-solid fa-xmark"></i> Nao Vou Participar</button>` : ''}
              ${ev.status !== 'concluido' && status === 'participar' && !cancelPending ? `<button class="btn btn-gold" id="detailCancelBtn"><i class="fa-solid fa-rotate-left"></i> Solicitar Troca</button>` : ''}
             <button class="btn btn-outline" id="eventDetailDone">Fechar</button>
@@ -6036,12 +6047,14 @@
      });
      overlay.addEventListener('click', e => {
        const skipBtn = e.target.closest?.('#detailSkipBtn');
+       const resubmitBtn = e.target.closest?.('#detailResubmitBtn');
        const cancelBtn = e.target.closest?.('#detailCancelBtn');
-       if (!skipBtn && !cancelBtn) return;
+       if (!skipBtn && !resubmitBtn && !cancelBtn) return;
        e.preventDefault();
        e.stopPropagation();
        close();
        if (skipBtn) openSkipModal(ev.id, currentProfile, onSuccess);
+       if (resubmitBtn) openSkipModal(ev.id, currentProfile, onSuccess);
        if (cancelBtn) openPresenceCancelModal(ev.id, currentProfile, onSuccess);
      });
    }
