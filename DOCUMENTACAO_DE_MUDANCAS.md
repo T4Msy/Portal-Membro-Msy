@@ -17,6 +17,20 @@ O registro deve informar, no mínimo:
 5. **Como validar:** testes executados e verificações manuais necessárias.
 6. **Impactos e pendências:** migrations a aplicar, dependências externas, compatibilidade ou riscos conhecidos.
 
+## Reenvio de justificativa recusada - 2026-09-19
+
+**O que mudou:** o membro agora recebe um aviso de que a justificativa anterior foi recusada e pode enviar uma nova justificativa no cartao ou nos detalhes do evento.
+
+**Por que mudou:** permitir que o membro corrija ou complemente a justificativa sem precisar marcar presenca.
+
+**Arquivos e servicos afetados:** `js/app.js` e `eventos.html`.
+
+**Como funciona:** o novo envio atualiza a justificativa existente, define o status como `pendente` e notifica a Diretoria. A justificativa entra na aba Justificativas com as acoes de aprovar ou recusar.
+
+**Validacao realizada:** sintaxe de `js/app.js` verificada com `node --check` e diff validado com `git diff --check`.
+
+**Pendencias ou cuidados para deploy:** publicar `js/app.js` e `eventos.html`; a nova versao no URL do script evita que o navegador reutilize o JavaScript anterior.
+
 ## Onde documentar
 
 | Tipo de mudança | Local de documentação |
