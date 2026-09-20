@@ -723,7 +723,7 @@
     const filterPanel = root.querySelector('[data-analytics-filter]');
     if (!filterPanel) return;
     const period = `${new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR')}`;
-    filterPanel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-results-head"><span>Mensagens por participante</span><i></i><button type="button" class="sv-analytics-btn" data-analytics-copy>Copiar para Excel</button><button type="button" class="sv-analytics-btn" data-analytics-pdf>Baixar PDF</button></div><p>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
+    filterPanel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel sv-analytics-result-panel" data-analytics-result><div class="sv-analytics-results-head"><div><span>Mensagens por participante</span><small>Resumo do período</small></div><i></i><div class="sv-analytics-result-actions"><button type="button" class="sv-analytics-btn" data-analytics-copy><i class="fa-regular fa-copy"></i> Copiar</button><button type="button" class="sv-analytics-btn sv-analytics-btn-primary" data-analytics-pdf><i class="fa-solid fa-file-pdf"></i> Baixar PDF</button></div></div><p class="sv-analytics-period"><i class="fa-regular fa-calendar"></i>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
     const table = root.querySelector('[data-analytics-result] table');
     if (table) {
       normalizeAnalyticsTable(table);
