@@ -385,7 +385,7 @@
   const ANALYTICS_NAME_MAP = [{ canonical: 'Xitter', aliases: ['marlon'] }, { canonical: 'Tales', aliases: ['t4les', 'tales'] }, { canonical: 'Marcos', aliases: ['marcos flausino', 'mfl4', 'marcos'] }, { canonical: 'Mariana', aliases: ['mariana msy', 'missmoon', 'mariana'] }, { canonical: 'Hariany', aliases: ['hariany msy', 'hariany'] }, { canonical: 'Felipe', aliases: ['felipe flausino', 'felipe msy', 'felipe'] }, { canonical: 'Matheus', aliases: ['matheus lucas', 'matheus'] }, { canonical: 'Naíra', aliases: ['nana msy', 'naíra', 'naira'] }, { canonical: 'Ph', aliases: ['pedro (ph)', 'pedro ph', 'ph'] }, { canonical: 'Pepeu', aliases: ['pepeu msy', 'pepeu'] }];
   const ANALYTICS_IGNORE_NAMES = ['você', 'masayoshi'];
   function normalizeAnalyticsName(raw) {
-    const clean = raw.replace(/\u{1F377}/gu, '').replace(/[​-‍﻿]/g, '').trim();
+    const clean = raw.replace(/[~\u{1F377}]/gu, '').replace(/[​-‍﻿]/g, '').trim();
     const cleanLower = clean.toLowerCase();
     if (ANALYTICS_IGNORE_NAMES.some((ignored) => cleanLower.includes(ignored))) return null;
     for (const entry of ANALYTICS_NAME_MAP) {
@@ -551,23 +551,48 @@
     const original = button.textContent;
     button.textContent = 'Gerando...';
     button.disabled = true;
-    const fullWidth = Math.max(table.scrollWidth, box.clientWidth);
-    const clone = box.cloneNode(true);
-    clone.style.position = 'fixed';
-    clone.style.left = '-99999px';
-    clone.style.top = '0';
-    clone.style.width = `${fullWidth}px`;
-    clone.style.overflow = 'visible';
-    document.body.appendChild(clone);
+    // Captura somente o relatorio na largura real da tabela. Isso impede que o
+    // overflow horizontal do celular corte as ultimas colunas no PDF.
+    const fullWidth = Math.max(table.scrollWidth, 680);
+    const exportNode = document.createElement('section');
+    exportNode.style.cssText = `position:fixed;left:-99999px;top:0;width:${fullWidth + 48}px;padding:24px;background:#080808;color:#ddd;overflow:visible;`;
+    const title = document.createElement('h1');
+    title.textContent = 'MSY Analytics — Mensagens por participante';
+    title.style.cssText = 'margin:0 0 8px;color:#c0001a;font:600 18px serif;';
+    const period = document.createElement('p');
+    period.textContent = box.querySelector('p')?.textContent?.trim() || '';
+    period.style.cssText = 'margin:0 0 18px;color:#aaa;font:12px monospace;';
+    const tableClone = table.cloneNode(true);
+    tableClone.style.width = `${fullWidth}px`;
+    tableClone.style.minWidth = `${fullWidth}px`;
+    exportNode.append(title, period, tableClone);
+    document.body.appendChild(exportNode);
     try {
       if (document.fonts?.ready) { try { await document.fonts.ready; } catch (fontError) { /* fonts ja carregadas ou indisponiveis */ } }
-      const canvas = await html2canvas(clone, { backgroundColor: '#080808', scale: 2, logging: false, useCORS: true, windowWidth: fullWidth });
+      const maxCanvasPixels = 12000000;
+      const scale = Math.min(2, Math.max(1, Math.sqrt(maxCanvasPixels / (exportNode.offsetWidth * exportNode.scrollHeight))));
+      const canvas = await html2canvas(exportNode, { backgroundColor: '#080808', scale, logging: false, useCORS: true, windowWidth: exportNode.offsetWidth });
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
-      pdf.setFillColor(8, 8, 8);
-      pdf.rect(0, 0, canvas.width, canvas.height, 'F');
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(buildAnalyticsPdfFilename());
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const margin = 8;
+      const pageWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
+      const pageHeight = pdf.internal.pageSize.getHeight() - (margin * 2);
+      const imageHeight = (canvas.height * pageWidth) / canvas.width;
+      for (let offset = 0, page = 0; offset < imageHeight; offset += pageHeight, page += 1) {
+        if (page) pdf.addPage();
+        pdf.setFillColor(8, 8, 8);
+        pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+        pdf.addImage(canvas, 'PNG', margin, margin - offset, pageWidth, imageHeight);
+      }
+      const url = URL.createObjectURL(pdf.output('blob'));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = buildAnalyticsPdfFilename();
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       button.textContent = 'Baixado';
       setTimeout(() => { button.textContent = original; }, 2500);
     } catch (error) {
@@ -575,7 +600,7 @@
       button.textContent = original;
       Utils.showToast('Nao foi possivel gerar o PDF.', 'error');
     } finally {
-      document.body.removeChild(clone);
+      exportNode.remove();
       button.disabled = false;
     }
   }
@@ -695,15 +720,10 @@
 
   function renderAnalyticsResult(html, inicio, fim) {
     root.querySelector('[data-analytics-result]')?.remove();
-    root.querySelector('[data-analytics-ia]')?.remove();
     const filterPanel = root.querySelector('[data-analytics-filter]');
     if (!filterPanel) return;
     const period = `${new Date(`${inicio}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${fim}T12:00:00`).toLocaleDateString('pt-BR')}`;
     filterPanel.insertAdjacentHTML('afterend', `<section class="sv-analytics-panel" data-analytics-result><div class="sv-analytics-results-head"><span>Mensagens por participante</span><i></i><button type="button" class="sv-analytics-btn" data-analytics-copy>Copiar para Excel</button><button type="button" class="sv-analytics-btn" data-analytics-pdf>Baixar PDF</button></div><p>${esc(period)}</p><div class="sv-analytics-result">${sanitizeAnalyticsHtml(html)}</div></section>`);
-    const resultSection = root.querySelector('[data-analytics-result]');
-    if (state.analyticsMode === 'weekly' && resultSection) {
-      resultSection.insertAdjacentHTML('afterend', '<section class="sv-analytics-panel sv-analytics-ia" data-analytics-ia><div class="sv-analytics-section-title"><span>Relatorio Inteligente</span><i></i></div><label class="sv-analytics-ia-label">Instrucao personalizada (opcional)</label><textarea placeholder="Ex: destaque quem merece reconhecimento." data-analytics-prompt></textarea><button type="button" class="sv-analytics-submit" data-analytics-generate-report><span>Gerar Relatorio</span><i></i></button><div class="sv-analytics-relatorio" data-analytics-relatorio></div></section>');
-    }
     const table = root.querySelector('[data-analytics-result] table');
     if (table) {
       normalizeAnalyticsTable(table);
@@ -785,7 +805,7 @@
   function onChange(event) { const input = event.target.closest('[data-performance-date]'); if (input?.value) changePeriod(null, input.value); const file = event.target.closest('#analyticsFile'); if (file) { const label = document.getElementById('analyticsFileLabel'); if (label) label.textContent = file.files?.[0]?.name || 'Selecionar arquivo...'; } }
   async function refreshReminders() { await loadData(); render(); }
   async function onSubmit(event) { const form = event.target; if (!form.matches('[data-reminder-form],[data-observation-form],[data-team-form]')) return; event.preventDefault(); const values = new FormData(form); if (form.matches('[data-team-form]')) { if (state.profile.tier !== 'diretoria') return Utils.showToast('Somente a diretoria gerencia a equipe.', 'error'); const { error } = await db.rpc('set_supervision_team_member', { p_user_id: values.get('userId'), p_role: values.get('role'), p_receive_alerts: values.get('receiveAlerts') === 'on' }); if (error) return Utils.showToast(error.message, 'error'); Utils.showToast('Equipe de Supervisão atualizada.'); return refreshReminders(); } const isReminder = form.matches('[data-reminder-form]'); const payload = isReminder ? { title: values.get('title'), description: values.get('description') || null, category: values.get('category'), due_at: values.get('dueAt') ? new Date(String(values.get('dueAt'))).toISOString() : null, origin: 'manual', created_by: state.profile.id } : { title: values.get('title'), body: values.get('body'), origin: 'manual', created_by: state.profile.id }; const { error } = await db.from(isReminder ? 'supervision_reminders' : 'supervision_observations').insert(payload); if (error) { Utils.showToast(error.message, 'error'); return; } Utils.showToast(isReminder ? 'Lembrete criado.' : 'Observacao registrada.'); await refreshReminders(); }
-  function onClick(event) { if (event.target.closest('[data-menu-toggle]')) { root.querySelector('.sv-rail')?.classList.toggle('open'); root.querySelector('[data-rail-backdrop]')?.classList.toggle('open'); return; } if (event.target.closest('[data-rail-backdrop]')) { root.querySelector('.sv-rail')?.classList.remove('open'); root.querySelector('[data-rail-backdrop]')?.classList.remove('open'); return; } const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; state.analyticsMode = mode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; root.querySelectorAll('[data-analytics-weekly]').forEach((field) => { field.style.display = mode === 'monthly' ? 'none' : ''; }); const picker = root.querySelector('[data-analytics-monthly]'); if (picker) { picker.style.display = mode === 'monthly' ? 'block' : 'none'; if (mode === 'monthly') initAnalyticsPicker(); } root.querySelector('[data-analytics-result]')?.remove(); const filter = root.querySelector('[data-analytics-filter]'); if (filter) filter.style.display = 'none'; root.querySelector('[data-analytics-ia]')?.remove(); return; } const analyticsCopy = event.target.closest('[data-analytics-copy]'); if (analyticsCopy) { copyAnalyticsTable(); return; } const analyticsPdf = event.target.closest('[data-analytics-pdf]'); if (analyticsPdf) { downloadAnalyticsPdf(); return; } const analyticsReport = event.target.closest('[data-analytics-generate-report]'); if (analyticsReport) { const output = root.querySelector('[data-analytics-relatorio]'); if (output) { output.innerHTML = buildLocalAnalyticsReport(); output.scrollIntoView({ behavior: 'smooth' }); } return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
+  function onClick(event) { if (event.target.closest('[data-menu-toggle]')) { root.querySelector('.sv-rail')?.classList.toggle('open'); root.querySelector('[data-rail-backdrop]')?.classList.toggle('open'); return; } if (event.target.closest('[data-rail-backdrop]')) { root.querySelector('.sv-rail')?.classList.remove('open'); root.querySelector('[data-rail-backdrop]')?.classList.remove('open'); return; } const route = event.target.closest('[data-route]')?.dataset.route; if (route) { location.hash = route; return; } const analyticsMode = event.target.closest('[data-analytics-mode]'); if (analyticsMode) { const mode = analyticsMode.dataset.analyticsMode; state.analyticsMode = mode; document.getElementById('analyticsMode').value = mode; document.querySelectorAll('[data-analytics-mode]').forEach((item) => item.classList.toggle('active', item === analyticsMode)); const label = document.getElementById('analyticsSectionLabel'); if (label) label.textContent = `Parametros de Analise - ${mode === 'monthly' ? 'Mensal' : 'Semanal'}`; root.querySelectorAll('[data-analytics-weekly]').forEach((field) => { field.style.display = mode === 'monthly' ? 'none' : ''; }); const picker = root.querySelector('[data-analytics-monthly]'); if (picker) { picker.style.display = mode === 'monthly' ? 'block' : 'none'; if (mode === 'monthly') initAnalyticsPicker(); } root.querySelector('[data-analytics-result]')?.remove(); const filter = root.querySelector('[data-analytics-filter]'); if (filter) filter.style.display = 'none'; return; } const analyticsCopy = event.target.closest('[data-analytics-copy]'); if (analyticsCopy) { copyAnalyticsTable(); return; } const analyticsPdf = event.target.closest('[data-analytics-pdf]'); if (analyticsPdf) { downloadAnalyticsPdf(); return; } const mode = event.target.closest('[data-performance-mode]')?.dataset.performanceMode; if (mode) { changePeriod(mode); return; } const reminderAction = event.target.closest('[data-reminder-action]'); if (reminderAction) { db.from('supervision_reminders').update({ status: reminderAction.dataset.reminderAction, action_by: state.profile.id, action_at: new Date().toISOString() }).eq('id', reminderAction.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const observation = event.target.closest('[data-observation-id]'); if (observation) { db.from('supervision_observations').update({ status: 'archived', archived_by: state.profile.id, archived_at: new Date().toISOString() }).eq('id', observation.dataset.observationId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else await refreshReminders(); }); return; } const copy = event.target.closest('[data-copy-whatsapp]'); if (copy) { const text = copy.closest('.sv-reminder')?.querySelector('.sv-whatsapp-text')?.value; if (text) navigator.clipboard?.writeText(text).then(() => Utils.showToast('Mensagem copiada.')); return; } const memberId = event.target.closest('[data-member]')?.dataset.member; if (memberId) { const member = state.data.members.find((item) => item.id === memberId); if (member) { document.querySelector('.sv-modal-overlay')?.remove(); document.body.insertAdjacentHTML('beforeend', memberModal(member)); const modal = document.querySelector('.sv-modal-overlay'); modal?.addEventListener('click', (modalEvent) => { if (modalEvent.target === modal || modalEvent.target.closest('[data-close-member]')) modal.remove(); }); } } }
   root.innerHTML = '<div class="sv-boot"><span></span><p>Inicializando Supervisao...</p></div>';
   init().catch((error) => { console.error('[MSY][supervisao] inicializacao:', error); root.innerHTML = `<section class="sv-fatal sv-corner"><div class="sv-eyebrow">Supervisao indisponivel</div><h1>O centro operacional nao carregou.</h1><p>${esc(error?.message || 'Verifique a conexao e a migration da Supervisao.')}</p><a class="sv-button" href="dashboard.html">Voltar ao Portal</a></section>`; });
 }());

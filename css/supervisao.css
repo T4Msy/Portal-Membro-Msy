@@ -82,16 +82,7 @@
 .sv-analytics-btn.copiado{border-color:#2a5a2a;color:#6a9a6a}
 .sv-analytics-result th .sv-day{display:block;font:10px 'JetBrains Mono',monospace;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#c0001a}
 .sv-analytics-result th .sv-day.weekend{color:#e01122}
-.sv-analytics-ia{margin-top:20px}
-.sv-analytics-ia-label{font:9px 'JetBrains Mono',monospace;color:#c0001a;letter-spacing:3px;text-transform:uppercase;display:block;margin-bottom:10px}
-.sv-analytics-ia textarea{width:100%;background:#040404;border:1px solid #2a2a2a;border-radius:2px;padding:14px 16px;color:#ddd;font:15px 'Cormorant Garamond',serif;outline:0;resize:vertical;min-height:80px;line-height:1.6;margin-bottom:20px}
-.sv-analytics-ia textarea:focus{border-color:#8b0000}
-.sv-analytics-relatorio{border-top:1px solid #1e1e1e;padding-top:24px;font:17px/1.8 'Cormorant Garamond',serif;color:#bbb}
-.sv-analytics-relatorio h3{font:600 11px 'Cinzel',serif;color:#c0001a;letter-spacing:4px;text-transform:uppercase;margin:28px 0 10px}
-.sv-analytics-relatorio p{margin-bottom:10px}
-.sv-analytics-relatorio ul{padding-left:20px;margin-bottom:10px}
-.sv-analytics-relatorio li{margin-bottom:6px}
-@media(max-width:720px){.sv-analytics-results-head{align-items:flex-start}.sv-analytics-results-head>i{display:none}.sv-analytics-btn{flex:1 1 auto;text-align:center}.sv-analytics-ia textarea{font-size:16px}}
+@media(max-width:720px){.sv-analytics-results-head{align-items:flex-start}.sv-analytics-results-head>i{display:none}.sv-analytics-btn{flex:1 1 auto;text-align:center}.sv-analytics-result table{min-width:0;width:100%;table-layout:fixed;font-size:9px}.sv-analytics-result th,.sv-analytics-result td{padding:8px 3px;font-size:8px;letter-spacing:0}.sv-analytics-result td:first-child,.sv-analytics-result th:first-child{width:88px;font-size:13px;white-space:normal}.sv-analytics-result th .sv-day{font-size:8px;letter-spacing:0}}
 
 /* Full-screen loading overlay shown while a report is being processed. */
 .sv-analytics-loading-overlay{position:fixed;inset:0;background:rgba(4,4,4,.95);backdrop-filter:blur(6px);z-index:10500;display:flex;align-items:center;justify-content:center;animation:svAnalyticsFadeIn .3s ease}
