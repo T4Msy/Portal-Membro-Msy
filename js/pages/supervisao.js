@@ -61,6 +61,11 @@
     root.addEventListener('click', (event) => { const reminder = event.target.closest('[data-radar-reminder]'); if (!reminder) return; if (!canOperate()) return Utils.showToast('Somente a coordenacao pode criar lembretes.', 'error'); db.from('supervision_reminders').insert({ title: reminder.dataset.radarReminder, description: reminder.dataset.radarDescription || null, category: 'task', origin: 'manual', status: 'open', created_by: state.profile.id }).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast('Lembrete criado.'); await refreshReminders(); } }); });
     root.addEventListener('click', (event) => { const approval = event.target.closest('[data-reminder-approval]'); if (!approval) return; if (!canOperate()) return Utils.showToast('Somente a coordenacao pode aprovar acoes.', 'error'); const approved = approval.dataset.reminderApproval === 'approved'; db.from('supervision_reminders').update({ approval_status: approved ? 'approved' : 'rejected', approved_by: approved ? state.profile.id : null, approved_at: approved ? new Date().toISOString() : null, rejection_reason: approved ? null : 'Dispensado pela coordenacao' }).eq('id', approval.dataset.reminderId).then(async ({ error }) => { if (error) Utils.showToast(error.message, 'error'); else { Utils.showToast(approved ? 'Acao aprovada.' : 'Acao recusada.'); await refreshReminders(); } }); });
     root.addEventListener('click', handleCentralAction);
+    root.addEventListener('click', (event) => {
+      if (event.target.closest('[data-case-select]') && window.matchMedia('(max-width:720px)').matches) {
+        requestAnimationFrame(() => root.querySelector('.sv-case-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+    });
     const reminderObserver = new MutationObserver(() => decorateReminderCards());
     reminderObserver.observe(root, { childList: true, subtree: true });
     root.addEventListener('change', onChange);
