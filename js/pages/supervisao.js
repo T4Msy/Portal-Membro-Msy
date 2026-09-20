@@ -382,7 +382,7 @@
   function teamPage() { const d = state.data; const team = d.team || []; const byId = new Map((d.profiles || []).map((p) => [p.id, p])); const rows = team.map((member) => { const profile = byId.get(member.user_id) || {}; return `<article class="sv-team-member"><div class="sv-avatar">${profile.avatar_url ? `<img src="${esc(profile.avatar_url)}" alt="">` : esc(profile.initials || Utils.getInitials(profile.name || '?'))}</div><div><b>${esc(profile.name || 'Membro removido')}</b><small>${esc(profile.role || '')} · ${member.role === 'coordinator' ? 'Coordenação' : 'Observador'}</small></div><span class="sv-team-alert ${member.receive_alerts ? 'on' : ''}">${member.receive_alerts ? 'Alertas ativos' : 'Sem alertas'}</span></article>`; }).join('') || '<div class="sv-empty">Nenhuma pessoa foi adicionada à equipe operacional.</div>'; const options = (d.profiles || []).map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} — ${esc(profile.role || 'Membro')}</option>`).join(''); return `<section class="sv-team-head"><div><div class="sv-eyebrow">Diretoria / governança da operação</div><h2>Equipe de Supervisão</h2><p>Somente integrantes desta equipe recebem os alertas críticos e de atenção no Portal e no celular.</p></div><span class="sv-open-count">${team.length} integrantes</span></section><section class="sv-team-layout"><form class="sv-corner sv-panel" data-team-form><div class="sv-panel-title"><i class="fa-solid fa-user-plus"></i>Adicionar ou atualizar integrante</div><label class="sv-label">Membro<select class="sv-input" name="userId" required><option value="">Selecionar membro</option>${options}</select></label><label class="sv-label">Papel<select class="sv-input" name="role"><option value="coordinator">Coordenação — pode operar casos</option><option value="observer">Observador — somente consulta</option></select></label><label class="sv-check"><input type="checkbox" name="receiveAlerts" checked> Receber alertas críticos e de atenção</label><button class="sv-button" type="submit">Salvar integrante</button><p class="sv-form-help">Salvar também libera o acesso à Supervisão para este membro.</p></form><section class="sv-corner sv-panel"><div class="sv-panel-title"><i class="fa-solid fa-users"></i>Equipe atual</div><div class="sv-team-list">${rows}</div></section></section>`; }
   function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
   function decorateReminderCards() { if (!canOperate()) return; const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
-  const ANALYTICS_NAME_MAP = [{ canonical: 'Xitter', aliases: ['marlon'] }, { canonical: 'Tales', aliases: ['t4les', 'tales'] }, { canonical: 'Marcos', aliases: ['marcos flausino', 'mfl4', 'marcos'] }, { canonical: 'Mariana', aliases: ['mariana msy', 'missmoon', 'mariana'] }, { canonical: 'Hariany', aliases: ['hariany msy', 'hariany'] }, { canonical: 'Felipe', aliases: ['felipe flausino', 'felipe msy', 'felipe'] }, { canonical: 'Matheus', aliases: ['matheus lucas', 'matheus'] }, { canonical: 'Naíra', aliases: ['nana msy', 'naíra', 'naira'] }, { canonical: 'Ph', aliases: ['pedro (ph)', 'pedro ph', 'ph'] }, { canonical: 'Pepeu', aliases: ['pepeu msy', 'pepeu'] }];
+  const ANALYTICS_NAME_MAP = [{ canonical: 'Xitter', aliases: ['marlon'] }, { canonical: 'Tales', aliases: ['t4les', 'tales'] }, { canonical: 'Marcos', aliases: ['marcos flausino', 'mfl4', 'marcos'] }, { canonical: 'Mariana', aliases: ['mariana msy', 'missmoon', 'mariana'] }, { canonical: 'Hariany', aliases: ['hariany msy', 'hariany'] }, { canonical: 'Felipe', aliases: ['felipe flausino', 'felipe msy', 'felipe'] }, { canonical: 'Matheus', aliases: ['matheus lucas', 'matheus'] }, { canonical: 'Naíra', aliases: ['nana msy', 'naíra', 'naira'] }, { canonical: 'Ph', aliases: ['pedro (ph)', 'pedro ph', 'ph'] }, { canonical: 'Pepeu', aliases: ['pepeu msy', 'pepeu'] }, { canonical: 'Duda', aliases: ['dudamedeirozss'] }, { canonical: 'Jotinha', aliases: ['joão victor silva', 'joao victor silva'] }, { canonical: 'Julia', aliases: ['lylary'] }];
   const ANALYTICS_IGNORE_NAMES = ['você', 'masayoshi'];
   function normalizeAnalyticsName(raw) {
     const clean = raw.replace(/[~\u{1F377}]/gu, '').replace(/[​-‍﻿]/g, '').trim();
@@ -396,6 +396,8 @@
   function normalizeAnalyticsTable(table) {
     const tbody = table.querySelector('tbody');
     if (!tbody) return;
+    const memberHeader = table.querySelector('thead th:first-child');
+    if (memberHeader) memberHeader.textContent = 'Membros';
     const numCols = table.querySelectorAll('thead th').length;
     const totalCol = numCols - 2;
     const avgCol = numCols - 1;
@@ -433,14 +435,20 @@
     const headers = Array.from(table.querySelectorAll('thead th'));
     if (headers.length < 3) return;
     const dateHeaders = headers.slice(1, headers.length - 2);
+    table.dataset.analyticsDays = String(dateHeaders.length);
     const [year, month, day] = String(inicioValue || '').split('-').map(Number);
     const startDate = year ? new Date(year, month - 1, day) : null;
+    const sundayColumns = [];
     dateHeaders.forEach((th, index) => {
       const date = parseAnalyticsHeaderDate(th.innerText.trim(), startDate, index);
       if (!date) return;
       const dayIndex = date.getDay();
-      const weekend = dayIndex === 0 || dayIndex === 6;
-      th.innerHTML = `<span class="sv-day${weekend ? ' weekend' : ''}">${ANALYTICS_WEEKDAYS_PT[dayIndex]}</span>`;
+      if (dayIndex === 0) { sundayColumns.push(index + 1); return; }
+      th.innerHTML = `<span class="sv-day">${ANALYTICS_WEEKDAYS_PT[dayIndex]}</span>`;
+    });
+    // Domingo permanece contabilizado no Total e na Media, mas nao ocupa uma coluna.
+    sundayColumns.reverse().forEach((column) => {
+      Array.from(table.querySelectorAll('thead tr,tbody tr,tfoot tr')).forEach((row) => row.cells[column]?.remove());
     });
   }
   function recalcAnalyticsFooter(table, rows) {
@@ -450,7 +458,7 @@
     for (let col = 1; col < numCols; col++) {
       let sum = 0;
       visibleRows.forEach((row) => { sum += parseFloat(String(row.cells[col]?.innerText || '').replace(',', '.')) || 0; });
-      if (col === numCols - 1) { const numPeriods = numCols - 3; const avg = numPeriods > 0 ? (sum / numPeriods).toFixed(1) : sum.toFixed(1); if (footerCells[col]) footerCells[col].innerHTML = `<strong>${avg}</strong>`; }
+      if (col === numCols - 1) { const numPeriods = Number(table.dataset.analyticsDays) || numCols - 3; const avg = numPeriods > 0 ? (sum / numPeriods).toFixed(1) : sum.toFixed(1); if (footerCells[col]) footerCells[col].innerHTML = `<strong>${avg}</strong>`; }
       else if (footerCells[col]) footerCells[col].innerHTML = `<strong>${Math.floor(sum)}</strong>`;
     }
   }

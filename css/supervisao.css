@@ -82,6 +82,16 @@
 .sv-analytics-period{display:flex;align-items:center;gap:8px;margin:0 0 18px;color:#9da3b0;font:10px 'JetBrains Mono',monospace}.sv-analytics-period i{color:#c14a59}.sv-analytics-result th .sv-day{display:block;font:10px 'JetBrains Mono',monospace;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:#c6cad5}.sv-analytics-result th .sv-day.weekend{color:#ff8090}
 @media(max-width:720px){.sv-analytics-result-panel{padding:18px 12px}.sv-analytics-results-head{align-items:flex-start;gap:12px}.sv-analytics-results-head>i{display:none}.sv-analytics-result-actions{width:100%}.sv-analytics-btn{flex:1;text-align:center}.sv-analytics-period{margin-bottom:14px;font-size:9px}.sv-analytics-result{border-radius:9px}.sv-analytics-result table{min-width:0;width:100%;table-layout:fixed;font-size:9px}.sv-analytics-result th,.sv-analytics-result td{padding:10px 2px;font-size:8px;letter-spacing:0}.sv-analytics-result td:first-child,.sv-analytics-result th:first-child{width:92px;font-size:13px;white-space:normal;line-height:1.1}.sv-analytics-result tfoot td:first-child{font-size:9px}.sv-analytics-result th .sv-day{font-size:8px;letter-spacing:0}}
 
+/* Refined dark-wine accents for the analytics table. */
+.sv-analytics-result tbody tr:hover{background:rgba(92,17,29,.14)}
+.sv-analytics-result td:nth-last-child(2){color:#b85c6a}
+.sv-analytics-result tfoot td{border-top-color:#54202a;background:#171014;color:#e3c7cd}
+.sv-analytics-result tfoot strong{color:#c97783}
+.sv-analytics-btn-primary{background:#5c111d;border-color:#762231}
+.sv-analytics-btn-primary:hover{background:#741523;border-color:#913141}
+.sv-analytics-period i{color:#7b3340}
+.sv-analytics-result th .sv-day.weekend{color:#c6cad5}
+
 /* Full-screen loading overlay shown while a report is being processed. */
 .sv-analytics-loading-overlay{position:fixed;inset:0;background:rgba(4,4,4,.95);backdrop-filter:blur(6px);z-index:10500;display:flex;align-items:center;justify-content:center;animation:svAnalyticsFadeIn .3s ease}
 .sv-analytics-loading-content{display:flex;flex-direction:column;align-items:center;gap:22px}
