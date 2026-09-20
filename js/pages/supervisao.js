@@ -418,8 +418,13 @@
         if (existing.cells[col]) existing.cells[col].innerText = String(Math.floor(a + b));
       }
       const numPeriods = numCols - 3;
-      if (existing.cells[avgCol] && numPeriods > 0) { const total = parseFloat(String(existing.cells[totalCol]?.innerText || '').replace(',', '.')) || 0; existing.cells[avgCol].innerText = (total / numPeriods).toFixed(1); }
+      if (existing.cells[avgCol] && numPeriods > 0) { const total = parseFloat(String(existing.cells[totalCol]?.innerText || '').replace(',', '.')) || 0; existing.cells[avgCol].innerText = String(Math.round(total / numPeriods)); }
       row.remove();
+    });
+    Array.from(table.querySelectorAll('tbody tr, tfoot tr')).forEach((row) => {
+      const averageCell = row.cells[avgCol];
+      const average = parseFloat(String(averageCell?.innerText || '').replace(',', '.'));
+      if (Number.isFinite(average)) averageCell.innerText = String(Math.round(average));
     });
   }
   const ANALYTICS_WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -458,7 +463,7 @@
     for (let col = 1; col < numCols; col++) {
       let sum = 0;
       visibleRows.forEach((row) => { sum += parseFloat(String(row.cells[col]?.innerText || '').replace(',', '.')) || 0; });
-      if (col === numCols - 1) { const numPeriods = Number(table.dataset.analyticsDays) || numCols - 3; const avg = numPeriods > 0 ? (sum / numPeriods).toFixed(1) : sum.toFixed(1); if (footerCells[col]) footerCells[col].innerHTML = `<strong>${avg}</strong>`; }
+      if (col === numCols - 1) { const numPeriods = Number(table.dataset.analyticsDays) || numCols - 3; const avg = numPeriods > 0 ? Math.round(sum / numPeriods) : Math.round(sum); if (footerCells[col]) footerCells[col].innerHTML = `<strong>${avg}</strong>`; }
       else if (footerCells[col]) footerCells[col].innerHTML = `<strong>${Math.floor(sum)}</strong>`;
     }
   }
