@@ -84,13 +84,14 @@
 
 /* Refined dark-wine accents for the analytics table. */
 .sv-analytics-result tbody tr:hover{background:rgba(92,17,29,.14)}
-.sv-analytics-result td:nth-last-child(2){color:#b85c6a}
+.sv-analytics-result td:nth-last-child(2){color:#c9cdd7}
 .sv-analytics-result tfoot td{border-top-color:#54202a;background:#171014;color:#e3c7cd}
 .sv-analytics-result tfoot strong{color:#c97783}
 .sv-analytics-btn-primary{background:#5c111d;border-color:#762231}
 .sv-analytics-btn-primary:hover{background:#741523;border-color:#913141}
 .sv-analytics-period i{color:#7b3340}
 .sv-analytics-result th .sv-day.weekend{color:#c6cad5}
+.sv-analytics-pdf-export table{table-layout:auto!important;font-size:12px!important}.sv-analytics-pdf-export th,.sv-analytics-pdf-export td{padding:14px 12px!important;font-size:12px!important}.sv-analytics-pdf-export th{font-size:9px!important}.sv-analytics-pdf-export td:first-child,.sv-analytics-pdf-export th:first-child{width:auto!important;min-width:154px!important;font-size:17px!important;white-space:nowrap!important}.sv-analytics-pdf-export th .sv-day{font-size:10px!important;letter-spacing:.8px!important}
 
 /* Full-screen loading overlay shown while a report is being processed. */
 .sv-analytics-loading-overlay{position:fixed;inset:0;background:rgba(4,4,4,.95);backdrop-filter:blur(6px);z-index:10500;display:flex;align-items:center;justify-content:center;animation:svAnalyticsFadeIn .3s ease}

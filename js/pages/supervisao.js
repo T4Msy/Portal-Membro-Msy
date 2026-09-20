@@ -570,10 +570,14 @@
     const period = document.createElement('p');
     period.textContent = box.querySelector('p')?.textContent?.trim() || '';
     period.style.cssText = 'margin:0 0 18px;color:#aaa;font:12px monospace;';
+    const tableFrame = document.createElement('div');
+    tableFrame.className = 'sv-analytics-result sv-analytics-pdf-export';
+    tableFrame.style.cssText = `width:${fullWidth}px;overflow:visible;`;
     const tableClone = table.cloneNode(true);
     tableClone.style.width = `${fullWidth}px`;
     tableClone.style.minWidth = `${fullWidth}px`;
-    exportNode.append(title, period, tableClone);
+    tableFrame.appendChild(tableClone);
+    exportNode.append(title, period, tableFrame);
     document.body.appendChild(exportNode);
     try {
       if (document.fonts?.ready) { try { await document.fonts.ready; } catch (fontError) { /* fonts ja carregadas ou indisponiveis */ } }
