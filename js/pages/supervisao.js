@@ -443,17 +443,11 @@
     table.dataset.analyticsDays = String(dateHeaders.length);
     const [year, month, day] = String(inicioValue || '').split('-').map(Number);
     const startDate = year ? new Date(year, month - 1, day) : null;
-    const sundayColumns = [];
     dateHeaders.forEach((th, index) => {
       const date = parseAnalyticsHeaderDate(th.innerText.trim(), startDate, index);
       if (!date) return;
       const dayIndex = date.getDay();
-      if (dayIndex === 0) { sundayColumns.push(index + 1); return; }
       th.innerHTML = `<span class="sv-day">${ANALYTICS_WEEKDAYS_PT[dayIndex]}</span>`;
-    });
-    // Domingo permanece contabilizado no Total e na Media, mas nao ocupa uma coluna.
-    sundayColumns.reverse().forEach((column) => {
-      Array.from(table.querySelectorAll('thead tr,tbody tr,tfoot tr')).forEach((row) => row.cells[column]?.remove());
     });
   }
   function recalcAnalyticsFooter(table, rows) {
