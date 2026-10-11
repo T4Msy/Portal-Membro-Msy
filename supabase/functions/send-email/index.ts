@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const RESEND_KEY  = Deno.env.get('RESEND_API_KEY')!
 const FROM_EMAIL  = 'MSY Portal <noreply@portalmsy.site>'
 const LINK_RE     = /^[a-z0-9_-]+\.html$/i
-const UUID_RE     =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE     = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin':  '*',
