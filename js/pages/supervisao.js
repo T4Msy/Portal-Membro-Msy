@@ -388,14 +388,15 @@
   function simplePage(title, icon, items) { return `<section class="sv-corner sv-panel sv-page"><div class="sv-panel-title"><i class="fa-solid ${icon}"></i>${title}</div>${rows(items, 'pending')}</section>`; }
   function decorateReminderCards() { if (!canOperate()) return; const pending = (state.data?.reminders || []).filter((item) => item.status === 'open'); root.querySelectorAll('.sv-reminder').forEach((card, index) => { if (card.dataset.approvalDecorated) return; const item = pending[index]; if (!item || item.approval_status !== 'pending_approval') return; card.dataset.approvalDecorated = 'true'; card.insertAdjacentHTML('afterbegin', `<div class="sv-approval-bar"><span><i class="fa-solid fa-shield-halved"></i> Aguardando aprovacao</span><div><button class="sv-button" data-reminder-approval="approved" data-reminder-id="${esc(item.id)}">Aprovar</button><button class="sv-button" data-reminder-approval="rejected" data-reminder-id="${esc(item.id)}">Recusar</button></div></div>`); }); }
   const ANALYTICS_NAME_MAP = [{ canonical: 'Xitter', aliases: ['marlon'] }, { canonical: 'Tales', aliases: ['t4les', 'tales'] }, { canonical: 'Marcos', aliases: ['marcos flausino', 'mfl4', 'marcos'] }, { canonical: 'Mariana', aliases: ['mariana msy', 'missmoon', 'mariana'] }, { canonical: 'Hariany', aliases: ['hariany msy', 'hariany'] }, { canonical: 'Felipe', aliases: ['felipe flausino', 'felipe msy', 'felipe'] }, { canonical: 'Matheus', aliases: ['matheus lucas', 'matheus'] }, { canonical: 'Naíra', aliases: ['nana msy', 'naíra', 'naira'] }, { canonical: 'Ph', aliases: ['pedro (ph)', 'pedro ph', 'ph'] }, { canonical: 'Pepeu', aliases: ['pepeu msy', 'pepeu'] }, { canonical: 'Duda', aliases: ['dudamedeirozss'] }, { canonical: 'Jotinha', aliases: ['joão victor silva', 'joao victor silva'] }, { canonical: 'Julia', aliases: ['lylary'] }];
-  const ANALYTICS_IGNORE_NAMES = ['você', 'masayoshi'];
+  const ANALYTICS_IGNORE_NAMES = ['você', 'masayoshi', 'corvus bot'];
   function normalizeAnalyticsName(raw) {
     const clean = raw.replace(/[~\u{1F377}]/gu, '').replace(/[​-‍﻿]/g, '').trim();
-    const cleanLower = clean.toLowerCase();
-    if (ANALYTICS_IGNORE_NAMES.some((ignored) => cleanLower.includes(ignored))) return null;
+    const cleanLower = clean.normalize('NFKC').toLowerCase();
+    // Aliases first: "Marlon Masayoshi" must map to Xitter before the group-name ignore rule
     for (const entry of ANALYTICS_NAME_MAP) {
       if (entry.aliases.some((alias) => cleanLower.includes(alias))) return `${entry.canonical} 🍷`;
     }
+    if (ANALYTICS_IGNORE_NAMES.some((ignored) => cleanLower.includes(ignored))) return null;
     return `${clean} 🍷`;
   }
   function normalizeAnalyticsTable(table) {
