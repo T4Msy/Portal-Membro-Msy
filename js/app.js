@@ -2566,7 +2566,7 @@
              <i class="fa-solid fa-envelope" style="color:#60a5fa"></i> Email
            </label>
          </div>
-         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Canais só são disparados se o membro tiver aquela preferência ativada no perfil.</div>
+         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado.</div>
        </div>
      `;
      document.getElementById('modalFooter').innerHTML = `
@@ -2923,7 +2923,7 @@
               type: 'activity',
               icon: '✏️',
               link: 'atividades.html',
-              channels: ['push', 'email'],
+              channels,
             })
           ));
           if (!attachResult.ok) {
@@ -2971,7 +2971,7 @@
              type: 'activity',
              icon: '✏️',
              link: 'atividades.html',
-             channels: ['push', 'email'],
+             channels,
            })
          ));
          if (!attachResult.ok) {
@@ -7688,19 +7688,13 @@
                      <i class="fa-solid fa-envelope" style="color:#60a5fa;margin-right:6px"></i>Notificações por Email
                    </div>
                    <div style="font-size:0.77rem;color:var(--text-3);line-height:1.5;margin-bottom:10px">
-                     Receba comunicados, atividades e eventos também no email.
+                     Atividades e comunicados enviados por email chegam no email da sua conta. Se preferir outro endereço, informe abaixo.
                    </div>
-                   <div id="emailFieldWrap" style="display:none">
+                   <div id="emailFieldWrap">
                      <input type="email" class="form-input" id="notif-email-addr"
                        placeholder="email@exemplo.com (opcional, usa o da conta se vazio)"
                        style="font-size:0.82rem;padding:8px 12px">
                    </div>
-                 </div>
-                 <div style="flex-shrink:0">
-                   <label class="notif-toggle-wrap">
-                     <input type="checkbox" id="toggle-email" class="notif-toggle-input">
-                     <span class="notif-toggle-slider"></span>
-                   </label>
                  </div>
                </div>
    
@@ -7846,17 +7840,13 @@
      /* ── Preferências de Notificação ────────────────────────── */
      (async () => {
        const pushToggle  = document.getElementById('toggle-push');
-       const emailToggle = document.getElementById('toggle-email');
        const emailField  = document.getElementById('notif-email-addr');
-       const emailWrap   = document.getElementById('emailFieldWrap');
        const pushLabel   = document.getElementById('pushStatusLabel');
        const testBtn     = document.getElementById('btnTestPush');
-   
+
        // Preenche toggles com prefs salvas
        pushToggle.checked  = profile.notif_push  ?? true;
-       emailToggle.checked = profile.notif_email ?? false;
        emailField.value    = profile.notif_email_address || '';
-       if (emailToggle.checked) emailWrap.style.display = 'block';
    
        // Estado atual do push neste browser
        async function updatePushLabel() {
@@ -7915,11 +7905,6 @@
          }
        });
    
-       // Toggle email: exibe/esconde campo de email
-       emailToggle.addEventListener('change', () => {
-         emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
-       });
-   
        // Salvar preferências de notificação
        document.getElementById('saveNotifPrefsBtn').addEventListener('click', async () => {
          const btn = document.getElementById('saveNotifPrefsBtn');
@@ -7931,7 +7916,6 @@
            // UPDATE (não upsert): upsert parcial dispara INSERT sem colunas obrigatórias (ex.: name).
            const { error: saveErr } = await db.from('profiles').update({
              notif_push:          pushToggle.checked,
-             notif_email:         emailToggle.checked,
              notif_email_address: emailAddr,
            }).eq('id', profile.id);
    
@@ -7939,20 +7923,17 @@
    
            // Confirma lendo o dado de volta do banco
            const { data: updated } = await db.from('profiles')
-             .select('notif_push, notif_email, notif_email_address')
+             .select('notif_push, notif_email_address')
              .eq('id', profile.id)
              .single();
-   
+
            if (updated) {
              // Atualiza objeto local com o que realmente foi gravado
              profile.notif_push          = updated.notif_push;
-             profile.notif_email         = updated.notif_email;
              profile.notif_email_address = updated.notif_email_address;
              // Sincroniza toggles com o valor confirmado
              pushToggle.checked  = updated.notif_push  ?? true;
-             emailToggle.checked = updated.notif_email ?? false;
              emailField.value    = updated.notif_email_address || '';
-             emailWrap.style.display = emailToggle.checked ? 'block' : 'none';
            }
    
            Utils.showToast('Preferências de notificação salvas!');

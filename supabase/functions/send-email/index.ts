@@ -2,7 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const RESEND_KEY  = Deno.env.get('RESEND_API_KEY')!
 const FROM_EMAIL  = 'MSY Portal <noreply@portalmsy.site>'
-const UUID_RE     = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const LINK_RE     = /^[a-z0-9_-]+\.html$/i
+const UUID_RE     =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin':  '*',
@@ -69,14 +70,15 @@ Deno.serve(async (req) => {
   }
 
   // ── Parsear e validar body ─────────────────────────────
-  let body: { userId?: string; all?: boolean; subject?: string; message?: string }
+  let body: { userId?: string; all?: boolean; subject?: string; message?: string; link?: string }
   try {
     body = await req.json()
   } catch {
     return err(400, 'JSON inválido')
   }
 
-  const { userId, all, subject, message } = body
+  const { userId, all, subject, message, link } = body
+  const portalUrl = `https://portalmsy.site/${link && LINK_RE.test(link) ? link : 'dashboard.html'}`
 
   if (!subject || !message) {
     return err(400, 'subject e message são obrigatórios')
@@ -89,7 +91,7 @@ Deno.serve(async (req) => {
   let query = serviceClient
     .from('profiles')
     .select('id, name, notif_email_address')
-    .eq('notif_email', true)
+    .eq('status', 'ativo')
 
   if (!all && userId) query = query.eq('id', userId)
 
@@ -107,9 +109,9 @@ Deno.serve(async (req) => {
       const { data: { user: u } } = await serviceClient.auth.admin.getUserById(m.id)
       email = u?.email
     }
-    if (!email) return
+    if (!email) throw new Error(`Sem email para ${m.id}`)
 
-    await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_KEY}`,
@@ -123,19 +125,22 @@ Deno.serve(async (req) => {
           <div style="background:#07070a;color:#ececec;padding:32px;font-family:sans-serif;max-width:520px;margin:0 auto;border:1px solid rgba(201,168,76,0.2);border-radius:12px">
             <div style="font-size:1.4rem;font-weight:700;color:#c9a84c;margin-bottom:16px">MSY Portal</div>
             <p style="color:#ececec;font-size:0.95rem;line-height:1.7">${safeMessage}</p>
-            <a href="https://portalmsy.site"
+            <a href="${portalUrl}"
                style="display:inline-block;margin-top:20px;padding:10px 22px;background:#b91c1c;color:#fff;text-decoration:none;border-radius:8px;font-size:0.85rem;font-weight:600">
               Abrir Portal →
             </a>
-            <p style="color:#666;font-size:0.72rem;margin-top:24px">Masayoshi Order · Para desativar, acesse Perfil → Notificações</p>
+            <p style="color:#666;font-size:0.72rem;margin-top:24px">Masayoshi Order · Para trocar o email de recebimento, acesse Perfil → Notificações</p>
           </div>
         `,
       }),
     })
+    if (!res.ok) throw new Error(`Resend HTTP ${res.status}: ${await res.text()}`)
   })
 
-  await Promise.allSettled(sends)
-  return new Response(JSON.stringify({ ok: true, sent: members?.length ?? 0 }), {
+  const results = await Promise.allSettled(sends)
+  const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+  failed.forEach((f) => console.error('[MSY][send-email]', f.reason))
+  return new Response(JSON.stringify({ ok: failed.length === 0, sent: results.length - failed.length, failed: failed.length }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

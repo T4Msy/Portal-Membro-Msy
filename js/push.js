@@ -169,13 +169,14 @@
        };
      },
 
-     async sendToUser(userId, { subject, message }) {
+     async sendToUser(userId, { subject, message, link }) {
        try {
-         await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
+         const res = await fetch(PUSH_CONFIG.EMAIL_ENDPOINT, {
            method:  'POST',
            headers: await this._authHeaders(),
-           body:    JSON.stringify({ userId, subject, message }),
+           body:    JSON.stringify({ userId, subject, message, link }),
          });
+         if (!res.ok) console.warn('[Email] send-email respondeu HTTP', res.status, await res.text());
        } catch (err) {
          console.warn('[Email] Falha ao enviar email:', err);
        }
@@ -229,7 +230,7 @@
        if (targetUserId) {
          // Notificação para um membro específico
          const { data: prefs } = await db.from('profiles')
-           .select('notif_push, notif_email, notif_email_address, name')
+           .select('notif_push, name')
            .eq('id', targetUserId)
            .single();
    
@@ -242,10 +243,12 @@
            });
          }
    
-         if (prefs?.notif_email && channels.includes('email')) {
+         // Email é obrigatório quando o canal for escolhido por quem envia
+         if (channels.includes('email')) {
            await EmailManager.sendToUser(targetUserId, {
-             subject: 'Notificação — MSY Portal',
+             subject: type === 'activity' ? 'Atividade — MSY Portal' : 'Notificação — MSY Portal',
              message: message,
+             link:    link,
            });
          }
    
