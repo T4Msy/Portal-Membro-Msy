@@ -108,6 +108,7 @@ export class VoiceRoomView {
 
   roomSkeleton() {
     return `${this.headerHtml('<span class="sp-count" data-count></span><span class="sp-grow"></span><span class="sp-conn" data-conn></span>')}
+      <div class="sp-join-hint" data-join-hint hidden>${icon('fa-microphone')} Se o navegador perguntar, permita o uso do microfone para entrar na conversa.</div>
       <button class="sp-audio-blocked" data-act="resume-audio" hidden>${icon('fa-volume-xmark')} O navegador bloqueou o som. Toque aqui para ativar o áudio.</button>
       <div class="sp-room-body" data-body></div>
       <div class="sp-controls" data-controls></div>`;
@@ -126,6 +127,7 @@ export class VoiceRoomView {
         : `<span class="sp-dot"></span> Conectado`;
     conn.title = snap.turnAvailable ? 'Conexão direta com TURN de reserva' : 'Conexão direta (sem servidor TURN de reserva)';
     this.el.querySelector('[data-act="resume-audio"]').hidden = !snap.audioBlocked;
+    this.el.querySelector('[data-join-hint]').hidden = snap.status !== 'joining';
 
     const body = this.el.querySelector('[data-body]');
     const layout = screens.length ? 'stage' : 'grid';
