@@ -98,3 +98,12 @@ Limitações conhecidas:
   beacons/sinais, e leitura dos quadros na aba de teste.
 - **Próximo:** configurar TURN gratuito (ExpressTURN ou Metered Open Relay) — o dono cria a conta e coloca as credenciais
   nos Secrets; criar Edge Function no portal que entrega as credenciais só para `space_can_access()`.
+
+## 14/10/2026 — TURN: função publicada
+- `supabase/functions/turn-credentials/index.ts` publicada no Supabase do portal (painel, "Via Editor", Verify JWT ligado).
+- Só entrega para quem passa em `space_can_access()`. Testado do portal logado: responde `{ iceServers: [], ttl: 0 }` (ainda sem secrets).
+- O Space já chama essa função ao entrar numa sala (`js/space/voice/webrtc/iceServers.js`, cache de 10 min quando vazio).
+- **Falta (dono):** criar os Secrets em Supabase → Edge Functions → Secrets:
+  - ExpressTURN: `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL`; ou
+  - Metered: `METERED_APP`, `METERED_API_KEY`.
+- Depois: repetir o teste com alguém no 4G (o quadro mostra "TURN" quando a conexão passa pelo intermediário).
