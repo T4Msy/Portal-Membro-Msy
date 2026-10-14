@@ -88,3 +88,13 @@ Limitações conhecidas:
 - Sem TURN no portal (a função `turn-credentials` não existe aqui; o código cai para STUN sozinho).
 - Na moldura, só cliques em links são capturados; códigos do portal que fazem `window.location = ...` na janela
   principal mostram o aviso "sair da página encerra a chamada".
+
+## 14/10/2026 — 1º teste real com 4G
+- Sala Geral com 3 sessões (todas da conta Xitter): aba de teste (Brave do dono), outra aba no mesmo PC e um aparelho no 4G.
+- Entre as duas abas do PC: **conectado** (0 ms, ~20 kbps de voz).
+- Aparelho no 4G: **"Reconectando", 0 kbps** — não fecha a conexão P2P. Sem TURN, o 4G bloqueia a conexão direta (esperado).
+- A Presença do Supabase não respondeu nessa sala; o **plano B por broadcast (beacons, D19) funcionou sozinho** — as sessões se enxergaram.
+- Como foi observado sem entrar na sala: assinatura somente-leitura do canal `space:voice:<id>` (sem `track`) para ler
+  beacons/sinais, e leitura dos quadros na aba de teste.
+- **Próximo:** configurar TURN gratuito (ExpressTURN ou Metered Open Relay) — o dono cria a conta e coloca as credenciais
+  nos Secrets; criar Edge Function no portal que entrega as credenciais só para `space_can_access()`.
