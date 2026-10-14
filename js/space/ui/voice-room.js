@@ -39,14 +39,18 @@ export class VoiceRoomView {
   }
 
   mount() {
-    this.el.addEventListener('click', (e) => this.onClick(e));
-    this.el.addEventListener('input', (e) => this.onInput(e));
+    // O container (.sp-main) é reaproveitado entre canais: os ouvintes saem junto com a view.
+    this.events = new AbortController();
+    const { signal } = this.events;
+    this.el.addEventListener('click', (e) => this.onClick(e), { signal });
+    this.el.addEventListener('input', (e) => this.onInput(e), { signal });
     this.voice.addEventListener('change', this.onChange);
     this.online.addEventListener('change', this.onChange);
     this.render();
   }
 
   destroy() {
+    this.events?.abort();
     this.voice.removeEventListener('change', this.onChange);
     this.online.removeEventListener('change', this.onChange);
     this.el.querySelectorAll('video').forEach((v) => { v.srcObject = null; });
