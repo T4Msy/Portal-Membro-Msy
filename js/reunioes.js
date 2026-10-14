@@ -1,5 +1,5 @@
 /* ============================================================
-   PAGE: REUNIÕES — agenda privada, participantes e atas
+   PAGE: REUNIÕES — agenda com convidados, solicitações e atas
    ============================================================ */
 
 async function initReunioes() {
@@ -7,20 +7,39 @@ async function initReunioes() {
   if (!profile) return;
   await renderTopBar('Reuniões', profile);
 
+  const esc = value => Utils.escapeHtml(String(value ?? ''));
   const content = document.getElementById('pageContent');
   const isManager = profile.tier === 'diretoria'
     || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_reunioes');
-  let membersCache = null;
-  let activeTab = 'reunioes';
+
+  const state = { tab: 'proximas', meetings: [], minutes: [], requests: [], members: null };
+
+  /* ── Helpers ─────────────────────────────────────────── */
+  const todayIso = () => new Date().toLocaleDateString('en-CA');
+  const toDate = iso => new Date(`${iso}T12:00:00`);
+  const shortTime = time => (time ? String(time).slice(0, 5) : '');
+  const daysUntil = iso => Math.round((toDate(iso) - toDate(todayIso())) / 86400000);
 
   const activeMembers = async () => {
-    if (membersCache) return membersCache;
-    const { data, error } = await db.from('profiles').select('id,name,initials,color')
+    if (state.members) return state.members;
+    const { data, error } = await db.from('profiles').select('id,name,initials,color,avatar_url,tier')
       .eq('status', 'ativo').order('name');
     if (error) throw error;
-    membersCache = data || [];
-    return membersCache;
+    state.members = data || [];
+    return state.members;
   };
+
+  const avatar = member => {
+    const color = /^#[0-9a-f]{3,8}$/i.test(member?.color || '') ? member.color : '#7f1d1d';
+    const inner = member?.avatar_url
+      ? `<img src="${esc(member.avatar_url)}" alt="">`
+      : esc(member?.initials || Utils.getInitials(member?.name || '?'));
+    return `<span class="rn-avatar" style="--rn-c:${color}" title="${esc(member?.name || '')}">${inner}</span>`;
+  };
+
+  const emptyState = (icon, text) => `<div class="rn-empty"><i class="fa-solid ${icon}"></i>${esc(text)}</div>`;
+  const sectionLabel = (icon, label, muted = false) =>
+    `<div class="rn-section-label${muted ? ' is-muted' : ''}"><i class="fa-solid ${icon}"></i> ${esc(label)}</div>`;
 
   const notifyParticipants = async (meetingId, userIds, message, icon = '📅') => {
     if (!userIds.length) return;
@@ -31,253 +50,668 @@ async function initReunioes() {
     if (error) console.warn('[MSY][reunioes] Falha ao notificar participantes:', error);
   };
 
+  /* ── Estrutura da página ─────────────────────────────── */
+  const statCount = isManager ? 4 : 3;
   content.innerHTML = `
-    <div class="page-header"><div>
-      <div class="page-header-title">Reuniões</div>
-      <div class="page-header-sub">Agenda privada, solicitações e atas</div>
-    </div><button class="btn btn-primary" id="solicitarReunBtn"><i class="fa-solid fa-handshake"></i> Solicitar Reunião</button></div>
-    <div class="filters-bar" style="margin-bottom:20px">
-      <button class="filter-btn active" data-tab="reunioes"><i class="fa-solid fa-calendar-check"></i> Reuniões</button>
-      ${isManager ? '<button class="filter-btn" data-tab="solicitacoes"><i class="fa-solid fa-inbox"></i> Solicitações</button>' : ''}
-      <button class="filter-btn" data-tab="atas"><i class="fa-solid fa-file-lines"></i> Atas de Reunião</button>
-    </div><div id="meetTab"></div>`;
+    <div class="rn-shell">
+      <section class="rn-hero card-enter">
+        <div class="rn-hero-main">
+          <div>
+            <div class="rn-kicker"><i class="fa-solid fa-chess-king"></i> Conselho da Ordem</div>
+            <h1 class="rn-title">Reuniões Masayoshi</h1>
+            <div class="rn-subtitle">Agenda das reuniões, convidados, pautas e atas da Masayoshi Order — tudo num só lugar.</div>
+            <div class="rn-hero-cta">
+              ${isManager ? '<button class="btn btn-primary" id="rnNewMeeting"><i class="fa-solid fa-calendar-plus"></i> Nova Reunião</button>' : ''}
+              <button class="btn ${isManager ? 'btn-outline' : 'btn-primary'}" id="rnRequest"><i class="fa-solid fa-handshake"></i> Solicitar Reunião</button>
+            </div>
+          </div>
+          <div class="rn-hero-stats" style="--rn-stats:${statCount}">
+            <div class="rn-stat"><div class="rn-stat-value" data-stat="proximas">0</div><div class="rn-stat-label">Próximas</div></div>
+            <div class="rn-stat"><div class="rn-stat-value" data-stat="concluidas">0</div><div class="rn-stat-label">Concluídas</div></div>
+            <div class="rn-stat"><div class="rn-stat-value" data-stat="atas">0</div><div class="rn-stat-label">Atas</div></div>
+            ${isManager ? '<div class="rn-stat rn-stat-alert"><div class="rn-stat-value" data-stat="pendentes">0</div><div class="rn-stat-label">Pedidos</div></div>' : ''}
+          </div>
+        </div>
+      </section>
+      <div class="rn-tabs" role="tablist">
+        <button class="rn-tab active" data-tab="proximas"><i class="fa-solid fa-calendar-days"></i> Próximas <span class="rn-tab-count" data-count="proximas"></span></button>
+        <button class="rn-tab" data-tab="historico"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
+        <button class="rn-tab" data-tab="atas"><i class="fa-solid fa-scroll"></i> Atas <span class="rn-tab-count" data-count="atas"></span></button>
+        ${isManager ? '<button class="rn-tab" data-tab="solicitacoes"><i class="fa-solid fa-inbox"></i> Solicitações <span class="rn-tab-count is-alert" data-count="pendentes"></span></button>' : ''}
+      </div>
+      <div id="rnTab"><div class="rn-loading"><i class="fa-solid fa-circle-notch fa-spin"></i></div></div>
+    </div>`;
 
   _injectMeetingModals(isManager);
-  bindRequestModal();
-  if (isManager) bindScheduleModal();
 
-  content.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
-    activeTab = button.dataset.tab;
-    content.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
-    if (activeTab === 'reunioes') loadMeetings();
-    if (activeTab === 'solicitacoes') loadRequests();
-    if (activeTab === 'atas') loadMinutes();
-  }));
+  content.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => switchTab(button.dataset.tab)));
+  document.getElementById('rnRequest').addEventListener('click', openRequestModal);
+  document.getElementById('rnNewMeeting')?.addEventListener('click', () => openMeetingModal());
 
-  async function loadMeetings() {
-    const tab = document.getElementById('meetTab');
-    tab.innerHTML = loadingMarkup();
-    let generalQuery = db.from('meetings').select('*').order('meeting_date', { ascending: false });
-    if (!isManager) generalQuery = generalQuery.eq('type', 'geral');
+  function switchTab(tab) {
+    state.tab = tab;
+    content.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item.dataset.tab === tab));
+    renderTab();
+  }
 
+  /* ── Carregamento ────────────────────────────────────── */
+  async function loadMinutes() {
+    const base = 'id,title,meeting_date,type,content,created_at';
+    let res = await db.from('meeting_minutes').select(`${base},scheduled_meeting_id`).order('meeting_date', { ascending: false });
+    // Fallback enquanto a migration 20261013_meetings_redesign não foi aplicada
+    if (res.error && /scheduled_meeting_id/.test(res.error.message || '')) {
+      res = await db.from('meeting_minutes').select(base).order('meeting_date', { ascending: false });
+    }
+    if (res.error) throw res.error;
+    return res.data || [];
+  }
+
+  async function loadAll() {
+    const tab = document.getElementById('rnTab');
     try {
-      const [{ data: generals, error: generalError }, { data: personal, error: personalError }] = await Promise.all([
-        generalQuery,
+      let legacyQuery = db.from('meetings').select('*').order('meeting_date', { ascending: false });
+      if (!isManager) legacyQuery = legacyQuery.eq('type', 'geral');
+
+      const [scheduled, legacy, minutes, requests] = await Promise.all([
         db.from('scheduled_meetings')
-          .select('*, participants:scheduled_meeting_participants(user_id, profile:profiles!scheduled_meeting_participants_user_id_fkey(name,initials,color))')
-          .order('meeting_date', { ascending: false })
+          .select('*, participants:scheduled_meeting_participants(user_id, profile:profiles!scheduled_meeting_participants_user_id_fkey(id,name,initials,color,avatar_url))')
+          .order('meeting_date', { ascending: false }),
+        legacyQuery,
+        loadMinutes(),
+        isManager
+          ? db.from('meeting_requests').select('*').order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        isManager ? activeMembers() : Promise.resolve([]),
       ]);
-      if (generalError) throw generalError;
-      if (personalError) throw personalError;
+      if (scheduled.error) throw scheduled.error;
+      if (legacy.error) throw legacy.error;
+      if (requests.error) throw requests.error;
 
-      const today = new Date().toLocaleDateString('en-CA');
-      const futurePersonal = (personal || []).filter(item => item.meeting_date >= today && item.status === 'agendada');
-      const historyPersonal = (personal || []).filter(item => item.meeting_date < today || item.status !== 'agendada');
-      const futureGeneral = (generals || []).filter(item => item.meeting_date >= today && item.status === 'agendada');
-      const historyGeneral = (generals || []).filter(item => item.meeting_date < today || item.status !== 'agendada');
+      state.minutes = minutes;
+      state.requests = requests.data || [];
+      const minuteByMeeting = new Map(minutes.filter(m => m.scheduled_meeting_id).map(m => [m.scheduled_meeting_id, m]));
 
-      tab.innerHTML = `
-        ${isManager ? `<div style="margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" id="newMeetBtn"><i class="fa-solid fa-calendar-plus"></i> Nova Reunião</button>
-          <button class="btn btn-gold" id="agendarMeetBtn"><i class="fa-solid fa-user-clock"></i> Agendar com Membro</button>
-        </div>` : ''}
-        ${futurePersonal.length ? section('Reuniões ativas', futurePersonal.map(personalCard).join(''), 'fa-user-clock') : ''}
-        ${futureGeneral.length ? section('Próximas reuniões gerais', futureGeneral.map(generalCard).join(''), 'fa-calendar-days') : ''}
-        ${!futurePersonal.length && !futureGeneral.length ? empty('Nenhuma reunião ativa.') : ''}
-        ${historyPersonal.length ? section('Histórico de reuniões privadas', historyPersonal.map(personalCard).join(''), 'fa-clock', true) : ''}
-        ${historyGeneral.length ? section('Reuniões gerais passadas', historyGeneral.map(generalCard).join(''), 'fa-calendar', true) : ''}`;
-
-      tab.querySelector('#newMeetBtn')?.addEventListener('click', () => document.getElementById('newMeetModal').classList.add('open'));
-      tab.querySelector('#agendarMeetBtn')?.addEventListener('click', () => openScheduleModal());
-      bindMeetingActions(tab, personal || []);
+      state.meetings = [
+        ...(scheduled.data || []).map(item => ({
+          id: item.id,
+          source: 'scheduled',
+          title: item.title || 'Reunião com a Diretoria',
+          date: item.meeting_date,
+          time: item.meeting_time,
+          description: item.description,
+          status: item.status === 'concluida' ? 'concluida' : item.status === 'cancelada' ? 'cancelada' : 'agendada',
+          participants: (item.participants || []).map(p => p.profile).filter(Boolean),
+          everyone: false,
+          minute: minuteByMeeting.get(item.id) || null,
+        })),
+        ...(legacy.data || []).map(item => ({
+          id: item.id,
+          source: 'legacy',
+          title: item.title,
+          date: item.meeting_date,
+          time: item.meeting_time,
+          description: item.description,
+          status: item.status === 'realizada' ? 'concluida' : item.status === 'cancelada' ? 'cancelada' : 'agendada',
+          participants: [],
+          everyone: item.type !== 'diretoria',
+          minute: null,
+        })),
+      ];
+      updateCounters();
+      renderTab();
     } catch (error) {
       console.error('[MSY][reunioes] Erro ao carregar reuniões:', error);
-      tab.innerHTML = empty('Erro ao carregar reuniões.');
+      tab.innerHTML = emptyState('fa-triangle-exclamation', 'Erro ao carregar. Tente recarregar a página.');
       Utils.showToast('Erro ao carregar reuniões.', 'error');
     }
   }
 
-  const section = (label, body, icon, muted = false) =>
-    `<div class="meet-section-label" style="${muted ? 'color:var(--text-3)' : ''}"><i class="fa-solid ${icon}"></i> ${label}</div>${body}`;
-  const empty = text => `<div class="empty-state" style="padding:32px"><div class="empty-state-text">${text}</div></div>`;
-  const loadingMarkup = () => `<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--gold)"></i></div>`;
+  const isUpcoming = meeting => meeting.status === 'agendada' && meeting.date >= todayIso();
 
-  function generalCard(meeting) {
-    const status = meeting.status === 'realizada' ? 'Realizada' : meeting.status === 'cancelada' ? 'Cancelada' : 'Agendada';
-    const color = meeting.status === 'realizada' ? '#10b981' : meeting.status === 'cancelada' ? '#ef4444' : 'var(--gold)';
-    return `<div class="meet-card"><div class="meet-card-inner"><div class="meet-card-top"><div>
-      <div class="meet-card-title">${Utils.escapeHtml(meeting.title)}</div><div class="meet-card-meta" style="margin-top:4px">
-      <span><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(meeting.meeting_date)}</span>
-      ${meeting.meeting_time ? `<span><i class="fa-regular fa-clock"></i> ${meeting.meeting_time}</span>` : ''}
-      <span><i class="fa-solid fa-users"></i> ${meeting.type === 'diretoria' ? 'Diretoria' : 'Geral'}</span>
-      <span style="color:${color}">${status}</span></div></div>
-      ${isManager ? `<div style="display:flex;gap:6px">${meeting.status === 'agendada' ? `<button class="btn btn-ghost btn-sm general-conclude" data-id="${meeting.id}" title="Concluir" style="color:#10b981"><i class="fa-solid fa-circle-check"></i></button>` : ''}<button class="btn btn-ghost btn-sm general-delete" data-id="${meeting.id}" title="Excluir" style="color:var(--red-bright)"><i class="fa-solid fa-trash"></i></button></div>` : ''}
-    </div>${meeting.description ? `<div class="meet-card-desc">${Utils.escapeHtml(meeting.description)}</div>` : ''}</div></div>`;
+  function updateCounters() {
+    const counts = {
+      proximas: state.meetings.filter(isUpcoming).length,
+      concluidas: state.meetings.filter(m => m.status === 'concluida').length,
+      atas: state.minutes.length,
+      pendentes: state.requests.filter(r => r.status === 'pendente').length,
+    };
+    Object.entries(counts).forEach(([key, value]) => {
+      content.querySelectorAll(`[data-stat="${key}"]`).forEach(el => { el.textContent = value; });
+      content.querySelectorAll(`[data-count="${key}"]`).forEach(el => { el.textContent = value ? value : ''; });
+    });
   }
 
-  function personalCard(meeting) {
-    const participants = meeting.participants || [];
-    const names = participants.map(item => item.profile?.name).filter(Boolean);
-    const status = meeting.status === 'concluida' ? ['Concluída', 'meet-badge-approved'] : meeting.status === 'cancelada' ? ['Cancelada', 'meet-badge-refused'] : ['Agendada', 'meet-badge-personal'];
-    return `<div class="meet-card" style="border-color:rgba(201,168,76,.18)"><div class="meet-card-inner"><div class="meet-card-top"><div style="flex:1;min-width:0">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div class="meet-card-title">Reunião com a Diretoria</div><span class="meet-badge ${status[1]}">${status[0]}</span></div>
-      <div class="meet-card-meta"><span><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(meeting.meeting_date)}</span><span><i class="fa-regular fa-clock"></i> ${meeting.meeting_time || '—'}</span><span><i class="fa-solid fa-users"></i> ${names.length} participante${names.length === 1 ? '' : 's'}</span></div>
-      ${names.length ? `<div class="meet-card-meta" style="margin-top:7px"><span title="${Utils.escapeHtml(names.join(', '))}"><i class="fa-solid fa-user-group"></i> ${Utils.escapeHtml(names.join(', '))}</span></div>` : ''}
-    </div>${isManager ? `<div style="display:flex;gap:6px">${meeting.status === 'agendada' ? `<button class="btn btn-ghost btn-sm add-participant" data-id="${meeting.id}" title="Adicionar membros" style="color:var(--gold)"><i class="fa-solid fa-user-plus"></i></button><button class="btn btn-ghost btn-sm scheduled-conclude" data-id="${meeting.id}" title="Concluir" style="color:#10b981"><i class="fa-solid fa-circle-check"></i></button><button class="btn btn-ghost btn-sm scheduled-cancel" data-id="${meeting.id}" title="Cancelar" style="color:#f59e0b"><i class="fa-solid fa-ban"></i></button>` : ''}<button class="btn btn-ghost btn-sm scheduled-delete" data-id="${meeting.id}" title="Excluir" style="color:var(--red-bright)"><i class="fa-solid fa-trash"></i></button></div>` : ''}</div>
-      ${meeting.description ? `<div class="meet-card-desc">${Utils.escapeHtml(meeting.description)}</div>` : ''}</div></div>`;
+  /* ── Renderização ────────────────────────────────────── */
+  function renderTab() {
+    const tab = document.getElementById('rnTab');
+    if (state.tab === 'proximas') tab.innerHTML = renderUpcoming();
+    if (state.tab === 'historico') tab.innerHTML = renderHistory();
+    if (state.tab === 'atas') tab.innerHTML = renderMinutes();
+    if (state.tab === 'solicitacoes') tab.innerHTML = renderRequests();
   }
 
-  function bindMeetingActions(tab, meetings) {
-    tab.querySelectorAll('.general-conclude').forEach(btn => btn.addEventListener('click', () => updateGeneral(btn.dataset.id, 'realizada')));
-    tab.querySelectorAll('.general-delete').forEach(btn => btn.addEventListener('click', () => deleteRow('meetings', btn.dataset.id, 'Excluir esta reunião?')));
-    tab.querySelectorAll('.scheduled-conclude').forEach(btn => btn.addEventListener('click', () => updateScheduled(btn.dataset.id, 'concluida')));
-    tab.querySelectorAll('.scheduled-cancel').forEach(btn => btn.addEventListener('click', async () => { if (await MSYConfirm.show('Cancelar esta reunião?', { title: 'Cancelar reunião', type: 'warn' })) updateScheduled(btn.dataset.id, 'cancelada'); }));
-    tab.querySelectorAll('.scheduled-delete').forEach(btn => btn.addEventListener('click', () => deleteRow('scheduled_meetings', btn.dataset.id, 'Excluir esta reunião?')));
-    tab.querySelectorAll('.add-participant').forEach(btn => btn.addEventListener('click', () => openParticipantModal(meetings.find(item => item.id === btn.dataset.id))));
+  function renderUpcoming() {
+    const upcoming = state.meetings.filter(isUpcoming)
+      .sort((a, b) => (a.date + shortTime(a.time)).localeCompare(b.date + shortTime(b.time)));
+    if (!upcoming.length) {
+      return emptyState('fa-calendar-xmark', isManager
+        ? 'Nenhuma reunião marcada. Clique em "Nova Reunião" para convocar os membros.'
+        : 'Você não tem reuniões marcadas no momento.');
+    }
+    const thisWeek = upcoming.filter(m => daysUntil(m.date) <= 7);
+    const later = upcoming.filter(m => daysUntil(m.date) > 7);
+    return `${thisWeek.length ? sectionLabel('fa-bolt', 'Nos próximos 7 dias') + thisWeek.map(meetingCard).join('') : ''}
+      ${later.length ? sectionLabel('fa-calendar-days', 'Mais adiante') + later.map(meetingCard).join('') : ''}`;
   }
 
-  async function updateGeneral(id, status) {
-    const { error } = await db.from('meetings').update({ status }).eq('id', id);
-    if (error) return Utils.showToast('Erro ao atualizar reunião.', 'error');
-    Utils.showToast('Reunião atualizada.'); loadMeetings();
-  }
-  async function updateScheduled(id, status) {
-    const meeting = await getMeeting(id);
-    const { error } = await db.from('scheduled_meetings').update({ status }).eq('id', id);
-    if (error) return Utils.showToast('Erro ao atualizar reunião.', 'error');
-    await notifyParticipants(id, (meeting?.participants || []).map(item => item.user_id), status === 'concluida' ? 'Sua reunião com a Diretoria foi concluída.' : 'Sua reunião com a Diretoria foi cancelada.', status === 'concluida' ? '✅' : '🚫');
-    Utils.showToast(status === 'concluida' ? 'Reunião concluída.' : 'Reunião cancelada.'); loadMeetings();
-  }
-  async function deleteRow(table, id, question) {
-    if (!(await MSYConfirm.show(question, { title: 'Excluir reunião' }))) return;
-    const { error } = await db.from(table).delete().eq('id', id);
-    if (error) return Utils.showToast('Erro ao excluir.', 'error');
-    Utils.showToast('Excluída.'); loadMeetings();
-  }
-  async function getMeeting(id) {
-    const { data } = await db.from('scheduled_meetings').select('id,participants:scheduled_meeting_participants(user_id)').eq('id', id).single();
-    return data;
+  function renderHistory() {
+    const past = state.meetings.filter(m => !isUpcoming(m))
+      .sort((a, b) => (b.date + shortTime(b.time)).localeCompare(a.date + shortTime(a.time)));
+    if (!past.length) return emptyState('fa-clock-rotate-left', 'Nenhuma reunião no histórico ainda.');
+    const groups = new Map();
+    past.forEach(meeting => {
+      const label = toDate(meeting.date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(meeting);
+    });
+    return [...groups.entries()].map(([label, items]) => sectionLabel('fa-calendar', label, true) + items.map(meetingCard).join('')).join('');
   }
 
-  async function loadRequests() {
-    const tab = document.getElementById('meetTab'); tab.innerHTML = loadingMarkup();
+  function meetingCard(meeting) {
+    const date = toDate(meeting.date);
+    const diff = daysUntil(meeting.date);
+    const upcoming = isUpcoming(meeting);
+    const statusLabel = { agendada: 'Agendada', concluida: 'Concluída', cancelada: 'Cancelada' }[meeting.status];
+    const soon = upcoming ? (diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : diff <= 7 ? `Em ${diff} dias` : '') : '';
+    const pastPending = meeting.status === 'agendada' && !upcoming;
+
+    const people = meeting.everyone
+      ? `<div class="rn-people"><span class="rn-chip rn-chip-muted"><i class="fa-solid fa-users"></i> Todos os membros</span></div>`
+      : `<div class="rn-people">
+          <div class="rn-avatars">${meeting.participants.slice(0, 6).map(avatar).join('')}${meeting.participants.length > 6 ? `<span class="rn-avatar rn-avatar-more">+${meeting.participants.length - 6}</span>` : ''}</div>
+          <span class="rn-people-names">${esc(meeting.participants.map(p => p.name).join(', ') || 'Sem convidados')}</span>
+        </div>`;
+
+    let ataButton = '';
+    if (meeting.minute) ataButton = `<button class="rn-ata-btn is-ready" data-act="view-ata" data-id="${meeting.id}"><i class="fa-solid fa-scroll"></i> Ver ata</button>`;
+    else if (isManager && meeting.source === 'scheduled' && meeting.status !== 'cancelada') ataButton = `<button class="rn-ata-btn" data-act="write-ata" data-id="${meeting.id}"><i class="fa-solid fa-feather-pointed"></i> Escrever ata</button>`;
+
+    let actions = '';
+    if (isManager) {
+      const open = meeting.status === 'agendada';
+      actions = `<div class="rn-actions">
+        ${open && meeting.source === 'scheduled' ? `<button class="rn-icon-btn" data-act="add" data-id="${meeting.id}" title="Convidar mais membros"><i class="fa-solid fa-user-plus"></i></button>` : ''}
+        ${open ? `<button class="rn-icon-btn is-success" data-act="conclude" data-id="${meeting.id}" data-source="${meeting.source}" title="Marcar como concluída"><i class="fa-solid fa-circle-check"></i></button>` : ''}
+        ${open && meeting.source === 'scheduled' ? `<button class="rn-icon-btn is-warn" data-act="cancel" data-id="${meeting.id}" title="Cancelar reunião"><i class="fa-solid fa-ban"></i></button>` : ''}
+        <button class="rn-icon-btn is-danger" data-act="delete" data-id="${meeting.id}" data-source="${meeting.source}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+      </div>`;
+    }
+
+    const cls = ['rn-card', 'card-enter', `is-${meeting.status}`, upcoming && diff === 0 ? 'is-today' : ''].filter(Boolean).join(' ');
+    return `<article class="${cls}">
+      <div class="rn-date" aria-hidden="true">
+        <span class="rn-date-wd">${esc(date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''))}</span>
+        <span class="rn-date-day">${date.getDate()}</span>
+        <span class="rn-date-mon">${esc(date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''))}</span>
+      </div>
+      <div class="rn-card-body">
+        <div class="rn-card-head">
+          <div style="min-width:0">
+            <div class="rn-chips">
+              <span class="rn-chip rn-chip-${meeting.status}">${statusLabel}</span>
+              ${soon ? `<span class="rn-chip rn-chip-soon"><i class="fa-solid fa-bolt"></i> ${soon}</span>` : ''}
+              ${pastPending ? '<span class="rn-chip rn-chip-muted">Aguardando conclusão</span>' : ''}
+            </div>
+            <h3 class="rn-card-title">${esc(meeting.title)}</h3>
+            <div class="rn-meta">
+              <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(meeting.date))}</span>
+              ${meeting.time ? `<span><i class="fa-regular fa-clock"></i>${esc(shortTime(meeting.time))}</span>` : ''}
+              ${meeting.everyone ? '' : `<span><i class="fa-solid fa-user-group"></i>${meeting.participants.length} convidado${meeting.participants.length === 1 ? '' : 's'}</span>`}
+            </div>
+          </div>
+          ${actions}
+        </div>
+        ${meeting.description ? `<div class="rn-pauta"><span class="rn-pauta-label">Pauta</span>${esc(meeting.description)}</div>` : ''}
+        <div class="rn-card-foot">${people}${ataButton}</div>
+      </div>
+    </article>`;
+  }
+
+  function renderMinutes() {
+    const meetingTitle = new Map(state.meetings.filter(m => m.source === 'scheduled').map(m => [m.id, m.title]));
+    const header = isManager ? `<div style="margin-bottom:16px"><button class="btn btn-primary" data-act="new-ata"><i class="fa-solid fa-plus"></i> Nova Ata</button></div>` : '';
+    if (!state.minutes.length) return header + emptyState('fa-scroll', 'Nenhuma ata disponível ainda.');
+    return header + state.minutes.map(minute => `<div class="rn-row card-enter">
+      <div class="rn-row-icon"><i class="fa-solid fa-scroll"></i></div>
+      <div class="rn-row-body">
+        <div class="rn-row-title">${esc(minute.title)}</div>
+        <div class="rn-meta">
+          <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(minute.meeting_date))}</span>
+          ${minute.scheduled_meeting_id && meetingTitle.has(minute.scheduled_meeting_id) ? `<span><i class="fa-solid fa-link"></i>${esc(meetingTitle.get(minute.scheduled_meeting_id))}</span>` : ''}
+        </div>
+      </div>
+      <div class="rn-row-actions">
+        <button class="btn btn-outline btn-sm" data-act="open-minute" data-id="${minute.id}"><i class="fa-solid fa-eye"></i> Ler</button>
+        ${isManager ? `<button class="rn-icon-btn" data-act="minute-access" data-id="${minute.id}" title="Quem pode ler"><i class="fa-solid fa-user-shield"></i></button>
+        <button class="rn-icon-btn is-danger" data-act="minute-delete" data-id="${minute.id}" title="Excluir ata"><i class="fa-solid fa-trash"></i></button>` : ''}
+      </div>
+    </div>`).join('');
+  }
+
+  function renderRequests() {
+    const memberName = id => state.members?.find(m => m.id === id)?.name || 'Membro';
+    const pending = state.requests.filter(r => r.status === 'pendente');
+    const resolved = state.requests.filter(r => r.status !== 'pendente');
+    const row = (request, withActions) => `<div class="rn-row card-enter">
+      <div class="rn-row-icon"><i class="fa-solid fa-handshake"></i></div>
+      <div class="rn-row-body">
+        <div class="rn-chips"><span class="rn-chip rn-chip-${esc(request.status)}">${esc(request.status)}</span></div>
+        <div class="rn-row-title">${esc(request.motivo)}</div>
+        <div class="rn-meta">
+          <span><i class="fa-solid fa-user"></i>${esc(memberName(request.user_id))}</span>
+          <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(String(request.created_at).split('T')[0]))}</span>
+          ${request.data_sugerida ? `<span><i class="fa-regular fa-clock"></i>Sugere: ${esc(request.data_sugerida)}</span>` : ''}
+        </div>
+        ${request.descricao ? `<div class="rn-row-text">${esc(request.descricao)}</div>` : ''}
+      </div>
+      ${withActions ? `<div class="rn-row-actions">
+        <button class="btn btn-gold btn-sm" data-act="accept-request" data-id="${request.id}"><i class="fa-solid fa-calendar-plus"></i> Aceitar e marcar</button>
+        <button class="btn btn-ghost btn-sm" data-act="refuse-request" data-id="${request.id}"><i class="fa-solid fa-xmark"></i> Recusar</button>
+      </div>` : ''}
+    </div>`;
+    return (pending.length ? sectionLabel('fa-inbox', `Aguardando resposta (${pending.length})`) + pending.map(r => row(r, true)).join('') : emptyState('fa-inbox', 'Nenhuma solicitação pendente.'))
+      + (resolved.length ? sectionLabel('fa-check-double', 'Respondidas', true) + resolved.map(r => row(r, false)).join('') : '');
+  }
+
+  /* ── Ações nos cards ─────────────────────────────────── */
+  document.getElementById('rnTab').addEventListener('click', async event => {
+    const button = event.target.closest('[data-act]');
+    if (!button) return;
+    const { act, id, source } = button.dataset;
+    const meeting = state.meetings.find(m => m.id === id && (!source || m.source === source));
     try {
-      const { data, error } = await db.from('meeting_requests').select('*').order('created_at', { ascending: false });
+      if (act === 'add') await openParticipantModal(meeting);
+      if (act === 'conclude') await setStatus(meeting, 'concluida');
+      if (act === 'cancel' && await MSYConfirm.show('Os convidados serão avisados do cancelamento.', { title: 'Cancelar reunião', type: 'warn' })) await setStatus(meeting, 'cancelada');
+      if (act === 'delete') await deleteMeeting(meeting);
+      if (act === 'write-ata') await openMinuteModal(meeting);
+      if (act === 'view-ata') openMinuteView(meeting.minute);
+      if (act === 'new-ata') await openMinuteModal(null);
+      if (act === 'open-minute') openMinuteView(state.minutes.find(m => m.id === id));
+      if (act === 'minute-access') await openMinuteAccess(id);
+      if (act === 'minute-delete') await deleteMinute(id);
+      if (act === 'accept-request') await acceptRequest(id);
+      if (act === 'refuse-request') await refuseRequest(id);
+    } catch (error) {
+      console.error('[MSY][reunioes] Ação falhou:', act, error);
+      Utils.showToast('Não foi possível concluir a ação. Tente novamente.', 'error');
+    }
+  });
+
+  async function setStatus(meeting, status) {
+    if (!meeting) return;
+    if (meeting.source === 'legacy') {
+      const { error } = await db.from('meetings').update({ status: status === 'concluida' ? 'realizada' : status }).eq('id', meeting.id);
       if (error) throw error;
-      const members = await activeMembers(); const map = Object.fromEntries(members.map(member => [member.id, member]));
-      const pending = (data || []).filter(item => item.status === 'pendente'); const resolved = (data || []).filter(item => item.status !== 'pendente');
-      const card = (request, actions) => `<div class="meet-req-card"><div style="display:flex;justify-content:space-between;gap:10px"><div><div style="font-weight:600;color:var(--text-1)">${Utils.escapeHtml(map[request.user_id]?.name || 'Membro')}</div><div style="font-size:.72rem;color:var(--text-3)">${Utils.formatDate(request.created_at.split('T')[0])}</div></div><span class="meet-badge ${request.status === 'aprovado' ? 'meet-badge-approved' : request.status === 'recusado' ? 'meet-badge-refused' : 'meet-badge-pending'}">${request.status}</span></div><div style="font-weight:600;margin:10px 0 6px">${Utils.escapeHtml(request.motivo)}</div>${request.descricao ? `<div style="font-size:.8rem;color:var(--text-2)">${Utils.escapeHtml(request.descricao)}</div>` : ''}${request.data_sugerida ? `<div class="meet-card-meta" style="margin-top:8px">Sugestão: ${Utils.escapeHtml(request.data_sugerida)}</div>` : ''}${actions ? `<div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm req-schedule" data-id="${request.id}" data-user="${request.user_id}" data-motivo="${Utils.escapeHtml(request.motivo)}"><i class="fa-solid fa-calendar-plus"></i> Aceitar e agendar</button><button class="btn btn-sm req-refuse" data-id="${request.id}" style="color:#ef4444"><i class="fa-solid fa-xmark"></i> Recusar</button></div>` : ''}</div>`;
-      tab.innerHTML = `${pending.length ? section(`Solicitações pendentes (${pending.length})`, pending.map(item => card(item, true)).join(''), 'fa-inbox') : empty('Nenhuma solicitação pendente.')}${resolved.length ? section('Resolvidas', resolved.map(item => card(item, false)).join(''), 'fa-check-double', true) : ''}`;
-      tab.querySelectorAll('.req-schedule').forEach(btn => btn.addEventListener('click', () => openScheduleModal({ requestId: btn.dataset.id, userId: btn.dataset.user, description: btn.dataset.motivo })));
-      tab.querySelectorAll('.req-refuse').forEach(btn => btn.addEventListener('click', async () => { const { error } = await db.from('meeting_requests').update({ status: 'recusado' }).eq('id', btn.dataset.id); if (error) return Utils.showToast('Erro ao recusar.', 'error'); Utils.showToast('Solicitação recusada.'); loadRequests(); }));
-    } catch (error) { console.error(error); tab.innerHTML = empty('Erro ao carregar solicitações.'); }
+    } else {
+      const { error } = await db.from('scheduled_meetings').update({ status }).eq('id', meeting.id);
+      if (error) throw error;
+      await notifyParticipants(meeting.id, meeting.participants.map(p => p.id),
+        status === 'concluida' ? `A reunião "${meeting.title}" foi concluída.` : `A reunião "${meeting.title}" foi cancelada.`,
+        status === 'concluida' ? '✅' : '🚫');
+    }
+    Utils.showToast(status === 'concluida' ? 'Reunião concluída.' : 'Reunião cancelada.');
+    await loadAll();
   }
 
-  function bindRequestModal() {
-    const modal = document.getElementById('solicitarModal'); const close = () => modal.classList.remove('open');
-    document.getElementById('solicitarReunBtn').onclick = () => { ['sol-motivo', 'sol-desc', 'sol-data'].forEach(id => document.getElementById(id).value = ''); modal.classList.add('open'); };
-    ['solModalClose', 'solModalCancel'].forEach(id => document.getElementById(id).onclick = close);
-    document.getElementById('solModalSave').onclick = async () => { const motivo = document.getElementById('sol-motivo').value.trim(); if (!motivo) return Utils.showToast('Informe o motivo.', 'error'); const { error } = await db.from('meeting_requests').insert({ user_id: profile.id, motivo, descricao: document.getElementById('sol-desc').value.trim() || null, data_sugerida: document.getElementById('sol-data').value.trim() || null }); if (error) return Utils.showToast('Erro ao enviar.', 'error'); close(); Utils.showToast('Solicitação enviada.'); };
+  async function deleteMeeting(meeting) {
+    if (!meeting) return;
+    if (!(await MSYConfirm.show(`Excluir "${meeting.title}"? Essa ação não pode ser desfeita.`, { title: 'Excluir reunião' }))) return;
+    const { error } = await db.from(meeting.source === 'legacy' ? 'meetings' : 'scheduled_meetings').delete().eq('id', meeting.id);
+    if (error) throw error;
+    Utils.showToast('Reunião excluída.');
+    await loadAll();
   }
 
-  function bindScheduleModal() {
-    const modal = document.getElementById('agendarModal');
-    ['agendarClose', 'agendarCancel'].forEach(id => document.getElementById(id).onclick = () => modal.classList.remove('open'));
-    document.getElementById('agendarSave').onclick = saveScheduledMeeting;
-    document.getElementById('newMeetSave').onclick = async () => { const title = document.getElementById('nm-title').value.trim(); const meeting_date = document.getElementById('nm-date').value; if (!title || !meeting_date) return Utils.showToast('Preencha título e data.', 'error'); const { error } = await db.from('meetings').insert({ title, meeting_date, meeting_time: document.getElementById('nm-time').value || null, type: document.getElementById('nm-type').value, description: document.getElementById('nm-desc').value.trim() || null, status: 'agendada', created_by: profile.id }); if (error) return Utils.showToast('Erro ao criar.', 'error'); document.getElementById('newMeetModal').classList.remove('open'); Utils.showToast('Reunião criada.'); loadMeetings(); };
+  async function refuseRequest(id) {
+    const { error } = await db.from('meeting_requests').update({ status: 'recusado' }).eq('id', id);
+    if (error) throw error;
+    Utils.showToast('Solicitação recusada.');
+    await loadAll();
   }
 
-  async function openScheduleModal(prefill = {}) {
-    const members = await activeMembers(); const select = document.getElementById('ag-member');
-    select.innerHTML = `<option value="">Selecionar membro...</option>` + members.map(member => `<option value="${member.id}" ${member.id === prefill.userId ? 'selected' : ''}>${Utils.escapeHtml(member.name)}</option>`).join('');
-    document.getElementById('ag-request-id').value = prefill.requestId || '';
-    document.getElementById('ag-request-member').textContent = prefill.userId
-      ? `Solicitante: ${members.find(member => member.id === prefill.userId)?.name || 'Membro'}`
-      : '';
-    document.getElementById('ag-member-group').style.display = prefill.userId ? 'none' : '';
-    document.getElementById('ag-description-group').style.display = prefill.userId ? 'none' : '';
-    document.getElementById('ag-date').value = ''; document.getElementById('ag-time').value = '19:00'; document.getElementById('ag-desc').value = prefill.description || '';
-    document.getElementById('agendarModal').classList.add('open');
+  async function acceptRequest(id) {
+    const request = state.requests.find(r => r.id === id);
+    if (!request) return;
+    await openMeetingModal({
+      requestId: request.id,
+      title: request.motivo,
+      description: request.descricao || request.motivo,
+      selected: [request.user_id],
+    });
   }
 
-  async function saveScheduledMeeting() {
-    const memberId = document.getElementById('ag-member').value;
-    const ids = memberId ? [memberId] : [];
-    const meeting_date = document.getElementById('ag-date').value; const meeting_time = document.getElementById('ag-time').value; const requestId = document.getElementById('ag-request-id').value || null;
-    if (!ids.length || !meeting_date || !meeting_time) return Utils.showToast('Selecione membros, data e horário.', 'error');
-    const { data: meeting, error } = await db.from('scheduled_meetings').insert({ created_by: profile.id, assigned_to: ids[0], meeting_date, meeting_time, description: document.getElementById('ag-desc').value.trim() || null, status: 'agendada', meeting_request_id: requestId }).select().single();
-    if (error) return Utils.showToast(error.message || 'Erro ao agendar.', 'error');
-    const { error: participantError } = await db.from('scheduled_meeting_participants').insert(ids.map(user_id => ({ meeting_id: meeting.id, user_id, added_by: profile.id })));
-    if (participantError) { await db.from('scheduled_meetings').delete().eq('id', meeting.id); return Utils.showToast('Erro ao adicionar participantes.', 'error'); }
-    if (requestId) { const { error: requestError } = await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', requestId); if (requestError) console.warn(requestError); }
-    await notifyParticipants(meeting.id, ids, `Sua reunião com a Diretoria foi agendada para ${Utils.formatDate(meeting_date)} às ${meeting_time}.`);
-    document.getElementById('agendarModal').classList.remove('open'); Utils.showToast('Reunião agendada.'); activeTab = 'reunioes'; content.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item.dataset.tab === 'reunioes')); loadMeetings();
+  /* ── Seletor de membros ──────────────────────────────── */
+  function mountPicker(host, members, selectedIds = []) {
+    const selected = new Set(selectedIds);
+    host.innerHTML = `
+      <div class="rn-picker-tools">
+        <div class="rn-search"><i class="fa-solid fa-magnifying-glass"></i><input class="form-input" type="search" placeholder="Buscar membro..." data-pick-search></div>
+        <button type="button" class="rn-quick" data-pick="all">Todos</button>
+        <button type="button" class="rn-quick" data-pick="diretoria">Diretoria</button>
+        <button type="button" class="rn-quick" data-pick="none">Limpar</button>
+      </div>
+      <div class="rn-picker-count" data-pick-count></div>
+      <div class="rn-picker-grid">${members.map(member => `
+        <button type="button" class="rn-pick" data-id="${member.id}" data-name="${esc((member.name || '').toLowerCase())}" aria-pressed="${selected.has(member.id)}">
+          ${avatar(member)}<span class="rn-pick-name">${esc(member.name)}</span><i class="fa-solid fa-circle-check rn-pick-check"></i>
+        </button>`).join('') || '<div class="rn-hint">Todos os membros ativos já foram convidados.</div>'}
+      </div>`;
+
+    const buttons = [...host.querySelectorAll('.rn-pick')];
+    const refresh = () => {
+      buttons.forEach(btn => btn.setAttribute('aria-pressed', String(selected.has(btn.dataset.id))));
+      host.querySelector('[data-pick-count]').innerHTML = `<strong>${selected.size}</strong> selecionado${selected.size === 1 ? '' : 's'}`;
+    };
+    buttons.forEach(btn => btn.addEventListener('click', () => {
+      selected.has(btn.dataset.id) ? selected.delete(btn.dataset.id) : selected.add(btn.dataset.id);
+      refresh();
+    }));
+    host.querySelector('[data-pick-search]').addEventListener('input', event => {
+      const term = event.target.value.trim().toLowerCase();
+      buttons.forEach(btn => { btn.hidden = Boolean(term) && !btn.dataset.name.includes(term); });
+    });
+    host.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
+      if (btn.dataset.pick === 'none') selected.clear();
+      if (btn.dataset.pick === 'all') buttons.filter(b => !b.hidden).forEach(b => selected.add(b.dataset.id));
+      if (btn.dataset.pick === 'diretoria') members.filter(m => m.tier === 'diretoria').forEach(m => selected.add(m.id));
+      refresh();
+    }));
+    refresh();
+    return () => [...selected];
   }
+
+  const openModal = id => document.getElementById(id).classList.add('open');
+  const closeModal = id => document.getElementById(id).classList.remove('open');
+  document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.closeModal)));
+
+  /* ── Nova reunião ────────────────────────────────────── */
+  let getMeetingGuests = () => [];
+  let meetingRequestId = null;
+
+  async function openMeetingModal(prefill = {}) {
+    const members = await activeMembers();
+    meetingRequestId = prefill.requestId || null;
+    document.getElementById('rn-meet-title').value = prefill.title || '';
+    document.getElementById('rn-meet-date').value = '';
+    document.getElementById('rn-meet-time').value = '19:00';
+    document.getElementById('rn-meet-desc').value = prefill.description || '';
+    getMeetingGuests = mountPicker(document.getElementById('rn-meet-picker'), members, prefill.selected || []);
+    openModal('rnMeetingModal');
+  }
+
+  document.getElementById('rnMeetingSave')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const title = document.getElementById('rn-meet-title').value.trim();
+    const meeting_date = document.getElementById('rn-meet-date').value;
+    const meeting_time = document.getElementById('rn-meet-time').value;
+    const description = document.getElementById('rn-meet-desc').value.trim() || null;
+    const ids = getMeetingGuests();
+    if (!title || !meeting_date || !meeting_time) return Utils.showToast('Preencha título, data e horário.', 'error');
+    if (!ids.length) return Utils.showToast('Escolha pelo menos um convidado.', 'error');
+
+    button.disabled = true;
+    try {
+      const { data: meeting, error } = await db.from('scheduled_meetings').insert({
+        created_by: profile.id, assigned_to: ids[0], title, meeting_date, meeting_time,
+        description, status: 'agendada', meeting_request_id: meetingRequestId,
+      }).select('id').single();
+      if (error) throw error;
+
+      const { error: participantError } = await db.from('scheduled_meeting_participants')
+        .insert(ids.map(user_id => ({ meeting_id: meeting.id, user_id, added_by: profile.id })));
+      if (participantError) {
+        await db.from('scheduled_meetings').delete().eq('id', meeting.id);
+        throw participantError;
+      }
+      if (meetingRequestId) {
+        const { error: requestError } = await db.from('meeting_requests').update({ status: 'aprovado' }).eq('id', meetingRequestId);
+        if (requestError) console.warn('[MSY][reunioes] Falha ao aprovar solicitação:', requestError);
+      }
+      await notifyParticipants(meeting.id, ids, `Você foi convocado para a reunião "${title}" em ${Utils.formatDate(meeting_date)} às ${meeting_time}.`);
+      closeModal('rnMeetingModal');
+      Utils.showToast(`Reunião marcada com ${ids.length} convidado${ids.length === 1 ? '' : 's'}.`);
+      switchTab('proximas');
+      await loadAll();
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao marcar reunião:', error);
+      Utils.showToast('Erro ao marcar reunião. Tente novamente.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  /* ── Convidar mais membros ───────────────────────────── */
+  let getExtraGuests = () => [];
+  let extraMeeting = null;
 
   async function openParticipantModal(meeting) {
-    if (!meeting) return; const members = await activeMembers(); const existing = new Set((meeting.participants || []).map(item => item.user_id));
-    const select = document.getElementById('participant-members'); select.innerHTML = `<option value="">Selecionar membro...</option>` + members.filter(member => !existing.has(member.id)).map(member => `<option value="${member.id}">${Utils.escapeHtml(member.name)}</option>`).join('');
-    document.getElementById('participant-meeting-id').value = meeting.id; document.getElementById('participantModal').classList.add('open');
+    if (!meeting) return;
+    extraMeeting = meeting;
+    const existing = new Set(meeting.participants.map(p => p.id));
+    const members = (await activeMembers()).filter(m => !existing.has(m.id));
+    document.getElementById('rnParticipantSubtitle').textContent = meeting.title;
+    getExtraGuests = mountPicker(document.getElementById('rn-participant-picker'), members);
+    openModal('rnParticipantModal');
   }
-  document.getElementById('participantSave')?.addEventListener('click', async () => {
-    const memberId = document.getElementById('participant-members').value; const ids = memberId ? [memberId] : []; const meetingId = document.getElementById('participant-meeting-id').value;
-    if (!ids.length) return Utils.showToast('Selecione pelo menos um membro.', 'error');
-    const { error } = await db.from('scheduled_meeting_participants').insert(ids.map(user_id => ({ meeting_id: meetingId, user_id, added_by: profile.id })));
-    if (error) return Utils.showToast('Erro ao adicionar membros.', 'error'); await notifyParticipants(meetingId, ids, 'Você foi incluído em uma reunião com a Diretoria.'); document.getElementById('participantModal').classList.remove('open'); Utils.showToast('Participantes adicionados.'); loadMeetings();
-  });
-  ['participantClose', 'participantCancel'].forEach(id => document.getElementById(id)?.addEventListener('click', () => document.getElementById('participantModal').classList.remove('open')));
 
-  async function loadMinutes() {
-    const tab = document.getElementById('meetTab'); tab.innerHTML = loadingMarkup();
+  document.getElementById('rnParticipantSave')?.addEventListener('click', async () => {
+    const ids = getExtraGuests();
+    if (!extraMeeting || !ids.length) return Utils.showToast('Escolha pelo menos um membro.', 'error');
     try {
-      const { data: minutes, error } = await db.from('meeting_minutes').select('*, creator:created_by(name)').order('meeting_date', { ascending: false }); if (error) throw error;
-      tab.innerHTML = `${isManager ? '<div style="margin-bottom:18px"><button class="btn btn-primary" id="newAtaBtn"><i class="fa-solid fa-plus"></i> Nova Ata</button></div>' : ''}${(minutes || []).length ? (minutes || []).map(minute => `<div class="card card-enter" style="margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-weight:600;color:var(--text-1)">${Utils.escapeHtml(minute.title)}</div><div class="meet-card-meta"><span><i class="fa-regular fa-calendar"></i> ${Utils.formatDate(minute.meeting_date)}</span><span>${minute.type === 'diretoria' ? 'Diretoria' : 'Geral'}</span></div></div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm view-ata" data-id="${minute.id}"><i class="fa-solid fa-eye"></i> Ver</button>${isManager ? `<button class="btn btn-ghost btn-sm manage-ata-access" data-id="${minute.id}" title="Quem pode ver" style="color:var(--gold)"><i class="fa-solid fa-user-shield"></i></button><button class="btn btn-ghost btn-sm delete-ata" data-id="${minute.id}" style="color:var(--red-bright)"><i class="fa-solid fa-trash"></i></button>` : ''}</div></div></div>`).join('') : empty('Nenhuma ata disponível.')}`;
-      tab.querySelector('#newAtaBtn')?.addEventListener('click', () => openMinuteModal());
-      tab.querySelectorAll('.view-ata').forEach(btn => btn.addEventListener('click', () => openMinuteView((minutes || []).find(item => item.id === btn.dataset.id))));
-      tab.querySelectorAll('.delete-ata').forEach(btn => btn.addEventListener('click', () => deleteMinute(btn.dataset.id)));
-      tab.querySelectorAll('.manage-ata-access').forEach(btn => btn.addEventListener('click', () => openMinuteAccess(btn.dataset.id)));
-    } catch (error) { console.error(error); tab.innerHTML = empty('Erro ao carregar atas.'); }
+      const { error } = await db.from('scheduled_meeting_participants')
+        .insert(ids.map(user_id => ({ meeting_id: extraMeeting.id, user_id, added_by: profile.id })));
+      if (error) throw error;
+      await notifyParticipants(extraMeeting.id, ids, `Você foi convocado para a reunião "${extraMeeting.title}" em ${Utils.formatDate(extraMeeting.date)}${extraMeeting.time ? ` às ${shortTime(extraMeeting.time)}` : ''}.`);
+      closeModal('rnParticipantModal');
+      Utils.showToast('Convidados adicionados.');
+      await loadAll();
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao convidar membros:', error);
+      Utils.showToast('Erro ao convidar membros.', 'error');
+    }
+  });
+
+  /* ── Atas ────────────────────────────────────────────── */
+  let getMinuteViewers = () => [];
+  let minuteMeetingId = null;
+
+  async function openMinuteModal(meeting) {
+    const members = await activeMembers();
+    minuteMeetingId = meeting?.source === 'scheduled' ? meeting.id : null;
+    document.getElementById('rnMinuteModalTitle').innerHTML = `<i class="fa-solid fa-feather-pointed"></i> ${meeting ? 'Ata da reunião' : 'Nova ata'}`;
+    document.getElementById('rn-ata-title').value = meeting ? `Ata — ${meeting.title}` : '';
+    document.getElementById('rn-ata-date').value = meeting?.date || todayIso();
+    document.getElementById('rn-ata-content').value = '';
+    getMinuteViewers = mountPicker(document.getElementById('rn-ata-picker'), members, meeting ? meeting.participants.map(p => p.id) : []);
+    openModal('rnMinuteModal');
   }
 
-  async function openMinuteModal() { const members = await activeMembers(); document.getElementById('ata-viewers').innerHTML = members.map(member => `<option value="${member.id}">${Utils.escapeHtml(member.name)}</option>`).join(''); ['ata-title', 'ata-date', 'ata-content'].forEach(id => document.getElementById(id).value = ''); document.getElementById('newAtaModal').classList.add('open'); }
-  document.getElementById('newAtaSave')?.addEventListener('click', async () => { const title = document.getElementById('ata-title').value.trim(); const meeting_date = document.getElementById('ata-date').value; if (!title || !meeting_date) return Utils.showToast('Preencha título e data.', 'error'); const viewers = [...document.getElementById('ata-viewers').selectedOptions].map(option => option.value); const { data: minute, error } = await db.from('meeting_minutes').insert({ title, meeting_date, type: document.getElementById('ata-type').value, content: document.getElementById('ata-content').value.trim() || null, created_by: profile.id }).select().single(); if (error) return Utils.showToast('Erro ao salvar ata.', 'error'); if (viewers.length) { const { error: viewerError } = await db.from('meeting_minute_viewers').insert(viewers.map(user_id => ({ minute_id: minute.id, user_id, added_by: profile.id }))); if (viewerError) return Utils.showToast('Ata salva, mas houve erro ao liberar acessos.', 'error'); } document.getElementById('newAtaModal').classList.remove('open'); Utils.showToast('Ata registrada.'); loadMinutes(); });
-  async function openMinuteAccess(minuteId) { const [members, viewers] = await Promise.all([activeMembers(), db.from('meeting_minute_viewers').select('user_id').eq('minute_id', minuteId)]); if (viewers.error) return Utils.showToast('Erro ao carregar acessos.', 'error'); const selected = new Set((viewers.data || []).map(item => item.user_id)); document.getElementById('access-minute-id').value = minuteId; document.getElementById('ata-access-members').innerHTML = members.map(member => `<option value="${member.id}" ${selected.has(member.id) ? 'selected' : ''}>${Utils.escapeHtml(member.name)}</option>`).join(''); document.getElementById('ataAccessModal').classList.add('open'); }
-  document.getElementById('ataAccessSave')?.addEventListener('click', async () => { const minuteId = document.getElementById('access-minute-id').value; const ids = [...document.getElementById('ata-access-members').selectedOptions].map(option => option.value); const { error: removeError } = await db.from('meeting_minute_viewers').delete().eq('minute_id', minuteId); if (removeError) return Utils.showToast('Erro ao atualizar acessos.', 'error'); if (ids.length) { const { error } = await db.from('meeting_minute_viewers').insert(ids.map(user_id => ({ minute_id: minuteId, user_id, added_by: profile.id }))); if (error) return Utils.showToast('Erro ao salvar acessos.', 'error'); } document.getElementById('ataAccessModal').classList.remove('open'); Utils.showToast('Acessos atualizados.'); });
-  async function deleteMinute(id) { if (!(await MSYConfirm.show('Excluir esta ata?', { title: 'Excluir ata' }))) return; const { error } = await db.from('meeting_minutes').delete().eq('id', id); if (error) return Utils.showToast('Erro ao excluir.', 'error'); Utils.showToast('Ata excluída.'); loadMinutes(); }
-  function openMinuteView(minute) { if (!minute) return; document.getElementById('ataViewTitle').textContent = minute.title; document.getElementById('ataViewBody').innerHTML = `<div class="meet-card-meta" style="margin-bottom:16px"><span>${Utils.formatDate(minute.meeting_date)}</span><span>${minute.type === 'diretoria' ? 'Diretoria' : 'Geral'}</span></div><div style="white-space:pre-wrap;line-height:1.7">${Utils.escapeHtml(minute.content || 'Sem conteúdo registrado.')}</div>`; document.getElementById('ataViewModal').classList.add('open'); }
-  ['newAtaClose', 'newAtaCancel'].forEach(id => document.getElementById(id)?.addEventListener('click', () => document.getElementById('newAtaModal').classList.remove('open')));
-  ['ataViewClose', 'ataViewCancel'].forEach(id => document.getElementById(id)?.addEventListener('click', () => document.getElementById('ataViewModal').classList.remove('open')));
-  ['ataAccessClose', 'ataAccessCancel'].forEach(id => document.getElementById(id)?.addEventListener('click', () => document.getElementById('ataAccessModal').classList.remove('open')));
+  document.getElementById('rnMinuteSave')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const title = document.getElementById('rn-ata-title').value.trim();
+    const meeting_date = document.getElementById('rn-ata-date').value;
+    if (!title || !meeting_date) return Utils.showToast('Preencha título e data.', 'error');
+    const payload = { title, meeting_date, type: 'geral', content: document.getElementById('rn-ata-content').value.trim() || null, created_by: profile.id };
+    if (minuteMeetingId) payload.scheduled_meeting_id = minuteMeetingId;
+    const viewers = getMinuteViewers();
 
-  await loadMeetings();
+    button.disabled = true;
+    try {
+      const { data: minute, error } = await db.from('meeting_minutes').insert(payload).select('id').single();
+      if (error) throw error;
+      if (viewers.length) {
+        const { error: viewerError } = await db.from('meeting_minute_viewers')
+          .insert(viewers.map(user_id => ({ minute_id: minute.id, user_id, added_by: profile.id })));
+        if (viewerError) {
+          console.error('[MSY][reunioes] Erro ao liberar leitores:', viewerError);
+          Utils.showToast('Ata salva, mas houve erro ao liberar os leitores.', 'error');
+        }
+      }
+      closeModal('rnMinuteModal');
+      Utils.showToast('Ata registrada.');
+      await loadAll();
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao salvar ata:', error);
+      Utils.showToast('Erro ao salvar ata.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  function openMinuteView(minute) {
+    if (!minute) return Utils.showToast('Você não tem acesso a esta ata.', 'error');
+    const linked = state.meetings.find(m => m.source === 'scheduled' && m.id === minute.scheduled_meeting_id);
+    document.getElementById('rnViewModalTitle').textContent = minute.title;
+    document.getElementById('rnViewBody').innerHTML = `
+      <div class="rn-view-meta">
+        <span class="rn-chip rn-chip-agendada"><i class="fa-regular fa-calendar"></i> ${esc(Utils.formatDate(minute.meeting_date))}</span>
+        ${linked ? `<span class="rn-chip rn-chip-muted"><i class="fa-solid fa-link"></i> ${esc(linked.title)}</span>` : ''}
+      </div>
+      <div class="rn-view-body">${esc(minute.content || 'Sem conteúdo registrado.')}</div>`;
+    openModal('rnViewModal');
+  }
+
+  let getAccessViewers = () => [];
+  let accessMinuteId = null;
+
+  async function openMinuteAccess(minuteId) {
+    const [members, viewers] = await Promise.all([
+      activeMembers(),
+      db.from('meeting_minute_viewers').select('user_id').eq('minute_id', minuteId),
+    ]);
+    if (viewers.error) throw viewers.error;
+    accessMinuteId = minuteId;
+    getAccessViewers = mountPicker(document.getElementById('rn-access-picker'), members, (viewers.data || []).map(v => v.user_id));
+    openModal('rnAccessModal');
+  }
+
+  document.getElementById('rnAccessSave')?.addEventListener('click', async () => {
+    const ids = getAccessViewers();
+    try {
+      const { error: removeError } = await db.from('meeting_minute_viewers').delete().eq('minute_id', accessMinuteId);
+      if (removeError) throw removeError;
+      if (ids.length) {
+        const { error } = await db.from('meeting_minute_viewers')
+          .insert(ids.map(user_id => ({ minute_id: accessMinuteId, user_id, added_by: profile.id })));
+        if (error) throw error;
+      }
+      closeModal('rnAccessModal');
+      Utils.showToast('Leitores atualizados.');
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao salvar leitores:', error);
+      Utils.showToast('Erro ao salvar leitores.', 'error');
+    }
+  });
+
+  async function deleteMinute(id) {
+    if (!(await MSYConfirm.show('Excluir esta ata?', { title: 'Excluir ata' }))) return;
+    const { error } = await db.from('meeting_minutes').delete().eq('id', id);
+    if (error) throw error;
+    Utils.showToast('Ata excluída.');
+    await loadAll();
+  }
+
+  /* ── Solicitar reunião (todos) ───────────────────────── */
+  function openRequestModal() {
+    ['rn-sol-motivo', 'rn-sol-desc', 'rn-sol-data'].forEach(id => { document.getElementById(id).value = ''; });
+    openModal('rnRequestModal');
+  }
+
+  document.getElementById('rnRequestSave').addEventListener('click', async () => {
+    const motivo = document.getElementById('rn-sol-motivo').value.trim();
+    if (!motivo) return Utils.showToast('Informe o motivo.', 'error');
+    try {
+      const { error } = await db.from('meeting_requests').insert({
+        user_id: profile.id, motivo,
+        descricao: document.getElementById('rn-sol-desc').value.trim() || null,
+        data_sugerida: document.getElementById('rn-sol-data').value.trim() || null,
+      });
+      if (error) throw error;
+      closeModal('rnRequestModal');
+      Utils.showToast('Solicitação enviada à Diretoria.');
+      if (isManager) await loadAll();
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao solicitar reunião:', error);
+      Utils.showToast('Erro ao enviar solicitação.', 'error');
+    }
+  });
+
+  await loadAll();
 }
 
 function _injectMeetingModals(isManager) {
-  ['solicitarModal', 'newMeetModal', 'agendarModal', 'participantModal', 'newAtaModal', 'ataViewModal', 'ataAccessModal'].forEach(id => document.getElementById(id)?.remove());
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="modal-overlay" id="solicitarModal"><div class="modal"><div class="modal-header"><div class="modal-title">Solicitar Reunião</div><button class="modal-close" id="solModalClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Motivo *</label><input class="form-input" id="sol-motivo"></div><div class="form-group"><label class="form-label">Descrição</label><textarea class="form-input form-textarea" id="sol-desc"></textarea></div><div class="form-group"><label class="form-label">Sugestão de data/horário</label><input class="form-input" id="sol-data"></div></div><div class="modal-footer"><button class="btn btn-ghost" id="solModalCancel">Cancelar</button><button class="btn btn-primary" id="solModalSave">Enviar</button></div></div></div>${isManager ? `<div class="modal-overlay" id="newMeetModal"><div class="modal"><div class="modal-header"><div class="modal-title">Nova Reunião</div><button class="modal-close" onclick="document.getElementById('newMeetModal').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="nm-title"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="nm-date"></div><div class="form-group"><label class="form-label">Horário</label><input class="form-input" type="time" id="nm-time" value="19:00"></div></div><div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="nm-type"><option value="geral">Geral</option><option value="diretoria">Diretoria</option></select></div><div class="form-group"><label class="form-label">Pauta</label><textarea class="form-input form-textarea" id="nm-desc"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary" id="newMeetSave">Criar</button></div></div></div><div class="modal-overlay" id="agendarModal"><div class="modal"><div class="modal-header"><div class="modal-title">Agendar Reunião com Membros</div><button class="modal-close" id="agendarClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="ag-request-id"><div class="form-group"><label class="form-label">Participantes *</label><select class="form-input" id="ag-members" multiple size="6"></select><div class="form-hint">Use Ctrl/Cmd para selecionar mais de um membro.</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="ag-date"></div><div class="form-group"><label class="form-label">Horário *</label><input class="form-input" type="time" id="ag-time" value="19:00"></div></div><div class="form-group"><label class="form-label">Pauta</label><textarea class="form-input form-textarea" id="ag-desc"></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" id="agendarCancel">Cancelar</button><button class="btn btn-gold" id="agendarSave">Agendar</button></div></div></div><div class="modal-overlay" id="participantModal"><div class="modal"><div class="modal-header"><div class="modal-title">Adicionar Participantes</div><button class="modal-close" id="participantClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="participant-meeting-id"><div class="form-group"><label class="form-label">Membros</label><select class="form-input" id="participant-members" multiple size="8"></select></div></div><div class="modal-footer"><button class="btn btn-ghost" id="participantCancel">Cancelar</button><button class="btn btn-primary" id="participantSave">Adicionar</button></div></div></div><div class="modal-overlay" id="newAtaModal"><div class="modal"><div class="modal-header"><div class="modal-title">Nova Ata</div><button class="modal-close" id="newAtaClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="ata-title"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="ata-date"></div><div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="ata-type"><option value="geral">Geral</option><option value="diretoria">Diretoria</option></select></div></div><div class="form-group"><label class="form-label">Quem pode ver</label><select class="form-input" id="ata-viewers" multiple size="6"></select><div class="form-hint">Apenas os membros escolhidos, além da gestão, verão a ata.</div></div><div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input form-textarea" id="ata-content"></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" id="newAtaCancel">Cancelar</button><button class="btn btn-primary" id="newAtaSave">Salvar Ata</button></div></div></div><div class="modal-overlay" id="ataAccessModal"><div class="modal"><div class="modal-header"><div class="modal-title">Acesso à Ata</div><button class="modal-close" id="ataAccessClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="access-minute-id"><div class="form-group"><label class="form-label">Membros autorizados</label><select class="form-input" id="ata-access-members" multiple size="9"></select></div></div><div class="modal-footer"><button class="btn btn-ghost" id="ataAccessCancel">Cancelar</button><button class="btn btn-primary" id="ataAccessSave">Salvar acessos</button></div></div></div>` : ''}<div class="modal-overlay" id="ataViewModal"><div class="modal"><div class="modal-header"><div class="modal-title" id="ataViewTitle"></div><button class="modal-close" id="ataViewClose"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="ataViewBody"></div><div class="modal-footer"><button class="btn btn-outline" id="ataViewCancel">Fechar</button></div></div></div>`;
-  [...wrap.children].forEach(element => document.body.appendChild(element));
+  ['rnRequestModal', 'rnMeetingModal', 'rnParticipantModal', 'rnMinuteModal', 'rnViewModal', 'rnAccessModal']
+    .forEach(id => document.getElementById(id)?.remove());
+
+  const modal = (id, title, body, footer, subtitleId = '') => `
+    <div class="modal-overlay" id="${id}">
+      <div class="modal rn-modal">
+        <div class="modal-header">
+          <div><div class="modal-title" id="${id}Title">${title}</div>${subtitleId ? `<div class="rn-hint" id="${subtitleId}" style="margin:4px 0 0"></div>` : ''}</div>
+          <button class="modal-close" data-close-modal="${id}" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">${body}</div>
+        ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+      </div>
+    </div>`;
+  const cancel = id => `<button class="btn btn-ghost" data-close-modal="${id}">Cancelar</button>`;
+
+  let html = modal('rnRequestModal', '<i class="fa-solid fa-handshake"></i> Solicitar Reunião', `
+    <div class="rn-hint">A Diretoria recebe o pedido e marca a reunião com você.</div>
+    <div class="form-group"><label class="form-label">Motivo *</label><input class="form-input" id="rn-sol-motivo" maxlength="140"></div>
+    <div class="form-group"><label class="form-label">Detalhes</label><textarea class="form-input form-textarea" id="rn-sol-desc"></textarea></div>
+    <div class="form-group"><label class="form-label">Sugestão de data/horário</label><input class="form-input" id="rn-sol-data" placeholder="Ex.: sexta à noite"></div>`,
+    `${cancel('rnRequestModal')}<button class="btn btn-primary" id="rnRequestSave">Enviar pedido</button>`);
+
+  html += modal('rnViewModal', '', '<div id="rnViewBody"></div>', '<button class="btn btn-outline" data-close-modal="rnViewModal">Fechar</button>');
+
   if (isManager) {
-    const initialMember = document.getElementById('ag-members');
-    if (initialMember) {
-      initialMember.id = 'ag-member';
-      initialMember.removeAttribute('multiple');
-      initialMember.removeAttribute('size');
-      initialMember.closest('.modal').querySelector('.modal-title').textContent = 'Agendar Reunião';
-      const group = initialMember.closest('.form-group');
-      group.id = 'ag-member-group';
-      group.querySelector('.form-label').textContent = 'Membro inicial *';
-      group.querySelector('.form-hint')?.remove();
-      group.insertAdjacentHTML('afterend', '<div id="ag-request-member" class="meet-card-meta" style="margin:-4px 0 12px"></div>');
-      document.getElementById('ag-desc').closest('.form-group').id = 'ag-description-group';
-    }
-    const extraMember = document.getElementById('participant-members');
-    if (extraMember) {
-      extraMember.removeAttribute('multiple');
-      extraMember.removeAttribute('size');
-      extraMember.closest('.form-group').querySelector('.form-label').textContent = 'Adicionar membro';
-    }
+    html += modal('rnMeetingModal', '<i class="fa-solid fa-calendar-plus"></i> Nova Reunião', `
+      <div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="rn-meet-title" maxlength="140" placeholder="Ex.: Alinhamento do mês"></div>
+      <div class="rn-form-grid">
+        <div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="rn-meet-date"></div>
+        <div class="form-group"><label class="form-label">Horário *</label><input class="form-input" type="time" id="rn-meet-time" value="19:00"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Pauta</label><textarea class="form-input form-textarea" id="rn-meet-desc" placeholder="O que vai ser discutido?"></textarea></div>
+      <div class="rn-modal-section">Convidados *</div>
+      <div class="rn-hint">Só os convidados veem a reunião. Para uma reunião geral, use "Todos".</div>
+      <div id="rn-meet-picker"></div>`,
+      `${cancel('rnMeetingModal')}<button class="btn btn-gold" id="rnMeetingSave"><i class="fa-solid fa-paper-plane"></i> Marcar reunião</button>`);
+
+    html += modal('rnParticipantModal', '<i class="fa-solid fa-user-plus"></i> Convidar mais membros',
+      '<div id="rn-participant-picker"></div>',
+      `${cancel('rnParticipantModal')}<button class="btn btn-primary" id="rnParticipantSave">Convidar</button>`, 'rnParticipantSubtitle');
+
+    html += modal('rnMinuteModal', '<i class="fa-solid fa-feather-pointed"></i> Nova ata', `
+      <div class="rn-form-grid">
+        <div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="rn-ata-title" maxlength="160"></div>
+        <div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="rn-ata-date"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input form-textarea" id="rn-ata-content" rows="8" placeholder="Decisões, responsáveis e próximos passos..."></textarea></div>
+      <div class="rn-modal-section">Quem pode ler</div>
+      <div class="rn-hint">Além da gestão, só os membros marcados leem a ata. Os convidados da reunião já vêm marcados.</div>
+      <div id="rn-ata-picker"></div>`,
+      `${cancel('rnMinuteModal')}<button class="btn btn-primary" id="rnMinuteSave"><i class="fa-solid fa-floppy-disk"></i> Salvar ata</button>`);
+
+    html += modal('rnAccessModal', '<i class="fa-solid fa-user-shield"></i> Quem pode ler a ata',
+      '<div id="rn-access-picker"></div>',
+      `${cancel('rnAccessModal')}<button class="btn btn-primary" id="rnAccessSave">Salvar leitores</button>`);
   }
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  [...wrap.children].forEach(element => document.body.appendChild(element));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

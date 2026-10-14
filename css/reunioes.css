@@ -1,38 +1,439 @@
 /* ============================================================
    MSY PORTAL — REUNIOES.CSS
-   Estilos dos cards e badges de reuniões (meet-*)
-   Extraído de reunioes.js na Fase 2.
+   Reuniões v2: hero, abas, cards com data, convidados e atas (rn-*)
    ============================================================ */
 
-.meet-card {
-  background: var(--black-3); border: 1px solid var(--border-faint);
-  border-radius: var(--radius-lg); margin-bottom: 10px; overflow: hidden;
-  transition: border-color .2s, box-shadow .2s;
+body[data-page="reunioes"] .rn-shell { max-width: 1180px; margin: 0 auto; }
+
+/* ── Hero ───────────────────────────────────────────── */
+body[data-page="reunioes"] .rn-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(201,168,76,.2);
+  border-radius: 14px;
+  padding: 28px 30px;
+  margin-bottom: 18px;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(220,38,38,.16), transparent 55%),
+    radial-gradient(ellipse at 0 100%, rgba(201,168,76,.14), transparent 50%),
+    linear-gradient(160deg, rgba(24,22,28,.98), rgba(10,10,14,.98));
+  box-shadow: 0 24px 70px rgba(0,0,0,.4);
 }
-.meet-card:hover { border-color: rgba(201,168,76,.22); box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-.meet-card-inner { padding: 16px 20px; }
-.meet-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px; }
-.meet-card-title { font-family:'Cinzel',serif; font-size:.95rem; font-weight:700; color:var(--text-1); line-height:1.3; }
-.meet-card-meta { font-size:.74rem; color:var(--text-3); display:flex; gap:14px; flex-wrap:wrap; }
-.meet-card-desc { font-size:.81rem; color:var(--text-2); line-height:1.6; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-faint); }
-.meet-section-label {
-  display:flex; align-items:center; gap:10px;
-  font-size:.62rem; color:var(--gold); text-transform:uppercase;
-  letter-spacing:.14em; font-weight:700; margin:20px 0 12px;
+body[data-page="reunioes"] .rn-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 84px);
+  mask-image: linear-gradient(90deg, #000, transparent 70%);
 }
-.meet-section-label::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border-gold),transparent); }
-.meet-section-label:first-child { margin-top:0; }
-.meet-req-card {
-  background: var(--black-3); border: 1px solid var(--border-faint);
-  border-radius: var(--radius-lg); padding:14px 18px; margin-bottom:10px;
+body[data-page="reunioes"] .rn-hero::after {
+  content: "\f0c0";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  position: absolute;
+  right: -18px;
+  bottom: -46px;
+  font-size: 11rem;
+  color: rgba(201,168,76,.05);
+  pointer-events: none;
 }
-.meet-badge {
-  display:inline-flex; align-items:center; gap:4px;
-  font-size:.62rem; font-weight:700; padding:3px 9px;
-  border-radius:20px; border:1px solid; letter-spacing:.05em; text-transform:uppercase;
-  white-space:nowrap;
+body[data-page="reunioes"] .rn-hero-main {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 22px;
 }
-.meet-badge-pending  { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); color:#f59e0b; }
-.meet-badge-approved { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.3); color:#10b981; }
-.meet-badge-refused  { background:rgba(220,38,38,.1);  border-color:rgba(220,38,38,.3);  color:#ef4444; }
-.meet-badge-personal { background:rgba(201,168,76,.1); border-color:rgba(201,168,76,.3); color:var(--gold); }
+body[data-page="reunioes"] .rn-kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--gold);
+  font-size: .66rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+  margin-bottom: 9px;
+}
+body[data-page="reunioes"] .rn-title {
+  font-family: "Cinzel", serif;
+  color: var(--text-1);
+  font-size: clamp(1.55rem, 3vw, 2.4rem);
+  line-height: 1.05;
+  margin: 0;
+}
+body[data-page="reunioes"] .rn-subtitle {
+  color: var(--text-2);
+  font-size: .88rem;
+  line-height: 1.55;
+  max-width: 560px;
+  margin-top: 9px;
+}
+body[data-page="reunioes"] .rn-hero-cta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+body[data-page="reunioes"] .rn-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(var(--rn-stats, 3), minmax(84px, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+}
+body[data-page="reunioes"] .rn-stat {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(4,4,7,.42);
+  padding: 12px;
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+body[data-page="reunioes"] .rn-stat-value {
+  color: var(--gold);
+  font-family: "Cinzel", serif;
+  font-size: 1.5rem; font-weight: 800; line-height: 1;
+}
+body[data-page="reunioes"] .rn-stat-label {
+  color: var(--text-3);
+  font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  margin-top: 6px;
+}
+body[data-page="reunioes"] .rn-stat-alert .rn-stat-value { color: #f59e0b; }
+
+/* ── Abas ───────────────────────────────────────────── */
+body[data-page="reunioes"] .rn-tabs {
+  display: flex; gap: 10px; align-items: center;
+  overflow-x: auto;
+  padding: 3px 0 18px;
+  scrollbar-width: none;
+}
+body[data-page="reunioes"] .rn-tabs::-webkit-scrollbar { display: none; }
+body[data-page="reunioes"] .rn-tab {
+  min-height: 38px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025));
+  color: var(--text-2);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 15px;
+  cursor: pointer;
+  font-size: .76rem; font-weight: 800; letter-spacing: .04em;
+  transition: transform .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease), color .2s var(--ease);
+}
+body[data-page="reunioes"] .rn-tab:hover { transform: translateY(-1px); border-color: rgba(201,168,76,.35); color: var(--gold); }
+body[data-page="reunioes"] .rn-tab.active {
+  border-color: rgba(220,38,38,.55);
+  background: linear-gradient(135deg, rgba(220,38,38,.24), rgba(201,168,76,.12));
+  color: var(--red-bright);
+  box-shadow: 0 12px 26px rgba(220,38,38,.12);
+}
+body[data-page="reunioes"] .rn-tab-count {
+  background: rgba(201,168,76,.14);
+  border: 1px solid rgba(201,168,76,.25);
+  color: var(--gold);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: .62rem;
+}
+body[data-page="reunioes"] .rn-tab-count.is-alert { background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.35); color: #f59e0b; }
+body[data-page="reunioes"] .rn-tab-count:empty { display: none; }
+
+/* ── Seções ─────────────────────────────────────────── */
+body[data-page="reunioes"] .rn-section-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: .62rem; color: var(--gold);
+  text-transform: uppercase; letter-spacing: .14em; font-weight: 700;
+  margin: 24px 0 12px;
+}
+body[data-page="reunioes"] .rn-section-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border-gold), transparent); }
+body[data-page="reunioes"] .rn-section-label:first-child { margin-top: 0; }
+body[data-page="reunioes"] .rn-section-label.is-muted { color: var(--text-3); }
+
+body[data-page="reunioes"] .rn-empty {
+  border: 1px dashed rgba(201,168,76,.22);
+  border-radius: 14px;
+  padding: 38px 20px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: .85rem;
+  background: rgba(255,255,255,.015);
+}
+body[data-page="reunioes"] .rn-empty i { display: block; font-size: 1.6rem; color: rgba(201,168,76,.45); margin-bottom: 10px; }
+body[data-page="reunioes"] .rn-loading { padding: 40px; text-align: center; color: var(--gold); }
+
+/* ── Card de reunião ────────────────────────────────── */
+body[data-page="reunioes"] .rn-card {
+  position: relative;
+  display: flex;
+  gap: 18px;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,.07);
+  background:
+    radial-gradient(circle at 12% 0, rgba(201,168,76,.09), transparent 36%),
+    linear-gradient(135deg, rgba(22,22,28,.96), rgba(12,12,17,.98));
+  box-shadow: 0 14px 40px rgba(0,0,0,.28);
+  transition: transform .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+body[data-page="reunioes"] .rn-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 14px; bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rn-accent, var(--gold));
+}
+body[data-page="reunioes"] .rn-card:hover { transform: translateY(-2px); border-color: rgba(201,168,76,.26); box-shadow: 0 18px 48px rgba(0,0,0,.42); }
+body[data-page="reunioes"] .rn-card.is-concluida { --rn-accent: #10b981; }
+body[data-page="reunioes"] .rn-card.is-cancelada { --rn-accent: #ef4444; opacity: .72; }
+body[data-page="reunioes"] .rn-card.is-today { border-color: rgba(220,38,38,.38); box-shadow: 0 0 0 1px rgba(220,38,38,.12), 0 18px 48px rgba(220,38,38,.12); --rn-accent: var(--red-bright); }
+
+body[data-page="reunioes"] .rn-date {
+  flex-shrink: 0;
+  width: 66px;
+  align-self: flex-start;
+  border-radius: 12px;
+  border: 1px solid rgba(201,168,76,.24);
+  background: linear-gradient(180deg, rgba(201,168,76,.14), rgba(201,168,76,.03));
+  text-align: center;
+  padding: 8px 4px 9px;
+}
+body[data-page="reunioes"] .rn-date-wd { display: block; font-size: .58rem; font-weight: 800; letter-spacing: .12em; color: var(--text-3); text-transform: uppercase; }
+body[data-page="reunioes"] .rn-date-day { display: block; font-family: "Cinzel", serif; font-size: 1.7rem; font-weight: 800; line-height: 1.1; color: var(--text-1); }
+body[data-page="reunioes"] .rn-date-mon { display: block; font-size: .62rem; font-weight: 800; letter-spacing: .14em; color: var(--gold); text-transform: uppercase; }
+body[data-page="reunioes"] .is-today .rn-date { border-color: rgba(220,38,38,.45); background: linear-gradient(180deg, rgba(220,38,38,.2), rgba(220,38,38,.04)); }
+body[data-page="reunioes"] .is-today .rn-date-mon { color: var(--red-bright); }
+
+body[data-page="reunioes"] .rn-card-body { flex: 1; min-width: 0; }
+body[data-page="reunioes"] .rn-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+body[data-page="reunioes"] .rn-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 7px; }
+body[data-page="reunioes"] .rn-card-title {
+  font-family: "Cinzel", serif;
+  font-size: 1.02rem; font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+body[data-page="reunioes"] .rn-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: .74rem; color: var(--text-3); margin-top: 6px; }
+body[data-page="reunioes"] .rn-meta i { color: var(--gold); margin-right: 4px; }
+
+body[data-page="reunioes"] .rn-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .6rem; font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid;
+  letter-spacing: .06em; text-transform: uppercase;
+  white-space: nowrap;
+}
+body[data-page="reunioes"] .rn-chip-agendada  { background: rgba(201,168,76,.1); border-color: rgba(201,168,76,.32); color: var(--gold); }
+body[data-page="reunioes"] .rn-chip-concluida { background: rgba(16,185,129,.1); border-color: rgba(16,185,129,.3); color: #10b981; }
+body[data-page="reunioes"] .rn-chip-cancelada { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.3); color: #ef4444; }
+body[data-page="reunioes"] .rn-chip-soon      { background: rgba(220,38,38,.14); border-color: rgba(220,38,38,.4); color: #f87171; }
+body[data-page="reunioes"] .rn-chip-muted     { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); color: var(--text-3); }
+body[data-page="reunioes"] .rn-chip-pendente  { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.3); color: #f59e0b; }
+body[data-page="reunioes"] .rn-chip-aprovado  { background: rgba(16,185,129,.1); border-color: rgba(16,185,129,.3); color: #10b981; }
+body[data-page="reunioes"] .rn-chip-recusado  { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.3); color: #ef4444; }
+
+body[data-page="reunioes"] .rn-actions { display: flex; gap: 6px; flex-shrink: 0; }
+body[data-page="reunioes"] .rn-icon-btn {
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color .2s var(--ease), color .2s var(--ease), background .2s var(--ease);
+}
+body[data-page="reunioes"] .rn-icon-btn:hover { border-color: rgba(201,168,76,.4); color: var(--gold); background: rgba(201,168,76,.08); }
+body[data-page="reunioes"] .rn-icon-btn.is-success:hover { border-color: rgba(16,185,129,.45); color: #10b981; background: rgba(16,185,129,.08); }
+body[data-page="reunioes"] .rn-icon-btn.is-warn:hover { border-color: rgba(245,158,11,.45); color: #f59e0b; background: rgba(245,158,11,.08); }
+body[data-page="reunioes"] .rn-icon-btn.is-danger { color: var(--red-bright); }
+body[data-page="reunioes"] .rn-icon-btn.is-danger:hover { border-color: rgba(220,38,38,.45); background: rgba(220,38,38,.1); }
+
+body[data-page="reunioes"] .rn-pauta {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid rgba(255,255,255,.05);
+  font-size: .82rem;
+  color: var(--text-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+body[data-page="reunioes"] .rn-pauta-label {
+  display: block;
+  font-size: .58rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+body[data-page="reunioes"] .rn-card-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+body[data-page="reunioes"] .rn-people { display: flex; align-items: center; gap: 10px; min-width: 0; }
+body[data-page="reunioes"] .rn-people-names { font-size: .74rem; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-page="reunioes"] .rn-avatars { display: flex; flex-shrink: 0; }
+body[data-page="reunioes"] .rn-avatars .rn-avatar { margin-left: -8px; box-shadow: 0 0 0 2px #111116; }
+body[data-page="reunioes"] .rn-avatars .rn-avatar:first-child { margin-left: 0; }
+
+body[data-page="reunioes"] .rn-avatar {
+  width: 30px; height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .58rem; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--rn-c, #7f1d1d), #1a1a1a);
+  overflow: hidden;
+}
+body[data-page="reunioes"] .rn-avatar img { width: 100%; height: 100%; object-fit: cover; }
+body[data-page="reunioes"] .rn-avatar-more { background: rgba(201,168,76,.18); color: var(--gold); }
+
+body[data-page="reunioes"] .rn-ata-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(201,168,76,.35);
+  background: linear-gradient(135deg, rgba(201,168,76,.16), rgba(201,168,76,.04));
+  color: var(--gold);
+  font-size: .74rem; font-weight: 800; letter-spacing: .03em;
+  cursor: pointer;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+body[data-page="reunioes"] .rn-ata-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(201,168,76,.14); }
+body[data-page="reunioes"] .rn-ata-btn.is-ready { border-color: rgba(16,185,129,.4); background: linear-gradient(135deg, rgba(16,185,129,.16), rgba(16,185,129,.04)); color: #10b981; }
+
+/* ── Atas e solicitações ────────────────────────────── */
+body[data-page="reunioes"] .rn-row {
+  display: flex; align-items: center; gap: 14px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(135deg, rgba(22,22,28,.96), rgba(12,12,17,.98));
+}
+body[data-page="reunioes"] .rn-row-icon {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(201,168,76,.1);
+  border: 1px solid rgba(201,168,76,.22);
+  color: var(--gold);
+}
+body[data-page="reunioes"] .rn-row-body { flex: 1; min-width: 0; }
+body[data-page="reunioes"] .rn-row-title { font-weight: 700; color: var(--text-1); overflow-wrap: anywhere; }
+body[data-page="reunioes"] .rn-row-text { font-size: .8rem; color: var(--text-2); margin-top: 6px; line-height: 1.55; overflow-wrap: anywhere; }
+body[data-page="reunioes"] .rn-row-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ── Seletor de membros ─────────────────────────────── */
+body[data-page="reunioes"] .rn-modal { max-width: 640px; background: #0e0e13; border: 1px solid rgba(201,168,76,.2); }
+body[data-page="reunioes"] .rn-modal .modal-header { background: linear-gradient(135deg, rgba(201,168,76,.08), transparent); border-bottom: 1px solid rgba(201,168,76,.15); }
+body[data-page="reunioes"] .rn-modal .modal-title { font-family: "Cinzel", serif; letter-spacing: .05em; color: var(--gold); }
+body[data-page="reunioes"] .rn-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+body[data-page="reunioes"] .rn-modal-section {
+  font-size: .62rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gold);
+  margin: 6px 0 10px;
+}
+body[data-page="reunioes"] .rn-hint { font-size: .74rem; color: var(--text-3); margin: -4px 0 12px; }
+
+body[data-page="reunioes"] .rn-picker-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+body[data-page="reunioes"] .rn-search { position: relative; flex: 1; min-width: 180px; }
+body[data-page="reunioes"] .rn-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: .8rem; }
+body[data-page="reunioes"] .rn-search .form-input { padding-left: 34px; }
+body[data-page="reunioes"] .rn-quick {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03);
+  color: var(--text-2);
+  font-size: .72rem; font-weight: 800;
+  cursor: pointer;
+}
+body[data-page="reunioes"] .rn-quick:hover { border-color: rgba(201,168,76,.4); color: var(--gold); }
+body[data-page="reunioes"] .rn-picker-count { font-size: .72rem; color: var(--text-3); margin-bottom: 8px; }
+body[data-page="reunioes"] .rn-picker-count strong { color: var(--gold); }
+body[data-page="reunioes"] .rn-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 2px;
+}
+body[data-page="reunioes"] .rn-pick {
+  display: flex; align-items: center; gap: 9px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.025);
+  color: var(--text-2);
+  font-size: .78rem; font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+body[data-page="reunioes"] .rn-pick:hover { border-color: rgba(201,168,76,.3); }
+body[data-page="reunioes"] .rn-pick span.rn-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-page="reunioes"] .rn-pick .rn-pick-check { color: transparent; font-size: .8rem; }
+body[data-page="reunioes"] .rn-pick[aria-pressed="true"] {
+  border-color: rgba(201,168,76,.55);
+  background: linear-gradient(135deg, rgba(201,168,76,.16), rgba(201,168,76,.04));
+  color: var(--text-1);
+}
+body[data-page="reunioes"] .rn-pick[aria-pressed="true"] .rn-pick-check { color: var(--gold); }
+body[data-page="reunioes"] .rn-pick[hidden] { display: none; }
+body[data-page="reunioes"] .rn-pick .rn-avatar { width: 26px; height: 26px; font-size: .52rem; }
+
+body[data-page="reunioes"] .rn-view-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+body[data-page="reunioes"] .rn-view-body { white-space: pre-wrap; line-height: 1.75; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* ── Responsivo ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  body[data-page="reunioes"] .rn-hero-main { flex-direction: column; align-items: flex-start; }
+  body[data-page="reunioes"] .rn-hero-stats { width: 100%; }
+}
+@media (max-width: 560px) {
+  body[data-page="reunioes"] .rn-hero { padding: 20px 16px; border-radius: 12px; }
+  body[data-page="reunioes"] .rn-hero-stats { grid-template-columns: repeat(var(--rn-stats, 3), minmax(0, 1fr)); }
+  body[data-page="reunioes"] .rn-stat { padding: 9px 6px; }
+  body[data-page="reunioes"] .rn-stat-value { font-size: 1.15rem; }
+  body[data-page="reunioes"] .rn-card { gap: 12px; padding: 14px 14px 14px 16px; }
+  body[data-page="reunioes"] .rn-date { width: 52px; padding: 6px 2px 7px; }
+  body[data-page="reunioes"] .rn-date-day { font-size: 1.3rem; }
+  body[data-page="reunioes"] .rn-card-head { flex-direction: column; }
+  body[data-page="reunioes"] .rn-actions { align-self: flex-start; }
+  body[data-page="reunioes"] .rn-row { flex-wrap: wrap; }
+  body[data-page="reunioes"] .rn-row-actions { width: 100%; justify-content: flex-start; }
+  body[data-page="reunioes"] .rn-form-grid { grid-template-columns: 1fr; }
+  body[data-page="reunioes"] .rn-picker-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
+
+/* ── Tema claro ─────────────────────────────────────── */
+[data-theme="light"] body[data-page="reunioes"] .rn-hero,
+[data-theme="light"] body[data-page="reunioes"] .rn-card,
+[data-theme="light"] body[data-page="reunioes"] .rn-row,
+[data-theme="light"] body[data-page="reunioes"] .rn-stat {
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,250,240,.86)), #fffaf0;
+  border-color: rgba(120,77,20,.22);
+  box-shadow: 0 16px 42px rgba(120,77,20,.1);
+}
+[data-theme="light"] body[data-page="reunioes"] .rn-title,
+[data-theme="light"] body[data-page="reunioes"] .rn-card-title,
+[data-theme="light"] body[data-page="reunioes"] .rn-date-day,
+[data-theme="light"] body[data-page="reunioes"] .rn-row-title { color: #2b1f18; }
+[data-theme="light"] body[data-page="reunioes"] .rn-subtitle,
+[data-theme="light"] body[data-page="reunioes"] .rn-pauta,
+[data-theme="light"] body[data-page="reunioes"] .rn-row-text,
+[data-theme="light"] body[data-page="reunioes"] .rn-meta,
+[data-theme="light"] body[data-page="reunioes"] .rn-people-names { color: #5f5145; }
+[data-theme="light"] body[data-page="reunioes"] .rn-pauta { background: rgba(120,77,20,.04); border-color: rgba(120,77,20,.1); }
+[data-theme="light"] body[data-page="reunioes"] .rn-tab { background: rgba(255,255,255,.72); border-color: rgba(120,77,20,.18); color: #5f5145; }
+[data-theme="light"] body[data-page="reunioes"] .rn-tab.active { background: rgba(185,28,28,.1); color: #8f1418; }
+[data-theme="light"] body[data-page="reunioes"] .rn-avatars .rn-avatar { box-shadow: 0 0 0 2px #fffaf0; }
+[data-theme="light"] body[data-page="reunioes"] .rn-modal { background: #fffaf0; }
+[data-theme="light"] body[data-page="reunioes"] .rn-pick { background: rgba(255,255,255,.8); border-color: rgba(120,77,20,.15); color: #5f5145; }
