@@ -114,3 +114,13 @@ Limitações conhecidas:
 - Teste no portal logado: `RTCPeerConnection` com `iceTransportPolicy: 'relay'` gerou candidato **relay** → TURN aceito.
 - Quem já estava com o Space aberto pode levar até 10 min para pegar o TURN (cache de `iceServers.js`); recarregar resolve.
 - **Próximo:** repetir a chamada com alguém no 4G — o quadro da pessoa deve mostrar "TURN" nas estatísticas.
+
+## 14/10/2026 — Configurações de voz e vídeo (pedido do dono, "igual ao Discord")
+- `js/space/ui/settings.js`: escolher **microfone** (com barra de teste ao vivo), **saída de áudio** (com "Testar som"),
+  **câmera** e processamento de voz (supressão de ruído, cancelamento de eco, volume automático). Vale no meio da chamada
+  (`VoiceSession.changeInputDevice/changeOutputDevice`; câmera desliga/liga com a nova). Salvo em `space_preferences`.
+- Abre pela engrenagem no painel do usuário (embaixo dos canais) e na barra de controles da chamada.
+- **Celular:** o navegador não deixa o site escolher alto-falante × "do ouvido" (`setSinkId` indisponível ou sem lista).
+  A tela explica e mostra só o que o navegador liberar. **Planejado para o app Android novo** (controle nativo de áudio).
+- Testado no Brave (injeção da branch): 4 microfones + 8 saídas listados, sem erros. Corrigido: botão liga/desliga
+  virava bolinha por causa da regra global do portal `input { min-height: 44px }`.
