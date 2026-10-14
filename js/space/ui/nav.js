@@ -1,6 +1,7 @@
 // Coluna de canais do MSY Space (portado de ChannelSidebar/UserPanel/RoomDialogs da Plataforma).
 import { supabase } from '../lib/supabase.js';
 import { avatarHtml, displayName, esc, icon, toast } from './dom.js';
+import { openVoiceSettings } from './settings.js';
 
 export class SpaceNav {
   constructor(container, { workspace, voice, online, me, onSelect }) {
@@ -97,6 +98,7 @@ export class SpaceNav {
         <div class="sp-me-name"><b>${esc(displayName(me))}</b><small>${call ? 'Em chamada' : 'Disponível'}</small></div>
         ${call ? `<button class="sp-icon-btn ${vs.local.muted || !vs.local.micAvailable ? 'is-off' : ''}" data-act="mute" title="${vs.local.muted ? 'Ativar microfone' : 'Desativar microfone'}">${icon(vs.local.muted || !vs.local.micAvailable ? 'fa-microphone-slash' : 'fa-microphone')}</button>
           <button class="sp-icon-btn ${vs.local.deafened ? 'is-off' : ''}" data-act="deafen" title="${vs.local.deafened ? 'Ativar som' : 'Desativar som'}">${icon(vs.local.deafened ? 'fa-volume-xmark' : 'fa-headphones')}</button>` : ''}
+        <button class="sp-icon-btn" data-act="settings" title="Voz e vídeo (microfone, saída, câmera)" aria-label="Configurações de voz e vídeo">${icon('fa-gear')}</button>
       </div>`;
     if (html === this.lastHtml) return;
     this.lastHtml = html;
@@ -122,6 +124,7 @@ export class SpaceNav {
     if (act === 'leave') this.voice.leave();
     if (act === 'mute') this.voice.toggleMute();
     if (act === 'deafen') this.voice.toggleDeafen();
+    if (act === 'settings') openVoiceSettings({ prefs: this.voice.prefs, voice: this.voice });
     if (act === 'create-room') await this.createRoom();
     if (act === 'join-room') await this.joinRoom();
   }

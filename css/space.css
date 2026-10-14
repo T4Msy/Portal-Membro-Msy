@@ -627,6 +627,42 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 /* ── Modal simples (criar sala / código) ─────────────────────── */
 .sp-modal .modal { max-width: 420px; }
 
+/* ── Configurações de voz e vídeo ─────────────────────────────── */
+.sp-settings .modal { max-width: 520px; background: #0e0c16; border: 1px solid rgba(168, 85, 247, .3); }
+.sp-settings .modal-title { display: flex; align-items: center; gap: 8px; }
+.sp-settings .modal-title i { color: #a855f7; }
+.sp-settings .modal-body { display: grid; gap: 18px; max-height: 70vh; overflow-y: auto; }
+.sp-set-block { display: grid; gap: 8px; justify-items: start; }
+.sp-set-block select { width: 100%; }
+.sp-set-label { display: flex; align-items: center; gap: 8px; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #c4b5fd; }
+.sp-set-allow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(168, 85, 247, .12); border: 1px solid rgba(168, 85, 247, .3);
+  font-size: .8rem; color: #e9d5ff;
+}
+.sp-meter-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+.sp-meter { flex: 1; height: 10px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.sp-meter span { display: block; height: 100%; width: 0%; border-radius: inherit; background: linear-gradient(90deg, #22c55e, #a3e635, #facc15); transition: width .06s linear; }
+.sp-settings .sp-hint { font-size: .74rem; color: #8f8f99; line-height: 1.5; margin: 0; }
+.sp-switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .07); cursor: pointer;
+}
+.sp-switch-row b { display: block; font-size: .84rem; }
+.sp-switch-row small { display: block; font-size: .72rem; color: #8f8f99; margin-top: 2px; }
+.sp-switch {
+  appearance: none; flex-shrink: 0;
+  width: 42px; height: 24px; border-radius: 999px;
+  background: rgba(255, 255, 255, .15); position: relative; cursor: pointer; transition: background .2s;
+}
+.sp-switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s;
+}
+.sp-switch:checked { background: #7c3aed; }
+.sp-switch:checked::after { transform: translateX(18px); }
+
 /* ── Celular ──────────────────────────────────────────────────── */
 @media (max-width: 860px) {
   body[data-page="space"] .sp-app { grid-template-columns: 1fr; }

@@ -6,6 +6,7 @@ import { REACTIONS } from '../voice/VoiceSession.js';
 import { getCapabilities, screenShareUnsupportedReason } from '../voice/media/capabilities.js';
 import { SCREEN_PRESETS } from '../voice/media/screen.js';
 import { avatarHtml, bindVideo, displayName, esc, formatKbps, icon, safeColor, toast } from './dom.js';
+import { openVoiceSettings } from './settings.js';
 
 /** Só troca o HTML quando mudou (evita perder foco/hover a cada atualização de fala). */
 function setHtml(el, html) {
@@ -311,6 +312,7 @@ export class VoiceRoomView {
       ${local.screen ? btn('stop-screen', 'fa-display', 'Parar transmissão', 'is-on')
         : btn('screen-menu', 'fa-display', screenBlocked || 'Compartilhar tela', this.menu === 'screen' ? 'is-open' : '', Boolean(screenBlocked))}
       ${btn('react-menu', 'fa-face-smile', 'Reações', this.menu === 'react' ? 'is-open' : '')}
+      ${btn('settings', 'fa-gear', 'Voz e vídeo (microfone, saída, câmera)')}
       ${btn('leave', 'fa-phone-slash', 'Sair da sala', 'is-danger')}
       ${local.screen ? `<span class="sp-upload" title="Upload real medido nas conexões">Enviando ${esc(formatKbps(snap.uploadKbps))} · ${viewers} ${viewers === 1 ? 'espectador' : 'espectadores'}</span>` : ''}
       ${this.menu === 'react' ? `<div class="sp-pop sp-react-pop">${REACTIONS.map((e) => `<button data-act="react" data-emoji="${esc(e)}" aria-label="Reagir com ${esc(e)}">${esc(e)}</button>`).join('')}</div>` : ''}
@@ -361,6 +363,7 @@ export class VoiceRoomView {
       case 'start-screen': this.menu = null; this.render(); v.startScreen(this.withAudio); break;
       case 'leave': this.menu = null; v.leave(); this.onLeftRoom?.(); break;
       case 'resume-audio': v.resumeAudio(); break;
+      case 'settings': this.menu = null; openVoiceSettings({ prefs: v.prefs, voice: v }); break;
       case 'pick-screen': this.selectedScreen = btn.dataset.id; this.render(); break;
       case 'watch': v.setWatching(btn.dataset.id, btn.dataset.watching !== 'true'); break;
       case 'fullscreen': this.toggleFullscreen(); break;
