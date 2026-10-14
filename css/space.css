@@ -653,7 +653,7 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 .sp-switch-row small { display: block; font-size: .72rem; color: #8f8f99; margin-top: 2px; }
 .sp-settings input.sp-switch {
   -webkit-appearance: none !important; appearance: none !important; flex-shrink: 0;
-  width: 42px !important; height: 24px !important; min-width: 42px; margin: 0; padding: 0;
+  width: 42px !important; height: 24px !important; min-width: 42px; min-height: 24px !important; margin: 0; padding: 0;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   background: rgba(255, 255, 255, .15); position: relative; cursor: pointer; transition: background .2s;
 }
