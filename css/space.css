@@ -700,7 +700,14 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 
 /* ── Confirmação (MSYConfirm) ─────────────────────────────────
    O estilo padrão vive em premium.css, que o Space não carrega.
-   Sem isto o modal cai sem estilo no fim da página. */
+   Aqui ele ganha a identidade do Space: roxo, borda viva e
+   entrada animada (as animações reiniciam a cada abertura). */
+@property --sp-confirm-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 body[data-page="space"] #msy-confirm-overlay {
   position: fixed;
   inset: 0;
@@ -709,52 +716,166 @@ body[data-page="space"] #msy-confirm-overlay {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, .6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(124, 58, 237, .22), transparent 55%),
+    rgba(4, 3, 10, .72);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   opacity: 0;
   visibility: hidden;
-  transition: opacity .2s var(--ease), visibility .2s var(--ease);
+  transition: opacity .25s var(--ease), visibility .25s var(--ease);
 }
 body[data-page="space"] #msy-confirm-overlay.open { opacity: 1; visibility: visible; }
+
 body[data-page="space"] #msy-confirm-box {
+  position: relative;
   width: 100%;
   max-width: 400px;
   overflow: hidden;
-  background: var(--sp-bg-3);
-  border: 1px solid rgba(168, 85, 247, .28);
-  border-radius: var(--radius-xl);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .85), inset 0 1px 0 rgba(255, 255, 255, .05);
-  transform: translateY(16px) scale(.96);
-  transition: transform .22s var(--ease);
+  border: 1px solid transparent;
+  border-radius: 24px;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(168, 85, 247, .16), transparent 60%) padding-box,
+    linear-gradient(180deg, #17121f, #0e0b15) padding-box,
+    conic-gradient(from var(--sp-confirm-angle), rgba(168, 85, 247, .15), #c084fc, #6d28d9, rgba(168, 85, 247, .15) 40%, rgba(168, 85, 247, .15)) border-box;
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, .08),
+    0 30px 80px rgba(0, 0, 0, .8),
+    0 0 60px rgba(124, 58, 237, .25);
+  opacity: 0;
+  transform: translateY(28px) scale(.92);
+  filter: blur(6px);
+  transition: opacity .2s var(--ease), transform .2s var(--ease), filter .2s var(--ease);
 }
-body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box { transform: none; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition: opacity .3s ease-out, transform .5s cubic-bezier(.34, 1.56, .64, 1), filter .3s ease-out;
+  animation: sp-confirm-spin 4s linear infinite;
+}
+
 body[data-page="space"] #msy-confirm-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 20px 22px 14px;
-  border-bottom: 1px solid var(--sp-line);
+  gap: 16px;
+  padding: 30px 24px 6px;
+  text-align: center;
 }
+
 body[data-page="space"] #msy-confirm-icon {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 1.1rem;
+  font-size: 1.45rem;
+  color: #f5e9ff;
+  background: radial-gradient(circle at 35% 30%, #c084fc, #7c3aed 55%, #4c1d95);
+  box-shadow: 0 0 0 6px rgba(168, 85, 247, .12), 0 10px 30px rgba(124, 58, 237, .55);
 }
-body[data-page="space"] #msy-confirm-icon.danger { background: var(--red-subtle); color: var(--red-bright); border: 1px solid var(--border-red); }
-body[data-page="space"] #msy-confirm-icon.warn { background: rgba(245, 158, 11, .1); color: var(--sp-warn); border: 1px solid rgba(245, 158, 11, .25); }
-body[data-page="space"] #msy-confirm-icon.info { background: var(--sp-accent-soft); color: var(--sp-accent); border: 1px solid rgba(168, 85, 247, .3); }
-body[data-page="space"] #msy-confirm-title { font-family: "Cinzel", serif; font-size: .95rem; font-weight: 700; color: var(--text-1); }
-body[data-page="space"] #msy-confirm-body { padding: 16px 22px 20px; font-size: .88rem; line-height: 1.6; color: var(--text-2); }
-body[data-page="space"] #msy-confirm-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 22px 20px; }
+body[data-page="space"] #msy-confirm-icon::before,
+body[data-page="space"] #msy-confirm-icon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(192, 132, 252, .55);
+  opacity: 0;
+  pointer-events: none;
+}
+body[data-page="space"] #msy-confirm-icon.danger { background: radial-gradient(circle at 35% 30%, #e879f9, #a21caf 50%, #581c87); }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-icon { animation: sp-confirm-pop .55s .08s cubic-bezier(.34, 1.56, .64, 1) both; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-icon::before { animation: sp-confirm-ring 2.2s .45s ease-out infinite; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-icon::after { animation: sp-confirm-ring 2.2s 1.55s ease-out infinite; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-icon.danger i { animation: sp-confirm-shake .5s .6s ease-in-out both; }
+
+body[data-page="space"] #msy-confirm-title {
+  font-family: "Cinzel", serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  background: linear-gradient(180deg, #fff, #d8b4fe);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+body[data-page="space"] #msy-confirm-body {
+  padding: 8px 28px 24px;
+  font-size: .9rem;
+  line-height: 1.6;
+  text-align: center;
+  color: #b8b0c8;
+}
+body[data-page="space"] #msy-confirm-footer {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 22px;
+}
+body[data-page="space"] #msy-confirm-footer .btn {
+  flex: 1;
+  min-height: 46px;
+  border-radius: 14px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-size: .78rem;
+}
+body[data-page="space"] #msy-confirm-ok {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  border: 1px solid rgba(216, 180, 254, .35);
+  background: linear-gradient(135deg, #a855f7, #7c3aed 55%, #6d28d9);
+  box-shadow: 0 8px 24px rgba(124, 58, 237, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform .15s var(--ease), box-shadow .2s var(--ease), filter .2s var(--ease);
+}
+body[data-page="space"] #msy-confirm-ok::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-ok::after { animation: sp-confirm-shine 2.8s .7s ease-in-out infinite; }
+body[data-page="space"] #msy-confirm-ok:hover { filter: brightness(1.1); box-shadow: 0 10px 32px rgba(168, 85, 247, .6), inset 0 1px 0 rgba(255, 255, 255, .3); transform: translateY(-1px); }
+body[data-page="space"] #msy-confirm-ok:active { transform: scale(.97); }
+body[data-page="space"] #msy-confirm-cancel {
+  color: #c4b5fd;
+  background: rgba(168, 85, 247, .06);
+  border: 1px solid rgba(168, 85, 247, .22);
+  transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease);
+}
+body[data-page="space"] #msy-confirm-cancel:hover { background: rgba(168, 85, 247, .14); border-color: rgba(168, 85, 247, .45); color: #fff; }
+body[data-page="space"] #msy-confirm-ok:focus-visible,
+body[data-page="space"] #msy-confirm-cancel:focus-visible { outline: 2px solid rgba(192, 132, 252, .45); outline-offset: 3px; }
+
+/* Conteúdo entra em sequência */
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-title { animation: sp-confirm-rise .4s .16s ease-out both; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-body { animation: sp-confirm-rise .4s .22s ease-out both; }
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-footer { animation: sp-confirm-rise .4s .28s ease-out both; }
+
+@keyframes sp-confirm-spin { to { --sp-confirm-angle: 360deg; } }
+@keyframes sp-confirm-pop { from { transform: scale(.3) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sp-confirm-ring { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes sp-confirm-shake { 0%, 100% { transform: none; } 20%, 60% { transform: rotate(-12deg); } 40%, 80% { transform: rotate(12deg); } }
+@keyframes sp-confirm-shine { 0% { transform: translateX(-120%); } 45%, 100% { transform: translateX(120%); } }
+@keyframes sp-confirm-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 768px) {
-  body[data-page="space"] #msy-confirm-overlay { padding: 16px; }
+  body[data-page="space"] #msy-confirm-overlay { padding: 18px; }
   body[data-page="space"] #msy-confirm-footer { flex-direction: column-reverse; }
-  body[data-page="space"] #msy-confirm-footer .btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box,
+  body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box * ,
+  body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box *::before,
+  body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box *::after { animation: none !important; }
+  body[data-page="space"] #msy-confirm-box { transform: none; filter: none; }
 }
