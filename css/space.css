@@ -651,17 +651,18 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 }
 .sp-switch-row b { display: block; font-size: .84rem; }
 .sp-switch-row small { display: block; font-size: .72rem; color: #8f8f99; margin-top: 2px; }
-.sp-switch {
-  appearance: none; flex-shrink: 0;
-  width: 42px; height: 24px; border-radius: 999px;
+.sp-settings input.sp-switch {
+  -webkit-appearance: none !important; appearance: none !important; flex-shrink: 0;
+  width: 42px !important; height: 24px !important; min-width: 42px; margin: 0; padding: 0;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   background: rgba(255, 255, 255, .15); position: relative; cursor: pointer; transition: background .2s;
 }
-.sp-switch::after {
+.sp-settings input.sp-switch::after {
   content: ""; position: absolute; top: 3px; left: 3px;
   width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s;
 }
-.sp-switch:checked { background: #7c3aed; }
-.sp-switch:checked::after { transform: translateX(18px); }
+.sp-settings input.sp-switch:checked { background: #7c3aed !important; }
+.sp-settings input.sp-switch:checked::after { transform: translateX(18px); }
 
 /* ── Celular ──────────────────────────────────────────────────── */
 @media (max-width: 860px) {
