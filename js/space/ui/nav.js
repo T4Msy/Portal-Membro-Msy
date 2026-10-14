@@ -75,6 +75,7 @@ export class SpaceNav {
     const html = `
       <div class="sp-nav-head">
         <span class="sp-brand"><i class="fa-solid fa-satellite-dish"></i> MSY Space</span>
+        <a class="sp-icon-btn sp-nav-home" href="dashboard.html" title="Voltar ao Portal" aria-label="Voltar ao Portal">${icon('fa-house')}</a>
         <button class="sp-icon-btn sp-nav-close" data-act="close-nav" aria-label="Fechar">${icon('fa-xmark')}</button>
       </div>
       <div class="sp-nav-actions">

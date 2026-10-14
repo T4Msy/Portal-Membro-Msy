@@ -10,17 +10,19 @@ import { VoiceRoomView } from './ui/voice-room.js';
 import { CallDock } from './ui/call-dock.js';
 import { esc, icon, toast } from './ui/dom.js';
 
-const { renderSidebar, renderTopBar } = window.MSY;
+const { Auth } = window.MSY;
 const LAST_CHANNEL_KEY = 'msy_space_last_channel';
 
 async function initSpace() {
-  const profile = await renderSidebar('space');
-  if (!profile) return; // sem acesso: o portal já redirecionou
-  await renderTopBar('MSY Space', profile);
-
-  const content = document.getElementById('pageContent');
-  content.classList.add('sp-page');
-  content.innerHTML = `<div class="loading-container">${icon('fa-circle-notch fa-spin')} Carregando o MSY Space...</div>`;
+  // Experiência imersiva (como a Supervisão): login do portal + checagem de acesso, sem a sidebar do portal.
+  const profile = await Auth.requireAuth();
+  if (!profile) return; // sem sessão: o portal já mandou para o login
+  if (!await MSYTabAccess.canAccess('space', profile)) {
+    window.location.replace('dashboard.html');
+    return;
+  }
+  const content = document.getElementById('spaceApp');
+  const warpStarted = Date.now();
 
   const workspace = new Workspace(profile);
   const prefs = new SpacePrefs(profile.id);
@@ -28,9 +30,11 @@ async function initSpace() {
     await Promise.all([workspace.load(), prefs.load()]);
   } catch (err) {
     console.error('[MSY][space] Erro ao carregar:', err);
-    content.innerHTML = '<div class="empty-state">Erro ao carregar o MSY Space. Tente recarregar a página.</div>';
+    content.innerHTML = `<div class="sp-fatal">${icon('fa-triangle-exclamation')}<p>Erro ao carregar o MSY Space. Tente recarregar a página.</p><a class="btn btn-ghost" href="dashboard.html">Voltar ao Portal</a></div>`;
     return;
   }
+  // A animação de entrada dura pelo menos um instante (sensação de "entrar em outro lugar").
+  await new Promise((r) => setTimeout(r, Math.max(0, 900 - (Date.now() - warpStarted))));
 
   const online = new OnlinePresence(profile.id);
   online.start();
@@ -38,7 +42,13 @@ async function initSpace() {
   const voice = new VoiceController({ me: profile, prefs, online, workspace, toast });
 
   content.innerHTML = `
-    <div class="sp-app">
+    <div class="sp-app sp-enter">
+      <nav class="sp-rail" aria-label="MSY Space">
+        <span class="sp-rail-logo" title="MSY Space"><i class="fa-solid fa-satellite-dish"></i></span>
+        <span class="sp-rail-sep"></span>
+        <span class="sp-grow"></span>
+        <a class="sp-rail-btn" href="dashboard.html" title="Voltar ao Portal" aria-label="Voltar ao Portal"><i class="fa-solid fa-house"></i></a>
+      </nav>
       <aside class="sp-nav" aria-label="Canais do MSY Space"></aside>
       <div class="sp-nav-backdrop" data-close-nav></div>
       <section class="sp-main"></section>
@@ -117,6 +127,6 @@ async function initSpace() {
 
 initSpace().catch((err) => {
   console.error('[MSY][space] Falha ao iniciar:', err);
-  const content = document.getElementById('pageContent');
-  if (content) content.innerHTML = `<div class="empty-state">${esc('Erro ao abrir o MSY Space. Tente recarregar a página.')}</div>`;
+  const content = document.getElementById('spaceApp');
+  if (content) content.innerHTML = `<div class="sp-fatal"><p>${esc("Erro ao abrir o MSY Space. Tente recarregar a página.")}</p><a class="btn btn-ghost" href="dashboard.html">Voltar ao Portal</a></div>`;
 });
