@@ -9,11 +9,13 @@ import { ChatView } from './ui/chat.js';
 import { VoiceRoomView } from './ui/voice-room.js';
 import { CallDock } from './ui/call-dock.js';
 import { esc, icon, toast } from './ui/dom.js';
+import { followVisualViewport } from './ui/viewport.js';
 
 const { Auth } = window.MSY;
 const LAST_CHANNEL_KEY = 'msy_space_last_channel';
 
 async function initSpace() {
+  followVisualViewport();
   // Experiência imersiva (como a Supervisão): login do portal + checagem de acesso, sem a sidebar do portal.
   const profile = await Auth.requireAuth();
   if (!profile) return; // sem sessão: o portal já mandou para o login

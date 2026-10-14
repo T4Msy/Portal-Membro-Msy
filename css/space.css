@@ -24,7 +24,8 @@ body[data-page="space"] [hidden] { display: none !important; }
 body.space-body {
   margin: 0;
   height: 100vh;
-  height: 100dvh;
+  height: var(--sp-vvh, 100dvh);
+  min-height: 0;
   overflow: hidden;
   background:
     radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, .55), transparent 60%),
@@ -697,6 +698,12 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 
 /* ── Tema claro: o Space continua escuro (é uma "sala") ───────── */
 [data-theme="light"] body[data-page="space"] .sp-app { color-scheme: dark; }
+
+/* ── Celular: o iOS dá zoom em campos com fonte < 16px ───────── */
+@media (pointer: coarse) {
+  body[data-page="space"] .sp-composer textarea,
+  body[data-page="space"] .sp-edit textarea { font-size: 16px; }
+}
 
 /* ── Confirmação (MSYConfirm) ─────────────────────────────────
    O estilo padrão vive em premium.css, que o Space não carrega.

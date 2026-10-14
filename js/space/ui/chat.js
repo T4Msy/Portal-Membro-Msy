@@ -63,6 +63,9 @@ export class ChatView {
     this.input = this.el.querySelector('.sp-composer textarea');
 
     this.scrollEl.addEventListener('scroll', () => this.onScroll());
+    // Teclado abrindo encolhe a lista: quem estava no fim continua vendo a última mensagem.
+    this.resizeObs = new ResizeObserver(() => { if (this.stick) this.scrollEl.scrollTop = this.scrollEl.scrollHeight; });
+    this.resizeObs.observe(this.scrollEl);
     this.el.addEventListener('click', (e) => this.onClick(e));
     this.el.querySelector('.sp-composer').addEventListener('submit', (e) => { e.preventDefault(); this.submit(); });
     this.input.addEventListener('keydown', (e) => {
@@ -80,6 +83,7 @@ export class ChatView {
 
   destroy() {
     this.destroyed = true;
+    this.resizeObs?.disconnect();
     if (this.rt) supabase.removeChannel(this.rt);
     this.rt = null;
   }
