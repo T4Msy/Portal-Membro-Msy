@@ -141,7 +141,7 @@ async function initReunioes() {
           description: item.description,
           status: item.status === 'concluida' ? 'concluida' : item.status === 'cancelada' ? 'cancelada' : 'agendada',
           participants: (item.participants || []).map(p => p.profile).filter(Boolean),
-          everyone: false,
+          audience: null,
           minute: minuteByMeeting.get(item.id) || null,
         })),
         ...(legacy.data || []).map(item => ({
@@ -153,7 +153,7 @@ async function initReunioes() {
           description: item.description,
           status: item.status === 'realizada' ? 'concluida' : item.status === 'cancelada' ? 'cancelada' : 'agendada',
           participants: [],
-          everyone: item.type !== 'diretoria',
+          audience: item.type === 'diretoria' ? 'Só a Diretoria' : 'Todos os membros',
           minute: null,
         })),
       ];
@@ -225,8 +225,8 @@ async function initReunioes() {
     const soon = upcoming ? (diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : diff <= 7 ? `Em ${diff} dias` : '') : '';
     const pastPending = meeting.status === 'agendada' && !upcoming;
 
-    const people = meeting.everyone
-      ? `<div class="rn-people"><span class="rn-chip rn-chip-muted"><i class="fa-solid fa-users"></i> Todos os membros</span></div>`
+    const people = meeting.audience
+      ? `<div class="rn-people"><span class="rn-chip rn-chip-muted"><i class="fa-solid fa-users"></i> ${esc(meeting.audience)}</span></div>`
       : `<div class="rn-people">
           <div class="rn-avatars">${meeting.participants.slice(0, 6).map(avatar).join('')}${meeting.participants.length > 6 ? `<span class="rn-avatar rn-avatar-more">+${meeting.participants.length - 6}</span>` : ''}</div>
           <span class="rn-people-names">${esc(meeting.participants.map(p => p.name).join(', ') || 'Sem convidados')}</span>
@@ -266,7 +266,7 @@ async function initReunioes() {
             <div class="rn-meta">
               <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(meeting.date))}</span>
               ${meeting.time ? `<span><i class="fa-regular fa-clock"></i>${esc(shortTime(meeting.time))}</span>` : ''}
-              ${meeting.everyone ? '' : `<span><i class="fa-solid fa-user-group"></i>${meeting.participants.length} convidado${meeting.participants.length === 1 ? '' : 's'}</span>`}
+              ${meeting.audience ? '' : `<span><i class="fa-solid fa-user-group"></i>${meeting.participants.length} convidado${meeting.participants.length === 1 ? '' : 's'}</span>`}
             </div>
           </div>
           ${actions}
