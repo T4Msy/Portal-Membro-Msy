@@ -22,11 +22,12 @@ na mesma linguagem do portal (JS puro, sem build).
 | 6 | Chamada em sobreposição | A chamada continua enquanto a pessoa navega pelo portal (ver "Chamada persistente") |
 | 7 | Acesso | Só **diretoria** + quem receber a permissão `acessar_space` em Permissões (surpresa para os membros) |
 | 8 | Documentar tudo | Esta pasta `docs/msy-space/` |
+| 9 | "Igual à Supervisão: parecer que entrou em outro lugar" | `space.html` imersiva: sem sidebar do portal, fundo espacial, animação de entrada, coluna de ícones com "Voltar ao Portal" |
 
 ## Arquitetura
 
 ```
-space.html                 página do MSY Space (aba do portal, acima de Supervisão)
+space.html                 página imersiva do MSY Space (como supervisao.html: Auth.requireAuth + MSYTabAccess.canAccess('space'))
 js/space/
   lib/supabase.js          ponte: exporta o `db` do portal (mesma sessão)
   lib/presenceThrottle.js  freio de presença (limite do Supabase: 5 updates/30 s)

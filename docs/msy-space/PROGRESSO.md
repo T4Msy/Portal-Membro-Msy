@@ -74,6 +74,16 @@ Como testei sem publicar: abri uma página do portal logado no Brave do dono e i
 - Corrigido: grade quebrada no computador (fundo do menu do celular ocupava coluna), botões de celular aparecendo,
   "Novas mensagens" aparecendo escondido, borda amarela no campo de texto.
 
+## 14/10/2026 — Experiência imersiva (pedido do dono)
+- "Fazer igual a Supervisão, que você entra e parece que está entrando em outro lugar."
+- `space.html` deixou de usar a sidebar/topbar do portal: tela cheia (`body.space-body`, `#spaceApp`), fundo
+  espacial com estrelas, animação "Entrando no MSY Space" (mín. 0,9 s), coluna de ícones estilo Discord com a
+  casinha "Voltar ao Portal" (no celular, a casinha fica no topo da lista de canais).
+- Acesso conferido no próprio `space-app.js`: `Auth.requireAuth()` + `MSYTabAccess.canAccess('space')` → senão vai para o dashboard.
+- Com chamada ativa, "Voltar ao Portal" abre o portal na moldura por cima da chamada (cartão flutuante continua).
+- Testado no Brave (injeção da branch): animação ✅, layout ✅, presença entre abas ✅ (a aba de teste parada no
+  aviso do microfone apareceu como "1 pessoa na sala"). Aviso "sair encerra a chamada" ao fechar a aba ✅.
+
 Limitações conhecidas:
 - Sem TURN no portal (a função `turn-credentials` não existe aqui; o código cai para STUN sozinho).
 - Na moldura, só cliques em links são capturados; códigos do portal que fazem `window.location = ...` na janela
