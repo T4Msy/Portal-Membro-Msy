@@ -389,7 +389,44 @@ body[data-page="reunioes"] .rn-pick[aria-pressed="true"] .rn-pick-check { color:
 body[data-page="reunioes"] .rn-pick[hidden] { display: none; }
 body[data-page="reunioes"] .rn-pick .rn-avatar { width: 26px; height: 26px; font-size: .52rem; }
 
-body[data-page="reunioes"] .rn-view-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+/* ── Anexos da ata ──────────────────────────────────── */
+body[data-page="reunioes"] .rn-optional { color: var(--text-3); letter-spacing: .04em; text-transform: none; font-weight: 600; }
+body[data-page="reunioes"] .rn-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 18px 14px;
+  border-radius: 12px;
+  border: 1px dashed rgba(201,168,76,.35);
+  background: rgba(201,168,76,.04);
+  color: var(--text-2);
+  font-size: .82rem; font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s var(--ease), background .2s var(--ease);
+}
+body[data-page="reunioes"] .rn-drop:hover { border-color: rgba(201,168,76,.6); background: rgba(201,168,76,.08); }
+body[data-page="reunioes"] .rn-drop > i { font-size: 1.3rem; color: var(--gold); }
+body[data-page="reunioes"] .rn-drop small { font-size: .7rem; font-weight: 500; color: var(--text-3); }
+body[data-page="reunioes"] .rn-drop-sm { flex-direction: row; gap: 8px; padding: 10px 14px; margin-top: 10px; }
+body[data-page="reunioes"] .rn-drop-sm > i { font-size: .9rem; }
+body[data-page="reunioes"] .rn-file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+body[data-page="reunioes"] .rn-file-list:empty { display: none; }
+body[data-page="reunioes"] .rn-file {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.025);
+}
+body[data-page="reunioes"] .rn-file-icon { color: var(--gold); width: 16px; text-align: center; }
+body[data-page="reunioes"] .rn-file-name { flex: 1; min-width: 0; font-size: .8rem; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-page="reunioes"] .rn-file-size { font-size: .7rem; color: var(--text-3); white-space: nowrap; }
+body[data-page="reunioes"] .rn-file .rn-icon-btn { width: 30px; height: 30px; }
+[data-theme="light"] body[data-page="reunioes"] .rn-file { background: rgba(255,255,255,.8); border-color: rgba(120,77,20,.15); }
+[data-theme="light"] body[data-page="reunioes"] .rn-file-name { color: #2b1f18; }
+
+body[data-page="reunioes"] .rn-view-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+body[data-page="reunioes"] .rn-view-edit { margin-left: auto; min-height: 30px; }
+body[data-page="reunioes"] .rn-file .rn-chip { flex-shrink: 0; }
 body[data-page="reunioes"] .rn-view-body { white-space: pre-wrap; line-height: 1.75; color: var(--text-2); overflow-wrap: anywhere; }
 
 /* ── Responsivo ─────────────────────────────────────── */

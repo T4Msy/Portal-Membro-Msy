@@ -12,7 +12,9 @@ async function initReunioes() {
   const isManager = profile.tier === 'diretoria'
     || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_reunioes');
 
-  const state = { tab: 'proximas', meetings: [], minutes: [], requests: [], members: null };
+  const state = { tab: 'proximas', meetings: [], minutes: [], requests: [], members: null, attachments: new Map() };
+  const FILES_BUCKET = 'meeting-files';
+  const FILE_MAX_BYTES = 100 * 1024 * 1024;
 
   /* ── Helpers ─────────────────────────────────────────── */
   const todayIso = () => new Date().toLocaleDateString('en-CA');
@@ -35,6 +37,66 @@ async function initReunioes() {
       ? `<img src="${esc(member.avatar_url)}" alt="">`
       : esc(member?.initials || Utils.getInitials(member?.name || '?'));
     return `<span class="rn-avatar" style="--rn-c:${color}" title="${esc(member?.name || '')}">${inner}</span>`;
+  };
+
+  const formatSize = bytes => {
+    if (!bytes) return '';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+  };
+  const fileIcon = (mime = '', name = '') => {
+    const ext = name.split('.').pop().toLowerCase();
+    if (mime.startsWith('image/')) return 'fa-file-image';
+    if (mime.startsWith('video/')) return 'fa-file-video';
+    if (mime.startsWith('audio/')) return 'fa-file-audio';
+    if (mime === 'application/pdf' || ext === 'pdf') return 'fa-file-pdf';
+    if (['doc', 'docx', 'odt'].includes(ext)) return 'fa-file-word';
+    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return 'fa-file-excel';
+    if (['ppt', 'pptx', 'odp'].includes(ext)) return 'fa-file-powerpoint';
+    if (['zip', 'rar', '7z'].includes(ext)) return 'fa-file-zipper';
+    return 'fa-file-lines';
+  };
+  const storageName = name => name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-80) || 'arquivo';
+
+  async function loadAttachments() {
+    const { data, error } = await db.from('meeting_minute_attachments')
+      .select('id,minute_id,file_name,file_path,mime_type,file_size').order('created_at');
+    // Tabela ausente enquanto a migration de anexos não foi aplicada: segue sem anexos
+    if (error) { console.warn('[MSY][reunioes] Anexos indisponíveis:', error); return new Map(); }
+    const map = new Map();
+    (data || []).forEach(item => {
+      if (!map.has(item.minute_id)) map.set(item.minute_id, []);
+      map.get(item.minute_id).push(item);
+    });
+    return map;
+  }
+
+  async function uploadMinuteFiles(minuteId, files) {
+    let failed = 0;
+    for (const [index, file] of files.entries()) {
+      const path = `${minuteId}/${Date.now()}-${index}-${storageName(file.name)}`;
+      const { error: uploadError } = await db.storage.from(FILES_BUCKET).upload(path, file, { contentType: file.type || undefined });
+      if (uploadError) { console.error('[MSY][reunioes] Falha no upload:', uploadError); failed++; continue; }
+      const { error: rowError } = await db.from('meeting_minute_attachments').insert({
+        minute_id: minuteId, file_name: file.name, file_path: path,
+        mime_type: file.type || null, file_size: file.size, created_by: profile.id,
+      });
+      if (rowError) {
+        console.error('[MSY][reunioes] Falha ao registrar anexo:', rowError);
+        await db.storage.from(FILES_BUCKET).remove([path]).catch(() => null);
+        failed++;
+      }
+    }
+    return failed;
+  }
+
+  const acceptFiles = (fileList, current) => {
+    const accepted = [...current];
+    [...fileList].forEach(file => {
+      if (file.size > FILE_MAX_BYTES) return Utils.showToast(`"${file.name}" passa de 100MB.`, 'error');
+      if (!accepted.some(item => item.name === file.name && item.size === file.size)) accepted.push(file);
+    });
+    return accepted;
   };
 
   const emptyState = (icon, text) => `<div class="rn-empty"><i class="fa-solid ${icon}"></i>${esc(text)}</div>`;
@@ -112,7 +174,7 @@ async function initReunioes() {
       let legacyQuery = db.from('meetings').select('*').order('meeting_date', { ascending: false });
       if (!isManager) legacyQuery = legacyQuery.eq('type', 'geral');
 
-      const [scheduled, legacy, minutes, requests] = await Promise.all([
+      const [scheduled, legacy, minutes, requests, , attachments] = await Promise.all([
         db.from('scheduled_meetings')
           .select('*, participants:scheduled_meeting_participants(user_id, profile:profiles!scheduled_meeting_participants_user_id_fkey(id,name,initials,color,avatar_url))')
           .order('meeting_date', { ascending: false }),
@@ -122,12 +184,14 @@ async function initReunioes() {
           ? db.from('meeting_requests').select('*').order('created_at', { ascending: false })
           : Promise.resolve({ data: [] }),
         isManager ? activeMembers() : Promise.resolve([]),
+        loadAttachments(),
       ]);
       if (scheduled.error) throw scheduled.error;
       if (legacy.error) throw legacy.error;
       if (requests.error) throw requests.error;
 
       state.minutes = minutes;
+      state.attachments = attachments;
       state.requests = requests.data || [];
       const minuteByMeeting = new Map(minutes.filter(m => m.scheduled_meeting_id).map(m => [m.scheduled_meeting_id, m]));
 
@@ -288,11 +352,13 @@ async function initReunioes() {
         <div class="rn-meta">
           <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(minute.meeting_date))}</span>
           ${minute.scheduled_meeting_id && meetingTitle.has(minute.scheduled_meeting_id) ? `<span><i class="fa-solid fa-link"></i>${esc(meetingTitle.get(minute.scheduled_meeting_id))}</span>` : ''}
+          ${state.attachments.get(minute.id)?.length ? `<span><i class="fa-solid fa-paperclip"></i>${state.attachments.get(minute.id).length} anexo${state.attachments.get(minute.id).length === 1 ? '' : 's'}</span>` : ''}
         </div>
       </div>
       <div class="rn-row-actions">
         <button class="btn btn-outline btn-sm" data-act="open-minute" data-id="${minute.id}"><i class="fa-solid fa-eye"></i> Ler</button>
-        ${isManager ? `<button class="rn-icon-btn" data-act="minute-access" data-id="${minute.id}" title="Quem pode ler"><i class="fa-solid fa-user-shield"></i></button>
+        ${isManager ? `<button class="rn-icon-btn" data-act="minute-edit" data-id="${minute.id}" title="Editar ata"><i class="fa-solid fa-pen"></i></button>
+        <button class="rn-icon-btn" data-act="minute-access" data-id="${minute.id}" title="Quem pode ler"><i class="fa-solid fa-user-shield"></i></button>
         <button class="rn-icon-btn is-danger" data-act="minute-delete" data-id="${minute.id}" title="Excluir ata"><i class="fa-solid fa-trash"></i></button>` : ''}
       </div>
     </div>`).join('');
@@ -338,6 +404,7 @@ async function initReunioes() {
       if (act === 'view-ata') openMinuteView(meeting.minute);
       if (act === 'new-ata') await openMinuteModal(null);
       if (act === 'open-minute') openMinuteView(state.minutes.find(m => m.id === id));
+      if (act === 'minute-edit') await openMinuteModal(null, state.minutes.find(m => m.id === id));
       if (act === 'minute-access') await openMinuteAccess(id);
       if (act === 'minute-delete') await deleteMinute(id);
       if (act === 'accept-request') await acceptRequest(id);
@@ -522,19 +589,78 @@ async function initReunioes() {
     }
   });
 
-  /* ── Atas ────────────────────────────────────────────── */
+  /* ── Atas (criar e editar) ───────────────────────────── */
   let getMinuteViewers = () => [];
   let minuteMeetingId = null;
+  let editingMinute = null;
+  let pendingFiles = [];
+  let keptFiles = [];
+  let removedFiles = [];
 
-  async function openMinuteModal(meeting) {
+  function renderPendingFiles() {
+    const list = document.getElementById('rn-ata-file-list');
+    if (!list) return;
+    const row = (icon, name, size, attr, badge = '') => `<div class="rn-file">
+      <i class="fa-solid ${icon} rn-file-icon"></i>
+      <span class="rn-file-name">${esc(name)}</span>${badge}<span class="rn-file-size">${esc(formatSize(size))}</span>
+      <button type="button" class="rn-icon-btn is-danger" ${attr} title="Remover"><i class="fa-solid fa-xmark"></i></button>
+    </div>`;
+    list.innerHTML = keptFiles.map(file => row(fileIcon(file.mime_type || '', file.file_name), file.file_name, file.file_size, `data-remove-kept="${file.id}"`)).join('')
+      + pendingFiles.map((file, index) => row(fileIcon(file.type, file.name), file.name, file.size, `data-remove-file="${index}"`, '<span class="rn-chip rn-chip-agendada">Novo</span>')).join('');
+  }
+
+  document.getElementById('rn-ata-files')?.addEventListener('change', event => {
+    pendingFiles = acceptFiles(event.target.files, pendingFiles);
+    event.target.value = '';
+    renderPendingFiles();
+  });
+  document.getElementById('rn-ata-file-list')?.addEventListener('click', event => {
+    const pending = event.target.closest('[data-remove-file]');
+    const kept = event.target.closest('[data-remove-kept]');
+    if (pending) pendingFiles.splice(Number(pending.dataset.removeFile), 1);
+    if (kept) {
+      removedFiles.push(...keptFiles.filter(file => file.id === kept.dataset.removeKept));
+      keptFiles = keptFiles.filter(file => file.id !== kept.dataset.removeKept);
+    }
+    renderPendingFiles();
+  });
+
+  async function openMinuteModal(meeting, minute = null) {
     const members = await activeMembers();
-    minuteMeetingId = meeting?.source === 'scheduled' ? meeting.id : null;
-    document.getElementById('rnMinuteModalTitle').innerHTML = `<i class="fa-solid fa-feather-pointed"></i> ${meeting ? 'Ata da reunião' : 'Nova ata'}`;
-    document.getElementById('rn-ata-title').value = meeting ? `Ata — ${meeting.title}` : '';
-    document.getElementById('rn-ata-date').value = meeting?.date || todayIso();
-    document.getElementById('rn-ata-content').value = '';
-    getMinuteViewers = mountPicker(document.getElementById('rn-ata-picker'), members, meeting ? meeting.participants.map(p => p.id) : []);
+    editingMinute = minute;
+    pendingFiles = [];
+    removedFiles = [];
+    keptFiles = minute ? [...(state.attachments.get(minute.id) || [])] : [];
+
+    let viewers = meeting ? meeting.participants.map(p => p.id) : [];
+    if (minute) {
+      const { data, error } = await db.from('meeting_minute_viewers').select('user_id').eq('minute_id', minute.id);
+      if (error) throw error;
+      viewers = (data || []).map(item => item.user_id);
+    }
+
+    minuteMeetingId = minute ? minute.scheduled_meeting_id || null : meeting?.source === 'scheduled' ? meeting.id : null;
+    const heading = minute ? 'Editar ata' : meeting ? 'Ata da reunião' : 'Nova ata';
+    document.getElementById('rnMinuteModalTitle').innerHTML = `<i class="fa-solid fa-feather-pointed"></i> ${heading}`;
+    document.getElementById('rn-ata-title').value = minute ? minute.title : meeting ? `Ata — ${meeting.title}` : '';
+    document.getElementById('rn-ata-date').value = minute ? minute.meeting_date : meeting?.date || todayIso();
+    document.getElementById('rn-ata-content').value = minute?.content || '';
+    document.getElementById('rnMinuteSave').innerHTML = `<i class="fa-solid fa-floppy-disk"></i> ${minute ? 'Salvar alterações' : 'Salvar ata'}`;
+    renderPendingFiles();
+    getMinuteViewers = mountPicker(document.getElementById('rn-ata-picker'), members, viewers);
+    closeModal('rnViewModal');
     openModal('rnMinuteModal');
+  }
+
+  async function saveMinuteViewers(minuteId, viewers, replace) {
+    if (replace) {
+      const { error } = await db.from('meeting_minute_viewers').delete().eq('minute_id', minuteId);
+      if (error) throw error;
+    }
+    if (!viewers.length) return;
+    const { error } = await db.from('meeting_minute_viewers')
+      .insert(viewers.map(user_id => ({ minute_id: minuteId, user_id, added_by: profile.id })));
+    if (error) throw error;
   }
 
   document.getElementById('rnMinuteSave')?.addEventListener('click', async event => {
@@ -542,45 +668,137 @@ async function initReunioes() {
     const title = document.getElementById('rn-ata-title').value.trim();
     const meeting_date = document.getElementById('rn-ata-date').value;
     if (!title || !meeting_date) return Utils.showToast('Preencha título e data.', 'error');
-    const payload = { title, meeting_date, type: 'geral', content: document.getElementById('rn-ata-content').value.trim() || null, created_by: profile.id };
-    if (minuteMeetingId) payload.scheduled_meeting_id = minuteMeetingId;
+    const content = document.getElementById('rn-ata-content').value.trim() || null;
     const viewers = getMinuteViewers();
+    const editing = editingMinute;
+    const idleLabel = `<i class="fa-solid fa-floppy-disk"></i> ${editing ? 'Salvar alterações' : 'Salvar ata'}`;
 
     button.disabled = true;
     try {
-      const { data: minute, error } = await db.from('meeting_minutes').insert(payload).select('id').single();
-      if (error) throw error;
-      if (viewers.length) {
-        const { error: viewerError } = await db.from('meeting_minute_viewers')
-          .insert(viewers.map(user_id => ({ minute_id: minute.id, user_id, added_by: profile.id })));
-        if (viewerError) {
-          console.error('[MSY][reunioes] Erro ao liberar leitores:', viewerError);
-          Utils.showToast('Ata salva, mas houve erro ao liberar os leitores.', 'error');
-        }
+      let minuteId;
+      if (editing) {
+        const { error } = await db.from('meeting_minutes').update({ title, meeting_date, content }).eq('id', editing.id);
+        if (error) throw error;
+        minuteId = editing.id;
+      } else {
+        const payload = { title, meeting_date, type: 'geral', content, created_by: profile.id };
+        if (minuteMeetingId) payload.scheduled_meeting_id = minuteMeetingId;
+        const { data, error } = await db.from('meeting_minutes').insert(payload).select('id').single();
+        if (error) throw error;
+        minuteId = data.id;
       }
+
+      try {
+        await saveMinuteViewers(minuteId, viewers, Boolean(editing));
+      } catch (viewerError) {
+        console.error('[MSY][reunioes] Erro ao salvar leitores:', viewerError);
+        Utils.showToast('Ata salva, mas houve erro ao atualizar os leitores.', 'error');
+      }
+
+      if (removedFiles.length) {
+        const { error: removeError } = await db.from('meeting_minute_attachments').delete().in('id', removedFiles.map(file => file.id));
+        if (removeError) console.error('[MSY][reunioes] Erro ao remover anexos:', removeError);
+        else await db.storage.from(FILES_BUCKET).remove(removedFiles.map(file => file.file_path)).catch(() => null);
+      }
+      if (pendingFiles.length) {
+        button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando anexos...';
+        const failed = await uploadMinuteFiles(minuteId, pendingFiles);
+        if (failed) Utils.showToast(`Ata salva, mas ${failed} anexo${failed === 1 ? '' : 's'} não ${failed === 1 ? 'pôde' : 'puderam'} ser enviado${failed === 1 ? '' : 's'}.`, 'error');
+      }
+
+      pendingFiles = [];
+      removedFiles = [];
+      editingMinute = null;
       closeModal('rnMinuteModal');
-      Utils.showToast('Ata registrada.');
+      Utils.showToast(editing ? 'Ata atualizada.' : 'Ata registrada.');
       await loadAll();
     } catch (error) {
       console.error('[MSY][reunioes] Erro ao salvar ata:', error);
       Utils.showToast('Erro ao salvar ata.', 'error');
     } finally {
       button.disabled = false;
+      button.innerHTML = idleLabel;
     }
   });
 
+  let viewingMinute = null;
+
   function openMinuteView(minute) {
     if (!minute) return Utils.showToast('Você não tem acesso a esta ata.', 'error');
+    viewingMinute = minute;
     const linked = state.meetings.find(m => m.source === 'scheduled' && m.id === minute.scheduled_meeting_id);
+    const files = state.attachments.get(minute.id) || [];
     document.getElementById('rnViewModalTitle').textContent = minute.title;
     document.getElementById('rnViewBody').innerHTML = `
       <div class="rn-view-meta">
         <span class="rn-chip rn-chip-agendada"><i class="fa-regular fa-calendar"></i> ${esc(Utils.formatDate(minute.meeting_date))}</span>
         ${linked ? `<span class="rn-chip rn-chip-muted"><i class="fa-solid fa-link"></i> ${esc(linked.title)}</span>` : ''}
+        ${isManager ? '<button type="button" class="rn-ata-btn rn-view-edit" data-view-act="edit"><i class="fa-solid fa-pen"></i> Editar ata</button>' : ''}
       </div>
-      <div class="rn-view-body">${esc(minute.content || 'Sem conteúdo registrado.')}</div>`;
+      <div class="rn-view-body">${esc(minute.content || 'Sem conteúdo registrado.')}</div>
+      ${files.length || isManager ? `<div class="rn-modal-section" style="margin-top:20px">Anexos</div>
+        <div class="rn-file-list">${files.map(file => `<div class="rn-file">
+          <i class="fa-solid ${fileIcon(file.mime_type || '', file.file_name)} rn-file-icon"></i>
+          <span class="rn-file-name">${esc(file.file_name)}</span><span class="rn-file-size">${esc(formatSize(file.file_size))}</span>
+          <button type="button" class="rn-icon-btn" data-file-act="download" data-id="${file.id}" title="Baixar"><i class="fa-solid fa-download"></i></button>
+          ${isManager ? `<button type="button" class="rn-icon-btn is-danger" data-file-act="remove" data-id="${file.id}" title="Remover anexo"><i class="fa-solid fa-trash"></i></button>` : ''}
+        </div>`).join('') || '<div class="rn-hint" style="margin:0">Nenhum anexo nesta ata.</div>'}</div>
+        ${isManager ? `<label class="rn-drop rn-drop-sm"><input type="file" multiple hidden data-file-act="add"><i class="fa-solid fa-paperclip"></i> Adicionar anexo</label>` : ''}` : ''}`;
     openModal('rnViewModal');
   }
+
+  document.getElementById('rnViewBody').addEventListener('click', async event => {
+    if (event.target.closest('[data-view-act="edit"]') && viewingMinute) {
+      try { await openMinuteModal(null, viewingMinute); } catch (error) {
+        console.error('[MSY][reunioes] Erro ao abrir edição da ata:', error);
+        Utils.showToast('Não foi possível abrir a ata para edição.', 'error');
+      }
+      return;
+    }
+    const button = event.target.closest('button[data-file-act]');
+    if (!button || !viewingMinute) return;
+    const file = (state.attachments.get(viewingMinute.id) || []).find(item => item.id === button.dataset.id);
+    if (!file) return;
+    try {
+      if (button.dataset.fileAct === 'download') {
+        const { data, error } = await db.storage.from(FILES_BUCKET).createSignedUrl(file.file_path, 300, { download: file.file_name });
+        if (error) throw error;
+        if (!window.open(data.signedUrl, '_blank', 'noopener')) window.location.href = data.signedUrl;
+      }
+      if (button.dataset.fileAct === 'remove') {
+        if (!(await MSYConfirm.show(`Remover "${file.file_name}" da ata?`, { title: 'Remover anexo' }))) return;
+        const { error } = await db.from('meeting_minute_attachments').delete().eq('id', file.id);
+        if (error) throw error;
+        await db.storage.from(FILES_BUCKET).remove([file.file_path]).catch(() => null);
+        state.attachments.set(viewingMinute.id, (state.attachments.get(viewingMinute.id) || []).filter(item => item.id !== file.id));
+        openMinuteView(viewingMinute);
+        renderTab();
+        Utils.showToast('Anexo removido.');
+      }
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro no anexo:', error);
+      Utils.showToast('Não foi possível acessar o anexo.', 'error');
+    }
+  });
+
+  document.getElementById('rnViewBody').addEventListener('change', async event => {
+    if (event.target.dataset.fileAct !== 'add' || !viewingMinute) return;
+    const files = acceptFiles(event.target.files, []);
+    if (!files.length) return;
+    const minute = viewingMinute;
+    Utils.showToast(`Enviando ${files.length} anexo${files.length === 1 ? '' : 's'}...`);
+    try {
+      const failed = await uploadMinuteFiles(minute.id, files);
+      state.attachments = await loadAttachments();
+      if (failed) Utils.showToast(`${failed} anexo${failed === 1 ? '' : 's'} não ${failed === 1 ? 'pôde' : 'puderam'} ser enviado${failed === 1 ? '' : 's'}.`, 'error');
+      else Utils.showToast('Anexos adicionados.');
+      openMinuteView(minute);
+      renderTab();
+    } catch (error) {
+      console.error('[MSY][reunioes] Erro ao enviar anexos:', error);
+      Utils.showToast('Erro ao enviar anexos.', 'error');
+    }
+  });
 
   let getAccessViewers = () => [];
   let accessMinuteId = null;
@@ -615,9 +833,11 @@ async function initReunioes() {
   });
 
   async function deleteMinute(id) {
-    if (!(await MSYConfirm.show('Excluir esta ata?', { title: 'Excluir ata' }))) return;
+    if (!(await MSYConfirm.show('Excluir esta ata e os anexos dela?', { title: 'Excluir ata' }))) return;
+    const paths = (state.attachments.get(id) || []).map(file => file.file_path);
     const { error } = await db.from('meeting_minutes').delete().eq('id', id);
     if (error) throw error;
+    if (paths.length) await db.storage.from(FILES_BUCKET).remove(paths).catch(() => null);
     Utils.showToast('Ata excluída.');
     await loadAll();
   }
@@ -699,6 +919,13 @@ function _injectMeetingModals(isManager) {
         <div class="form-group"><label class="form-label">Data *</label><input class="form-input" type="date" id="rn-ata-date"></div>
       </div>
       <div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input form-textarea" id="rn-ata-content" rows="8" placeholder="Decisões, responsáveis e próximos passos..."></textarea></div>
+      <div class="rn-modal-section">Anexos <span class="rn-optional">(opcional)</span></div>
+      <label class="rn-drop"><input type="file" id="rn-ata-files" multiple hidden>
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        <span>Clique para anexar arquivos</span>
+        <small>PDF, imagens, planilhas, áudios... até 100MB cada</small>
+      </label>
+      <div class="rn-file-list" id="rn-ata-file-list"></div>
       <div class="rn-modal-section">Quem pode ler</div>
       <div class="rn-hint">Além da gestão, só os membros marcados leem a ata. Os convidados da reunião já vêm marcados.</div>
       <div id="rn-ata-picker"></div>`,
