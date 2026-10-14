@@ -216,6 +216,8 @@
      async canAccess(pageKey, profile) {
        if (!pageKey || this.ALWAYS_ALLOWED.has(pageKey)) return true;
        if (pageKey === 'supervisao') return MSYSupervisionAccess.canAccess(profile);
+       // MSY Space: diretoria ou permissão 'acessar_space' (docs/msy-space/README.md)
+       if (pageKey === 'space') return profile?.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'acessar_space');
        if (profile?.tier === 'diretoria') return true;
        if (this.ADMIN_ONLY.has(pageKey)) return false;
 
@@ -486,6 +488,7 @@
    
      const isDiretoria = profile.tier === 'diretoria';
      const canAccessSupervision = await MSYSupervisionAccess.canAccess(profile);
+     const canAccessSpace = await MSYTabAccess.canAccess('space', profile);
      sidebar.classList.toggle('sidebar-collapsed', profile.sidebar_collapsed === true);
    
      const actBadgeCacheKey = `activity_badge:${profile.id}`;
@@ -545,6 +548,13 @@
              ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ''}
            </a>
          `).join('')}
+         ${canAccessSpace ? `
+           <div class="sidebar-section-label" style="margin-top:8px">MSY Space</div>
+           <a href="space.html" class="nav-item nav-item-space ${activePage === 'space' ? 'active' : ''}">
+             <i class="fa-solid fa-satellite-dish" style="color:#a855f7"></i>
+             <span>MSY Space</span>
+           </a>
+         ` : ''}
          ${canAccessSupervision ? `
            <div class="sidebar-section-label sidebar-supervision-label" style="margin-top:8px">Area de Supervisao</div>
            <a href="supervisao.html?v=20260718-ops4" class="nav-item ${activePage === 'supervisao' ? 'active' : ''}">

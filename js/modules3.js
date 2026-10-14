@@ -69,6 +69,9 @@ const MSYPerms = {
     { key: 'gerenciar_projetos',    label: 'Gerenciar Projetos',     group: 'Projetos',   icon: 'fa-diagram-project' },
     // â”€â”€ Supervisao
     { key: 'acessar_supervisao',    label: 'Acesso a Supervisao',    group: 'Supervisao', icon: 'fa-eye' },
+    // ── MSY Space (ver docs/msy-space/README.md)
+    { key: 'acessar_space',         label: 'Acessar o MSY Space',    group: 'MSY Space',  icon: 'fa-satellite-dish' },
+    { key: 'gerenciar_space',       label: 'Gerenciar canais do MSY Space', group: 'MSY Space', icon: 'fa-sliders' },
   ],
 
   // Cache de permissões do usuário atual
@@ -268,6 +271,7 @@ async function openPermissionsManager() {
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
+    'MSY Space':   { icon:'fa-satellite-dish', color:'#a855f7', keys:['acessar_space','gerenciar_space'] },
   };
   const CRITICAL_KEYS = new Set(['remover_membros','aprovar_membros','moderar_feed','gerenciar_mensalidade','gerenciar_jornal']);
   const LABELS = {};
@@ -525,6 +529,7 @@ function getPermissionsGroups() {
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
+    'MSY Space':   { icon:'fa-satellite-dish', color:'#a855f7', keys:['acessar_space','gerenciar_space'] },
   };
 }
 
