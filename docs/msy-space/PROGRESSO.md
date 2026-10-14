@@ -4,11 +4,11 @@
 > Visão geral e decisões: [README.md](README.md).
 
 ## Onde estamos (14/10/2026)
-- Código na branch **`msy-space`** (ainda NÃO está no `main`/site).
-- Banco ✅ · porte da voz ✅ · interface (canais, chat, sala de voz, cartão flutuante, moldura) ✅ escrita.
-- Testado no portal real (injetando os arquivos da branch no Brave do dono): canais, chat (enviar/link/apagar)
-  e entrada na sala OK. **Falta:** chamada entre 2 pessoas, tela/câmera, moldura navegando com chamada ativa.
-- **Próximo:** publicar no `main` (só diretoria vê) e testar uma chamada real com 2 pessoas.
+- ✅ **Publicado no `main`** (commit 52092bb) — https://www.portalmsy.site/space.html. Só diretoria + permissão `acessar_space` veem a aba.
+- Conferido no site: `space.html` responde, abre imersivo, canais e presença OK.
+- Observação: `js/app.js` fica até 1 h no cache do navegador (sem versão no nome); a aba "MSY Space" na sidebar
+  pode demorar a aparecer → **Ctrl+F5** resolve na hora.
+- **Próximo:** teste real de chamada entre 2 pessoas da diretoria (voz, tela, câmera, voltar ao portal com a chamada ativa).
 
 ## Plano de fases
 | Fase | Conteúdo | Status |
