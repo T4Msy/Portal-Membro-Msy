@@ -107,3 +107,10 @@ Limitações conhecidas:
   - ExpressTURN: `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL`; ou
   - Metered: `METERED_APP`, `METERED_API_KEY`.
 - Depois: repetir o teste com alguém no 4G (o quadro mostra "TURN" quando a conexão passa pelo intermediário).
+
+## 14/10/2026 — TURN funcionando (ExpressTURN, plano grátis)
+- Secrets configurados pelo dono: `TURN_URLS=turn:free.expressturn.com:3478`, `TURN_USERNAME`, `TURN_CREDENTIAL`.
+  **Atenção:** o servidor do plano grátis é `free.expressturn.com` (o `relay1` deu 401).
+- Teste no portal logado: `RTCPeerConnection` com `iceTransportPolicy: 'relay'` gerou candidato **relay** → TURN aceito.
+- Quem já estava com o Space aberto pode levar até 10 min para pegar o TURN (cache de `iceServers.js`); recarregar resolve.
+- **Próximo:** repetir a chamada com alguém no 4G — o quadro da pessoa deve mostrar "TURN" nas estatísticas.
