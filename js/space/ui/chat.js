@@ -68,6 +68,10 @@ export class ChatView {
     this.resizeObs.observe(this.scrollEl);
     this.el.addEventListener('click', (e) => this.onClick(e));
     this.el.querySelector('.sp-composer').addEventListener('submit', (e) => { e.preventDefault(); this.submit(); });
+    // Enviar não tira o foco do campo: no celular o teclado continua aberto (como no WhatsApp).
+    const sendBtn = this.el.querySelector('.sp-send');
+    sendBtn.addEventListener('pointerdown', (e) => e.preventDefault());
+    sendBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.submit(); });
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.submit(); }
     });
