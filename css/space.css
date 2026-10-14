@@ -697,3 +697,64 @@ html.sp-shell-on .sp-shell-frame { display: block; }
 
 /* ── Tema claro: o Space continua escuro (é uma "sala") ───────── */
 [data-theme="light"] body[data-page="space"] .sp-app { color-scheme: dark; }
+
+/* ── Confirmação (MSYConfirm) ─────────────────────────────────
+   O estilo padrão vive em premium.css, que o Space não carrega.
+   Sem isto o modal cai sem estilo no fim da página. */
+body[data-page="space"] #msy-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .2s var(--ease), visibility .2s var(--ease);
+}
+body[data-page="space"] #msy-confirm-overlay.open { opacity: 1; visibility: visible; }
+body[data-page="space"] #msy-confirm-box {
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  background: var(--sp-bg-3);
+  border: 1px solid rgba(168, 85, 247, .28);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .85), inset 0 1px 0 rgba(255, 255, 255, .05);
+  transform: translateY(16px) scale(.96);
+  transition: transform .22s var(--ease);
+}
+body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box { transform: none; }
+body[data-page="space"] #msy-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--sp-line);
+}
+body[data-page="space"] #msy-confirm-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+body[data-page="space"] #msy-confirm-icon.danger { background: var(--red-subtle); color: var(--red-bright); border: 1px solid var(--border-red); }
+body[data-page="space"] #msy-confirm-icon.warn { background: rgba(245, 158, 11, .1); color: var(--sp-warn); border: 1px solid rgba(245, 158, 11, .25); }
+body[data-page="space"] #msy-confirm-icon.info { background: var(--sp-accent-soft); color: var(--sp-accent); border: 1px solid rgba(168, 85, 247, .3); }
+body[data-page="space"] #msy-confirm-title { font-family: "Cinzel", serif; font-size: .95rem; font-weight: 700; color: var(--text-1); }
+body[data-page="space"] #msy-confirm-body { padding: 16px 22px 20px; font-size: .88rem; line-height: 1.6; color: var(--text-2); }
+body[data-page="space"] #msy-confirm-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 22px 20px; }
+
+@media (max-width: 768px) {
+  body[data-page="space"] #msy-confirm-overlay { padding: 16px; }
+  body[data-page="space"] #msy-confirm-footer { flex-direction: column-reverse; }
+  body[data-page="space"] #msy-confirm-footer .btn { width: 100%; }
+}
