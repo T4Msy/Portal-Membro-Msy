@@ -159,9 +159,9 @@ async function initReunioes() {
   /* ── Carregamento ────────────────────────────────────── */
   async function loadMinutes() {
     const base = 'id,title,meeting_date,type,content,created_at';
-    let res = await db.from('meeting_minutes').select(`${base},scheduled_meeting_id`).order('meeting_date', { ascending: false });
+    let res = await db.from('meeting_minutes').select(`${base},scheduled_meeting_id,meeting_id`).order('meeting_date', { ascending: false });
     // Fallback enquanto a migration 20261013_meetings_redesign não foi aplicada
-    if (res.error && /scheduled_meeting_id/.test(res.error.message || '')) {
+    if (res.error && /scheduled_meeting_id|meeting_id/.test(res.error.message || '')) {
       res = await db.from('meeting_minutes').select(base).order('meeting_date', { ascending: false });
     }
     if (res.error) throw res.error;
@@ -194,6 +194,7 @@ async function initReunioes() {
       state.attachments = attachments;
       state.requests = requests.data || [];
       const minuteByMeeting = new Map(minutes.filter(m => m.scheduled_meeting_id).map(m => [m.scheduled_meeting_id, m]));
+      const minuteByLegacy = new Map(minutes.filter(m => m.meeting_id).map(m => [m.meeting_id, m]));
 
       state.meetings = [
         ...(scheduled.data || []).map(item => ({
@@ -218,7 +219,7 @@ async function initReunioes() {
           status: item.status === 'realizada' ? 'concluida' : item.status === 'cancelada' ? 'cancelada' : 'agendada',
           participants: [],
           audience: item.type === 'diretoria' ? 'Só a Diretoria' : 'Todos os membros',
-          minute: null,
+          minute: minuteByLegacy.get(item.id) || null,
         })),
       ];
       updateCounters();
@@ -229,6 +230,9 @@ async function initReunioes() {
       Utils.showToast('Erro ao carregar reuniões.', 'error');
     }
   }
+
+  const linkedMeeting = minute => state.meetings.find(m =>
+    (m.source === 'scheduled' && m.id === minute.scheduled_meeting_id) || (m.source === 'legacy' && m.id === minute.meeting_id));
 
   const isUpcoming = meeting => meeting.status === 'agendada' && meeting.date >= todayIso();
 
@@ -297,8 +301,8 @@ async function initReunioes() {
         </div>`;
 
     let ataButton = '';
-    if (meeting.minute) ataButton = `<button class="rn-ata-btn is-ready" data-act="view-ata" data-id="${meeting.id}"><i class="fa-solid fa-scroll"></i> Ver ata</button>`;
-    else if (isManager && meeting.source === 'scheduled' && meeting.status !== 'cancelada') ataButton = `<button class="rn-ata-btn" data-act="write-ata" data-id="${meeting.id}"><i class="fa-solid fa-feather-pointed"></i> Escrever ata</button>`;
+    if (meeting.minute) ataButton = `<button class="rn-ata-btn is-ready" data-act="view-ata" data-id="${meeting.id}" data-source="${meeting.source}"><i class="fa-solid fa-scroll"></i> Ver ata</button>`;
+    else if (isManager && meeting.status !== 'cancelada') ataButton = `<button class="rn-ata-btn" data-act="write-ata" data-id="${meeting.id}" data-source="${meeting.source}"><i class="fa-solid fa-feather-pointed"></i> Escrever ata</button>`;
 
     let actions = '';
     if (isManager) {
@@ -342,7 +346,6 @@ async function initReunioes() {
   }
 
   function renderMinutes() {
-    const meetingTitle = new Map(state.meetings.filter(m => m.source === 'scheduled').map(m => [m.id, m.title]));
     const header = isManager ? `<div style="margin-bottom:16px"><button class="btn btn-primary" data-act="new-ata"><i class="fa-solid fa-plus"></i> Nova Ata</button></div>` : '';
     if (!state.minutes.length) return header + emptyState('fa-scroll', 'Nenhuma ata disponível ainda.');
     return header + state.minutes.map(minute => `<div class="rn-row card-enter">
@@ -351,7 +354,7 @@ async function initReunioes() {
         <div class="rn-row-title">${esc(minute.title)}</div>
         <div class="rn-meta">
           <span><i class="fa-regular fa-calendar"></i>${esc(Utils.formatDate(minute.meeting_date))}</span>
-          ${minute.scheduled_meeting_id && meetingTitle.has(minute.scheduled_meeting_id) ? `<span><i class="fa-solid fa-link"></i>${esc(meetingTitle.get(minute.scheduled_meeting_id))}</span>` : ''}
+          ${linkedMeeting(minute) ? `<span><i class="fa-solid fa-link"></i>${esc(linkedMeeting(minute).title)}</span>` : ''}
           ${state.attachments.get(minute.id)?.length ? `<span><i class="fa-solid fa-paperclip"></i>${state.attachments.get(minute.id).length} anexo${state.attachments.get(minute.id).length === 1 ? '' : 's'}</span>` : ''}
         </div>
       </div>
@@ -380,10 +383,11 @@ async function initReunioes() {
         </div>
         ${request.descricao ? `<div class="rn-row-text">${esc(request.descricao)}</div>` : ''}
       </div>
-      ${withActions ? `<div class="rn-row-actions">
-        <button class="btn btn-gold btn-sm" data-act="accept-request" data-id="${request.id}"><i class="fa-solid fa-calendar-plus"></i> Aceitar e marcar</button>
-        <button class="btn btn-ghost btn-sm" data-act="refuse-request" data-id="${request.id}"><i class="fa-solid fa-xmark"></i> Recusar</button>
-      </div>` : ''}
+      <div class="rn-row-actions">
+        ${withActions ? `<button class="btn btn-gold btn-sm" data-act="accept-request" data-id="${request.id}"><i class="fa-solid fa-calendar-plus"></i> Aceitar e marcar</button>
+        <button class="btn btn-ghost btn-sm" data-act="refuse-request" data-id="${request.id}"><i class="fa-solid fa-xmark"></i> Recusar</button>` : ''}
+        <button class="rn-icon-btn is-danger" data-act="delete-request" data-id="${request.id}" title="Excluir solicitação"><i class="fa-solid fa-trash"></i></button>
+      </div>
     </div>`;
     return (pending.length ? sectionLabel('fa-inbox', `Aguardando resposta (${pending.length})`) + pending.map(r => row(r, true)).join('') : emptyState('fa-inbox', 'Nenhuma solicitação pendente.'))
       + (resolved.length ? sectionLabel('fa-check-double', 'Respondidas', true) + resolved.map(r => row(r, false)).join('') : '');
@@ -409,6 +413,7 @@ async function initReunioes() {
       if (act === 'minute-delete') await deleteMinute(id);
       if (act === 'accept-request') await acceptRequest(id);
       if (act === 'refuse-request') await refuseRequest(id);
+      if (act === 'delete-request') await deleteRequest(id);
     } catch (error) {
       console.error('[MSY][reunioes] Ação falhou:', act, error);
       Utils.showToast('Não foi possível concluir a ação. Tente novamente.', 'error');
@@ -437,6 +442,16 @@ async function initReunioes() {
     const { error } = await db.from(meeting.source === 'legacy' ? 'meetings' : 'scheduled_meetings').delete().eq('id', meeting.id);
     if (error) throw error;
     Utils.showToast('Reunião excluída.');
+    await loadAll();
+  }
+
+  async function deleteRequest(id) {
+    if (!(await MSYConfirm.show('Excluir esta solicitação? Reuniões já marcadas a partir dela continuam na agenda.', { title: 'Excluir solicitação' }))) return;
+    const { data, error } = await db.from('meeting_requests').delete().eq('id', id).select('id');
+    if (error) throw error;
+    // Sem permissão de exclusão o RLS não devolve erro, só não apaga nada
+    if (!data?.length) return Utils.showToast('Sem permissão para excluir esta solicitação.', 'error');
+    Utils.showToast('Solicitação excluída.');
     await loadAll();
   }
 
@@ -591,7 +606,7 @@ async function initReunioes() {
 
   /* ── Atas (criar e editar) ───────────────────────────── */
   let getMinuteViewers = () => [];
-  let minuteMeetingId = null;
+  let minuteLink = {};
   let editingMinute = null;
   let pendingFiles = [];
   let keptFiles = [];
@@ -633,13 +648,17 @@ async function initReunioes() {
     keptFiles = minute ? [...(state.attachments.get(minute.id) || [])] : [];
 
     let viewers = meeting ? meeting.participants.map(p => p.id) : [];
+    // Reuniões antigas não têm convidados: sugere a Diretoria ou todos, conforme o tipo
+    if (meeting?.source === 'legacy') viewers = members.filter(m => meeting.audience !== 'Só a Diretoria' || m.tier === 'diretoria').map(m => m.id);
     if (minute) {
       const { data, error } = await db.from('meeting_minute_viewers').select('user_id').eq('minute_id', minute.id);
       if (error) throw error;
       viewers = (data || []).map(item => item.user_id);
     }
 
-    minuteMeetingId = minute ? minute.scheduled_meeting_id || null : meeting?.source === 'scheduled' ? meeting.id : null;
+    minuteLink = minute ? {}
+      : meeting?.source === 'scheduled' ? { scheduled_meeting_id: meeting.id }
+      : meeting?.source === 'legacy' ? { meeting_id: meeting.id } : {};
     const heading = minute ? 'Editar ata' : meeting ? 'Ata da reunião' : 'Nova ata';
     document.getElementById('rnMinuteModalTitle').innerHTML = `<i class="fa-solid fa-feather-pointed"></i> ${heading}`;
     document.getElementById('rn-ata-title').value = minute ? minute.title : meeting ? `Ata — ${meeting.title}` : '';
@@ -682,7 +701,7 @@ async function initReunioes() {
         minuteId = editing.id;
       } else {
         const payload = { title, meeting_date, type: 'geral', content, created_by: profile.id };
-        if (minuteMeetingId) payload.scheduled_meeting_id = minuteMeetingId;
+        Object.assign(payload, minuteLink);
         const { data, error } = await db.from('meeting_minutes').insert(payload).select('id').single();
         if (error) throw error;
         minuteId = data.id;
@@ -726,7 +745,7 @@ async function initReunioes() {
   function openMinuteView(minute) {
     if (!minute) return Utils.showToast('Você não tem acesso a esta ata.', 'error');
     viewingMinute = minute;
-    const linked = state.meetings.find(m => m.source === 'scheduled' && m.id === minute.scheduled_meeting_id);
+    const linked = linkedMeeting(minute);
     const files = state.attachments.get(minute.id) || [];
     document.getElementById('rnViewModalTitle').textContent = minute.title;
     document.getElementById('rnViewBody').innerHTML = `
