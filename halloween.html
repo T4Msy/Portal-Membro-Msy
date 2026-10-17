@@ -6,7 +6,7 @@
 <meta property="og:description" content="De 24/10 a 01/11, nove dias de mistérios, desafios e eventos. Abra o convite e descubra o que te espera.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#040203">
-<link rel="stylesheet" href="css/halloween.css?v=20261017-1">
+<link rel="stylesheet" href="css/halloween.css?v=20261017-2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Special+Elite&family=VT323&display=swap">
@@ -681,7 +681,7 @@ const Sound={ctx:null,master:null,bus:null,on:false,failed:false,noise:null,rate
  unlock(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}
   try{if(!this.keep){const a=this.keep=new Audio(SILENT_WAV);a.loop=true;a.preload="auto";a.setAttribute("playsinline","")}
    const p=this.keep.play();if(p&&p.catch)p.catch(()=>{})}catch(e){}},
- wake(){if(!this.on||!this.ctx||document.hidden)return;if(this.ctx.state!=="running")this.ctx.resume().catch(()=>{});if(this.keep&&this.keep.paused){const p=this.keep.play();if(p&&p.catch)p.catch(()=>{})}},
+ wake(){if(!this.on||!this.ctx||document.hidden)return;if(this.ctx.state!=="running")this.kick();if(this.keep&&this.keep.paused){const p=this.keep.play();if(p&&p.catch)p.catch(()=>{})}},
  sleep(){if(this.keep)this.keep.pause();if(this.ctx&&this.ctx.state==="running")this.ctx.suspend().catch(()=>{})},
  init(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("noaudio");
   const c=this.ctx=new AC();this.master=c.createGain();this.master.gain.value=0;
@@ -703,8 +703,14 @@ const Sound={ctx:null,master:null,bus:null,on:false,failed:false,noise:null,rate
   const beat=()=>{if(this.on)this.heart();setTimeout(beat,this.rate)};setTimeout(beat,1000);
   const amb=()=>{if(this.on&&!S.calm&&S.scene!=="gate"&&S.scene!=="intro"){const r=Math.random();if(r<.4)this.sfx("whispers");else if(r<.7)this.sfx("creak");else if(r<.85)this.sfx("knock");else this.sfx("scream")}setTimeout(amb,9000+Math.random()*12000)};setTimeout(amb,7000);
  },
- async enable(){if(this.failed)return false;this.unlock();try{if(!this.ctx)this.init();await this.ctx.resume();this.on=true;const n=this.ctx.currentTime;this.master.gain.cancelScheduledValues(n);this.master.gain.setTargetAtTime(.95,n,.3);}catch(e){this.failed=true;this.on=false}ui();return this.on},
- disable(){if(this.keep)this.keep.pause();if(!this.ctx)return;this.on=false;const n=this.ctx.currentTime;this.master.gain.cancelScheduledValues(n);this.master.gain.setTargetAtTime(0,n,.2);this.projector(false);ui()},
+ async enable(){if(this.failed)return false;this.unlock();
+  try{if(!this.ctx)this.init()}catch(e){this.err=String(e&&e.message||e);if(!this.ctx){this.failed=!(window.AudioContext||window.webkitAudioContext)}ui();return false}
+  this.on=true;this.kick();try{const n=this.ctx.currentTime;this.master.gain.cancelScheduledValues(n);this.master.gain.setTargetAtTime(.95,n,.3)}catch(e){}ui();
+  /* Não fica esperando: no iPhone o resume() às vezes demora ou falha; cada toque seguinte tenta de novo (wake). */
+  try{await Promise.race([this.ctx.resume(),new Promise(r=>setTimeout(r,1200))])}catch(e){this.err=String(e&&e.message||e)}return this.on},
+ /* Toca um trecho mudo dentro do próprio toque: é o que destrava a Web Audio no iPhone. */
+ kick(){try{const c=this.ctx;if(c.state!=="running")c.resume().catch(e=>{this.err=String(e&&e.message||e)});const b=c.createBuffer(1,1,c.sampleRate),s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start(0)}catch(e){}},
+ disable(){if(this.keep)this.keep.pause();if(!this.ctx)return;this.on=false;const n=this.ctx.currentTime;this.master.gain.cancelScheduledValues(n);this.master.gain.setTargetAtTime(0,n,.2);this.projector(false);this.tv(false);ui()},
  toggle(){return this.on?this.disable():this.enable()},
  duck(on){if(!this.ctx)return;const n=this.ctx.currentTime;this.drone.gain.cancelScheduledValues(n);this.drone.gain.setTargetAtTime(on?0:1,n,on?.05:.8)},
  heart(){if(!this.on)return;try{this.tone(64,36,.18,.55);this.tone(58,32,.16,.36,"sine",.22)}catch(e){}},
@@ -718,10 +724,23 @@ const Sound={ctx:null,master:null,bus:null,on:false,failed:false,noise:null,rate
    for(let i=0;i<len;i++){const ph=(i/len*24)%1;d[i]=(Math.random()*2-1)*(.05+(ph<.03?.9:0)*(1-ph/.03))}
    const s=c.createBufferSource();s.buffer=b;s.loop=true;const f=c.createBiquadFilter();f.type="bandpass";f.frequency.value=1800;f.Q.value=.6;const g=c.createGain();g.gain.value=.16;s.connect(f);f.connect(g);g.connect(this.master);s.start();this.proj={s,g}}
   else if(!on&&this.proj){try{this.proj.s.stop()}catch(e){}this.proj=null}},
+ beepTV(dur){const c=this.ctx,t=c.currentTime,o=c.createOscillator(),g=c.createGain();o.type="sine";o.frequency.value=1000;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.32,t+.006);g.gain.setValueAtTime(.32,t+dur);g.gain.linearRampToValueAtTime(0,t+dur+.012);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.05)},
+ /* Chiado de TV fora do ar: ruído branco brilhante, estalos e o zumbido da rede elétrica. */
+ tvBuffer(){if(this.tvBuf)return this.tvBuf;const c=this.ctx,len=c.sampleRate*2,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);let crack=0;
+  for(let i=0;i<len;i++){if(Math.random()<.0009)crack=1;crack*=.985;const hum=Math.sin(i/c.sampleRate*6.283*60)*.05;d[i]=(Math.random()*2-1)*(.62+crack*.9)+hum}return this.tvBuf=b},
+ tvHiss(dur,gain){const c=this.ctx,t=c.currentTime,s=c.createBufferSource();s.buffer=this.tvBuffer();const hp=c.createBiquadFilter();hp.type="highpass";hp.frequency.value=700;const lp=c.createBiquadFilter();lp.type="lowpass";lp.frequency.value=9000;
+  const g=c.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(gain,t+.015);g.gain.setValueAtTime(gain,t+dur*.7);g.gain.linearRampToValueAtTime(0,t+dur);s.connect(hp);hp.connect(lp);lp.connect(g);g.connect(this.master);s.start(t,Math.random()*1.5);s.stop(t+dur+.05)},
+ tv(on){if(!this.ctx)return;if(on&&this.on&&!this.tvLoop){const c=this.ctx,s=c.createBufferSource();s.buffer=this.tvBuffer();s.loop=true;const hp=c.createBiquadFilter();hp.type="highpass";hp.frequency.value=600;const lp=c.createBiquadFilter();lp.type="lowpass";lp.frequency.value=8500;
+   const g=c.createGain(),t=c.currentTime;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.2,t+.08);s.connect(hp);hp.connect(lp);lp.connect(g);g.connect(this.master);s.start();this.tvLoop={s,g}}
+  else if(!on&&this.tvLoop){const{s,g}=this.tvLoop,t=this.ctx.currentTime;this.tvLoop=null;try{g.gain.setTargetAtTime(0,t,.04);s.stop(t+.3)}catch(e){}}},
  sfx(n){if(!this.on||!this.ctx)return;try{switch(n){
   case "beep":this.tone(1000,1000,.09,.28,"sine");break;
+  /* Contagem estilo TV: bipe curto de 1 kHz por número; o último é longo. */
+  case "count":this.beepTV(.16);break;
+  case "countEnd":this.beepTV(.85);break;
   case "tick":this.burst(.03,"highpass",2500,2500,.25);break;
-  case "static":this.burst(.35,"highpass",1500,1500,.24,.5);break;
+  case "static":this.tvHiss(.5,.34);break;
   case "insert":this.burst(.08,"lowpass",900,300,.4,.7);this.tone(120,60,.15,.35);this.burst(.05,"bandpass",2400,2000,.2,2,.25);this.burst(.05,"bandpass",2400,2000,.2,2,.32);this.burst(.6,"bandpass",400,700,.06,2,.4);break;
   case "whispers":{const fs=[700,1100,1600,2400,3200],sd=Math.random()<.5?-1:1;for(let i=0;i<12;i++){const f=fs[Math.floor(Math.random()*fs.length)];this.burst(.14+Math.random()*.22,"bandpass",f,f*.85,.07,10,i*.14+Math.random()*.05,sd*(1-i/12*2)*.9)}break}
   case "creak":this.osc("sawtooth",150,90,1.6,.07,0,"bandpass",700,6,19,.25);break;
@@ -890,9 +909,10 @@ function leader(n,p){const c=$("#leader"),g=c.getContext("2d"),S2=600,cx=300,cy=
  for(let i=0;i<40;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*.4})`;g.fillRect(Math.random()*S2,Math.random()*S2,Math.random()*3,Math.random()*3)}}
 async function runTape(){const tok=tape={skip:false};const w=async ms=>{if(!tok.skip)await sleep(ms);return tok.skip};
  go("intro");const L=$("#leader");L.hidden=false;$$(".card").forEach(c=>c.classList.remove("on"));Sound.projector(true);
- for(const n of [5,4,3]){Sound.sfx("tick");const t0=performance.now();await new Promise(r=>{const f=now=>{if(tok.skip)return r();const p=Math.min(1,(now-t0)/950);leader(n,p);if(p<1)requestAnimationFrame(f);else r()};requestAnimationFrame(f)});if(tok.skip)break}
- if(!tok.skip){leader(2,0);Sound.sfx("beep");await w(110);L.hidden=true;if(await w(700))return finishTape(tok)}
- L.hidden=true;
+ Sound.tv(true);
+ for(const n of [5,4,3]){Sound.sfx("count");const t0=performance.now();await new Promise(r=>{const f=now=>{if(tok.skip)return r();const p=Math.min(1,(now-t0)/950);leader(n,p);if(p<1)requestAnimationFrame(f);else r()};requestAnimationFrame(f)});if(tok.skip)break}
+ if(!tok.skip){leader(2,0);Sound.sfx("countEnd");await w(850);Sound.tv(false);L.hidden=true;if(await w(400))return finishTape(tok)}
+ L.hidden=true;Sound.tv(false);
  const card=async(id,ms)=>{const c=$(id);c.classList.add("on");if(await w(ms)){c.classList.remove("on");return true}c.classList.remove("on");return false};
  const cut=async()=>{Static.burst(110,.5);Sound.sfx("static");return w(140)};
  if(await card("#c1",2300))return finishTape(tok);
@@ -905,7 +925,7 @@ async function runTape(){const tok=tape={skip:false};const w=async ms=>{if(!tok.
  Sound.projector(false);Sound.heart();
  if(await card("#c3",2600))return finishTape(tok);
  finishTape(tok)}
-function finishTape(tok){if(tok.done)return;tok.done=true;tok.skip=true;$$(".card").forEach(c=>c.classList.remove("on"));Sound.projector(false);Static.burst(260,.45);Sound.sfx("static");go("invite");dripAll()}
+function finishTape(tok){if(tok.done)return;tok.done=true;tok.skip=true;Sound.tv(false);$$(".card").forEach(c=>c.classList.remove("on"));Sound.projector(false);Static.burst(260,.45);Sound.sfx("static");go("invite");dripAll()}
 $("#btnSkip").addEventListener("click",()=>{if(tape)tape.skip=true;finishTape(tape||{})});
 $("#btnReplay").addEventListener("click",()=>runTape());
 
