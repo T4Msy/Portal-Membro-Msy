@@ -940,3 +940,7 @@ body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-footer { animatio
 }
 body[data-page="space"] .sp-dev-item.sp-dev-allow { color: #d8b4fe; background: rgba(168, 85, 247, .12); }
 body[data-page="space"] .sp-dev-item.sp-dev-allow i { color: #d8b4fe; }
+/* Botões do painel estilo Discord: ignoram o mínimo global de 44px do portal (alvo de toque). */
+body[data-page="space"] .sp-me-group button { min-width: 0 !important; min-height: 0 !important; padding: 0 !important; }
+body[data-page="space"] .sp-me-group button:first-child { width: 32px !important; }
+body[data-page="space"] .sp-me-group .sp-me-chev { width: 16px !important; padding-right: 4px !important; }
