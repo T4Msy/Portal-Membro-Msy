@@ -39,6 +39,12 @@ export class VoiceController extends EventTarget {
     this.unsubscribe = session.subscribe(() => this.onSnapshot(session));
     this.onSnapshot(session);
     await session.join(channel.id, channel.user_limit);
+    // Como no Discord: se já estava mutado/ensurdecido fora da chamada, entra assim.
+    if (session === this.session && session.getSnapshot().status === 'connected') {
+      const p = this.prefs.get();
+      if (p.selfMute && !session.getSnapshot().local.muted && session.getSnapshot().local.micAvailable) await session.toggleMute();
+      if (p.selfDeaf && !session.getSnapshot().local.deafened) session.toggleDeafen();
+    }
 
     const snap = session.getSnapshot();
     if (snap.local.micError && snap.status === 'connected') {
@@ -105,8 +111,19 @@ export class VoiceController extends EventTarget {
     });
   }
 
-  toggleMute() { this.run((s) => s.toggleMute()); }
-  toggleDeafen() { this.run((s) => s.toggleDeafen()); }
+  /** Mutar/ensurdecer valem dentro e fora da chamada (fora, fica guardado para a próxima). */
+  get selfMuted() { return this.snapshot ? this.snapshot.local.muted : Boolean(this.prefs.get().selfMute); }
+  get selfDeafened() { return this.snapshot ? this.snapshot.local.deafened : Boolean(this.prefs.get().selfDeaf); }
+
+  toggleMute() {
+    if (!this.session) { this.prefs.update({ selfMute: !this.prefs.get().selfMute }); this.emit(); return; }
+    this.run(async (s) => { await s.toggleMute(); this.prefs.update({ selfMute: s.getSnapshot().local.muted }); });
+  }
+
+  toggleDeafen() {
+    if (!this.session) { this.prefs.update({ selfDeaf: !this.prefs.get().selfDeaf }); this.emit(); return; }
+    this.run((s) => { s.toggleDeafen(); this.prefs.update({ selfDeaf: s.getSnapshot().local.deafened }); });
+  }
   toggleCamera() { this.run((s) => s.toggleCamera()); }
   startScreen(withAudio) { this.run((s) => s.startScreen(withAudio)); }
   stopScreen() { this.run((s) => s.stopScreen()); }

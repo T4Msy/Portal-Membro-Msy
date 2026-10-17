@@ -124,3 +124,14 @@ Limitações conhecidas:
   A tela explica e mostra só o que o navegador liberar. **Planejado para o app Android novo** (controle nativo de áudio).
 - Testado no Brave (injeção da branch): 4 microfones + 8 saídas listados, sem erros. Corrigido: botão liga/desliga
   virava bolinha por causa da regra global do portal `input { min-height: 44px }`.
+
+## 17/10/2026 — Painel do usuário estilo Discord (pedido do dono, com print do Discord)
+- `js/space/ui/nav.js` (`userPanelHtml`): foto com bolinha de status (verde = disponível, roxo = em chamada), nome,
+  **microfone e fone com setinha** que abre a lista de dispositivos de entrada/saída (troca na hora, inclusive em chamada),
+  e atalho "Configurações de voz".
+- Mutar/ensurdecer funcionam **fora da chamada** (como no Discord): ficam em `space_preferences` (`selfMute`/`selfDeaf`)
+  e são aplicados ao entrar na sala (`voice-controller.js`).
+- Sem permissão de microfone o navegador esconde os dispositivos → o menu mostra "Permitir acesso aos dispositivos".
+- A branch `space-panel` foi juntada com o `main` (que tinha recebido melhorias do Space em outra sessão) sem conflitos.
+- Corrigido: botões do painel ficavam com 44px de largura por causa da regra global do portal (alvo de toque) → nome espremido.
+- Testado no Brave (injeção da branch): painel 48px por grupo, menu com o item de permissão, sem erros.

@@ -13,7 +13,7 @@
   const esc = (value) => Utils.escapeHtml(String(value ?? ''));
   const canOperate = () => state.profile?.tier === 'diretoria' || (state.data?.team || []).some((member) => member.user_id === state.profile?.id && member.role === 'coordinator');
   const statusKey = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const isClosed = (activity) => ['concluida', 'cancelada'].includes(statusKey(activity.status));
+  const isClosed = (activity) => ['concluida', 'incompleta', 'cancelada'].includes(statusKey(activity.status));
   const dateDue = (value) => value ? new Date(`${value}T23:59:59`) : null;
   const deliveryDeadline = (item) => {
     const date = item.deadline || item.prazo;
@@ -143,7 +143,7 @@
     const upcomingEvents = data.events.filter((event) => new Date(`${event.event_date}T23:59:59`) >= day);
     const pendingPayments = data.profiles.filter((profile) => !data.payments.some((payment) => payment.user_id === profile.id && statusKey(payment.status) === 'pago'));
     const members = buildMemberPerformance(data, day);
-    const completedActivities = data.activities.filter((activity) => statusKey(activity.status) === 'concluida');
+    const completedActivities = data.activities.filter((activity) => ['concluida', 'incompleta'].includes(statusKey(activity.status)));
     const completedLate = completedActivities.filter((activity) => {
       const completedAt = activity.closes_at ? new Date(activity.closes_at) : null;
       return completedAt && deliveryDeadline(activity) && completedAt > deliveryDeadline(activity);
@@ -203,7 +203,7 @@
       const projectTasks = data.tasks.filter((task) => task.assigned_to === profile.id);
       const completedProjectTasks = projectTasks.filter((task) => statusKey(task.status) === 'concluida').map((task) => ({ ...task, title: `[Projeto] ${task.title}`, deadline: task.prazo, status: 'Concluida' }));
       const openProjectTasks = projectTasks.filter((task) => statusKey(task.status) !== 'concluida').map((task) => ({ ...task, title: `[Projeto] ${task.title}`, deadline: task.prazo, status: statusKey(task.status) === 'em_andamento' ? 'Em andamento' : 'Pendente' }));
-      const completed = [...activities.filter((activity) => statusKey(activity.status) === 'concluida'), ...completedProjectTasks];
+      const completed = [...activities.filter((activity) => ['concluida', 'incompleta'].includes(statusKey(activity.status))), ...completedProjectTasks];
       const late = activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) !== 'em andamento' && dateDue(activity.deadline) && dateDue(activity.deadline) < day);
       const pending = [...activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) === 'pendente'), ...openProjectTasks.filter((task) => task.status === 'Pendente')];
       const ongoing = [...activities.filter((activity) => !isClosed(activity) && statusKey(activity.status) === 'em andamento'), ...openProjectTasks.filter((task) => task.status === 'Em andamento')];

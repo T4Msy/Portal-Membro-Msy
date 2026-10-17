@@ -399,8 +399,16 @@
        return true;
      },
      statusBadge(status) {
-       const map = { 'Pendente':'badge-pending','Em andamento':'badge-progress','Concluída':'badge-done','Cancelada':'badge-red' };
-       return `<span class="badge ${map[status]||'badge-gold'}">${status}</span>`;
+       const map = { 'Pendente':'badge-pending','Em andamento':'badge-progress','Concluída':'badge-done','Incompleta':'badge-incomplete','Cancelada':'badge-red' };
+       return `<span class="badge ${map[status]||'badge-gold'}">${Utils.activityStatusLabel(status)}</span>`;
+     },
+     /** 'Incompleta' = atividade encerrada sem entregar tudo (vale meia no desempenho). */
+     activityStatusLabel(status) {
+       return status === 'Incompleta' ? 'Concluída (incompleta)' : status;
+     },
+     /** Atividade encerrada (inteira ou incompleta): sai de prazos/atrasos e não aceita mais respostas. */
+     isActivityFinished(status) {
+       return status === 'Concluída' || status === 'Incompleta';
      },
      tierBadge(tier) {
        return tier === 'diretoria'
@@ -1619,12 +1627,12 @@
          const deadlineDiff = diff ?? 0;
          const passed = Utils.isDeadlinePassed(act);
          const hasExt = Utils.hasExtendedDeadline(act);
-         const urgentClass = diff !== null && diff <= 3 && act.status !== 'Concluída' && !passed ? 'urgent' : '';
+         const urgentClass = diff !== null && diff <= 3 && !Utils.isActivityFinished(act.status) && !passed ? 'urgent' : '';
          const recipientNames = [act.assigned_to_profile?.name, ...(act.collaborator_profiles || []).map(p => p?.name)].filter(Boolean);
          const recipientLabel = Utils.formatNameList(recipientNames);
 
          let deadlineLabel;
-         if (act.status === 'Concluída') deadlineLabel = 'Concluída';
+         if (Utils.isActivityFinished(act.status)) deadlineLabel = Utils.activityStatusLabel(act.status);
          else if (hasExt) deadlineLabel = `⚠️ Prazo estendido até ${Utils.formatActivityDeadline(act.extended_deadline, act.extended_deadline_time)}`;
          else if (passed) deadlineLabel = '🔴 Prazo excedido';
          else if (deadlineDiff < 0) deadlineLabel = `Vencida há ${Math.abs(deadlineDiff)} dias`;
@@ -1773,7 +1781,7 @@
        const fileInfo = AnexoUtils.getFileIcon(null, a.file_name);
        const isImg = AnexoUtils.isImage(null, a.file_name);
        const dateStr = Utils.formatDateTime ? Utils.formatDateTime(a.created_at) : new Date(a.created_at).toLocaleDateString('pt-BR');
-       const statusColor = a.activity?.status === 'Concluída' ? '#4ade80' : a.activity?.status === 'Em andamento' ? '#60a5fa' : '#eab308';
+       const statusColor = a.activity?.status === 'Concluída' ? '#4ade80' : a.activity?.status === 'Incompleta' ? '#fb923c' : a.activity?.status === 'Em andamento' ? '#60a5fa' : '#eab308';
 
        return `
          <div class="anexo-card-wrap">
@@ -1826,8 +1834,8 @@
          ${canCriar ? `<button class="btn btn-primary" id="newActivityBtn"><i class="fa-solid fa-plus"></i> Nova Atividade</button>` : ''}
        </div>
        <div class="filters-bar">
-         ${['Todos','Pendente','Em andamento','Concluída','Cancelada'].map(f =>
-           `<button class="filter-btn ${f==='Todos'?'active':''}" data-filter="${f}">${f}</button>`
+         ${['Todos','Pendente','Em andamento','Concluída','Incompleta','Cancelada'].map(f =>
+           `<button class="filter-btn ${f==='Todos'?'active':''}" data-filter="${f}">${f === 'Incompleta' ? 'Incompletas' : f}</button>`
          ).join('')}
          <button class="filter-btn filter-btn-anexos" data-filter="__anexos__">
            <i class="fa-solid fa-paperclip" style="font-size:.75rem;margin-right:4px"></i>Anexos
@@ -2083,7 +2091,7 @@
          }).join('')}
        ` : ''}
    
-       ${act.status !== 'Concluída' && ((isOwner && canSubmit) || isDiretoria) ? `
+       ${!Utils.isActivityFinished(act.status) && ((isOwner && canSubmit) || isDiretoria) ? `
          <div class="divider"></div>
          ${isLateSubmission && isOwner ? '<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:var(--radius);padding:10px;margin-bottom:12px;font-size:.8rem;color:#eab308"><i class="fa-solid fa-triangle-exclamation"></i> Você está enviando <strong>com atraso</strong>. O prazo original expirou.</div>' : ''}
          <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">${isDiretoria && !isOwner ? 'Resposta da Diretoria' : 'Enviar Resposta'}</div>
@@ -2100,7 +2108,7 @@
          <div id="fileChosen" style="font-size:.78rem;color:var(--gold);margin-top:8px;display:none"></div>
        ` : ''}
    
-       ${act.status !== 'Concluída' && isOwner && passed && !hasExt ? `
+       ${!Utils.isActivityFinished(act.status) && isOwner && passed && !hasExt ? `
          <div class="divider"></div>
          <div style="background:rgba(185,28,28,.1);border:1px solid var(--border-red);border-radius:var(--radius);padding:14px;text-align:center">
            <i class="fa-solid fa-lock" style="color:var(--red-bright);font-size:1.2rem;display:block;margin-bottom:8px"></i>
@@ -2115,6 +2123,7 @@
        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           ${canGerenciar ? `<button class="btn btn-sm btn-outline" id="editActBtn"><i class="fa-solid fa-pen"></i> Editar</button>` : ''}
           ${canConcluir && act.status !== 'Concluída' && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="markDoneBtn"><i class="fa-solid fa-check"></i> Marcar Concluída</button>` : ''}
+          ${canConcluir && !Utils.isActivityFinished(act.status) && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-outline btn-incomplete" id="markIncompleteBtn" title="Encerra a atividade como feita só em parte (vale metade no desempenho)"><i class="fa-solid fa-circle-half-stroke"></i> Concluir como incompleta</button>` : ''}
           ${canConcluir && act.status !== 'Cancelada' ? `<button class="btn btn-sm btn-ghost" id="cancelActBtn" style="color:var(--red-bright)"><i class="fa-solid fa-ban"></i> Cancelar</button>` : ''}
           ${canConcluir && act.status === 'Cancelada' ? `<button class="btn btn-sm btn-outline" id="uncancelActBtn" style="color:#22c55e;border-color:rgba(34,197,94,.35)"><i class="fa-solid fa-rotate-left"></i> Descancelar</button>` : ''}
           ${isDiretoria ? `<button class="btn btn-sm btn-ghost" id="deleteActBtn" style="color:var(--red-bright);border-color:var(--border-red)"><i class="fa-solid fa-trash"></i> Excluir</button>` : ''}
@@ -2138,7 +2147,7 @@
      `;
    
      // Submit response
-     const canRespond = act.status !== 'Concluída' && ((isOwner && canSubmit) || isDiretoria);
+     const canRespond = !Utils.isActivityFinished(act.status) && ((isOwner && canSubmit) || isDiretoria);
      const submitFooter = canRespond
        ? `<button class="btn btn-ghost" id="cancelModal">Cancelar</button><button class="btn btn-primary" id="submitActivity"><i class="fa-solid fa-paper-plane"></i> Enviar Resposta</button>`
        : `<button class="btn btn-outline" id="cancelModal">Fechar</button>`;
@@ -2333,6 +2342,26 @@
        setTimeout(() => initAtividades(), 300);
      });
    
+     document.getElementById('markIncompleteBtn')?.addEventListener('click', async () => {
+       if (!await MSYConfirm.show(`Concluir "${act.title}" como incompleta? A atividade é encerrada e vale metade no desempenho.`, { title: 'Concluir como incompleta' })) return;
+       try {
+         const { error } = await db.from('activities').update({ status: 'Incompleta' }).eq('id', id);
+         if (error) throw error;
+         const toNotify = isCollaborative
+           ? [...new Set([act.assigned_to, ...collabMembers].filter(Boolean))]
+           : [act.assigned_to].filter(Boolean);
+         await Promise.all(toNotify.map(uid =>
+           db.rpc('notify_member', { p_user_id: uid, p_message: `A atividade "${act.title}" foi concluída como incompleta.`, p_type: 'activity', p_icon: '🟠' })
+         ));
+         modal.classList.remove('open');
+         Utils.showToast('Atividade concluída como incompleta.');
+         setTimeout(() => initAtividades(), 300);
+       } catch (err) {
+         console.error('[MSY][atividades] Erro ao concluir como incompleta:', err);
+         Utils.showToast('Não foi possível concluir como incompleta.', 'error');
+       }
+     });
+
      document.getElementById('cancelActBtn')?.addEventListener('click', async () => {
        if (!await MSYConfirm.show('Cancelar esta atividade?')) return;
        await db.from('activities').update({ status: 'Cancelada' }).eq('id', id);
@@ -8647,6 +8676,7 @@
        const actsConcl = {};
        atividades.forEach(a => {
          if (a.status==='Concluída') actsConcl[a.assigned_to] = (actsConcl[a.assigned_to]||0)+1;
+         else if (a.status==='Incompleta') actsConcl[a.assigned_to] = (actsConcl[a.assigned_to]||0)+0.5;
        });
    
        const totalMsgs = Object.values(msgsPorNome).reduce((s,v)=>s+v,0)||1;
