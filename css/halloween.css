@@ -1,0 +1,20 @@
+/* Halloween Masayoshi 2026 — ajustes do convite (halloween.html) dentro do portal.
+   O visual do convite fica no próprio HTML; aqui só o que o portal acrescenta. */
+
+/* Botões do portal (Portal / Quem viu) são links com o mesmo visual dos botões da fita. */
+.topbtns a.hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+/* app.js põe um "ripple" nos botões; sem o CSS do portal ele só atrapalharia o layout. */
+.msy-ripple { display: none !important; }
+
+/* Com Portal (e Quem viu, para a diretoria) o topo ganha botões: compacta em telas estreitas. */
+@media (max-width: 420px) {
+  .topbtns { gap: 5px; }
+  .topbtns .hbtn { min-width: 38px; min-height: 40px; padding: 0 8px; }
+}

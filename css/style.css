@@ -7117,3 +7117,14 @@ body[data-page="membros"] #memberProfileModal .member-preview-options button:hov
     margin: 0;
   }
 }
+
+/* ── Aba temporária: Halloween Masayoshi 2026 ───────────────── */
+.nav-item-halloween i { color: #ea580c; }
+.nav-item-halloween .fa-ghost { animation: msy-ghost-float 2.6s ease-in-out infinite; }
+@keyframes msy-ghost-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-item-halloween .fa-ghost { animation: none; }
+}

@@ -166,9 +166,18 @@
        await db.auth.signOut();
        window.location.href = 'login.html';
      },
+     /* Página atual para voltar depois do login (só páginas do próprio portal). */
+     loginUrl() {
+       const here = window.location.pathname.split('/').pop() + window.location.search + window.location.hash;
+       return Auth.safeNext(here) ? `login.html?next=${encodeURIComponent(here)}` : 'login.html';
+     },
+     safeNext(value) {
+       if (typeof value !== 'string' || !/^[a-z0-9_-]+\.html(?:[?#][^\s]*)?$/i.test(value)) return null;
+       return /^(login|index|offline|dashboard)\.html/i.test(value) ? null : value;
+     },
      async requireAuth() {
        const session = await this.getSession();
-       if (!session) { window.location.href = 'login.html'; return null; }
+       if (!session) { window.location.href = this.loginUrl(); return null; }
        const profile = await this.getProfile();
        if (!profile || profile.status === 'pendente') { await this.logout(); return null; }
        return profile;
@@ -196,7 +205,7 @@
 
    const MSYTabAccess = {
      ALWAYS_ALLOWED: new Set(['login', 'offline', 'onboarding', 'busca']),
-     ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho']),
+     ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho', 'halloween-painel']),
      _rules: null,
 
      async rules() {
@@ -461,6 +470,9 @@
    /* ============================================================
       SIDEBAR
       ============================================================ */
+   /* Aba temporária do Halloween Masayoshi 2026: some sozinha depois de 01/11 (horário de Brasília). */
+   const HALLOWEEN_UNTIL = Date.parse('2026-11-02T00:00:00-03:00');
+
    async function renderSidebar(activePage) {
      const profileRaw = await Auth.requireAuth();
      if (!profileRaw) return;
@@ -548,6 +560,19 @@
              ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ''}
            </a>
          `).join('')}
+         ${Date.now() < HALLOWEEN_UNTIL ? `
+           <div class="sidebar-section-label" style="margin-top:8px">Evento</div>
+           <a href="halloween.html" class="nav-item nav-item-halloween">
+             <i class="fa-solid fa-ghost"></i>
+             <span>Halloween MSY</span>
+           </a>
+           ${isDiretoria ? `
+             <a href="halloween-painel.html" class="nav-item nav-item-halloween ${activePage === 'halloween-painel' ? 'active' : ''}">
+               <i class="fa-solid fa-eye"></i>
+               <span>Halloween · Quem viu</span>
+             </a>
+           ` : ''}
+         ` : ''}
          ${canAccessSpace ? `
            <div class="sidebar-section-label" style="margin-top:8px">MSY Space</div>
            <a href="space.html" class="nav-item nav-item-space ${activePage === 'space' ? 'active' : ''}">
@@ -839,8 +864,9 @@
       PAGE: LOGIN
       ============================================================ */
    async function initLogin() {
+     const afterLogin = Auth.safeNext(new URLSearchParams(window.location.search).get('next')) || 'dashboard.html';
      const session = await Auth.getSession();
-     if (session) { window.location.href = 'dashboard.html'; return; }
+     if (session) { window.location.href = afterLogin; return; }
    
      const form     = document.getElementById('loginForm');
      const errorEl  = document.getElementById('loginError');
@@ -871,7 +897,7 @@
          }
          loginBtn.textContent = 'Acesso concedido...';
          loginBtn.style.background = 'linear-gradient(135deg,#15803d,#16a34a)';
-         setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
+         setTimeout(() => { window.location.href = afterLogin; }, 600);
        } catch (err) {
          document.getElementById('loginErrorMsg').textContent = 'Credenciais inválidas. Verifique e tente novamente.';
          errorEl.classList.add('show');
