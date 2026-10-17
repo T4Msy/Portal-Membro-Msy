@@ -71,6 +71,8 @@ Resumo de `Masayoshi-Plataforma/docs/DECISOES.md` e `WEBRTC.md`:
 - **D15** "Um lado oferece": o iniciador (sessionId maior) cria os 4 transceivers `sendrecv` e oferece; o slot vem do `mid`.
 - **D18** Presença com freio (10 s na sala, 15 s no online); mudanças imediatas vão por broadcast `meta` com `rev`.
 - **D19** Se a Presença do Supabase falhar, cada sessão se anuncia por broadcast `beacon` (10 s, validade 30 s, `bye` ao sair).
+- **D20** O mesmo plano B do D19 vale para a presença global `space:online` (`online.js`): lista de canais e tela de entrada
+  continuam mostrando quem está em cada sala mesmo com a Presença do Supabase fora do ar.
 - **D8** "Parar de assistir" a tela economiza a banda de quem transmite.
 - Sem TURN (o da Cloudflare pede cartão): quem está em CGNAT/4G restritivo pode não conectar.
 - P2P mesh: bom para voz com até ~15 pessoas; tela para muitos espectadores pesa no upload de quem transmite.

@@ -135,3 +135,23 @@ Limitações conhecidas:
 - A branch `space-panel` foi juntada com o `main` (que tinha recebido melhorias do Space em outra sessão) sem conflitos.
 - Corrigido: botões do painel ficavam com 44px de largura por causa da regra global do portal (alvo de toque) → nome espremido.
 - Testado no Brave (injeção da branch): painel 48px por grupo, menu com o item de permissão, sem erros.
+
+## 17/10/2026 — Auditoria de erros do MSY Space + correções (pedido do dono: "procure todos os erros" → "resolva tudo")
+- Verificado OK no ar: página sem erros no console, chat em tempo real entre abas, troca de canal fecha a conexão antiga,
+  banco (RLS nas 5 tabelas, cron de limpeza ativo, sem salas órfãs, permissão `acessar_space` salvável).
+- Corrigido (branch `fix/space-audit`, testado no Brave por injeção do commit):
+  1. **Edição de mensagem perdia o texto** quando chegava mensagem nova (`ui/chat.js` redesenha a lista) → o rascunho,
+     o cursor e o foco são guardados e restaurados a cada redesenho. Testado: texto e cursor ficaram, e salvou.
+  2. **Presença global sem plano B** → `online.js` ganhou anúncios por broadcast (decisão D20). Testado com 2 abas:
+     a aba "quebrada" anuncia, a outra passa a anunciar e vê a sala de voz dela; `bye` remove na hora.
+  3. **Dado corrompido de categorias recolhidas travava o Space** → `ui/nav.js` lê com try/catch. Testado com valor inválido.
+  4. **Última preferência perdida ao fechar a aba** → `prefs.js` grava com `fetch keepalive` ao sair/ir para o fundo
+     (`flushOnExit`, só se houver mudança). Testado: resposta 200 e `updated_at` atualizado.
+  5. **Voltar pelo "voltar" do navegador** deixava o Space sem tempo real → `pageshow` com `persisted` recarrega a página.
+  6. **Trocar câmera ligada** usava atraso fixo de 400 ms → `voice.restartCamera()` desliga e liga em sequência.
+  7. **Falha ao buscar o TURN** prendia a chamada 10 min só com STUN → nova tentativa em 30 s (`iceServers.js`
+     + ajuste no `scripts/port-space.cjs` para não perder no próximo port).
+  8. **Mensagem enviada usava a hora do aparelho para ordenar** → mensagens não confirmadas ficam sempre no fim.
+  9. **"Apagar tudo" fazia os outros redesenharem 1x por mensagem** → DELETEs agrupados num desenho por quadro.
+  - Extra: o indicador "carregando antigas" nunca aparecia (e ficava preso depois) → ordem corrigida em `loadOlder`.
+- Ainda não testado na prática (precisa de 2 pessoas): compartilhar tela, câmera e navegar com a chamada ativa (moldura).
