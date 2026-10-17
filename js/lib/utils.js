@@ -79,9 +79,10 @@ export function statusBadge(status) {
     'Pendente':    'badge-pending',
     'Em andamento':'badge-progress',
     'Concluída':   'badge-done',
+    'Incompleta':  'badge-incomplete',
     'Cancelada':   'badge-red',
   };
-  return `<span class="badge ${map[status] || 'badge-gold'}">${status}</span>`;
+  return `<span class="badge ${map[status] || 'badge-gold'}">${status === 'Incompleta' ? 'Concluída (incompleta)' : status}</span>`;
 }
 
 export function tierBadge(tier) {

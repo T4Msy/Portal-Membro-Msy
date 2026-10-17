@@ -1334,7 +1334,7 @@ async function renderSystemAlerts(containerEl) {
   try {
     const [r1,r2,r3,r4,r5,r6] = await Promise.all([
       db.from('profiles').select('id,name,initials,color,avatar_url,join_date,created_at,role').eq('status','ativo'),
-      db.from('activities').select('id,title,deadline,deadline_time,status,assigned_to,closes_at').neq('status','Concluída').neq('status','Cancelada'),
+      db.from('activities').select('id,title,deadline,deadline_time,status,assigned_to,closes_at').neq('status','Concluída').neq('status','Incompleta').neq('status','Cancelada'),
       db.from('activities').select('assigned_to'),
       db.from('events').select('id,title,event_date,mandatory,type,description,created_by').order('event_date',{ascending:true}),
       db.from('event_presencas').select('event_id,membro_id,status'),
