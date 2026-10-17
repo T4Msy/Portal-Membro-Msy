@@ -120,6 +120,8 @@ export class SpaceNav {
     const list = menu === 'input' ? this.devices.inputs : menu === 'output' ? this.devices.outputs : [];
     const current = menu === 'input' ? prefs.inputDeviceId : prefs.outputDeviceId;
     const canPickOutput = caps.outputSelection && this.devices.outputs.length > 0;
+    // Sem permissão de microfone o navegador esconde os dispositivos (vem só um item sem id/nome).
+    const needsPermission = menu && [...this.devices.inputs, ...this.devices.outputs].some((d) => !d.deviceId || !d.label);
     const popover = menu ? `<div class="sp-dev-pop" role="menu">
         <div class="sp-dev-title">${menu === 'input' ? 'Dispositivo de entrada' : 'Dispositivo de saída'}</div>
         ${menu === 'output' && !canPickOutput
@@ -129,6 +131,7 @@ export class SpaceNav {
           : [{ deviceId: '', label: 'Padrão do sistema' }, ...list.filter((d) => d.deviceId && d.deviceId !== 'default')]
             .map((d, i) => `<button class="sp-dev-item ${(current || '') === d.deviceId ? 'is-on' : ''}" data-act="pick-device" data-kind="${menu}" data-id="${esc(d.deviceId)}">
               <span>${esc(d.label || `${menu === 'input' ? 'Microfone' : 'Saída'} ${i}`)}</span>${icon((current || '') === d.deviceId ? 'fa-circle-dot' : 'fa-circle')}</button>`).join('')}
+        ${needsPermission ? `<button class="sp-dev-item sp-dev-allow" data-act="allow-devices"><span>Permitir acesso aos dispositivos</span>${icon('fa-lock-open')}</button>` : ''}
         <div class="sp-dev-sep"></div>
         <button class="sp-dev-item" data-act="settings"><span>Configurações de voz</span>${icon('fa-gear')}</button>
       </div>` : '';
@@ -150,6 +153,22 @@ export class SpaceNav {
   async openDeviceMenu(kind) {
     if (this.deviceMenu === kind) { this.deviceMenu = null; this.render(); return; }
     this.devices = await listDevices().catch(() => ({ inputs: [], outputs: [], cameras: [] }));
+    this.deviceMenu = kind;
+    this.render();
+  }
+
+  /** Pede a permissão do microfone só para o navegador revelar a lista de dispositivos. */
+  async allowDevices() {
+    const kind = this.deviceMenu;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (err) {
+      console.warn('[MSY][space] Permissão de dispositivos negada:', err);
+      toast('O navegador não liberou o acesso. Libere no cadeado da barra de endereço.', 'error');
+      return;
+    }
+    this.devices = await listDevices().catch(() => this.devices);
     this.deviceMenu = kind;
     this.render();
   }
@@ -180,6 +199,7 @@ export class SpaceNav {
     const act = btn.dataset.act;
     if (act === 'device-menu') await this.openDeviceMenu(btn.dataset.kind);
     if (act === 'pick-device') await this.pickDevice(btn.dataset.kind, btn.dataset.id);
+    if (act === 'allow-devices') await this.allowDevices();
     if (act === 'select') this.onSelect(btn.dataset.id);
     if (act === 'toggle-group') {
       const key = btn.dataset.key;

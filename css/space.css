@@ -938,3 +938,5 @@ body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-footer { animatio
   body[data-page="space"] #msy-confirm-overlay.open #msy-confirm-box *::after { animation: none !important; }
   body[data-page="space"] #msy-confirm-box { transform: none; filter: none; }
 }
+body[data-page="space"] .sp-dev-item.sp-dev-allow { color: #d8b4fe; background: rgba(168, 85, 247, .12); }
+body[data-page="space"] .sp-dev-item.sp-dev-allow i { color: #d8b4fe; }
