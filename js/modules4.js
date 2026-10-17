@@ -211,12 +211,13 @@ async function initDesempenho() {
 
     const actsByM = {};
     atividades.forEach(a => {
-      if (!actsByM[a.assigned_to]) actsByM[a.assigned_to] = { total:0, concluidas:0, atrasadas:0, pendentes:0, andamento:0 };
+      if (!actsByM[a.assigned_to]) actsByM[a.assigned_to] = { total:0, concluidas:0, incompletas:0, atrasadas:0, pendentes:0, andamento:0 };
       actsByM[a.assigned_to].total++;
       if      (a.status === 'Concluída')    actsByM[a.assigned_to].concluidas++;
+      else if (a.status === 'Incompleta')   actsByM[a.assigned_to].incompletas++;
       else if (a.status === 'Pendente')     actsByM[a.assigned_to].pendentes++;
       else if (a.status === 'Em andamento') actsByM[a.assigned_to].andamento++;
-      if ((Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`)) < new Date() && a.status !== 'Concluída' && a.status !== 'Cancelada')
+      if ((Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`)) < new Date() && !Utils.isActivityFinished(a.status) && a.status !== 'Cancelada')
         actsByM[a.assigned_to].atrasadas++;
     });
 
@@ -238,7 +239,7 @@ async function initDesempenho() {
     });
 
     const membrosScored = membros.map(m => {
-      const acts    = actsByM[m.id] || { total:0, concluidas:0, atrasadas:0, pendentes:0, andamento:0 };
+      const acts    = actsByM[m.id] || { total:0, concluidas:0, incompletas:0, atrasadas:0, pendentes:0, andamento:0 };
       const pres    = presByM[m.id] || { conf:0, aus:0, just:0, penalty:0, neutral:0, events:new Set() };
       const contrib = evContrib[m.id] || { criou:0, ajudou:0 };
       const msgs    = msgsById[m.id] || 0;
@@ -246,8 +247,8 @@ async function initDesempenho() {
       const presPenalty = (pres.penalty || 0) + (missingPres * .35);
       const presTotal = Math.max(0, evAccountable.length - (pres.neutral || 0));
       const presScore = Math.max(0, pres.conf - presPenalty);
-      const score   = calcScore({ acts_total:acts.total, concluidas:acts.concluidas, pres_conf:pres.conf, pres_total:presTotal, pres_score:presScore, msgs }, evPub.length, msgMedia);
-      const taxaActs = acts.total > 0    ? Math.round((acts.concluidas / acts.total) * 100)          : null;
+      const score   = calcScore({ acts_total:acts.total, concluidas:acts.concluidas + acts.incompletas * 0.5, pres_conf:pres.conf, pres_total:presTotal, pres_score:presScore, msgs }, evPub.length, msgMedia);
+      const taxaActs = acts.total > 0    ? Math.round(((acts.concluidas + acts.incompletas * 0.5) / acts.total) * 100)          : null;
       const taxaPres = presTotal > 0     ? Math.round(Math.max(0, Math.min(100, (presScore / presTotal) * 100))) : null;
       const taxaMsgs = msgMedia > 0 && msgs > 0 ? Math.round(Math.min(100, (msgs / msgMedia) * 100)) : null;
       return { ...m, acts, pres, contrib, msgs, score, taxaActs, taxaPres, taxaMsgs, premiacoes: premByM[m.id] || 0 };
@@ -262,7 +263,8 @@ async function initDesempenho() {
 
     const totalActs  = atividades.length;
     const concl      = atividades.filter(a => a.status === 'Concluída').length;
-    const taxaGeral  = totalActs > 0 ? Math.round((concl / totalActs) * 100) : 0;
+    const incompl    = atividades.filter(a => a.status === 'Incompleta').length; // vale meia
+    const taxaGeral  = totalActs > 0 ? Math.round(((concl + incompl * 0.5) / totalActs) * 100) : 0;
     const presConf   = presencas.filter(p => p.attendance_status === 'presente' || p.status === 'confirmado').length;
     const taxaPres   = evAccountable.length > 0 && membros.length > 0 ? Math.round((presConf / (evAccountable.length * membros.length)) * 100) : 0;
     const alertas    = buildAlertas(membrosOrdenados, atividades, eventosMes, presencas, evPub, msgsById, msgMedia, rankings);
@@ -310,7 +312,7 @@ async function initDesempenho() {
               <div class="dp-hm">
                 <div class="dp-hm-val" style="color:${taxaGeral>=70?'#10b981':taxaGeral>=40?'#c9a84c':'#ef4444'}">${taxaGeral}%</div>
                 <div class="dp-hm-lbl">Conclusão Geral</div>
-                <div class="dp-hm-sub">${concl} de ${totalActs} atividades</div>
+                <div class="dp-hm-sub">${concl}${incompl ? ` + ${incompl} incompleta${incompl === 1 ? '' : 's'}` : ''} de ${totalActs} atividades</div>
               </div>
               <div class="dp-hm">
                 <div class="dp-hm-val" style="color:${taxaPres>=70?'#10b981':taxaPres>=40?'#c9a84c':'#ef4444'}">${taxaPres}%</div>
@@ -465,7 +467,7 @@ async function initDesempenho() {
 
       const comps = [];
       if (m.taxaMsgs !== null)  comps.push({ key:'msgs', lbl:'Mensagens (50%)',  val:m.taxaMsgs, clr:'#60a5fa',     detail:`${m.msgs} msgs · média ${Math.round(msgAvg)}` });
-      if (m.acts.total > 0)     comps.push({ key:'acts', lbl:'Atividades (40%)', val:m.taxaActs, clr:'var(--gold)', detail:`${m.acts.concluidas} feitas / ${m.acts.total} atribuídas` });
+      if (m.acts.total > 0)     comps.push({ key:'acts', lbl:'Atividades (40%)', val:m.taxaActs, clr:'var(--gold)', detail:`${m.acts.concluidas} feitas${m.acts.incompletas ? ` + ${m.acts.incompletas} incompleta${m.acts.incompletas === 1 ? '' : 's'}` : ''} / ${m.acts.total} atribuídas` });
       if (evCount > 0)          comps.push({ key:'pres', lbl:'Presença (10%)',   val:m.taxaPres, clr:'#10b981',     detail:`${m.pres.conf} confirmadas / ${evCount} eventos` });
       const totalBase = comps.reduce((s,c) => s + SCORE_WEIGHTS[c.key], 0) || 1;
 
@@ -655,7 +657,7 @@ function buildAlertas(membrosScored, atividades, eventosMes, presencas, evPublic
   /* ── ATIVIDADES ── */
   const atrasadas = atividades.filter(a => {
     const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
-    return d < today && a.status !== 'Concluída' && a.status !== 'Cancelada';
+    return d < today && !Utils.isActivityFinished(a.status) && a.status !== 'Cancelada';
   });
   if (atrasadas.length > 0) alertas.push({
     level:'danger', cat:'Atividades', catIcon:'fa-list-check', catColor:'#f59e0b',
@@ -667,7 +669,7 @@ function buildAlertas(membrosScored, atividades, eventosMes, presencas, evPublic
   const vencendo = atividades.filter(a => {
     const d = Utils.getActivityDeadlineDate(a) || new Date(`${a.deadline}T23:59:59`);
     const diff = (d - today) / 86400000;
-    return diff >= 0 && diff <= 3 && a.status !== 'Concluída';
+    return diff >= 0 && diff <= 3 && !Utils.isActivityFinished(a.status);
   });
   if (vencendo.length > 0) alertas.push({
     level:'warning', cat:'Atividades', catIcon:'fa-list-check', catColor:'#f59e0b',
