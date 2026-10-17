@@ -35,6 +35,8 @@ const ALIAS = {
 // Ajustes do portal aplicados depois da conversão (arquivo de destino -> [de, para])
 const PATCHES = {
   'voice/webrtc/SignalingChannel.js': [["`voice:${this.channelId}`", "`space:voice:${this.channelId}`"]],
+  // Falha ao buscar o TURN não pode deixar a chamada 10 min só com STUN (4G cai): tenta de novo em 30 s.
+  'voice/webrtc/iceServers.js': [['expiresAt: Date.now() + 10 * 60 * 1000', 'expiresAt: Date.now() + 30 * 1000']],
 };
 
 const srcToOut = Object.fromEntries(Object.entries(MAP).map(([k, v]) => [path.posix.join('', k.replace(/\.ts$/, '')), v]));

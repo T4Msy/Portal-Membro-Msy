@@ -16,7 +16,13 @@ export class SpaceNav {
     this.selectedId = null;
     this.deviceMenu = null;
     this.devices = { inputs: [], outputs: [], cameras: [] };
-    this.collapsed = new Set(JSON.parse(localStorage.getItem('msy_space_collapsed') || '[]'));
+    // Dado do navegador pode estar corrompido ou bloqueado: nunca impede o Space de abrir.
+    this.collapsed = new Set((() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('msy_space_collapsed') || '[]');
+        return Array.isArray(saved) ? saved.filter((k) => typeof k === 'string') : [];
+      } catch { return []; }
+    })());
     this.onChange = () => this.render();
   }
 

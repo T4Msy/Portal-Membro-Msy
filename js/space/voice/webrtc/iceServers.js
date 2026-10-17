@@ -22,7 +22,7 @@ export async function getIceServers() {
     catch {
         // Sem TURN configurado: segue apenas com STUN.
     }
-    cache = { servers: STUN, expiresAt: Date.now() + 10 * 60 * 1000 };
+    cache = { servers: STUN, expiresAt: Date.now() + 30 * 1000 };
     return STUN;
 }
 export function hasTurn(servers) {

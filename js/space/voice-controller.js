@@ -125,6 +125,14 @@ export class VoiceController extends EventTarget {
     this.run((s) => { s.toggleDeafen(); this.prefs.update({ selfDeaf: s.getSnapshot().local.deafened }); });
   }
   toggleCamera() { this.run((s) => s.toggleCamera()); }
+  /** Trocou a câmera com ela ligada: desliga e liga na ordem (sem depender de tempo fixo). */
+  restartCamera() {
+    this.run(async (s) => {
+      if (!s.getSnapshot().local.camera) return;
+      await s.toggleCamera();
+      await s.toggleCamera();
+    });
+  }
   startScreen(withAudio) { this.run((s) => s.startScreen(withAudio)); }
   stopScreen() { this.run((s) => s.stopScreen()); }
   setWatching(sessionId, watching) { this.run((s) => s.setWatching(sessionId, watching)); }

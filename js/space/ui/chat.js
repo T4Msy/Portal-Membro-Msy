@@ -10,6 +10,12 @@ const MAX_LENGTH = 4000;
 const GROUP_WINDOW_MS = 5 * 60_000;
 const STICK_THRESHOLD = 120;
 
+/** Mensagens ainda não confirmadas ficam sempre no fim: a hora delas é a do aparelho
+ *  (que pode estar errada); ao confirmar, passam a usar a hora do servidor. */
+function pendingLast(list) {
+  return [...list.filter((m) => !m.status), ...list.filter((m) => m.status)];
+}
+
 function errorText(e) {
   const msg = e?.message || '';
   if (/RATE_LIMITED/.test(msg)) return 'Calma! Muitas mensagens seguidas. Espere alguns segundos.';
@@ -80,7 +86,7 @@ export class ChatView {
     this.input.addEventListener('input', () => this.autosize());
 
     this.fetchLatest()
-      .then((list) => { this.items = mergeMessages(this.items, list); this.hasMore = list.length >= PAGE_SIZE; })
+      .then((list) => { this.items = pendingLast(mergeMessages(this.items, list)); this.hasMore = list.length >= PAGE_SIZE; })
       .catch((e) => { console.error('[MSY][space] Erro ao carregar mensagens:', e); toast('Erro ao carregar mensagens.', 'error'); })
       .finally(() => { this.loading = false; this.render(); });
     this.subscribe();
@@ -126,7 +132,8 @@ export class ChatView {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'space_messages', filter }, (p) => this.apply([p.new]))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'space_messages' }, (p) => {
         const id = p.old?.id;
-        if (id && this.items.some((m) => m.id === id)) { this.items = this.items.filter((m) => m.id !== id); this.render(); }
+        // DELETE não aceita filtro no Supabase: ignora ids que não são deste canal.
+        if (id && this.items.some((m) => m.id === id)) { this.items = this.items.filter((m) => m.id !== id); this.scheduleRender(); }
       })
       .subscribe((status) => {
         if (this.destroyed) return;
@@ -147,8 +154,15 @@ export class ChatView {
 
   apply(incoming) {
     if (this.destroyed) return;
-    this.items = mergeMessages(this.items, incoming);
+    this.items = pendingLast(mergeMessages(this.items, incoming));
     this.render();
+  }
+
+  /** Eventos em rajada (ex.: "apagar tudo" gera um DELETE por mensagem) viram um único desenho. */
+  scheduleRender() {
+    if (this.renderQueued) return;
+    this.renderQueued = true;
+    requestAnimationFrame(() => { this.renderQueued = false; this.render(); });
   }
 
   submit() {
@@ -193,17 +207,21 @@ export class ChatView {
     const oldest = this.items.find((m) => !m.status);
     if (!oldest || this.loadingOlder || !this.hasMore) return;
     this.loadingOlder = true;
-    const prevHeight = this.scrollEl.scrollHeight;
+    // Mostra o indicador no topo sem a lista "pular".
+    this.render({ keepFrom: this.scrollEl.scrollHeight });
+    let older = null;
     try {
-      const older = await this.fetchOlder(oldest);
-      this.items = mergeMessages(this.items, older);
-      this.hasMore = older.length >= PAGE_SIZE;
-      this.render({ keepFrom: prevHeight });
+      older = await this.fetchOlder(oldest);
     } catch (e) {
       console.error('[MSY][space] Erro ao carregar antigas:', e);
-    } finally {
-      this.loadingOlder = false;
     }
+    this.loadingOlder = false;
+    if (this.destroyed) return;
+    if (older) {
+      this.items = pendingLast(mergeMessages(this.items, older));
+      this.hasMore = older.length >= PAGE_SIZE;
+    }
+    this.render({ keepFrom: this.scrollEl.scrollHeight });
   }
 
   // ── Interface ─────────────────────────────────────────────
@@ -226,8 +244,8 @@ export class ChatView {
       if (act === 'jump') { this.stick = true; this.scrollEl.scrollTo({ top: this.scrollEl.scrollHeight, behavior: 'smooth' }); btn.hidden = true; }
       if (act === 'retry' && msg) { this.items = this.items.map((m) => (m.id === msg.id ? { ...m, status: 'sending' } : m)); this.render(); this.deliver(msg); }
       if (act === 'discard' && msg) { this.items = this.items.filter((m) => m.id !== msg.id); this.render(); }
-      if (act === 'edit' && msg) { this.editingId = msg.id; this.render(); this.el.querySelector('.sp-edit textarea')?.focus(); }
-      if (act === 'edit-cancel') { this.editingId = null; this.render(); }
+      if (act === 'edit' && msg) { this.editingId = msg.id; this.editDraft = null; this.render(); this.el.querySelector('.sp-edit textarea')?.focus(); }
+      if (act === 'edit-cancel') { this.editingId = null; this.editDraft = null; this.render(); }
       if (act === 'edit-save' && msg) await this.saveEdit(msg);
       if (act === 'delete' && msg) await this.remove(msg);
       if (act === 'purge') await this.purge();
@@ -246,6 +264,7 @@ export class ChatView {
       this.items = this.items.map((m) => (m.id === msg.id ? { ...m, content: text, edited_at: new Date().toISOString() } : m));
     }
     this.editingId = null;
+    this.editDraft = null;
     this.render();
   }
 
@@ -280,6 +299,13 @@ export class ChatView {
     if (badge) badge.hidden = this.live || this.loading;
 
     if (this.loading) return;
+    // Mensagem em edição: guarda o que já foi digitado (a lista é redesenhada a cada mensagem nova).
+    const editBox = this.listEl.querySelector('.sp-edit textarea');
+    const editState = editBox && {
+      focused: document.activeElement === editBox, start: editBox.selectionStart, end: editBox.selectionEnd, scroll: editBox.scrollTop,
+    };
+    if (editBox) this.editDraft = editBox.value;
+    if (this.editingId && !this.items.some((m) => m.id === this.editingId)) { this.editingId = null; this.editDraft = null; }
     let html = '';
     if (this.loadingOlder) html += `<div class="sp-loading sp-loading-sm">${icon('fa-circle-notch fa-spin')}</div>`;
     if (!this.hasMore) {
@@ -296,6 +322,11 @@ export class ChatView {
       html += this.messageHtml(m, grouped);
     });
     this.listEl.innerHTML = html;
+    const newEditBox = editState && this.listEl.querySelector('.sp-edit textarea');
+    if (newEditBox) {
+      newEditBox.scrollTop = editState.scroll;
+      if (editState.focused) { newEditBox.focus({ preventScroll: true }); newEditBox.setSelectionRange(editState.start, editState.end); }
+    }
 
     if (keepFrom !== null) el.scrollTop += el.scrollHeight - keepFrom;
     else if (this.stick) el.scrollTop = el.scrollHeight;
@@ -309,7 +340,7 @@ export class ChatView {
     const editing = this.editingId === m.id;
     const state = m.status === 'sending' ? ' is-sending' : m.status === 'failed' ? ' is-failed' : '';
     const body = editing
-      ? `<div class="sp-edit"><textarea rows="2" maxlength="${MAX_LENGTH}">${esc(m.content)}</textarea>
+      ? `<div class="sp-edit"><textarea rows="2" maxlength="${MAX_LENGTH}">${esc(this.editDraft ?? m.content)}</textarea>
           <div class="sp-edit-actions"><button class="btn btn-ghost btn-sm" data-act="edit-cancel">Cancelar</button><button class="btn btn-primary btn-sm" data-act="edit-save">Salvar</button></div></div>`
       : `<div class="sp-msg-text">${linkify(m.content)}${m.edited_at ? ' <span class="sp-msg-edited" title="Editada">(editada)</span>' : ''}</div>`;
     const actions = m.status === 'failed'

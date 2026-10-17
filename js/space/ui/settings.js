@@ -131,7 +131,7 @@ class VoiceSettings {
       if (t.dataset.pref === 'cameraDeviceId') {
         this.prefs.update({ cameraDeviceId: t.value || undefined });
         // Câmera ligada: desliga e liga de novo já com a nova.
-        if (this.voice.snapshot?.local.camera) { this.voice.toggleCamera(); setTimeout(() => this.voice.toggleCamera(), 400); }
+        this.voice.restartCamera();
       }
       if (t.dataset.prefBool) {
         const prefs = this.prefs.update({ [t.dataset.prefBool]: t.checked });

@@ -124,8 +124,14 @@ async function initSpace() {
     if (target) select(target); else showFirst();
   }
 
-  window.addEventListener('pagehide', () => { online.stop(); workspace.close(); prefs.flush(); });
+  window.addEventListener('pagehide', () => { online.stop(); workspace.close(); prefs.flushOnExit(); });
+  // Aba indo para o fundo (no celular pode nunca mais voltar): grava as preferências pendentes.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') prefs.flushOnExit(); });
 }
+
+// Voltou pelo "voltar" do navegador (página restaurada do cache): as conexões em tempo real
+// foram encerradas ao sair, então abre de novo do zero.
+window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
 
 initSpace().catch((err) => {
   console.error('[MSY][space] Falha ao iniciar:', err);
