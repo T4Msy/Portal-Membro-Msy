@@ -155,3 +155,27 @@ Limitações conhecidas:
   9. **"Apagar tudo" fazia os outros redesenharem 1x por mensagem** → DELETEs agrupados num desenho por quadro.
   - Extra: o indicador "carregando antigas" nunca aparecia (e ficava preso depois) → ordem corrigida em `loadOlder`.
 - Ainda não testado na prática (precisa de 2 pessoas): compartilhar tela, câmera e navegar com a chamada ativa (moldura).
+
+## 20/10/2026 — Câmera em tela cheia, quadro no formato da câmera, janela flutuante e permissões (pedido do dono)
+- **Formato da câmera** (`ui/voice-room.js` `fitTile` + `css/space.css`): o quadro lê `videoWidth/videoHeight` do vídeo
+  (`loadedmetadata`/`resize`) e vira de pé (`is-portrait`, `--sp-ar`) ou deitado; o vídeo usa `contain` (câmera inteira).
+- **Tela cheia por pessoa**: botão no canto do quadro com câmera (ou dois cliques). No celular Android a tela gira para o
+  formato da câmera (`screen.orientation.lock`), e gira de novo se a pessoa virar o celular. iPhone: tela cheia do próprio
+  vídeo (`webkitEnterFullscreen`), gira pelo sensor. A tela cheia da transmissão também gira.
+- **Janela flutuante da chamada** (`ui/call-pip.js`, botão nos controles da sala e no cartão flutuante):
+  - Chrome/Edge/Brave no computador: Document Picture-in-Picture = mini sala com câmeras, quem fala e botões
+    (microfone, som, câmera, sair). Fechar a janelinha não sai da chamada; sair da chamada fecha a janelinha.
+  - Celular/Safari/Firefox: a mini sala é desenhada num canvas → vídeo em PiP; no Chrome os botões de microfone,
+    câmera e desligar aparecem na janelinha (Media Session `togglemicrophone`/`togglecamera`/`hangup`).
+  - `enterpictureinpicture` registrado: o Chrome pode abrir a janela sozinho ao sair da aba durante a chamada
+    (ele pergunta uma vez — é a "permissão" que o navegador tem). A permissão do Android "sobrepor a outros apps" só
+    existe para app instalado → fica para o app Android do Space.
+- **"Pede permissão toda vez"** (`ui/permissions.js`): o site não consegue marcar "permitir sempre" — quem decide é o
+  navegador. Agora: antes da janela do navegador aparecer, um aviso diz qual opção escolher ("Permitir ao visitar o site";
+  iPhone: aA → Ajustes do Site → Permitir). Nas configurações de voz há a seção **Permissões** (estado de microfone e
+  câmera, botão "Permitir sempre" que pede os dois numa pergunta só, e como desbloquear quando bloqueado).
+- Testado no Brave (injeção do commit, câmera falsa de canvas — nada real capturado, sala temporária apagada depois):
+  quadro de pé 360×640 e deitado 640×360, tela cheia com `contain`, janela flutuante com vídeo e 4 botões (mutar pela
+  janelinha funcionou), canvas do modo celular desenha câmera e avatar, seção de permissões e aviso, sem erros.
+- **Falta testar em celular real:** giro automático em tela cheia (Android), PiP de vídeo no Android/iPhone e a chamada
+  continuando com o app em segundo plano (iPhone pode pausar o microfone fora do Safari).
