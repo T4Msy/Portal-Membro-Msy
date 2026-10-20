@@ -214,3 +214,14 @@ Limitações conhecidas:
   centralizadas; sem câmera, 2 quadros 682×384 no meio da tela.
 - Quadro preto no print do dono: era a câmera do celular mandando imagem preta (saiu do navegador/câmera ocupada);
   o app Android resolve o segundo plano.
+
+## 20/10/2026 — Câmera em HD + destaque "igual ao Discord" (pedido do dono: "qualidade HORRÍVEL" e clicar na câmera para ir pro grande)
+- **Qualidade:** a câmera era capturada em 640×360 e enviada a 350 kbps com prioridade baixa e `contentHint='motion'`
+  (o navegador sacrificava a nitidez). Agora 1280×720 a 30 fps, até 1,2 Mbps, prioridade média, sem `contentHint`
+  (`voice/VoiceSession.js`, `voice/media/devices.js` + PATCHES em `scripts/port-space.cjs`; app: 1 Mbps, 720p).
+  Testado: a câmera da outra aba chegou em 720×1280 (antes ficava no máximo 360×640).
+- **Destaque:** clicar no quadro de alguém leva a pessoa para o centro grande; os outros (inclusive você) vão para a
+  faixa de baixo. Clicar no grande ou apertar Esc volta para a grade; clicar em alguém da faixa troca o destaque.
+  Os quadros mudam de lugar sem recriar o `<video>` (não pisca). Funciona também durante transmissão de tela.
+- **Volume por pessoa** saiu do clique (agora é destaque): botão no canto do quadro ou botão direito/toque longo.
+- Testado no Brave (2 abas, câmeras falsas 1280×720 e 720×1280, sala temporária apagada).
