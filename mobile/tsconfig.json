@@ -1,0 +1,14 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "types": ["jest"],
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true,
+    "paths": {
+      "@/lib/supabase": ["./src/lib/supabase.ts"],
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["App.tsx", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
+}

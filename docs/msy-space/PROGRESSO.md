@@ -193,3 +193,15 @@ Limitações conhecidas:
   - Janela flutuante falhou no Android → aviso de onde liberar (Configurações → Apps → Chrome → Picture-in-picture).
 - Incidente no teste: injetei o código numa aba do Brave onde o dono tinha entrado na Sala Geral (a tela da chamada sumiu).
   Avisado; dono liberou recarregar. **Regra: antes de injetar, conferir se a aba não tem chamada ativa** (usar aba nova).
+
+## 20/10/2026 — App Android do MSY Space 0.1 (pedido do dono: "os dois" — melhorar o site e fazer o app)
+- Criado `mobile/` (cópia adaptada do app Masayoshi 0.9, que já tinha segundo plano, PiP, câmera e orientação).
+  Detalhes, build e instalação: [APP_ANDROID.md](APP_ANDROID.md).
+- Adaptações: banco do portal (`mobile/src/lib/config.ts`), login por e-mail do portal, acesso por `space_can_access()`,
+  tabelas/RPCs `space_*`, presença `space:online` (com `sessionId`/`joinedAt`, igual ao site), link
+  `space.html?sala=CODIGO`, cores do Space, botão alto-falante × "do ouvido", id `site.portalmsy.space`, nome "MSY Space".
+- A camada WebRTC é a MESMA do site (`js/space/voice/webrtc`) via `mobile/metro.config.js` (troca o `lib/supabase.js`
+  do site pelo cliente do app). Pacote JS gerado e conferido: tópico `space:voice:`, sem `window.MSY`, projeto do portal.
+- `.vercelignore` com `mobile/` (o código do app não vai para o site).
+- APK gerado (`npm run build:apk`, 2 min 25 s, 47 MB, ARM). Testado no emulador (versão x86 só para teste): abre na tela
+  de login do MSY Space, sem erros. **Falta teste real** com login e chamada num celular (não dá para logar sem a senha).
