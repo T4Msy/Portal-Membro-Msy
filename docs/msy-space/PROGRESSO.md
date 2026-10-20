@@ -205,3 +205,12 @@ Limitações conhecidas:
 - `.vercelignore` com `mobile/` (o código do app não vai para o site).
 - APK gerado (`npm run build:apk`, 2 min 25 s, 47 MB, ARM). Testado no emulador (versão x86 só para teste): abre na tela
   de login do MSY Space, sem erros. **Falta teste real** com login e chamada num celular (não dá para logar sem a senha).
+
+## 20/10/2026 — Grade da chamada centralizada "igual ao Discord" (print do dono: quadros grudados no canto)
+- `ui/voice-room.js` `layoutGrid()` + `.sp-tile-grid` em flex centralizado: todos os quadros com a **mesma altura**,
+  largura = formato da câmera (em pé estreito, deitado largo, sem câmera 16:9), no **maior tamanho que cabe** na área
+  (busca binária simulando a quebra de linha do flex). Recalcula com `ResizeObserver` e quando uma câmera muda de formato.
+- Testado no Brave (2 abas, câmeras falsas, sala temporária apagada): em pé 327×583 + deitada 1036×583 lado a lado e
+  centralizadas; sem câmera, 2 quadros 682×384 no meio da tela.
+- Quadro preto no print do dono: era a câmera do celular mandando imagem preta (saiu do navegador/câmera ocupada);
+  o app Android resolve o segundo plano.
