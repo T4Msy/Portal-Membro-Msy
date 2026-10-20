@@ -9,7 +9,7 @@ import { SignalingChannel } from './webrtc/SignalingChannel.js';
 import { SLOTS } from './webrtc/types.js';
 const ENCODINGS = {
     mic: { maxBitrate: 48_000, priority: 'high', networkPriority: 'high' },
-    camera: { maxBitrate: 350_000, maxFramerate: 24, priority: 'low', networkPriority: 'low' },
+    camera: { maxBitrate: 1_200_000, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
     screen: { maxBitrate: SCREEN_PRESETS.motion.maxBitrate, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
     screenAudio: { maxBitrate: 128_000, priority: 'medium', networkPriority: 'medium' },
 };

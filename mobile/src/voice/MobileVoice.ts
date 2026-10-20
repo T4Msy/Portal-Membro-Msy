@@ -43,7 +43,7 @@ export interface Snapshot {
 // Celular: tela reduzida pela metade (telas de celular têm resolução alta e o upload é limitado).
 const ENCODINGS: Record<MediaSlot, SenderEncoding> = {
   mic: { maxBitrate: 48_000, priority: 'high', networkPriority: 'high' },
-  camera: { maxBitrate: 300_000, maxFramerate: 20 },
+  camera: { maxBitrate: 1_000_000, maxFramerate: 30 },
   screen: { maxBitrate: 1_800_000, maxFramerate: 24, scaleResolutionDownBy: 2, priority: 'medium' },
   screenAudio: { maxBitrate: 64_000 },
 }
@@ -244,7 +244,7 @@ export class MobileVoice {
       t.stop()
       this.patch({ camera: null })
     } else {
-      const s = await mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: 640, height: 480, frameRate: 24 } })
+      const s = await mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: 1280, height: 720, frameRate: 30 } })
       const track = s.getVideoTracks()[0]
       if (!track) throw new Error('A câmera não retornou vídeo.')
       this.cameraTrack = track

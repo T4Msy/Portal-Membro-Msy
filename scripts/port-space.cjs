@@ -37,6 +37,9 @@ const PATCHES = {
   'voice/webrtc/SignalingChannel.js': [["`voice:${this.channelId}`", "`space:voice:${this.channelId}`"]],
   // Falha ao buscar o TURN não pode deixar a chamada 10 min só com STUN (4G cai): tenta de novo em 30 s.
   'voice/webrtc/iceServers.js': [['expiresAt: Date.now() + 10 * 60 * 1000', 'expiresAt: Date.now() + 30 * 1000']],
+  // Câmera em HD (era 640x360 a 350 kbps com prioridade baixa: "qualidade horrível" — pedido do dono 20/10/2026).
+  'voice/VoiceSession.js': [["camera: { maxBitrate: 350_000, maxFramerate: 24, priority: 'low', networkPriority: 'low' },","camera: { maxBitrate: 1_200_000, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },"]],
+  'voice/media/devices.js': [["            width: { ideal: 640 },\n            height: { ideal: 360 },\n            frameRate: { ideal: 24, max: 30 },","            width: { ideal: 1280 },\n            height: { ideal: 720 },\n            frameRate: { ideal: 30, max: 30 },"],["    track.contentHint = 'motion';\n",""]],
 };
 
 const srcToOut = Object.fromEntries(Object.entries(MAP).map(([k, v]) => [path.posix.join('', k.replace(/\.ts$/, '')), v]));

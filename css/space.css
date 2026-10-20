@@ -1008,3 +1008,18 @@ body[data-page="space"] .sp-tile:fullscreen .sp-tile-full i::before { content: "
 .sp-perm-row b.is-ok { color: #4ade80; }
 .sp-perm-row b.is-warn { color: #fbbf24; }
 .sp-perm-row b.is-bad { color: #f87171; }
+
+/* ── Destaque (clicou na câmera de alguém, como no Discord): grande no meio, os outros na faixa de baixo ── */
+body[data-page="space"] [data-layout="focus"] .sp-tile-strip { justify-content: safe center; }
+body[data-page="space"] .sp-tile-vol {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px !important; height: 32px !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
+  border: 0; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff; cursor: pointer;
+}
+body[data-page="space"] .sp-tile.is-compact .sp-tile-vol { width: 26px !important; height: 26px !important; top: 6px; left: 6px; font-size: .75rem; }
+body[data-page="space"] .sp-tile-conn { left: 48px; }
+@media (hover: hover) {
+  body[data-page="space"] .sp-tile-vol { opacity: 0; transition: opacity .15s; }
+  body[data-page="space"] .sp-tile:hover .sp-tile-vol { opacity: 1; }
+}

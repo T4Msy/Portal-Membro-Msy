@@ -52,6 +52,7 @@ export class VoiceRoomView {
     this.selectedScreen = null;
     this.menu = null; // 'screen' | 'react' | null
     this.volumeFor = null;
+    this.focusKey = null; // quadro em destaque (clicou na câmera de alguém, como no Discord)
     this.withAudio = true;
     this.onChange = () => this.render();
     // Grade como no Discord/Meet: recalcula o tamanho dos quadros quando a área muda.
@@ -75,6 +76,17 @@ export class VoiceRoomView {
       if (tile) this.fullscreenTile(tile);
     }, { signal });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) unlockOrientation(); }, { signal });
+    // Botão direito (ou toque longo) no quadro de alguém: volume dessa pessoa.
+    this.el.addEventListener('contextmenu', (e) => {
+      const tile = e.target.closest('.sp-tile[data-remote]');
+      if (!tile) return;
+      e.preventDefault();
+      this.volumeFor = this.volumeFor === tile.dataset.key ? null : tile.dataset.key;
+      this.render();
+    }, { signal });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.focusKey && !document.fullscreenElement) { this.focusKey = null; this.render(); }
+    }, { signal });
     this.voice.addEventListener('change', this.onChange);
     this.online.addEventListener('change', this.onChange);
     this.render();
@@ -167,20 +179,32 @@ export class VoiceRoomView {
     this.el.querySelector('[data-join-hint]').hidden = snap.status !== 'joining';
 
     const body = this.el.querySelector('[data-body]');
-    const layout = screens.length ? 'stage' : 'grid';
+    if (this.focusKey && !tiles.some((t) => t.key === this.focusKey)) this.focusKey = null; // a pessoa saiu
+    const layout = this.focusKey ? 'focus' : screens.length ? 'stage' : 'grid';
     if (body.dataset.layout !== layout) {
       body.dataset.layout = layout;
-      this.tiles.clear();
+      // Os quadros (e seus <video>) são reaproveitados: só mudam de lugar, sem piscar.
+      for (const node of this.tiles.values()) node.remove();
       body.innerHTML = layout === 'stage'
         ? '<div class="sp-stage" data-stage></div><div class="sp-tile-strip" data-tiles></div>'
-        : '<div class="sp-tile-grid" data-tiles></div>';
+        : layout === 'focus'
+          ? '<div class="sp-tile-grid sp-focus" data-focus></div><div class="sp-tile-strip" data-tiles></div>'
+          : '<div class="sp-tile-grid" data-tiles></div>';
       this.gridObs.disconnect();
       this.gridKey = null;
-      if (layout === 'grid') this.gridObs.observe(body.querySelector('.sp-tile-grid'));
+      const grid = body.querySelector('.sp-tile-grid');
+      if (grid) this.gridObs.observe(grid);
     }
     if (layout === 'stage') this.renderStage(body.querySelector('[data-stage]'), screens, snap);
-    this.renderTiles(body.querySelector('[data-tiles]'), tiles, snap, layout === 'stage');
-    if (layout === 'grid') this.layoutGrid();
+    if (layout === 'focus') {
+      this.renderTiles([
+        { container: body.querySelector('[data-focus]'), tiles: tiles.filter((t) => t.key === this.focusKey), compact: false },
+        { container: body.querySelector('[data-tiles]'), tiles: tiles.filter((t) => t.key !== this.focusKey), compact: true },
+      ], snap);
+    } else {
+      this.renderTiles([{ container: body.querySelector('[data-tiles]'), tiles, compact: layout === 'stage' }], snap);
+    }
+    if (layout !== 'stage') this.layoutGrid();
     this.renderControls(snap);
   }
 
@@ -216,9 +240,14 @@ export class VoiceRoomView {
     return list;
   }
 
-  renderTiles(container, tiles, snap, compact) {
-    const keep = new Set(tiles.map((t) => t.key));
+  /** places: [{ container, tiles, compact }] — grade, destaque ou faixa de baixo. */
+  renderTiles(places, snap) {
+    const keep = new Set(places.flatMap((p) => p.tiles.map((t) => t.key)));
     for (const [key, node] of this.tiles) if (!keep.has(key)) { node.querySelector('video')?.remove(); node.remove(); this.tiles.delete(key); }
+    for (const place of places) this.renderTilesIn(place.container, place.tiles, snap, place.compact);
+  }
+
+  renderTilesIn(container, tiles, snap, compact) {
     tiles.forEach((t, index) => {
       let node = this.tiles.get(t.key);
       if (!node) {
@@ -228,13 +257,19 @@ export class VoiceRoomView {
         node.innerHTML = `<div class="sp-tile-media"></div>
           <div class="sp-tile-foot"><span class="sp-tile-name"></span><span class="sp-grow"></span><span class="sp-tile-icons"></span></div>
           <div class="sp-tile-conn" hidden></div><div class="sp-tile-stats" hidden></div><div class="sp-tile-fx"></div>
-          <button class="sp-tile-full" data-act="tile-full" title="Tela cheia" aria-label="Ver câmera em tela cheia">${icon('fa-expand')}</button>`;
+          <button class="sp-tile-full" data-act="tile-full" title="Tela cheia" aria-label="Ver câmera em tela cheia">${icon('fa-expand')}</button>
+          ${t.isLocal ? '' : `<button class="sp-tile-vol" data-act="tile-volume" title="Volume desta pessoa" aria-label="Volume desta pessoa">${icon('fa-sliders')}</button>`}`;
+        if (!t.isLocal) node.dataset.remote = '1';
         this.tiles.set(t.key, node);
       }
       if (container.children[index] !== node) container.insertBefore(node, container.children[index] || null);
       node.classList.toggle('is-speaking', t.speaking);
       node.classList.toggle('is-compact', compact);
-      node.classList.toggle('is-clickable', !t.isLocal);
+      // Na faixa de baixo o tamanho vem do CSS (o da grade é calculado em layoutGrid).
+      if (compact && node.style.height) { node.style.width = ''; node.style.height = ''; }
+      node.classList.toggle('is-clickable', true);
+      node.classList.toggle('is-focused', t.key === this.focusKey);
+      node.title = t.key === this.focusKey ? 'Clique para voltar à grade' : 'Clique para destacar';
       node.dataset.user = t.userId;
 
       const media = node.querySelector('.sp-tile-media');
@@ -385,8 +420,9 @@ export class VoiceRoomView {
   async onClick(e) {
     const btn = e.target.closest('[data-act]');
     const tile = e.target.closest('.sp-tile.is-clickable');
+    // Clique no quadro de alguém: vai para o destaque (grande); clicar de novo volta para a grade.
     if (!btn && tile && !e.target.closest('.sp-volume')) {
-      this.volumeFor = this.volumeFor === tile.dataset.key ? null : tile.dataset.key;
+      this.focusKey = this.focusKey === tile.dataset.key ? null : tile.dataset.key;
       this.render();
       return;
     }
@@ -421,6 +457,7 @@ export class VoiceRoomView {
       case 'call-pip': await this.pip?.toggle(); this.render(); break;
       case 'tile-full': this.fullscreenTile(btn.closest('.sp-tile')); break;
       case 'volume-close': this.volumeFor = null; this.render(); break;
+      case 'tile-volume': { const k = btn.closest('.sp-tile')?.dataset.key; this.volumeFor = this.volumeFor === k ? null : k; this.render(); break; }
       case 'copy-code': this.copy(this.channel.join_code, 'Código copiado.'); break;
       case 'copy-link': this.copy(`${location.origin}/space.html?sala=${encodeURIComponent(this.channel.join_code)}`, 'Link copiado.'); break;
       case 'close-room': await this.closeRoom(); break;
@@ -487,13 +524,14 @@ export class VoiceRoomView {
   layoutGrid() {
     const grid = this.el.querySelector('.sp-tile-grid');
     if (!grid || !grid.children.length) return;
+    // Destaque: um quadro só, no maior tamanho que couber.
     const tiles = [...grid.children];
     const gap = 12;
     const W = grid.clientWidth - 1;
     const H = grid.clientHeight - 1;
     if (W <= 0 || H <= 0) return;
     const ars = tiles.map((n) => Math.min(21 / 9, Math.max(9 / 16, n._ar || 16 / 9)));
-    const key = `${W}x${H}:${ars.map((a) => a.toFixed(3)).join(',')}`;
+    const key = `${W}x${H}:${tiles.map((n, i) => `${n.dataset.key}=${ars[i].toFixed(3)}`).join(',')}`;
     if (key === this.gridKey) return;
     this.gridKey = key;
     const fits = (h) => {

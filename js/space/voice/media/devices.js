@@ -30,15 +30,14 @@ export async function getCameraTrack(deviceId) {
         audio: false,
         video: {
             deviceId: deviceId ? { ideal: deviceId } : undefined,
-            width: { ideal: 640 },
-            height: { ideal: 360 },
-            frameRate: { ideal: 24, max: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
         },
     });
     const track = stream.getVideoTracks()[0];
     if (!track)
         throw new DOMException('Nenhuma câmera', 'NotFoundError');
-    track.contentHint = 'motion';
     return track;
 }
 /** Mensagem clara para cada falha de captura do navegador. */
