@@ -54,6 +54,8 @@ export class VoiceRoomView {
     this.volumeFor = null;
     this.withAudio = true;
     this.onChange = () => this.render();
+    // Grade como no Discord/Meet: recalcula o tamanho dos quadros quando a área muda.
+    this.gridObs = new ResizeObserver(() => this.layoutGrid());
   }
 
   get inThisRoom() {
@@ -79,6 +81,7 @@ export class VoiceRoomView {
   }
 
   destroy() {
+    this.gridObs.disconnect();
     this.events?.abort();
     this.voice.removeEventListener('change', this.onChange);
     this.online.removeEventListener('change', this.onChange);
@@ -171,9 +174,13 @@ export class VoiceRoomView {
       body.innerHTML = layout === 'stage'
         ? '<div class="sp-stage" data-stage></div><div class="sp-tile-strip" data-tiles></div>'
         : '<div class="sp-tile-grid" data-tiles></div>';
+      this.gridObs.disconnect();
+      this.gridKey = null;
+      if (layout === 'grid') this.gridObs.observe(body.querySelector('.sp-tile-grid'));
     }
     if (layout === 'stage') this.renderStage(body.querySelector('[data-stage]'), screens, snap);
     this.renderTiles(body.querySelector('[data-tiles]'), tiles, snap, layout === 'stage');
+    if (layout === 'grid') this.layoutGrid();
     this.renderControls(snap);
   }
 
@@ -247,6 +254,7 @@ export class VoiceRoomView {
         if (document.fullscreenElement === node) document.exitFullscreen().catch(() => undefined);
         node.classList.remove('has-video', 'is-portrait');
         node.style.removeProperty('--sp-ar');
+        node._ar = null;
         media.innerHTML = avatarHtml(t.profile, compact ? 48 : 76, 'sp-tile-avatar');
         media.dataset.avatarFor = t.userId;
       }
@@ -465,8 +473,49 @@ export class VoiceRoomView {
     node.classList.add('has-video');
     node.classList.toggle('is-portrait', portrait);
     node.style.setProperty('--sp-ar', `${w} / ${h}`);
+    node._ar = w / h;
+    this.layoutGrid();
     // Em tela cheia e a pessoa virou o celular: gira junto.
     if (document.fullscreenElement === node) lockOrientation(portrait);
+  }
+
+  /**
+   * Grade centralizada (como no Discord/Meet): todos os quadros com a mesma altura, cada um com
+   * a largura do formato da sua câmera (em pé = estreito, deitado = largo; sem câmera = 16:9),
+   * no maior tamanho que cabe na área. Simula a quebra de linha do flex para achar essa altura.
+   */
+  layoutGrid() {
+    const grid = this.el.querySelector('.sp-tile-grid');
+    if (!grid || !grid.children.length) return;
+    const tiles = [...grid.children];
+    const gap = 12;
+    const W = grid.clientWidth - 1;
+    const H = grid.clientHeight - 1;
+    if (W <= 0 || H <= 0) return;
+    const ars = tiles.map((n) => Math.min(21 / 9, Math.max(9 / 16, n._ar || 16 / 9)));
+    const key = `${W}x${H}:${ars.map((a) => a.toFixed(3)).join(',')}`;
+    if (key === this.gridKey) return;
+    this.gridKey = key;
+    const fits = (h) => {
+      let rows = 1;
+      let x = 0;
+      for (const a of ars) {
+        const w = Math.floor(Math.min(a * h, W));
+        if (x > 0 && x + gap + w > W) { rows += 1; x = w; } else x += (x > 0 ? gap : 0) + w;
+      }
+      return rows * h + (rows - 1) * gap <= H;
+    };
+    const min = matchMedia('(max-width: 640px)').matches ? 90 : 110;
+    let lo = min;
+    let hi = H;
+    if (fits(lo)) {
+      for (let i = 0; i < 22; i += 1) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+    }
+    const h = Math.floor(lo);
+    tiles.forEach((n, i) => {
+      n.style.width = `${Math.floor(Math.min(ars[i] * h, W))}px`;
+      n.style.height = `${h}px`;
+    });
   }
 
   /** Picture-in-picture: a transmissão continua visível por cima de outros apps/abas. */

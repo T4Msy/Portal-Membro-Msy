@@ -461,11 +461,13 @@ body[data-page="space"] .sp-audio-blocked {
   font-size: .8rem; font-weight: 700; cursor: pointer;
 }
 body[data-page="space"] .sp-room-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+/* Grade centralizada como no Discord: o tamanho de cada quadro vem do JS (layoutGrid). */
 body[data-page="space"] .sp-tile-grid {
   flex: 1; min-height: 0; overflow-y: auto;
-  display: grid; gap: 12px; align-content: center;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  display: flex; flex-wrap: wrap; gap: 12px;
+  justify-content: center; align-content: center;
 }
+body[data-page="space"] .sp-tile-grid .sp-tile { flex: none; aspect-ratio: auto; min-height: 0; width: 250px; height: 141px; }
 body[data-page="space"] .sp-tile-strip { display: flex; gap: 10px; overflow-x: auto; flex-shrink: 0; padding-bottom: 4px; }
 body[data-page="space"] .sp-tile-strip .sp-tile { width: 190px; flex-shrink: 0; }
 
@@ -948,10 +950,6 @@ body[data-page="space"] .sp-me-group .sp-me-chev { width: 16px !important; paddi
 /* ── Câmeras: o quadro toma o formato da câmera (de pé ou deitada) ── */
 body[data-page="space"] .sp-tile.has-video { aspect-ratio: var(--sp-ar, 16 / 9); background: #000; }
 body[data-page="space"] .sp-tile.has-video .sp-tile-media video { object-fit: contain; }
-body[data-page="space"] .sp-tile-grid .sp-tile.is-portrait {
-  justify-self: center; width: auto; max-width: 100%;
-  height: min(62vh, 520px);
-}
 body[data-page="space"] .sp-tile-strip .sp-tile.is-portrait { width: auto; height: 150px; }
 body[data-page="space"] .sp-tile-full {
   position: absolute; top: 8px; right: 8px; z-index: 2;
@@ -966,7 +964,7 @@ body[data-page="space"] .sp-tile.has-video .sp-tile-stats { right: 48px; }
   body[data-page="space"] .sp-tile.has-video:hover .sp-tile-full { opacity: 1; }
 }
 /* Tela cheia: câmera inteira no centro, sem bordas */
-body[data-page="space"] .sp-tile:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; border-radius: 0; background: #000; }
+body[data-page="space"] .sp-tile:fullscreen { aspect-ratio: auto; width: 100vw !important; height: 100vh !important; border-radius: 0; background: #000; }
 body[data-page="space"] .sp-tile:fullscreen .sp-tile-media video { object-fit: contain; }
 body[data-page="space"] .sp-tile:fullscreen .sp-tile-full { display: inline-flex; opacity: 1; }
 body[data-page="space"] .sp-tile:fullscreen .sp-tile-full i::before { content: "\f066"; } /* fa-compress */
