@@ -13,9 +13,32 @@ function setHtml(el, html) {
   if (el._spHtml !== html) { el.innerHTML = html; el._spHtml = html; }
 }
 
+/** Tela cheia (ou sai dela). iPhone: só o próprio <video> entra em tela cheia. */
+async function enterFullscreen(el, video, portrait) {
+  try {
+    if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+    if (el.requestFullscreen) {
+      await el.requestFullscreen({ navigationUI: 'hide' });
+      lockOrientation(portrait);
+    } else if (video?.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen();
+    }
+  } catch { /* usuário cancelou ou navegador recusou */ }
+}
+
+/** No celular, gira a tela para o formato do vídeo (Android; o iPhone gira pelo sensor). */
+function lockOrientation(portrait) {
+  try { screen.orientation?.lock?.(portrait ? 'portrait' : 'landscape').catch(() => undefined); } catch { /* sem suporte */ }
+}
+
+function unlockOrientation() {
+  try { screen.orientation?.unlock?.(); } catch { /* sem suporte */ }
+}
+
 export class VoiceRoomView {
-  constructor(container, channel, { workspace, voice, online, me, onToggleNav, onLeftRoom }) {
+  constructor(container, channel, { workspace, voice, online, pip, me, onToggleNav, onLeftRoom }) {
     this.el = container;
+    this.pip = pip;
     this.channel = channel;
     this.workspace = workspace;
     this.voice = voice;
@@ -44,6 +67,12 @@ export class VoiceRoomView {
     const { signal } = this.events;
     this.el.addEventListener('click', (e) => this.onClick(e), { signal });
     this.el.addEventListener('input', (e) => this.onInput(e), { signal });
+    // Dois toques/cliques na câmera de alguém: tela cheia.
+    this.el.addEventListener('dblclick', (e) => {
+      const tile = e.target.closest('.sp-tile.has-video');
+      if (tile) this.fullscreenTile(tile);
+    }, { signal });
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) unlockOrientation(); }, { signal });
     this.voice.addEventListener('change', this.onChange);
     this.online.addEventListener('change', this.onChange);
     this.render();
@@ -191,7 +220,8 @@ export class VoiceRoomView {
         node.dataset.key = t.key;
         node.innerHTML = `<div class="sp-tile-media"></div>
           <div class="sp-tile-foot"><span class="sp-tile-name"></span><span class="sp-grow"></span><span class="sp-tile-icons"></span></div>
-          <div class="sp-tile-conn" hidden></div><div class="sp-tile-stats" hidden></div><div class="sp-tile-fx"></div>`;
+          <div class="sp-tile-conn" hidden></div><div class="sp-tile-stats" hidden></div><div class="sp-tile-fx"></div>
+          <button class="sp-tile-full" data-act="tile-full" title="Tela cheia" aria-label="Ver câmera em tela cheia">${icon('fa-expand')}</button>`;
         this.tiles.set(t.key, node);
       }
       if (container.children[index] !== node) container.insertBefore(node, container.children[index] || null);
@@ -206,10 +236,17 @@ export class VoiceRoomView {
         if (!video) {
           media.innerHTML = '<video autoplay playsinline muted></video>';
           video = media.querySelector('video');
+          // O quadro toma o formato da câmera: de pé (celular em pé) ou deitado.
+          const fit = () => this.fitTile(node, video);
+          video.addEventListener('loadedmetadata', fit);
+          video.addEventListener('resize', fit);
         }
         video.classList.toggle('is-mirror', t.isLocal);
         bindVideo(video, t.camera);
       } else if (media.dataset.avatarFor !== t.userId || media.querySelector('video')) {
+        if (document.fullscreenElement === node) document.exitFullscreen().catch(() => undefined);
+        node.classList.remove('has-video', 'is-portrait');
+        node.style.removeProperty('--sp-ar');
         media.innerHTML = avatarHtml(t.profile, compact ? 48 : 76, 'sp-tile-avatar');
         media.dataset.avatarFor = t.userId;
       }
@@ -316,6 +353,7 @@ export class VoiceRoomView {
       ${local.screen ? btn('stop-screen', 'fa-display', 'Parar transmissão', 'is-on')
         : btn('screen-menu', 'fa-display', screenBlocked || 'Compartilhar tela', this.menu === 'screen' ? 'is-open' : '', Boolean(screenBlocked))}
       ${btn('react-menu', 'fa-face-smile', 'Reações', this.menu === 'react' ? 'is-open' : '')}
+      ${this.pip?.supported ? btn('call-pip', 'fa-clone', 'Janela flutuante: a chamada fica por cima de outros apps e abas', this.pip.isOpen ? 'is-on' : '') : ''}
       ${btn('settings', 'fa-gear', 'Voz e vídeo (microfone, saída, câmera)')}
       ${btn('leave', 'fa-phone-slash', 'Sair da sala', 'is-danger')}
       ${local.screen ? `<span class="sp-upload" title="Upload real medido nas conexões">Enviando ${esc(formatKbps(snap.uploadKbps))} · ${viewers} ${viewers === 1 ? 'espectador' : 'espectadores'}</span>` : ''}
@@ -372,6 +410,8 @@ export class VoiceRoomView {
       case 'watch': v.setWatching(btn.dataset.id, btn.dataset.watching !== 'true'); break;
       case 'fullscreen': this.toggleFullscreen(); break;
       case 'pip': this.togglePip(); break;
+      case 'call-pip': await this.pip?.toggle(); this.render(); break;
+      case 'tile-full': this.fullscreenTile(btn.closest('.sp-tile')); break;
       case 'volume-close': this.volumeFor = null; this.render(); break;
       case 'copy-code': this.copy(this.channel.join_code, 'Código copiado.'); break;
       case 'copy-link': this.copy(`${location.origin}/space.html?sala=${encodeURIComponent(this.channel.join_code)}`, 'Link copiado.'); break;
@@ -406,11 +446,27 @@ export class VoiceRoomView {
   async toggleFullscreen() {
     const view = this.el.querySelector('[data-view]');
     if (!view) return;
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else if (view.requestFullscreen) await view.requestFullscreen();
-      else view.querySelector('video')?.webkitEnterFullscreen?.();
-    } catch { /* usuário cancelou */ }
+    const video = view.querySelector('video');
+    await enterFullscreen(view, video, video?.videoHeight > video?.videoWidth);
+  }
+
+  /** Câmera de uma pessoa em tela cheia; no celular a tela gira para o formato da câmera. */
+  async fullscreenTile(tile) {
+    const video = tile?.querySelector('.sp-tile-media video');
+    if (!video) return;
+    await enterFullscreen(tile, video, tile.classList.contains('is-portrait'));
+  }
+
+  fitTile(node, video) {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) return;
+    const portrait = h > w;
+    node.classList.add('has-video');
+    node.classList.toggle('is-portrait', portrait);
+    node.style.setProperty('--sp-ar', `${w} / ${h}`);
+    // Em tela cheia e a pessoa virou o celular: gira junto.
+    if (document.fullscreenElement === node) lockOrientation(portrait);
   }
 
   /** Picture-in-picture: a transmissão continua visível por cima de outros apps/abas. */

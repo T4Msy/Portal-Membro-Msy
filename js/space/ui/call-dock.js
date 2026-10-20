@@ -3,8 +3,9 @@
 import { avatarHtml, displayName, esc, icon } from './dom.js';
 
 export class CallDock {
-  constructor({ voice, workspace, me, isRoomVisible, onOpenRoom }) {
+  constructor({ voice, workspace, pip, me, isRoomVisible, onOpenRoom }) {
     this.voice = voice;
+    this.pip = pip;
     this.workspace = workspace;
     this.me = me;
     this.isRoomVisible = isRoomVisible;
@@ -51,6 +52,7 @@ export class CallDock {
           <button class="sp-ctl sp-ctl-sm ${micOff ? 'is-off' : ''}" data-act="mute" title="${micOff ? 'Ativar microfone' : 'Desativar microfone'}">${icon(micOff ? 'fa-microphone-slash' : 'fa-microphone')}</button>
           <button class="sp-ctl sp-ctl-sm ${snap.local.deafened ? 'is-off' : ''}" data-act="deafen" title="${snap.local.deafened ? 'Ativar som' : 'Desativar som'}">${icon(snap.local.deafened ? 'fa-volume-xmark' : 'fa-headphones')}</button>
           ${snap.local.screen ? `<button class="sp-ctl sp-ctl-sm is-on" data-act="stop-screen" title="Parar transmissão">${icon('fa-display')}</button>` : ''}
+          ${this.pip?.supported ? `<button class="sp-ctl sp-ctl-sm" data-act="pip" title="Janela flutuante (fica por cima de outros apps)">${icon('fa-clone')}</button>` : ''}
           <button class="sp-ctl sp-ctl-sm" data-act="open" title="Abrir a sala">${icon('fa-up-right-and-down-left-from-center')}</button>
           <button class="sp-ctl sp-ctl-sm is-danger" data-act="leave" title="Sair da chamada">${icon('fa-phone-slash')}</button>
         </div>`;
@@ -70,6 +72,7 @@ export class CallDock {
     if (act === 'stop-screen') this.voice.stopScreen();
     if (act === 'leave') this.voice.leave();
     if (act === 'open') this.onOpenRoom();
+    if (act === 'pip') this.pip?.toggle();
     if (act === 'minimize') { this.minimized = true; this.render(); }
     if (act === 'expand') { this.minimized = false; this.render(); }
   }

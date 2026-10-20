@@ -2,6 +2,7 @@
 // Uma única sessão de voz por janela. A interface escuta o evento 'change' e lê `snapshot`.
 import { supabase } from './lib/supabase.js';
 import { VoiceSession } from './voice/VoiceSession.js';
+import { explainBeforeAsking } from './ui/permissions.js';
 
 const ACTIVE = new Set(['joining', 'connected', 'reconnecting']);
 
@@ -28,6 +29,8 @@ export class VoiceController extends EventTarget {
   async join(channel) {
     const current = this.session;
     if (current && current.getSnapshot().channelId === channel.id && current.getSnapshot().status !== 'error') return;
+    // Antes da janela do navegador: explica qual opção escolher para ele não perguntar toda vez.
+    await explainBeforeAsking(['microphone']);
     if (current) this.leave();
 
     const session = new VoiceSession({
@@ -124,7 +127,12 @@ export class VoiceController extends EventTarget {
     if (!this.session) { this.prefs.update({ selfDeaf: !this.prefs.get().selfDeaf }); this.emit(); return; }
     this.run((s) => { s.toggleDeafen(); this.prefs.update({ selfDeaf: s.getSnapshot().local.deafened }); });
   }
-  toggleCamera() { this.run((s) => s.toggleCamera()); }
+  toggleCamera() {
+    this.run(async (s) => {
+      if (!s.getSnapshot().local.camera) await explainBeforeAsking(['camera']);
+      await s.toggleCamera();
+    });
+  }
   /** Trocou a câmera com ela ligada: desliga e liga na ordem (sem depender de tempo fixo). */
   restartCamera() {
     this.run(async (s) => {

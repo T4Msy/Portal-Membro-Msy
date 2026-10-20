@@ -8,6 +8,7 @@ import { SpaceNav } from './ui/nav.js';
 import { ChatView } from './ui/chat.js';
 import { VoiceRoomView } from './ui/voice-room.js';
 import { CallDock } from './ui/call-dock.js';
+import { CallPip } from './ui/call-pip.js';
 import { esc, icon, toast } from './ui/dom.js';
 import { followVisualViewport } from './ui/viewport.js';
 
@@ -42,6 +43,7 @@ async function initSpace() {
   online.start();
   workspace.subscribe();
   const voice = new VoiceController({ me: profile, prefs, online, workspace, toast });
+  const pip = new CallPip({ voice, workspace, me: profile });
 
   content.innerHTML = `
     <div class="sp-app sp-enter">
@@ -76,7 +78,7 @@ async function initSpace() {
     try { localStorage.setItem(LAST_CHANNEL_KEY, id); } catch { /* sem storage */ }
     history.replaceState(null, '', `space.html#c=${id}`);
     shell.spaceUrl = `space.html#c=${id}`;
-    const ctx = { workspace, voice, online, me: profile, onToggleNav: toggleNav, onLeftRoom: (closed) => { if (closed) showFirst(); } };
+    const ctx = { workspace, voice, online, pip, me: profile, onToggleNav: toggleNav, onLeftRoom: (closed) => { if (closed) showFirst(); } };
     view = channel.kind === 'voice' ? new VoiceRoomView(main, channel, ctx) : new ChatView(main, channel, ctx);
     view.mount();
     dock.render();
@@ -100,7 +102,7 @@ async function initSpace() {
   shell.install();
 
   const dock = new CallDock({
-    voice, workspace, me: profile,
+    voice, workspace, pip, me: profile,
     // A sala está na tela quando a moldura está fechada e o canal aberto é o da chamada.
     isRoomVisible: () => !shellOn && selectedId === voice.channelId,
     onOpenRoom: () => { if (shellOn) shell.showSpace(); else if (voice.channelId) select(voice.channelId); },

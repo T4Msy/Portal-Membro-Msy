@@ -7,6 +7,7 @@
 import { listDevices } from '../voice/media/devices.js';
 import { getCapabilities } from '../voice/media/capabilities.js';
 import { esc, icon, toast } from './dom.js';
+import { allowAlwaysTip, permissionState, requestBoth, unblockTip } from './permissions.js';
 
 let open = null;
 
@@ -39,6 +40,8 @@ class VoiceSettings {
           ${icon('fa-lock-open')} Para ver os nomes dos seus dispositivos, o navegador precisa de permissão.
           <button class="btn btn-primary btn-sm" data-act="allow">Permitir acesso</button>
         </div>
+
+        <section class="sp-set-block" data-perms></section>
 
         <section class="sp-set-block">
           <label class="sp-set-label" for="spSetInput">${icon('fa-microphone')} Microfone</label>
@@ -83,7 +86,25 @@ class VoiceSettings {
       <input type="checkbox" class="sp-switch" data-pref-bool="${esc(key)}" ${on ? 'checked' : ''}></label>`;
   }
 
+  /** Estado das permissões + "Permitir sempre" (o navegador pergunta uma vez só pelos dois). */
+  async renderPerms() {
+    const box = this.el.querySelector('[data-perms]');
+    const [mic, cam] = await Promise.all([permissionState('microphone'), permissionState('camera')]);
+    const label = { granted: 'Permitido', denied: 'Bloqueado', prompt: 'Pergunta toda vez', unknown: 'Decidido pelo navegador' };
+    const tone = { granted: 'is-ok', denied: 'is-bad', prompt: 'is-warn', unknown: '' };
+    const allGranted = mic === 'granted' && cam === 'granted';
+    const anyDenied = mic === 'denied' || cam === 'denied';
+    box.innerHTML = `<div class="sp-set-label">${icon('fa-shield-halved')} Permissões</div>
+      <div class="sp-perm-row"><span>${icon('fa-microphone')} Microfone</span><b class="${tone[mic]}">${label[mic]}</b></div>
+      <div class="sp-perm-row"><span>${icon('fa-video')} Câmera</span><b class="${tone[cam]}">${label[cam]}</b></div>
+      ${allGranted ? '<p class="sp-hint">Tudo certo: o navegador não precisa perguntar de novo.</p>'
+        : anyDenied ? `<p class="sp-hint is-warn">${unblockTip()}</p>`
+          : `<button class="btn btn-primary btn-sm" data-act="allow-always">${icon('fa-lock-open')} Permitir sempre</button>
+             <p class="sp-hint">${allowAlwaysTip()}</p>`}`;
+  }
+
   async renderDevices() {
+    this.renderPerms();
     const { inputs, outputs, cameras } = await listDevices();
     const p = this.prefs.get();
     const needsPermission = [...inputs, ...cameras].some((d) => !d.label);
@@ -150,15 +171,14 @@ class VoiceSettings {
     if (!btn) return;
     const act = btn.dataset.act;
     if (act === 'close') this.close();
-    if (act === 'allow') await this.askPermission();
+    if (act === 'allow' || act === 'allow-always') await this.askPermission();
     if (act === 'mic-test') this.testStream ? this.stopMicTest() : await this.startMicTest();
     if (act === 'sound-test') await this.playTestSound();
   }
 
   async askPermission() {
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-      s.getTracks().forEach((t) => t.stop());
+      await requestBoth();
     } catch (err) {
       console.warn('[MSY][space] Permissão de dispositivos negada:', err);
       toast('O navegador não liberou o acesso. Libere no cadeado da barra de endereço.', 'error');
