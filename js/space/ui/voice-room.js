@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase.js';
 import { REACTIONS } from '../voice/VoiceSession.js';
 import { getCapabilities, screenShareUnsupportedReason } from '../voice/media/capabilities.js';
 import { SCREEN_PRESETS } from '../voice/media/screen.js';
-import { avatarHtml, bindVideo, displayName, esc, formatKbps, icon, safeColor, toast } from './dom.js';
+import { avatarHtml, bindVideo, displayName, esc, formatKbps, icon, liveCamera, safeColor, toast } from './dom.js';
 import { openVoiceSettings } from './settings.js';
 
 /** Só troca o HTML quando mudou (evita perder foco/hover a cada atualização de fala). */
@@ -192,7 +192,7 @@ export class VoiceRoomView {
     return [local, ...snap.participants.map((p) => ({
       key: p.sessionId, userId: p.userId, ...look(p.userId), isLocal: false,
       muted: p.meta.muted, deafened: p.meta.deafened, speaking: p.speaking && !p.meta.muted,
-      sharing: p.meta.screen, camera: p.camera, link: p.link, stats: p.stats,
+      sharing: p.meta.screen, camera: liveCamera(p.camera), link: p.link, stats: p.stats,
       voiceVolume: vol[p.userId] ?? 1, streamVolume: vol[`${p.userId}:stream`] ?? 1,
     }))];
   }

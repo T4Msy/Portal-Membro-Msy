@@ -19,6 +19,42 @@ export class VoiceController extends EventTarget {
     this.snapshot = null;
     this.touchTimer = null;
     window.addEventListener('pagehide', () => this.session?.leave());
+    // Celular: ao sair do site o sistema corta microfone/câmera (às vezes a chamada inteira).
+    // Ao voltar, recupera sozinho o que caiu.
+    this.away = null;
+    document.addEventListener('visibilitychange', () => (document.hidden ? this.onHidden() : this.onVisible()));
+  }
+
+  onHidden() {
+    const snap = this.session?.getSnapshot();
+    this.away = { camera: Boolean(snap?.local.camera), channelId: this.channelId };
+  }
+
+  async onVisible() {
+    const away = this.away;
+    this.away = null;
+    if (!away?.channelId) return;
+    try {
+      const s = this.session;
+      // A chamada caiu enquanto o site estava fora da tela: entra de novo.
+      if (!s) {
+        const channel = this.workspace.getChannel(away.channelId);
+        if (channel && !this.leftOnPurpose) {
+          this.toast('Reconectando você à chamada…', 'warning');
+          await this.join(channel);
+        }
+        return;
+      }
+      const snap = s.getSnapshot();
+      // Microfone encerrado pelo sistema: pega de novo.
+      if (s.micTrack?.readyState === 'ended' || (!snap.local.micAvailable && /desconectado/.test(snap.local.micError || ''))) {
+        await s.changeInputDevice(this.prefs.get());
+      }
+      // Câmera desligada pelo sistema: liga de novo.
+      if (away.camera && !s.getSnapshot().local.camera) await s.toggleCamera();
+    } catch (err) {
+      console.warn('[MSY][space] Falha ao recuperar a chamada ao voltar:', err);
+    }
   }
 
   /** Há chamada em andamento (ou entrando)? */
@@ -32,6 +68,7 @@ export class VoiceController extends EventTarget {
     // Antes da janela do navegador: explica qual opção escolher para ele não perguntar toda vez.
     await explainBeforeAsking(['microphone']);
     if (current) this.leave();
+    this.leftOnPurpose = false;
 
     const session = new VoiceSession({
       userId: this.me.id,
@@ -58,6 +95,7 @@ export class VoiceController extends EventTarget {
   leave() {
     const session = this.session;
     if (!session) return;
+    this.leftOnPurpose = true;
     const snap = session.getSnapshot();
     // Último a sair de uma sala com código: ela será removida em breve.
     const channel = snap.channelId ? this.workspace.getChannel(snap.channelId) : null;

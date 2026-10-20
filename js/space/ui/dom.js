@@ -61,6 +61,12 @@ export function linkify(text) {
   return out;
 }
 
+/** Câmera que está mandando imagem. Pausada (celular saiu do app) ou encerrada → null (mostra a foto). */
+export function liveCamera(stream) {
+  const track = stream?.getVideoTracks()[0];
+  return track && track.readyState === 'live' && !track.muted ? stream : null;
+}
+
 /** <video> ligado a um MediaStream (o áudio toca separado, no AudioOutput). */
 export function bindVideo(video, stream) {
   if (!video) return;

@@ -12,7 +12,7 @@
 // app instalado — fica para o app Android do Space). O navegador, porém, pode abrir a janela
 // sozinho quando você sai da aba durante a chamada (Chrome: "picture-in-picture automático",
 // ele pergunta uma vez) — por isso registramos o `enterpictureinpicture` da Media Session.
-import { avatarHtml, bindVideo, displayName, esc, icon, safeColor, toast } from './dom.js';
+import { avatarHtml, bindVideo, displayName, esc, icon, liveCamera, safeColor, toast } from './dom.js';
 
 const W = 480;
 const H = 270;
@@ -47,7 +47,9 @@ export class CallPip {
       else toast('Este navegador não tem janela flutuante.', 'warning');
     } catch (err) {
       console.warn('[MSY][space] Janela flutuante falhou:', err);
-      toast('O navegador não abriu a janela flutuante.', 'warning');
+      toast(/Android/.test(navigator.userAgent)
+        ? 'O Android não abriu a janela flutuante. Libere em Configurações → Apps → Chrome → Picture-in-picture → Permitir.'
+        : `O navegador não abriu a janela flutuante (${err?.name || 'erro'}).`, 'warning');
     }
   }
 
@@ -248,7 +250,7 @@ export class CallPip {
       { key: snap.local.sessionId, userId: this.me.id, isLocal: true, ...look(this.me.id), camera: snap.local.camera,
         muted: snap.local.muted || !snap.local.micAvailable, speaking: snap.local.speaking && !snap.local.muted },
       ...snap.participants.map((p) => ({ key: p.sessionId, userId: p.userId, isLocal: false, ...look(p.userId),
-        camera: p.camera, muted: p.meta.muted, speaking: p.speaking && !p.meta.muted })),
+        camera: liveCamera(p.camera), muted: p.meta.muted, speaking: p.speaking && !p.meta.muted })),
     ];
     const score = (p) => (p.speaking ? 2 : 0) + (p.camera ? 1 : 0) + (p.isLocal ? -0.5 : 0);
     return list.map((p, i) => ({ p, i })).sort((a, b) => score(b.p) - score(a.p) || a.i - b.i).map(({ p }) => p);
