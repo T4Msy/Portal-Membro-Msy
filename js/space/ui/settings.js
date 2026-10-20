@@ -63,6 +63,7 @@ class VoiceSettings {
         <section class="sp-set-block">
           <label class="sp-set-label" for="spSetCamera">${icon('fa-video')} Câmera</label>
           <select id="spSetCamera" class="form-input" data-pref="cameraDeviceId"></select>
+          ${this.toggle('mirrorCamera', 'Espelhar minha câmera (só para mim)', 'Desligado: você se vê exatamente como os outros te veem. Os outros nunca veem espelhado.', Boolean(p.mirrorCamera))}
         </section>
 
         <section class="sp-set-block">
@@ -153,6 +154,11 @@ class VoiceSettings {
         this.prefs.update({ cameraDeviceId: t.value || undefined });
         // Câmera ligada: desliga e liga de novo já com a nova.
         this.voice.restartCamera();
+      }
+      if (t.dataset.prefBool === 'mirrorCamera') {
+        this.prefs.update({ mirrorCamera: t.checked });
+        this.voice.emit();
+        return;
       }
       if (t.dataset.prefBool) {
         const prefs = this.prefs.update({ [t.dataset.prefBool]: t.checked });

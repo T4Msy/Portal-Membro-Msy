@@ -4,6 +4,7 @@ import { avatarHtml, displayName, esc, icon, toast } from './dom.js';
 import { openVoiceSettings } from './settings.js';
 import { listDevices } from '../voice/media/devices.js';
 import { getCapabilities } from '../voice/media/capabilities.js';
+import { downloadAndroidApp, latestAppInfo } from './app-download.js';
 
 export class SpaceNav {
   constructor(container, { workspace, voice, online, me, onSelect }) {
@@ -33,6 +34,8 @@ export class SpaceNav {
     });
     for (const src of [this.workspace, this.voice, this.online]) src.addEventListener('change', this.onChange);
     this.render();
+    // Versão do app publicada (aparece no botão de download).
+    latestAppInfo().then((info) => { if (info?.version) { this.appVersion = info.version; this.render(); } });
   }
 
   select(id) { this.selectedId = id; this.render(); }
@@ -96,6 +99,8 @@ export class SpaceNav {
         <button class="sp-pill" data-act="create-room">${icon('fa-plus')} Criar sala</button>
         <button class="sp-pill" data-act="join-room">${icon('fa-key')} Usar código</button>
       </div>
+      ${getCapabilities().isIOS ? '' : `<button class="sp-app-dl" data-act="app-download" title="A chamada continua com o celular bloqueado ou em outro app">
+        <i class="fa-brands fa-android" aria-hidden="true"></i><span><b>Baixar app Android</b><small>${this.appVersion ? `Versão ${esc(this.appVersion)} · ` : ''}chamada em segundo plano</small></span></button>`}
       <div class="sp-nav-scroll">
         ${groupHtml}
         ${rooms.length ? `<section class="sp-group"><div class="sp-group-head is-static">${icon('fa-key')}<span>Salas com código</span></div>
@@ -220,6 +225,7 @@ export class SpaceNav {
     if (act === 'settings') { this.deviceMenu = null; this.render(); openVoiceSettings({ prefs: this.voice.prefs, voice: this.voice }); }
     if (act === 'create-room') await this.createRoom();
     if (act === 'join-room') await this.joinRoom();
+    if (act === 'app-download') await downloadAndroidApp();
   }
 
   async createRoom() {

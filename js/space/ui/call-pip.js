@@ -102,7 +102,7 @@ export class CallPip {
       if (p.camera) {
         let v = media.querySelector('video');
         if (!v) { media.innerHTML = '<video autoplay playsinline muted></video>'; v = media.querySelector('video'); }
-        v.classList.toggle('is-mirror', p.isLocal);
+        v.classList.toggle('is-mirror', p.isLocal && Boolean(this.voice.prefs.get().mirrorCamera));
         bindVideo(v, p.camera);
       } else if (media.dataset.avatarFor !== p.userId || media.querySelector('video')) {
         media.innerHTML = avatarHtml(p.profile, 54);

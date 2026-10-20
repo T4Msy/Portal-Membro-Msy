@@ -59,5 +59,17 @@ fora do Safari a câmera para (o site agora mostra a foto em vez de tela preta).
 ## Versões
 | Versão | Data | Mudança |
 |---|---|---|
+| 0.3 | 20/10/2026 | Sua câmera não aparece mais espelhada (você se vê igual os outros te veem). Download pelo MSY Space |
 | 0.2 | 20/10/2026 | Câmera em HD (720p, 30 fps, até 1 Mbps; antes 640×480 a 300 kbps) |
 | 0.1 | 20/10/2026 | Primeira versão do MSY Space (base: app Masayoshi 0.9) + alto-falante/"do ouvido" |
+
+## Download pelo MSY Space
+- Botão verde **"Baixar app Android"** na coluna de canais do Space (some no iPhone). Gera um link assinado de 10 min
+  para `space-app/MSY-Space.apk` no Storage do portal (bucket **privado**: só quem tem acesso ao Space baixa;
+  só a gestão do Space envia versões — `supabase/migrations/20261020_space_app_download.sql`).
+- `space-app/latest.json` = `{ version, size, date, sha256 }` → a versão aparece no botão.
+- **Publicar versão nova:** `npm run build:apk` → enviar `MSY-Space.apk` (e atualizar `latest.json`) no bucket
+  `space-app` logado como Diretoria. Pelo assistente: o upload do navegador aceita até 10 MB por vez, então o APK é
+  dividido (`split -b 9000000`), as partes são juntadas na aba do portal, o SHA-256 é conferido e aí enviado.
+- Limite do bucket: 50 MB (plano grátis). O APK tem ~47 MB; se passar disso, gerar só `arm64-v8a`
+  (`-PreactNativeArchitectures=arm64-v8a`), que serve para praticamente todos os celulares atuais.

@@ -225,3 +225,11 @@ Limitações conhecidas:
   Os quadros mudam de lugar sem recriar o `<video>` (não pisca). Funciona também durante transmissão de tela.
 - **Volume por pessoa** saiu do clique (agora é destaque): botão no canto do quadro ou botão direito/toque longo.
 - Testado no Brave (2 abas, câmeras falsas 1280×720 e 720×1280, sala temporária apagada).
+
+## 20/10/2026 — Câmera "invertida" + APK para baixar no Space (pedido do dono)
+- "Quando a pessoa vê minha câmera, ela inverte": você se via ESPELHADO (prévia estilo selfie) e os outros te viam
+  normal → parecia invertido. Agora a prévia não é espelhada por padrão (todos veem igual); opção "Espelhar minha
+  câmera (só para mim)" nas configurações de voz (`mirrorCamera`). App: prévia sem espelho.
+- Download do app dentro do Space: botão "Baixar app Android" + bucket privado `space-app` (SQL rodado no Brave;
+  `select` confirmou bucket privado com limite 52428800). APK 0.3 enviado (SHA-256 conferido) + `latest.json`.
+  Detalhes em [APP_ANDROID.md](APP_ANDROID.md#download-pelo-msy-space).

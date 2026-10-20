@@ -1023,3 +1023,16 @@ body[data-page="space"] .sp-tile-conn { left: 48px; }
   body[data-page="space"] .sp-tile-vol { opacity: 0; transition: opacity .15s; }
   body[data-page="space"] .sp-tile:hover .sp-tile-vol { opacity: 1; }
 }
+
+/* ── Botão "Baixar app Android" (coluna de canais) ── */
+body[data-page="space"] .sp-app-dl {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 12px 2px; padding: 8px 12px !important; min-height: 0 !important; width: auto;
+  border-radius: 12px; border: 1px solid rgba(61, 220, 132, .35);
+  background: rgba(61, 220, 132, .08); color: #d1fae5; text-align: left; cursor: pointer;
+}
+body[data-page="space"] .sp-app-dl:hover { background: rgba(61, 220, 132, .16); }
+body[data-page="space"] .sp-app-dl .fa-android { font-size: 1.35rem; color: #3ddc84; }
+body[data-page="space"] .sp-app-dl span { display: flex; flex-direction: column; line-height: 1.25; }
+body[data-page="space"] .sp-app-dl b { font-size: .8rem; }
+body[data-page="space"] .sp-app-dl small { font-size: .68rem; color: #9ca3af; }

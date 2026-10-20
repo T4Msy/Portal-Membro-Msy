@@ -283,7 +283,8 @@ export class VoiceRoomView {
           video.addEventListener('loadedmetadata', fit);
           video.addEventListener('resize', fit);
         }
-        video.classList.toggle('is-mirror', t.isLocal);
+        // Sem espelho por padrão: você vê a sua câmera igual os outros veem (opção nas configurações).
+        video.classList.toggle('is-mirror', t.isLocal && Boolean(this.voice.prefs.get().mirrorCamera));
         bindVideo(video, t.camera);
       } else if (media.dataset.avatarFor !== t.userId || media.querySelector('video')) {
         if (document.fullscreenElement === node) document.exitFullscreen().catch(() => undefined);

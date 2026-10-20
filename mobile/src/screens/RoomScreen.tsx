@@ -50,7 +50,7 @@ export function RoomScreen({ room, userId, onBack }: Props) {
   const active = sharers.find((p) => p.sessionId === watching) ?? sharers[0]
 
   const cameras: VideoItem[] = [
-    ...(snap.camera ? [{ key: 'me', name: 'Você', stream: snap.camera, mirror: true, local: true }] : []),
+    ...(snap.camera ? [{ key: 'me', name: 'Você', stream: snap.camera, mirror: false, local: true }] : []),
     ...snap.peers.filter((p) => p.camera).map((p) => ({ key: p.sessionId, name: names.get(p.userId) ?? 'Membro', stream: p.camera as MediaStream, mirror: false, local: false })),
   ]
 
