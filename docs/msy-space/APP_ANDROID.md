@@ -59,4 +59,5 @@ fora do Safari a câmera para (o site agora mostra a foto em vez de tela preta).
 ## Versões
 | Versão | Data | Mudança |
 |---|---|---|
+| 0.2 | 20/10/2026 | Câmera em HD (720p, 30 fps, até 1 Mbps; antes 640×480 a 300 kbps) |
 | 0.1 | 20/10/2026 | Primeira versão do MSY Space (base: app Masayoshi 0.9) + alto-falante/"do ouvido" |
