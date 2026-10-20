@@ -179,3 +179,17 @@ Limitações conhecidas:
   janelinha funcionou), canvas do modo celular desenha câmera e avatar, seção de permissões e aviso, sem erros.
 - **Falta testar em celular real:** giro automático em tela cheia (Android), PiP de vídeo no Android/iPhone e a chamada
   continuando com o app em segundo plano (iPhone pode pausar o microfone fora do Safari).
+
+## 20/10/2026 — Celular saindo do site (relato do dono: Android "não arrumou nada", iPhone câmera preta mas ouve)
+- Causa: no celular o **sistema** corta microfone/câmera de site em segundo plano (já comprovado na Plataforma, TESTES 3.10).
+  Solução definitiva no Android = app nativo (próxima etapa). No site, melhorias (branch `fix/space-mobile-background`):
+  - `ui/dom.js` `liveCamera()`: câmera pausada/encerrada (faixa `muted`/`ended`) mostra a foto em vez de quadro preto
+    (sala e janela flutuante).
+  - `voice-controller.js` `onHidden/onVisible`: ao voltar para o site, pega o microfone de novo se o sistema encerrou,
+    religa a câmera se estava ligada e, se a chamada caiu enquanto estava fora (e a pessoa não saiu de propósito), entra
+    de novo na mesma sala.
+  - `lib/supabase.js`: `realtime.worker = true` (sinal de vida do Supabase num Web Worker; timers da página em segundo
+    plano são atrasados pelo navegador e o socket caía). Testado no Brave: conectado após 40 s, canais `joined`.
+  - Janela flutuante falhou no Android → aviso de onde liberar (Configurações → Apps → Chrome → Picture-in-picture).
+- Incidente no teste: injetei o código numa aba do Brave onde o dono tinha entrado na Sala Geral (a tela da chamada sumiu).
+  Avisado; dono liberou recarregar. **Regra: antes de injetar, conferir se a aba não tem chamada ativa** (usar aba nova).
