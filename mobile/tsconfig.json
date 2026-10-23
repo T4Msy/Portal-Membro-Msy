@@ -4,9 +4,11 @@
     "types": ["jest"],
     "lib": ["es2022", "dom"],
     "skipLibCheck": true,
+    "allowJs": true,
     "paths": {
       "@/lib/supabase": ["./src/lib/supabase.ts"],
-      "@/*": ["../src/*"]
+      "@/lib/presenceThrottle": ["../js/space/lib/presenceThrottle.js"],
+      "@/features/voice/webrtc/*": ["../js/space/voice/webrtc/*"]
     }
   },
   "include": ["App.tsx", "src/**/*.ts", "src/**/*.tsx"],

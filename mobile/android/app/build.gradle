@@ -83,8 +83,8 @@ android {
         applicationId "site.portalmsy.space"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "0.3"
+        versionCode 4
+        versionName "0.4"
     }
     signingConfigs {
         debug {
@@ -118,3 +118,7 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Ícones (Font Awesome 6, os mesmos do site): só as fontes usadas entram no APK.
+project.ext.vectoricons = [iconFontNames: ["FontAwesome6_Solid.ttf", "FontAwesome6_Regular.ttf", "FontAwesome6_Brands.ttf"]]
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")

@@ -59,6 +59,7 @@ fora do Safari a câmera para (o site agora mostra a foto em vez de tela preta).
 ## Versões
 | Versão | Data | Mudança |
 |---|---|---|
+| 0.4 | 22/10/2026 | Visual novo no jeito do Discord (lista de canais com quem está em cada sala, folha "Entrar na voz", call com grade + anel verde de quem fala + barra de controles, barra "Voz conectada", chat dos canais de texto); a call continua ao trocar de tela; ícones Font Awesome |
 | 0.3 | 20/10/2026 | Sua câmera não aparece mais espelhada (você se vê igual os outros te veem). Download pelo MSY Space |
 | 0.2 | 20/10/2026 | Câmera em HD (720p, 30 fps, até 1 Mbps; antes 640×480 a 300 kbps) |
 | 0.1 | 20/10/2026 | Primeira versão do MSY Space (base: app Masayoshi 0.9) + alto-falante/"do ouvido" |
@@ -73,3 +74,18 @@ fora do Safari a câmera para (o site agora mostra a foto em vez de tela preta).
   dividido (`split -b 9000000`), as partes são juntadas na aba do portal, o SHA-256 é conferido e aí enviado.
 - Limite do bucket: 50 MB (plano grátis). O APK tem ~47 MB; se passar disso, gerar só `arm64-v8a`
   (`-PreactNativeArchitectures=arm64-v8a`), que serve para praticamente todos os celulares atuais.
+
+## Telas (0.4, jeito do Discord com as cores do Space)
+- `src/lib/space.ts` (`SpaceStore`): estrutura (`space:workspace` ao vivo), presença global `space:online` (mesmo formato
+  do site) e a **chamada ativa** — vive fora das telas, então a call continua na lista/chat.
+- `HomeScreen`: cabeçalho do "servidor", categorias recolhíveis, canais de texto, salas de voz com quem está dentro
+  (anel verde de quem fala, mudo/câmera/tela), barra **"Voz conectada"** e painel do usuário (engrenagem → sair).
+  Tocar numa sala abre a folha **"Entrar na voz"**.
+- `CallScreen`: seta para baixo minimiza **sem sair**; grade (1 = tela toda, 2 = empilhadas, 3+ = 2 colunas) com anel
+  verde; transmissão em cima; barra redonda: câmera, microfone, som, tela, sair (vermelho); alto-falante/"do ouvido"
+  e convite no topo. Quem fala: nível de áudio pelo `getStats` a cada 400 ms (`MobileVoice.pollLevels`).
+- `ChatScreen`: canais de texto (tempo real `space:chat:<id>`, envio otimista, segurar = apagar/reenviar).
+- Botão voltar do Android: call/chat → lista. A janela flutuante (PiP) sempre mostra a call.
+- `src/dev/Preview.tsx`: telas com dados de exemplo para conferir o visual no emulador sem login (não entra no APK;
+  para usar, trocar temporariamente o `registerComponent` do `index.js`).
+- O app do Discord foi usado só como referência de layout (nada copiado do APK dele).

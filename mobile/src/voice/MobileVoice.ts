@@ -1,16 +1,22 @@
 import { mediaDevices, MediaStream, type MediaStreamTrack } from '@livekit/react-native-webrtc'
 import { NativeModules } from 'react-native'
 import InCallManager from 'react-native-incall-manager'
-import type { RealtimeChannel } from '@supabase/supabase-js'
 // Mesma camada WebRTC do site (ver metro.config.js).
 import { getIceServers, hasTurn } from '@/features/voice/webrtc/iceServers'
 import { MeshTransport } from '@/features/voice/webrtc/MeshTransport'
 import { SignalingChannel } from '@/features/voice/webrtc/SignalingChannel'
-import type { LinkState, MediaSlot, PresenceMeta, SenderEncoding } from '@/features/voice/webrtc/types'
+import type { LinkState, MediaSlot, PresenceMeta, SenderEncoding } from './webrtcTypes'
 import { supabase } from '../lib/supabase'
 import { uuid } from '../lib/uuid'
-import { PresenceThrottle } from '@/lib/presenceThrottle'
 import { stopKeepAlive } from './keepAlive'
+
+export interface VoiceState {
+  channelId: string
+  muted: boolean
+  deafened: boolean
+  screen: boolean
+  camera: boolean
+}
 
 export type Status = 'idle' | 'joining' | 'connected' | 'reconnecting' | 'error'
 
@@ -36,6 +42,9 @@ export interface Snapshot {
   camera: MediaStream | null
   peers: RemotePeer[]
   turn: boolean
+  /** Quem está falando agora (sessionIds) e se eu estou falando — anel verde, como no Discord. */
+  speaking: string[]
+  selfSpeaking: boolean
   /** true = alto-falante; false = "do ouvido" (ou fone/Bluetooth, que o Android escolhe sozinho). */
   speaker: boolean
 }
@@ -61,6 +70,8 @@ const INITIAL: Snapshot = {
   peers: [],
   turn: false,
   speaker: true,
+  speaking: [],
+  selfSpeaking: false,
 }
 
 /** Sessão de voz do app MSY Space: entra na mesma sala do site, fala, ouve, câmera e transmite a tela. */
@@ -70,9 +81,8 @@ export class MobileVoice {
   private listeners = new Set<() => void>()
   private signaling: SignalingChannel | null = null
   private transport: MeshTransport | null = null
-  private online: RealtimeChannel | null = null
-  private onlineThrottle = new PresenceThrottle<ReturnType<MobileVoice['onlineMeta']>>(15_000, (m) => this.online?.track(m) ?? Promise.resolve())
   private heartbeat: ReturnType<typeof setInterval> | null = null
+  private levelTimer: ReturnType<typeof setInterval> | null = null
   private streams: Record<MediaSlot, MediaStream> | null = null
   private mic: MediaStreamTrack | null = null
   private screen: MediaStreamTrack | null = null
@@ -86,6 +96,8 @@ export class MobileVoice {
   constructor(
     private readonly userId: string,
     private readonly temporaryRoom: boolean,
+    /** Estado de voz para a presença global (o site mostra quem está em cada sala). */
+    private readonly onVoiceState: (state: VoiceState | null) => void = () => undefined,
   ) {}
 
   subscribe = (l: () => void) => {
@@ -99,6 +111,7 @@ export class MobileVoice {
   }
 
   async join(channelId: string, userLimit: number, roomName = 'Sala de voz'): Promise<void> {
+    if (this.disposed) return // saiu antes de entrar (ex.: enquanto pedia permissão)
     this.patch({ status: 'joining', channelId, error: null })
     this.roomName = roomName
     InCallManager.start({ media: 'video' }) // modo chamada + alto-falante
@@ -177,9 +190,10 @@ export class MobileVoice {
       return
     }
     this.patch({ status: 'connected' })
+    this.levelTimer = setInterval(() => void this.pollLevels(), 400)
     // Notificação fixa "Em chamada": mantém o app vivo e o microfone ativo em segundo plano.
     this.startService()
-    this.joinOnline(channelId)
+    this.publish()
     if (this.temporaryRoom) {
       void supabase.rpc('space_touch_room', { p_channel: channelId })
       this.heartbeat = setInterval(() => void supabase.rpc('space_touch_room', { p_channel: channelId }), 5 * 60_000)
@@ -272,13 +286,13 @@ export class MobileVoice {
     const channelId = this.snap.channelId
     if (this.temporaryRoom && channelId && this.peers.size === 0) void supabase.rpc('space_mark_room_empty', { p_channel: channelId })
     if (this.heartbeat) clearInterval(this.heartbeat)
+    if (this.levelTimer) clearInterval(this.levelTimer)
     this.signaling?.leave()
     this.transport?.close()
     this.mic?.stop()
     this.screen?.stop()
     this.cameraTrack?.stop()
-    this.onlineThrottle.cancel()
-    if (this.online) void supabase.removeChannel(this.online)
+    this.onVoiceState(null)
     InCallManager.stop()
     void NativeModules.CallService?.stop().catch(() => undefined)
     stopKeepAlive()
@@ -317,30 +331,34 @@ export class MobileVoice {
     }
   }
 
+  /** Nível de áudio pelas estatísticas do WebRTC (o app não tem AudioContext como o site). */
+  private async pollLevels() {
+    const links = (this.transport as unknown as { links?: Map<string, { pc?: RTCPeerConnection }> } | null)?.links
+    if (!links || this.disposed) return
+    const speaking: string[] = []
+    let self = false
+    for (const [id, link] of links) {
+      if (!link.pc) continue
+      try {
+        const report = await link.pc.getStats()
+        let level = 0
+        report.forEach((s: { type: string; kind?: string; audioLevel?: number }) => {
+          if (s.type === 'inbound-rtp' && s.kind === 'audio' && typeof s.audioLevel === 'number') level = Math.max(level, s.audioLevel)
+          if (s.type === 'media-source' && s.kind === 'audio' && typeof s.audioLevel === 'number' && s.audioLevel > 0.04) self = true
+        })
+        if (level > 0.04) speaking.push(id)
+      } catch {
+        /* conexão fechando */
+      }
+    }
+    if (this.snap.muted || this.snap.deafened || !this.snap.micAvailable) self = false
+    if (speaking.join() !== this.snap.speaking.join() || self !== this.snap.selfSpeaking) this.patch({ speaking, selfSpeaking: self })
+  }
+
   private publish() {
     void this.signaling?.updateMeta(this.meta())
-    this.onlineThrottle.push(this.onlineMeta())
-  }
-
-  /** Presença global ('space:online'): faz o site mostrar quem está nesta sala. */
-  private joinOnline(channelId: string) {
-    const ch = supabase.channel('space:online', { config: { private: true, presence: { key: this.sessionId } } })
-    this.online = ch
-    ch.subscribe((st) => {
-      if (st === 'SUBSCRIBED') this.onlineThrottle.push(this.onlineMeta(), true)
-    })
-    void channelId
-  }
-
-  private onlineMeta() {
-    return {
-      tabId: this.sessionId,
-      sessionId: this.sessionId,
-      userId: this.userId,
-      joinedAt: this.joinedAt,
-      voice: this.snap.channelId
-        ? { channelId: this.snap.channelId, muted: this.snap.muted, deafened: this.snap.deafened, screen: this.snap.sharing, camera: Boolean(this.cameraTrack) }
-        : null,
+    if (this.snap.channelId && this.snap.status !== 'joining') {
+      this.onVoiceState({ channelId: this.snap.channelId, muted: this.snap.muted || !this.snap.micAvailable, deafened: this.snap.deafened, screen: this.snap.sharing, camera: Boolean(this.cameraTrack) })
     }
   }
 

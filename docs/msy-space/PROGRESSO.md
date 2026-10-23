@@ -233,3 +233,10 @@ Limitações conhecidas:
 - Download do app dentro do Space: botão "Baixar app Android" + bucket privado `space-app` (SQL rodado no Brave;
   `select` confirmou bucket privado com limite 52428800). APK 0.3 enviado (SHA-256 conferido) + `latest.json`.
   Detalhes em [APP_ANDROID.md](APP_ANDROID.md#download-pelo-msy-space).
+
+## 22/10/2026 — App 0.4 com visual "jeito do Discord" (pedido do dono, com o Discord de referência)
+- Telas novas (lista de canais, folha "Entrar na voz", call, barra "Voz conectada", chat) — ver
+  [APP_ANDROID.md](APP_ANDROID.md#telas-04-jeito-do-discord-com-as-cores-do-space). Ícones: `react-native-vector-icons`
+  (Font Awesome 6, os do site). A call saiu da tela e foi para o `SpaceStore` (continua ao navegar).
+- Conferido no emulador com dados de exemplo (lista, call, folha, chat). APK 0.4 publicado no bucket `space-app`
+  (SHA-256 conferido, 50 MB). **Falta teste real** com login e call entre celular e site.

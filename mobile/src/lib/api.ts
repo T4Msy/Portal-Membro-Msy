@@ -4,12 +4,20 @@ import { supabase } from './supabase'
 export interface Profile {
   id: string
   name: string
+  initials?: string | null
   color: string | null
   avatar_url: string | null
 }
 
+export interface Category {
+  id: string
+  name: string
+  position: number
+}
+
 export interface Room {
   id: string
+  category_id: string | null
   name: string
   kind: 'text' | 'voice'
   is_private: boolean
@@ -40,7 +48,7 @@ export async function signIn(email: string, password: string): Promise<void> {
 }
 
 export async function myProfile(userId: string): Promise<Profile | null> {
-  const { data } = await supabase.from('profiles').select('id, name, color, avatar_url').eq('id', userId).maybeSingle()
+  const { data } = await supabase.from('profiles').select('id, name, initials, color, avatar_url').eq('id', userId).maybeSingle()
   return (data as Profile | null) ?? null
 }
 
@@ -51,19 +59,29 @@ export async function canAccessSpace(): Promise<boolean> {
   return Boolean(data)
 }
 
+const CHANNEL_FIELDS = 'id, category_id, name, kind, is_private, is_temporary, join_code, user_limit, position'
+
 export async function voiceRooms(): Promise<Room[]> {
-  const { data, error } = await supabase
-    .from('space_channels')
-    .select('id, name, kind, is_private, is_temporary, join_code, user_limit, position')
-    .eq('kind', 'voice')
-    .order('position')
+  const { data, error } = await supabase.from('space_channels').select(CHANNEL_FIELDS).eq('kind', 'voice').order('position')
   if (error) throw error
   return data as Room[]
 }
 
-export async function profileNames(): Promise<Map<string, string>> {
-  const { data } = await supabase.from('profiles').select('id, name')
-  return new Map(((data ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]))
+/** Estrutura do Space (igual ao site): categorias, todos os canais e perfis ativos do portal. */
+export async function loadWorkspace(): Promise<{ categories: Category[]; channels: Room[]; profiles: Map<string, Profile> }> {
+  const [cats, chans, profs] = await Promise.all([
+    supabase.from('space_categories').select('id, name, position').order('position'),
+    supabase.from('space_channels').select(CHANNEL_FIELDS).order('position').order('created_at'),
+    supabase.from('profiles').select('id, name, initials, color, avatar_url').eq('status', 'ativo'),
+  ])
+  if (cats.error) throw cats.error
+  if (chans.error) throw chans.error
+  if (profs.error) throw profs.error
+  return {
+    categories: (cats.data ?? []) as Category[],
+    channels: (chans.data ?? []) as Room[],
+    profiles: new Map(((profs.data ?? []) as Profile[]).map((p) => [p.id, p])),
+  }
 }
 
 export function normalizeCode(raw: string): string {
