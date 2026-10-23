@@ -19,7 +19,7 @@ export function avatarHtml(profile, size = 32, extraClass = '') {
   const color = safeColor(profile?.color);
   const initials = profile?.initials || Utils.getInitials(profile?.name || '?');
   const inner = profile?.avatar_url ? `<img src="${esc(profile.avatar_url)}" alt="" loading="lazy">` : esc(initials);
-  return `<span class="sp-avatar ${extraClass}" style="--sp-c:${color};--sp-size:${size}px" title="${esc(profile?.name || '')}">${inner}</span>`;
+  return `<span class="sp-avatar ${extraClass}" style="--sp-c:${color};--sp-size:${size}px" title="${esc(profile?.name || '')}" data-space-user="${esc(profile?.id || '')}" role="button" tabindex="0" aria-label="Ver perfil de ${esc(profile?.name || 'membro')}">${inner}</span>`;
 }
 
 export function displayName(profile) {
