@@ -1064,7 +1064,7 @@ body[data-page="space"] .sp-ch-del:hover { background: rgba(239, 68, 68, .15); c
 :root {
   --sp-grad: linear-gradient(135deg, #c084fc 0%, #a855f7 35%, #7c3aed 65%, #ec4899 100%);
   --sp-grad-soft: linear-gradient(135deg, rgba(192, 132, 252, .22), rgba(124, 58, 237, .12) 60%, rgba(236, 72, 153, .14));
-  --sp-glass: linear-gradient(180deg, rgba(22, 18, 36, .72), rgba(10, 8, 18, .82));
+  --sp-glass: linear-gradient(180deg, rgba(26, 18, 46, .6), rgba(10, 8, 18, .74));
 }
 
 /* ── Fundo vivo: nebulosa que deriva + estrelas que piscam ── */
@@ -1075,11 +1075,11 @@ body.space-body::after {
 body.space-body::before {
   inset: -30%;
   background:
-    radial-gradient(38% 32% at 22% 28%, rgba(147, 51, 234, .30), transparent 70%),
-    radial-gradient(30% 28% at 78% 22%, rgba(236, 72, 153, .16), transparent 70%),
-    radial-gradient(42% 36% at 70% 78%, rgba(79, 70, 229, .22), transparent 70%),
-    radial-gradient(26% 24% at 30% 82%, rgba(168, 85, 247, .18), transparent 70%);
-  animation: sp-nebula 48s ease-in-out infinite alternate;
+    radial-gradient(38% 32% at 22% 28%, rgba(147, 51, 234, .48), transparent 70%),
+    radial-gradient(30% 28% at 78% 22%, rgba(236, 72, 153, .28), transparent 70%),
+    radial-gradient(42% 36% at 70% 78%, rgba(79, 70, 229, .36), transparent 70%),
+    radial-gradient(26% 24% at 30% 82%, rgba(168, 85, 247, .3), transparent 70%);
+  animation: sp-nebula 32s ease-in-out infinite alternate;
   will-change: transform;
 }
 body.space-body::after {
@@ -1091,8 +1091,8 @@ body.space-body::after {
     radial-gradient(1px 1px at 90px 220px, rgba(196, 181, 253, .6), transparent 60%),
     radial-gradient(1px 1px at 330px 40px, rgba(255, 255, 255, .5), transparent 60%);
   background-size: 360px 260px;
-  animation: sp-twinkle 7s ease-in-out infinite alternate, sp-drift 140s linear infinite;
-  opacity: .55;
+  animation: sp-twinkle 5s ease-in-out infinite alternate, sp-drift 120s linear infinite;
+  opacity: .8;
 }
 body.space-body .sp-root { position: relative; z-index: 1; }
 @keyframes sp-nebula {
@@ -1100,10 +1100,10 @@ body.space-body .sp-root { position: relative; z-index: 1; }
   50% { transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08); }
   100% { transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1.04); }
 }
-@keyframes sp-twinkle { from { opacity: .35; } to { opacity: .75; } }
+@keyframes sp-twinkle { from { opacity: .45; } to { opacity: .95; } }
 @keyframes sp-drift { from { background-position: 0 0; } to { background-position: -720px 520px; } }
 
-body[data-page="space"] .sp-app { background: rgba(5, 4, 10, .28); }
+body[data-page="space"] .sp-app { background: rgba(5, 4, 10, .12); }
 
 /* ── Coluna de ícones: logo com anel em órbita ── */
 body[data-page="space"] .sp-rail { background: linear-gradient(180deg, rgba(8, 5, 18, .9), rgba(3, 2, 7, .92)); }
