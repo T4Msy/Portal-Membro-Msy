@@ -249,3 +249,18 @@ Limitações conhecidas:
 - Testado no site publicado: lixeira em "CineMsy 🎃🦇" e "Teste lixeira"; encerrei só a de teste → sumiu da lista e do
   banco; a "CineMsy" ficou. APK 0.5 publicado no bucket (SHA-256 conferido).
 - Obs.: o jsDelivr falhou ao servir parte dos módulos na injeção de teste; o teste foi feito no site publicado.
+
+## 22/10/2026 — Visual 2.0 do Space no PC (pedido do dono: "menos genérico, degradês, algo mexendo")
+- Camada nova no fim de `css/space.css` ("VISUAL 2.0"):
+  - fundo vivo: nebulosa roxa/rosa/azul que deriva devagar (`body::before`) + estrelas que piscam e andam (`body::after`);
+  - logo da coluna flutuando com anel em degradê girando (gira só as cores via `@property --sp-a`, a forma fica parada);
+  - painéis de vidro em degradê, linha de luz correndo sob os cabeçalhos, marca "MSY Space" em degradê;
+  - canais com barrinha em degradê que cresce e desliza no hover; canal ativo com brilho; "Criar sala" com brilho
+    passando; quem fala na lista pulsa em verde;
+  - call: quadros entram animados, sobem no hover, quem fala ganha anel verde girando; controles numa cápsula de vidro
+    flutuante; botões ligados em degradê; botão "Entrar na sala" verde em degradê; orbe da sala com órbitas girando;
+  - chat: campo de mensagem com brilho ao focar, botão enviar em degradê, barras de rolagem roxas.
+- Regras: só transform/opacity nas animações pesadas; animações contínuas fora da lista de canais (ela é redesenhada a
+  cada fala e reiniciaria); menos efeitos no celular; tudo desliga com "reduzir movimento" do sistema.
+- Grade da call com 6px de folga (o brilho/anel não cria barra de rolagem; `layoutGrid` desconta).
+- Testado no Brave (CSS do commit aplicado no site publicado + call de teste com câmera falsa; sala apagada depois).
