@@ -356,7 +356,7 @@ export class ChatView {
     return `<div class="sp-msg${state}" data-msg="${esc(m.id)}">
       ${avatarHtml(author, 38, 'sp-msg-avatar')}
       <div class="sp-msg-body">
-        <div class="sp-msg-head"><span class="sp-msg-author" style="--sp-c:${safeColor(author?.color, '#d9d9d9')}">${esc(displayName(author))}</span>
+        <div class="sp-msg-head"><button class="sp-msg-author" data-space-user="${esc(author?.id || '')}" style="--sp-c:${safeColor(author?.color, '#d9d9d9')}">${esc(displayName(author))}</button>
         <span class="sp-msg-time" title="${esc(formatFull(m.created_at))}">${esc(formatMessageTime(m.created_at))}</span></div>
         ${body}${actions}
       </div></div>`;

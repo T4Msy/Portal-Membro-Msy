@@ -11,6 +11,7 @@ import { CallDock } from './ui/call-dock.js';
 import { CallPip } from './ui/call-pip.js';
 import { esc, icon, toast } from './ui/dom.js';
 import { followVisualViewport } from './ui/viewport.js';
+import { openProfileCard } from './ui/profile.js?v=20261023-avatar8mb';
 
 const { Auth } = window.MSY;
 const LAST_CHANNEL_KEY = 'msy_space_last_channel';
@@ -25,6 +26,19 @@ async function initSpace() {
     return;
   }
   const content = document.getElementById('spaceApp');
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.sp-profile-modal')) return;
+    const target = event.target.closest('[data-space-user]');
+    if (!target || !target.dataset.spaceUser) return;
+    event.stopPropagation();
+    const person = workspace.profile(target.dataset.spaceUser);
+    if (person) openProfileCard({ profile: person, ownProfile: person.id === profile.id, workspace });
+  }, true);
+  document.addEventListener('keydown', (event) => {
+    if ((event.key !== 'Enter' && event.key !== ' ') || !event.target.matches('.sp-avatar[data-space-user]')) return;
+    event.preventDefault();
+    event.target.click();
+  });
   const warpStarted = Date.now();
 
   const workspace = new Workspace(profile);

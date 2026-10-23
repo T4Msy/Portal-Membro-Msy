@@ -291,6 +291,39 @@ body[data-page="space"] .sp-me-name small { font-size: .68rem; color: var(--text
   transition: box-shadow .15s var(--ease);
 }
 .sp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sp-avatar[data-space-user] { cursor: pointer; }
+.sp-avatar[data-space-user]:hover { filter: brightness(1.12); }
+body[data-page="space"] .sp-me-avatar, body[data-page="space"] .sp-me-name { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+body[data-page="space"] .sp-me-avatar { position: relative; display: inline-flex; }
+body[data-page="space"] .sp-me-name { min-width: 0; display: block; }
+body[data-page="space"] .sp-profile-modal { z-index: 1300; }
+body[data-page="space"] .sp-profile-modal .modal { position: relative; width: min(520px, calc(100vw - 28px)); max-width: 520px; padding: 0; overflow: hidden; border: 1px solid rgba(168,85,247,.28); border-radius: 18px; background: #100e18; }
+.sp-profile-close { z-index: 2; color: white; background: rgba(10,8,16,.6); }
+.sp-profile-banner { height: 150px; background: radial-gradient(ellipse at 70% 0%, rgba(168,85,247,.65), transparent 55%), linear-gradient(125deg,#211343,#151124 60%,#291450); background: radial-gradient(ellipse at 70% 0%, color-mix(in srgb, var(--profile-accent, #a855f7) 65%, transparent), transparent 55%), linear-gradient(125deg,#211343,#151124 60%,#291450); background-size: cover; background-position: center; background-repeat: no-repeat; }
+.sp-profile-card { position: relative; padding: 0 24px 24px; }
+.sp-profile-card > .sp-avatar { margin-top: -44px; border: 5px solid #100e18; box-shadow: 0 6px 24px #0008; }
+.sp-profile-card h2 { margin: 12px 0 6px; font-size: 1.25rem; }
+.sp-profile-avatar { outline: 2px solid var(--profile-accent, #a855f7); }
+.sp-profile-bio { min-height: 24px; margin: 0 0 18px; color: #d6d1e0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sp-profile-bio span { color: var(--text-3); }
+.sp-profile-preview { padding: 10px 12px; border-left: 3px solid var(--profile-accent, #a855f7); border-radius: 5px; background: #171521; }
+.sp-profile-preview strong { display: block; color: white; }
+.sp-profile-preview p { margin: 4px 0 0; color: var(--text-2); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sp-profile-form { display: grid; gap: 14px; margin-top: 16px; }
+.sp-profile-field { display: grid; gap: 6px; color: #d8d1e5; font-size: .82rem; font-weight: 700; }
+.sp-profile-field input:not([type=color]), .sp-profile-field textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--sp-line); border-radius: 9px; background: #171521; color: white; font: inherit; }
+.sp-profile-field textarea { resize: vertical; }
+.sp-profile-field small, .sp-profile-uploads small { color: var(--text-3); font-weight: 400; }
+.sp-profile-color { display: flex; align-items: center; gap: 10px; }
+.sp-profile-color input { width: 42px; height: 34px; padding: 2px; border: 1px solid var(--sp-line); border-radius: 7px; background: #171521; }
+.sp-profile-uploads { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--sp-line); border-radius: 10px; }
+.sp-profile-uploads label { display: grid; gap: 4px; min-width: 0; color: #d8d1e5; font-size: .8rem; }
+.sp-profile-uploads input { max-width: 100%; color: var(--text-2); font-size: .75rem; }
+.sp-profile-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.sp-profile-error { margin: 0; color: #fca5a5; }
+.sp-msg-author { border: 0; padding: 0; background: transparent; color: var(--sp-c); font: inherit; font-weight: 800; cursor: pointer; }
+body[data-page="space"] .sp-tile-name { border: 0; padding: 0; background: transparent; color: var(--sp-c); font: inherit; text-align: left; cursor: pointer; }
+@media (max-width: 560px) { .sp-profile-banner { height: 118px; } .sp-profile-card { padding: 0 16px 18px; } .sp-profile-uploads { grid-template-columns: 1fr; } .sp-profile-uploads button { justify-self: start; } }
 
 /* ── Botões base ─────────────────────────────────────────────── */
 body[data-page="space"] .sp-icon-btn {

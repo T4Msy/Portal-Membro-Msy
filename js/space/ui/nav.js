@@ -149,7 +149,7 @@ export class SpaceNav {
     return `<div class="sp-me">
       ${popover}
       <span class="sp-me-avatar">${avatarHtml(me, 34)}<span class="sp-me-status ${call ? 'is-call' : ''}"></span></span>
-      <div class="sp-me-name"><b>${esc(displayName(me))}</b><small>${call ? 'Em chamada' : 'Disponível'}</small></div>
+      <button class="sp-me-name" data-space-user="${esc(me.id)}"><b>${esc(displayName(me))}</b><small>${call ? 'Em chamada' : 'Disponível'} · Meu perfil</small></button>
       <span class="sp-me-group ${muted ? 'is-off' : ''} ${menu === 'input' ? 'is-open' : ''}">
         <button data-act="mute" title="${muted ? 'Ativar microfone' : 'Desativar microfone'}" aria-label="${muted ? 'Ativar microfone' : 'Desativar microfone'}">${icon(muted ? 'fa-microphone-slash' : 'fa-microphone')}</button>
         <button class="sp-me-chev" data-act="device-menu" data-kind="input" title="Escolher microfone" aria-label="Escolher microfone">${icon('fa-chevron-down')}</button>

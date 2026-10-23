@@ -55,7 +55,7 @@ Tudo com prefixo `space_` para não colidir com tabelas/funções do portal
 - Acesso: `space_can_access()` = diretoria **ou** permissão `acessar_space`.
 - Gestão (criar/editar canais, apagar mensagens dos outros): `space_can_manage()` = diretoria
   **ou** permissão `gerenciar_space`.
-- Perfis, nomes e fotos vêm de `public.profiles` do portal (nada duplicado).
+- A identidade e autenticação continuam em `public.profiles` do Portal; os dados sociais editáveis do Space ficam em `public.space_profiles` e no bucket `space-profile-media` (`20261023_msy_space_profiles.sql`). O Space combina os dois em memória; nunca grava alterações em `public.profiles`.
 - Detalhes na migration e em PROGRESSO.md.
 
 ### Realtime (tópicos privados, autorizados por RLS em `realtime.messages`)

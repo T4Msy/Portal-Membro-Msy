@@ -255,7 +255,7 @@ export class VoiceRoomView {
         node.className = 'sp-tile';
         node.dataset.key = t.key;
         node.innerHTML = `<div class="sp-tile-media"></div>
-          <div class="sp-tile-foot"><span class="sp-tile-name"></span><span class="sp-grow"></span><span class="sp-tile-icons"></span></div>
+          <div class="sp-tile-foot"><button class="sp-tile-name" data-space-user="${esc(t.userId)}"></button><span class="sp-grow"></span><span class="sp-tile-icons"></span></div>
           <div class="sp-tile-conn" hidden></div><div class="sp-tile-stats" hidden></div><div class="sp-tile-fx"></div>
           <button class="sp-tile-full" data-act="tile-full" title="Tela cheia" aria-label="Ver câmera em tela cheia">${icon('fa-expand')}</button>
           ${t.isLocal ? '' : `<button class="sp-tile-vol" data-act="tile-volume" title="Volume desta pessoa" aria-label="Volume desta pessoa">${icon('fa-sliders')}</button>`}`;
@@ -298,6 +298,7 @@ export class VoiceRoomView {
 
       const name = node.querySelector('.sp-tile-name');
       name.style.setProperty('--sp-c', t.color);
+      name.dataset.spaceUser = t.userId;
       setHtml(name, `${esc(t.name)}${t.isLocal ? ' <small>(você)</small>' : ''}`);
       setHtml(node.querySelector('.sp-tile-icons'),
         (t.sharing ? `<span title="Transmitindo a tela">${icon('fa-display')}</span>` : '')

@@ -2,7 +2,8 @@
 // Atualiza ao vivo pelo tópico privado 'space:workspace' (postgres_changes filtrado por RLS).
 import { supabase } from './lib/supabase.js';
 
-const PROFILE_FIELDS = 'id,name,initials,color,avatar_url,tier';
+const PROFILE_FIELDS = 'id,name,initials,tier';
+const SPACE_PROFILE_FIELDS = 'user_id,display_name,bio,accent_color,avatar_path,banner_path';
 
 export class Workspace extends EventTarget {
   constructor(me) {
@@ -17,18 +18,34 @@ export class Workspace extends EventTarget {
   }
 
   async load() {
-    const [cats, chans, profs, manage] = await Promise.all([
+    const [cats, chans, profs, spaceProfiles, manage] = await Promise.all([
       supabase.from('space_categories').select('*').order('position'),
       supabase.from('space_channels').select('*').order('position').order('created_at'),
       supabase.from('profiles').select(PROFILE_FIELDS).eq('status', 'ativo'),
+      supabase.from('space_profiles').select(SPACE_PROFILE_FIELDS),
       supabase.rpc('space_can_manage'),
     ]);
     if (cats.error) throw cats.error;
     if (chans.error) throw chans.error;
     if (profs.error) throw profs.error;
+    if (spaceProfiles.error) throw spaceProfiles.error;
     this.categories = cats.data || [];
     this.channels = chans.data || [];
-    this.profiles = new Map((profs.data || []).map((p) => [p.id, p]));
+    const custom = new Map((spaceProfiles.data || []).map((p) => [p.user_id, p]));
+    this.profiles = new Map((profs.data || []).map((p) => {
+      const extra = custom.get(p.id) || {};
+      const publicUrl = (path) => path ? supabase.storage.from('space-profile-media').getPublicUrl(path).data.publicUrl : null;
+      return [p.id, {
+        ...p,
+        name: extra.display_name || p.name,
+        bio: extra.bio || '',
+        color: extra.accent_color || '#a855f7',
+        avatar_url: publicUrl(extra.avatar_path),
+        banner_url: publicUrl(extra.banner_path),
+        avatar_path: extra.avatar_path || null,
+        banner_path: extra.banner_path || null,
+      }];
+    }));
     this.canManage = manage.data === true;
     this.emit();
   }
@@ -70,6 +87,19 @@ export class Workspace extends EventTarget {
 
   getChannel(id) { return this.channels.find((c) => c.id === id) || null; }
   profile(id) { return this.profiles.get(id) || null; }
+
+  applySpaceProfile(userId, extra) {
+    const current = this.profiles.get(userId);
+    if (!current) return;
+    const publicUrl = (path) => path ? supabase.storage.from('space-profile-media').getPublicUrl(path).data.publicUrl : null;
+    this.profiles.set(userId, { ...current, ...extra,
+      name: extra.display_name || current.name,
+      color: extra.accent_color || current.color,
+      avatar_url: publicUrl(extra.avatar_path) || (extra.avatar_path === null ? null : current.avatar_url),
+      banner_url: publicUrl(extra.banner_path),
+    });
+    this.emit();
+  }
 
   /** Canais fixos agrupados por categoria + salas com código à parte. */
   grouped() {
