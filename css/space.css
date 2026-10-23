@@ -1052,3 +1052,233 @@ body[data-page="space"] .sp-ch-del:hover { background: rgba(239, 68, 68, .15); c
   body[data-page="space"] .sp-ch-deletable:hover .sp-ch-del,
   body[data-page="space"] .sp-ch-del:focus-visible { opacity: 1; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   VISUAL 2.0 — "cosmos" do MSY Space (pedido do dono: menos genérico,
+   degradês e coisas se mexendo). Só animações de transform/opacity
+   (leves); tudo desliga com "reduzir movimento" do sistema.
+   Animações contínuas ficam em partes estáveis da tela (fundo, logo,
+   quadros e controles da call): a lista de canais é redesenhada a cada
+   mudança de fala e reiniciaria a animação.
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --sp-grad: linear-gradient(135deg, #c084fc 0%, #a855f7 35%, #7c3aed 65%, #ec4899 100%);
+  --sp-grad-soft: linear-gradient(135deg, rgba(192, 132, 252, .22), rgba(124, 58, 237, .12) 60%, rgba(236, 72, 153, .14));
+  --sp-glass: linear-gradient(180deg, rgba(22, 18, 36, .72), rgba(10, 8, 18, .82));
+}
+
+/* ── Fundo vivo: nebulosa que deriva + estrelas que piscam ── */
+body.space-body::before,
+body.space-body::after {
+  content: ""; position: fixed; pointer-events: none; z-index: 0;
+}
+body.space-body::before {
+  inset: -30%;
+  background:
+    radial-gradient(38% 32% at 22% 28%, rgba(147, 51, 234, .30), transparent 70%),
+    radial-gradient(30% 28% at 78% 22%, rgba(236, 72, 153, .16), transparent 70%),
+    radial-gradient(42% 36% at 70% 78%, rgba(79, 70, 229, .22), transparent 70%),
+    radial-gradient(26% 24% at 30% 82%, rgba(168, 85, 247, .18), transparent 70%);
+  animation: sp-nebula 48s ease-in-out infinite alternate;
+  will-change: transform;
+}
+body.space-body::after {
+  inset: 0;
+  background-image:
+    radial-gradient(1.2px 1.2px at 20px 30px, rgba(255, 255, 255, .75), transparent 60%),
+    radial-gradient(1px 1px at 140px 90px, rgba(233, 213, 255, .7), transparent 60%),
+    radial-gradient(1.4px 1.4px at 260px 160px, rgba(255, 255, 255, .6), transparent 60%),
+    radial-gradient(1px 1px at 90px 220px, rgba(196, 181, 253, .6), transparent 60%),
+    radial-gradient(1px 1px at 330px 40px, rgba(255, 255, 255, .5), transparent 60%);
+  background-size: 360px 260px;
+  animation: sp-twinkle 7s ease-in-out infinite alternate, sp-drift 140s linear infinite;
+  opacity: .55;
+}
+body.space-body .sp-root { position: relative; z-index: 1; }
+@keyframes sp-nebula {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08); }
+  100% { transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1.04); }
+}
+@keyframes sp-twinkle { from { opacity: .35; } to { opacity: .75; } }
+@keyframes sp-drift { from { background-position: 0 0; } to { background-position: -720px 520px; } }
+
+body[data-page="space"] .sp-app { background: rgba(5, 4, 10, .28); }
+
+/* ── Coluna de ícones: logo com anel em órbita ── */
+body[data-page="space"] .sp-rail { background: linear-gradient(180deg, rgba(8, 5, 18, .9), rgba(3, 2, 7, .92)); }
+body[data-page="space"] .sp-rail-logo { position: relative; isolation: isolate; animation: sp-float 6s ease-in-out infinite; }
+body[data-page="space"] .sp-rail-logo::before {
+  content: ""; position: absolute; inset: -4px; z-index: -1; border-radius: 19px;
+  background: conic-gradient(from 0deg, #c084fc, #ec4899, #7c3aed, #22d3ee, #c084fc);
+  animation: sp-spin 6s linear infinite;
+}
+body[data-page="space"] .sp-rail-logo::after {
+  content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 17px;
+  background: radial-gradient(circle at 35% 30%, #c084fc, #6d28d9 60%, #2e1065);
+}
+body[data-page="space"] .sp-rail-btn { transition: border-radius .25s var(--ease), background .25s var(--ease), color .25s var(--ease), transform .25s var(--ease), box-shadow .25s var(--ease); }
+body[data-page="space"] .sp-rail-btn:hover { background: var(--sp-grad); color: #fff; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(168, 85, 247, .45); }
+@keyframes sp-float { 50% { transform: translateY(-3px); } }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+
+/* ── Coluna de canais: vidro + marca em degradê ── */
+body[data-page="space"] .sp-nav { background: var(--sp-glass); border-right: 1px solid rgba(168, 85, 247, .12); }
+body[data-page="space"] .sp-nav-head { position: relative; }
+body[data-page="space"] .sp-nav-head::after,
+body[data-page="space"] .sp-main-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(192, 132, 252, .7), rgba(236, 72, 153, .5), transparent);
+  background-size: 200% 100%;
+  animation: sp-sweep 6s linear infinite;
+}
+@keyframes sp-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+body[data-page="space"] .sp-brand {
+  background: linear-gradient(90deg, #fff 0%, #e9d5ff 30%, #c084fc 50%, #f9a8d4 70%, #fff 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+body[data-page="space"] .sp-brand i { -webkit-text-fill-color: #c084fc; }
+
+/* Botões "Criar sala / Usar código": brilho que passa no hover */
+body[data-page="space"] .sp-pill { position: relative; overflow: hidden; background: rgba(124, 58, 237, .14); transition: transform .2s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease); }
+body[data-page="space"] .sp-pill::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 50%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .28), transparent);
+  transform: skewX(-20deg); transition: left .6s var(--ease);
+}
+body[data-page="space"] .sp-pill:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(168, 85, 247, .3); background: rgba(124, 58, 237, .26); }
+body[data-page="space"] .sp-pill:hover::after { left: 120%; }
+
+/* Canais: barrinha em degradê que cresce + deslize no hover */
+body[data-page="space"] .sp-ch { position: relative; transition: background .2s var(--ease), color .2s var(--ease), transform .2s var(--ease); }
+body[data-page="space"] .sp-ch::before {
+  content: ""; position: absolute; left: -8px; top: 50%; width: 4px; height: 0; border-radius: 0 4px 4px 0;
+  background: var(--sp-grad); transform: translateY(-50%); transition: height .25s var(--ease);
+}
+body[data-page="space"] .sp-ch:hover { transform: translateX(3px); background: linear-gradient(90deg, rgba(168, 85, 247, .12), transparent); }
+body[data-page="space"] .sp-ch:hover::before { height: 14px; }
+body[data-page="space"] .sp-ch.is-active { background: var(--sp-grad-soft); box-shadow: inset 0 0 0 1px rgba(192, 132, 252, .25), 0 4px 18px rgba(124, 58, 237, .18); }
+body[data-page="space"] .sp-ch.is-active::before { height: 22px; }
+body[data-page="space"] .sp-ch.is-connected i { color: var(--sp-ok); filter: drop-shadow(0 0 6px rgba(34, 197, 94, .7)); }
+body[data-page="space"] .sp-ch-people li { transition: background .2s var(--ease); }
+body[data-page="space"] .sp-ch-people li:hover { background: rgba(255, 255, 255, .04); }
+body[data-page="space"] .sp-ch-people li.is-speaking .sp-avatar { animation: sp-talk 1.1s ease-in-out infinite; }
+body[data-page="space"] .sp-ch-people li.is-speaking span:not(.sp-avatar) { color: #fff; }
+@keyframes sp-talk {
+  0%, 100% { box-shadow: 0 0 0 2px var(--sp-ok), 0 0 8px rgba(34, 197, 94, .45); }
+  50% { box-shadow: 0 0 0 3px var(--sp-ok), 0 0 18px rgba(34, 197, 94, .75); }
+}
+
+/* Barra "Voz conectada" e painel do usuário */
+body[data-page="space"] .sp-callbar { background: linear-gradient(90deg, rgba(34, 197, 94, .05), rgba(34, 197, 94, .14) 50%, rgba(34, 197, 94, .05)); }
+body[data-page="space"] .sp-me { background: linear-gradient(90deg, rgba(124, 58, 237, .1), rgba(0, 0, 0, .3)); }
+
+/* ── Área principal ── */
+body[data-page="space"] .sp-main-head { position: relative; background: linear-gradient(90deg, rgba(18, 12, 32, .7), rgba(10, 10, 15, .55)); }
+body[data-page="space"] .sp-head-title {
+  background: linear-gradient(90deg, #fff, #e9d5ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* Chat */
+body[data-page="space"] .sp-msg { transition: background .2s var(--ease); }
+body[data-page="space"] .sp-msg:hover { background: linear-gradient(90deg, rgba(168, 85, 247, .07), transparent 70%); }
+body[data-page="space"] .sp-welcome-icon { background: var(--sp-grad); color: #fff; box-shadow: 0 0 34px rgba(168, 85, 247, .45); }
+body[data-page="space"] .sp-chat-welcome h3 {
+  background: var(--sp-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+body[data-page="space"] .sp-composer {
+  position: relative; background: rgba(23, 20, 36, .85);
+  border-color: rgba(168, 85, 247, .18);
+  transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
+}
+body[data-page="space"] .sp-composer:focus-within { border-color: rgba(192, 132, 252, .55); box-shadow: 0 0 0 3px rgba(168, 85, 247, .14), 0 10px 30px rgba(124, 58, 237, .25); }
+body[data-page="space"] .sp-send { background: var(--sp-grad); background-size: 200% 200%; transition: transform .2s var(--ease), box-shadow .2s var(--ease), background-position .4s var(--ease); }
+body[data-page="space"] .sp-send:hover { transform: translateY(-1px) rotate(-8deg); background-position: 100% 100%; box-shadow: 0 6px 20px rgba(236, 72, 153, .35); }
+body[data-page="space"] .sp-jump { background: var(--sp-grad); border: 0; animation: sp-bob 1.8s ease-in-out infinite; }
+@keyframes sp-bob { 50% { transform: translateX(-50%) translateY(-3px); } }
+
+/* Entrada da sala de voz: orbe com órbitas */
+body[data-page="space"] .sp-lobby-orb { position: relative; background: radial-gradient(circle at 30% 30%, #c084fc, #7c3aed 55%, #2e1065); color: #fff; box-shadow: 0 0 70px rgba(168, 85, 247, .45); animation: sp-float 5s ease-in-out infinite; }
+body[data-page="space"] .sp-lobby-orb::before,
+body[data-page="space"] .sp-lobby-orb::after {
+  content: ""; position: absolute; inset: -16px; border-radius: 50%;
+  border: 1px dashed rgba(192, 132, 252, .45); animation: sp-spin 14s linear infinite;
+}
+body[data-page="space"] .sp-lobby-orb::after { inset: -32px; border-style: solid; border-color: rgba(236, 72, 153, .18); animation-duration: 22s; animation-direction: reverse; }
+body[data-page="space"] .sp-lobby h2 { background: linear-gradient(90deg, #fff, #d8b4fe); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+body[data-page="space"] .sp-join-btn {
+  background: linear-gradient(90deg, #16a34a, #22c55e, #4ade80, #22c55e, #16a34a) !important; background-size: 300% 100% !important;
+  border: 0 !important; color: #04130a !important; font-weight: 800;
+  box-shadow: 0 10px 30px rgba(34, 197, 94, .3);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), background-position .6s var(--ease);
+}
+body[data-page="space"] .sp-join-btn:hover { transform: translateY(-2px) scale(1.02); background-position: 100% 0 !important; box-shadow: 0 14px 38px rgba(34, 197, 94, .45); }
+
+/* ── Quadros da call: borda em degradê, anel girando em quem fala ── */
+body[data-page="space"] .sp-tile {
+  isolation: isolate;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(124, 58, 237, .25), transparent 60%), linear-gradient(160deg, #1a1530, #0e0b18);
+  box-shadow: inset 0 0 0 1px rgba(192, 132, 252, .14), 0 10px 30px rgba(0, 0, 0, .35);
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+  animation: sp-tile-in .45s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+body[data-page="space"] .sp-tile:hover { transform: translateY(-3px); box-shadow: inset 0 0 0 1px rgba(192, 132, 252, .35), 0 16px 40px rgba(124, 58, 237, .25); }
+body[data-page="space"] .sp-tile.is-speaking { overflow: visible; box-shadow: 0 0 34px rgba(34, 197, 94, .35); }
+body[data-page="space"] .sp-tile.is-speaking::before {
+  content: ""; position: absolute; inset: -2px; z-index: -2; border-radius: 16px;
+  background: conic-gradient(from 0deg, #22c55e, #86efac, #a3e635, #22c55e);
+  animation: sp-spin 2.4s linear infinite;
+}
+body[data-page="space"] .sp-tile.is-speaking::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 14px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(34, 197, 94, .18), transparent 60%), linear-gradient(160deg, #13201a, #0b120e);
+}
+body[data-page="space"] .sp-tile.is-speaking .sp-tile-media { border-radius: 14px; overflow: hidden; }
+body[data-page="space"] .sp-tile-avatar.is-speaking { animation: sp-talk 1.1s ease-in-out infinite; }
+body[data-page="space"] .sp-tile-foot { background: linear-gradient(transparent, rgba(8, 5, 18, .85)); border-radius: 0 0 14px 14px; }
+@keyframes sp-tile-in { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Controles: cápsula de vidro flutuante */
+body[data-page="space"] .sp-controls {
+  align-self: center; margin: 0 auto 16px; width: fit-content; max-width: calc(100% - 24px);
+  padding: 10px 16px; border: 1px solid rgba(192, 132, 252, .22); border-radius: 999px;
+  background: linear-gradient(180deg, rgba(30, 22, 52, .85), rgba(12, 9, 22, .9));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .5), 0 0 40px rgba(124, 58, 237, .18);
+  backdrop-filter: blur(14px);
+}
+body[data-page="space"] .sp-controls .sp-ctl { transition: transform .2s var(--ease), background .2s, border-color .2s, box-shadow .2s; }
+body[data-page="space"] .sp-controls .sp-ctl:hover:not(:disabled) { transform: translateY(-3px) scale(1.06); box-shadow: 0 8px 22px rgba(168, 85, 247, .35); }
+body[data-page="space"] .sp-controls .sp-ctl.is-on,
+body[data-page="space"] .sp-controls .sp-ctl.is-open { background: var(--sp-grad); border-color: transparent; color: #fff; box-shadow: 0 6px 20px rgba(168, 85, 247, .45); }
+body[data-page="space"] .sp-controls .sp-ctl.is-danger { background: linear-gradient(135deg, #ef4444, #b91c1c); border-color: transparent; box-shadow: 0 6px 20px rgba(239, 68, 68, .35); }
+body[data-page="space"] .sp-controls .sp-ctl.is-danger:hover { box-shadow: 0 10px 28px rgba(239, 68, 68, .55); }
+
+/* Popups, cartão flutuante e transmissão */
+body[data-page="space"] .sp-pop,
+body[data-page="space"] .sp-dev-pop { background: linear-gradient(180deg, rgba(30, 22, 52, .97), rgba(14, 11, 24, .98)); border-color: rgba(192, 132, 252, .22); }
+body[data-page="space"] .sp-dev-pop { animation: sp-fade-up .18s ease-out; }
+@keyframes sp-fade-up { from { opacity: 0; transform: translateY(6px); } }
+body[data-page="space"] .sp-stage { box-shadow: 0 0 0 1px rgba(192, 132, 252, .18), 0 20px 50px rgba(0, 0, 0, .45); }
+.sp-dock { background: linear-gradient(160deg, rgba(40, 24, 70, .96), rgba(12, 10, 18, .98)); }
+
+/* Barras de rolagem roxas e finas */
+body[data-page="space"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+body[data-page="space"] ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(168, 85, 247, .45), rgba(124, 58, 237, .35)); border-radius: 8px; }
+body[data-page="space"] ::-webkit-scrollbar-track { background: transparent; }
+
+/* Celular: menos efeitos (bateria) */
+@media (max-width: 900px) {
+  body.space-body::after { animation: none; opacity: .4; }
+  body[data-page="space"] .sp-controls { backdrop-filter: none; margin-bottom: 10px; }
+  body[data-page="space"] .sp-ch:hover { transform: none; }
+}
+
+/* Quem pediu "reduzir movimento" no sistema: sem animações */
+@media (prefers-reduced-motion: reduce) {
+  body.space-body::before, body.space-body::after,
+  body[data-page="space"] *, body[data-page="space"] *::before, body[data-page="space"] *::after {
+    animation: none !important; transition: none !important;
+  }
+}
