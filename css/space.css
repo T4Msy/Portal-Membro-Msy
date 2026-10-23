@@ -1025,18 +1025,7 @@ body[data-page="space"] .sp-tile-conn { left: 48px; }
   body[data-page="space"] .sp-tile:hover .sp-tile-vol { opacity: 1; }
 }
 
-/* ── Botão "Baixar app Android" (coluna de canais) ── */
-body[data-page="space"] .sp-app-dl {
-  display: flex; align-items: center; gap: 10px;
-  margin: 8px 12px 2px; padding: 8px 12px !important; min-height: 0 !important; width: auto;
-  border-radius: 12px; border: 1px solid rgba(61, 220, 132, .35);
-  background: rgba(61, 220, 132, .08); color: #d1fae5; text-align: left; cursor: pointer;
-}
-body[data-page="space"] .sp-app-dl:hover { background: rgba(61, 220, 132, .16); }
-body[data-page="space"] .sp-app-dl .fa-android { font-size: 1.35rem; color: #3ddc84; }
-body[data-page="space"] .sp-app-dl span { display: flex; flex-direction: column; line-height: 1.25; }
-body[data-page="space"] .sp-app-dl b { font-size: .8rem; }
-body[data-page="space"] .sp-app-dl small { font-size: .68rem; color: #9ca3af; }
+/* (botão grande de download trocado pelo ícone ao lado de "MSY Space" — ver fim do arquivo) */
 
 /* ── Encerrar sala com código pela lista de canais ── */
 body[data-page="space"] .sp-ch-deletable { position: relative; }
@@ -1286,3 +1275,57 @@ body[data-page="space"] ::-webkit-scrollbar-track { background: transparent; }
     animation: none !important; transition: none !important;
   }
 }
+
+/* ── Ícone de download ao lado de "MSY Space" + janela do app Android ── */
+body[data-page="space"] .sp-nav-head { gap: 6px; }
+body[data-page="space"] .sp-nav-head .sp-brand { flex: 1; min-width: 0; }
+body[data-page="space"] .sp-nav-dl {
+  position: relative; width: 32px !important; height: 32px !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
+  border-radius: 10px; color: #c4b5fd;
+  background: rgba(124, 58, 237, .14); border: 1px solid rgba(192, 132, 252, .25);
+  transition: transform .2s var(--ease), background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
+}
+body[data-page="space"] .sp-nav-dl:hover { background: var(--sp-grad); color: #fff; border-color: transparent; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(168, 85, 247, .4); }
+body[data-page="space"] .sp-nav-dl::after {
+  content: ""; position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%;
+  background: #3ddc84; box-shadow: 0 0 8px #3ddc84;
+}
+
+.sp-appdl-modal .modal {
+  position: relative; max-width: 440px; overflow: hidden;
+  background: linear-gradient(170deg, rgba(40, 24, 70, .98), rgba(12, 10, 20, .99));
+  border: 1px solid rgba(192, 132, 252, .3);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 60px rgba(124, 58, 237, .25);
+}
+.sp-appdl-modal .modal::before {
+  content: ""; position: absolute; top: -40%; left: -20%; width: 140%; height: 70%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(61, 220, 132, .16), transparent), radial-gradient(closest-side at 70% 60%, rgba(168, 85, 247, .25), transparent);
+}
+.sp-appdl-modal .modal-body { position: relative; padding-top: 22px; }
+.sp-appdl-close {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
+  border: 0; border-radius: 8px; background: rgba(255, 255, 255, .06); color: #c9c6d6; cursor: pointer;
+}
+.sp-appdl-close:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.sp-appdl-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.sp-appdl-icon {
+  width: 60px; height: 60px; flex-shrink: 0; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #3ddc84, #16a34a); color: #04130a; font-size: 1.9rem;
+  box-shadow: 0 10px 26px rgba(61, 220, 132, .35);
+  animation: sp-float 4s ease-in-out infinite;
+}
+.sp-appdl-hero h3 { margin: 0; font-size: 1.1rem; color: #fff; }
+.sp-appdl-hero p { margin: 4px 0 0; font-size: .8rem; color: #c4b5fd; }
+.sp-appdl-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.sp-appdl-list li {
+  display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px; border-radius: 10px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .06);
+  font-size: .82rem; line-height: 1.4; color: #d4d2df;
+}
+.sp-appdl-list li > i { width: 18px; margin-top: 2px; text-align: center; color: #c084fc; }
+.sp-appdl-list b { color: #fff; }
+.sp-appdl-how { padding: 10px 12px; border-radius: 10px; background: rgba(61, 220, 132, .08); border: 1px solid rgba(61, 220, 132, .2); font-size: .8rem; color: #d1fae5; }
+.sp-appdl-how ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
+.sp-appdl-go { background: linear-gradient(90deg, #16a34a, #3ddc84) !important; border: 0 !important; color: #04130a !important; font-weight: 800; }
+.sp-appdl-go:hover { filter: brightness(1.08); box-shadow: 0 8px 24px rgba(61, 220, 132, .35); }
