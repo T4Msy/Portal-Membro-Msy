@@ -1110,8 +1110,8 @@ body[data-page="space"] .sp-rail { background: linear-gradient(180deg, rgba(8, 5
 body[data-page="space"] .sp-rail-logo { position: relative; isolation: isolate; animation: sp-float 6s ease-in-out infinite; }
 body[data-page="space"] .sp-rail-logo::before {
   content: ""; position: absolute; inset: -4px; z-index: -1; border-radius: 19px;
-  background: conic-gradient(from 0deg, #c084fc, #ec4899, #7c3aed, #22d3ee, #c084fc);
-  animation: sp-spin 6s linear infinite;
+  background: conic-gradient(from var(--sp-a), #c084fc, #ec4899, #7c3aed, #22d3ee, #c084fc);
+  animation: sp-angle 5s linear infinite;
 }
 body[data-page="space"] .sp-rail-logo::after {
   content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 17px;
@@ -1121,6 +1121,9 @@ body[data-page="space"] .sp-rail-btn { transition: border-radius .25s var(--ease
 body[data-page="space"] .sp-rail-btn:hover { background: var(--sp-grad); color: #fff; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(168, 85, 247, .45); }
 @keyframes sp-float { 50% { transform: translateY(-3px); } }
 @keyframes sp-spin { to { transform: rotate(360deg); } }
+/* Gira só as cores do degradê (a forma fica parada: sem pontas aparecendo). */
+@property --sp-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes sp-angle { to { --sp-a: 360deg; } }
 
 /* ── Coluna de canais: vidro + marca em degradê ── */
 body[data-page="space"] .sp-nav { background: var(--sp-glass); border-right: 1px solid rgba(168, 85, 247, .12); }
@@ -1228,8 +1231,8 @@ body[data-page="space"] .sp-tile:hover { transform: translateY(-3px); box-shadow
 body[data-page="space"] .sp-tile.is-speaking { overflow: visible; box-shadow: 0 0 34px rgba(34, 197, 94, .35); }
 body[data-page="space"] .sp-tile.is-speaking::before {
   content: ""; position: absolute; inset: -2px; z-index: -2; border-radius: 16px;
-  background: conic-gradient(from 0deg, #22c55e, #86efac, #a3e635, #22c55e);
-  animation: sp-spin 2.4s linear infinite;
+  background: conic-gradient(from var(--sp-a), #22c55e, #86efac 25%, transparent 45%, #22c55e 70%, #a3e635 85%, #22c55e);
+  animation: sp-angle 2s linear infinite;
 }
 body[data-page="space"] .sp-tile.is-speaking::after {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 14px;
