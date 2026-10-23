@@ -3,7 +3,7 @@
 // (lista de canais, chat), como no Discord.
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { PresenceThrottle } from '@/lib/presenceThrottle'
-import { loadWorkspace, type Category, type Profile, type Room } from './api'
+import { canManageSpace, deleteRoom, loadWorkspace, type Category, type Profile, type Room } from './api'
 import { supabase } from './supabase'
 import { uuid } from './uuid'
 import { MobileVoice, type VoiceState } from '../voice/MobileVoice'
@@ -31,6 +31,8 @@ export interface SpaceSnapshot {
   /** Sessão de voz ativa (null fora de chamada). */
   voice: MobileVoice | null
   voiceRoom: Room | null
+  /** Gestão do Space: pode encerrar qualquer sala com código. */
+  canManage: boolean
 }
 
 export class SpaceStore {
@@ -42,6 +44,7 @@ export class SpaceStore {
     voiceByChannel: new Map(),
     voice: null,
     voiceRoom: null,
+    canManage: false,
   }
   private listeners = new Set<() => void>()
   private structure: RealtimeChannel | null = null
@@ -67,6 +70,7 @@ export class SpaceStore {
 
   async start(): Promise<void> {
     await this.reload()
+    void canManageSpace().then((canManage) => this.patch({ canManage }))
     // Estrutura ao vivo (canal criado/apagado no site aparece aqui), como o 'space:workspace' do site.
     let ch = supabase.channel('space:workspace', { config: { private: true } })
     for (const table of ['space_channels', 'space_categories', 'space_channel_members']) {
@@ -127,6 +131,17 @@ export class SpaceStore {
     this.patch({ voice, voiceRoom: room })
     void askCallPermissions().then(() => voice.join(room.id, room.user_limit, room.name))
     return voice
+  }
+
+  canDelete(room: Room): boolean {
+    return room.is_temporary && (room.created_by === this.userId || this.snap.canManage)
+  }
+
+  /** Encerra a sala com código (sai dela antes, se estiver dentro). */
+  async deleteRoom(room: Room): Promise<void> {
+    if (this.snap.voiceRoom?.id === room.id) this.leaveVoice()
+    await deleteRoom(room.id)
+    await this.reload()
   }
 
   leaveVoice() {

@@ -78,6 +78,20 @@ export function HomeScreen({ store, onOpenChat, onOpenCall }: Props) {
     }
   }
 
+  function askDelete(room: Room) {
+    Alert.alert('Encerrar sala', `"${room.name}" e o código ${room.join_code ?? ''} deixam de existir para todos.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Encerrar',
+        style: 'destructive',
+        onPress: () => {
+          setSheet(null)
+          store.deleteRoom(room).catch((e: unknown) => Alert.alert('Sala', friendly(e)))
+        },
+      },
+    ])
+  }
+
   function account() {
     Alert.alert(me?.name ?? 'Conta', 'Mesma conta do Portal MSY.', [
       { text: 'Cancelar', style: 'cancel' },
@@ -119,6 +133,7 @@ export function HomeScreen({ store, onOpenChat, onOpenCall }: Props) {
                   store={store}
                   speaking={c.id === inCallId ? speaking : new Set()}
                   onPress={() => openChannel(c)}
+                  onDelete={store.canDelete(c) ? () => askDelete(c) : undefined}
                 />
               ))}
           </View>
@@ -141,7 +156,7 @@ export function HomeScreen({ store, onOpenChat, onOpenCall }: Props) {
         <Icon name="gear" size={18} color={colors.silver500} />
       </Pressable>
 
-      <JoinSheet store={store} room={sheet} onClose={() => setSheet(null)} onJoined={() => { setSheet(null); onOpenCall() }} />
+      <JoinSheet store={store} room={sheet} onClose={() => setSheet(null)} onJoined={() => { setSheet(null); onOpenCall() }} onDelete={askDelete} />
       <CodeDialog mode={dialog} onCancel={() => setDialog(null)} onConfirm={(t) => void confirmDialog(t)} />
     </View>
   )
@@ -164,18 +179,24 @@ function RoundButton({ icon, label, onPress }: { icon: string; label: string; on
   )
 }
 
-function ChannelRow({ room, active, members, store, speaking, onPress }: { room: Room; active: boolean; members: VoiceMember[]; store: SpaceStore; speaking: Set<string>; onPress: () => void }) {
+function ChannelRow({ room, active, members, store, speaking, onPress, onDelete }: { room: Room; active: boolean; members: VoiceMember[]; store: SpaceStore; speaking: Set<string>; onPress: () => void; onDelete?: () => void }) {
   const voice = room.kind === 'voice'
   return (
     <View>
       <Pressable
         onPress={onPress}
+        onLongPress={onDelete}
         style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 9, borderRadius: radius.sm, backgroundColor: active ? colors.ink600 : pressed ? colors.ink700 : 'transparent', marginTop: 2 })}
       >
         <Icon name={voice ? 'volume-high' : 'hashtag'} size={16} color={active ? colors.ok : colors.silver500} />
         <Text style={{ flex: 1, color: active ? colors.white : colors.silver300, fontSize: 16, fontWeight: active ? '700' : '500' }} numberOfLines={1}>{room.name}</Text>
         {room.is_private && <Icon name="lock" size={11} color={colors.silver700} />}
         {voice && members.length > 0 && <Text style={{ color: colors.silver500, fontSize: 12 }}>{members.length}/{room.user_limit}</Text>}
+        {onDelete && (
+          <Pressable onPress={onDelete} hitSlop={8} accessibilityLabel={`Encerrar sala ${room.name}`} style={{ paddingLeft: 6 }}>
+            <Icon name="trash" size={14} color={colors.silver700} />
+          </Pressable>
+        )}
       </Pressable>
       {voice &&
         members.map((m) => {
@@ -223,7 +244,7 @@ const noopSubscribe = () => () => undefined
 const nullSnapshot = () => null
 
 /** Folha "Entrar na voz" (como no Discord): quem está na sala e o botão verde. */
-function JoinSheet({ store, room, onClose, onJoined }: { store: SpaceStore; room: Room | null; onClose: () => void; onJoined: () => void }) {
+function JoinSheet({ store, room, onClose, onJoined, onDelete }: { store: SpaceStore; room: Room | null; onClose: () => void; onJoined: () => void; onDelete: (room: Room) => void }) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const members = room ? (snap.voiceByChannel.get(room.id) ?? []) : []
   const busy = Boolean(snap.voiceRoom && room && snap.voiceRoom.id !== room.id)
@@ -270,6 +291,12 @@ function JoinSheet({ store, room, onClose, onJoined }: { store: SpaceStore; room
             <Text style={{ color: colors.white, fontWeight: '800', fontSize: 16 }}>{busy ? 'Trocar para esta sala' : 'Entrar na voz'}</Text>
           </Pressable>
           {busy && <Text style={{ color: colors.silver500, textAlign: 'center', marginTop: 10, fontSize: 12 }}>Você vai sair de {snap.voiceRoom?.name}.</Text>}
+          {store.canDelete(room) && (
+            <Pressable onPress={() => onDelete(room)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: '#5b1a26' }}>
+              <Icon name="trash" size={14} color={colors.dangerSoft} />
+              <Text style={{ color: colors.dangerSoft, fontWeight: '700' }}>Encerrar sala</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </Modal>

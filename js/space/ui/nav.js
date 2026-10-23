@@ -59,13 +59,16 @@ export class SpaceNav {
           ...snap.participants.map((p) => ({ userId: p.userId, muted: p.meta.muted, deafened: p.meta.deafened, screen: p.meta.screen }))]
         : inVoice;
       const unique = people.filter((p, i) => people.findIndex((x) => x.userId === p.userId) === i);
-      return `<li>
+      // Sala com código: quem criou (ou a gestão do Space) pode encerrar direto pela lista.
+      const canDelete = c.is_temporary && (c.created_by === this.me.id || this.workspace.canManage);
+      return `<li class="${canDelete ? 'sp-ch-deletable' : ''}">
         <button class="sp-ch ${this.selectedId === c.id ? 'is-active' : ''} ${this.voice.channelId === c.id ? 'is-connected' : ''}" data-act="select" data-id="${esc(c.id)}">
           ${icon(c.kind === 'voice' ? 'fa-volume-high' : 'fa-hashtag')}
           <span class="sp-ch-name">${esc(c.name)}</span>
           ${c.is_private ? `<span class="sp-ch-lock">${icon('fa-lock')}</span>` : ''}
           ${c.kind === 'voice' && unique.length ? `<span class="sp-ch-count">${unique.length}</span>` : ''}
         </button>
+        ${canDelete ? `<button class="sp-ch-del" data-act="delete-room" data-id="${esc(c.id)}" title="Encerrar sala" aria-label="Encerrar sala ${esc(c.name)}">${icon('fa-trash')}</button>` : ''}
         ${unique.length ? `<ul class="sp-ch-people">${unique.map((p) => {
           const prof = this.workspace.profile(p.userId);
           return `<li class="${speaking.has(p.userId) ? 'is-speaking' : ''}">${avatarHtml(prof, 22)}<span>${esc(displayName(prof))}</span>
@@ -169,6 +172,23 @@ export class SpaceNav {
   }
 
   /** Pede a permissão do microfone só para o navegador revelar a lista de dispositivos. */
+  /** Encerra uma sala com código (some para todos; quem estava nela sai). */
+  async deleteRoom(id) {
+    const room = this.workspace.getChannel(id);
+    if (!room) return;
+    if (!(await MSYConfirm.show(`Encerrar a sala "${room.name}"? Ela e o código ${room.join_code || ''} deixam de existir para todos.`, { title: 'Encerrar sala' }))) return;
+    try {
+      if (this.voice.channelId === id) this.voice.leave();
+      const { error } = await supabase.rpc('space_delete_room', { p_channel: id });
+      if (error) throw error;
+      await this.workspace.reloadChannels();
+      toast('Sala encerrada.');
+    } catch (err) {
+      console.error('[MSY][space] Falha ao encerrar sala:', err);
+      toast(/FORBIDDEN|42501/.test(err?.message || err?.code || '') ? 'Só quem criou a sala (ou a gestão) pode encerrar.' : 'Não foi possível encerrar a sala.', 'error');
+    }
+  }
+
   async allowDevices() {
     const kind = this.deviceMenu;
     try {
@@ -226,6 +246,7 @@ export class SpaceNav {
     if (act === 'create-room') await this.createRoom();
     if (act === 'join-room') await this.joinRoom();
     if (act === 'app-download') await downloadAndroidApp();
+    if (act === 'delete-room') await this.deleteRoom(btn.dataset.id);
   }
 
   async createRoom() {

@@ -48,9 +48,10 @@ class FakeStore extends SpaceStore {
     ]], ['v3', [{ userId: 'u1', channelId: 'v3', muted: false, deafened: false, screen: true, camera: false }]]]),
     voice: fakeVoice,
     voiceRoom: channels[2],
+    canManage: true,
   }
   getSnapshot = () => this.fake
-  subscribe = () => () => undefined
+  subscribe = (_l: () => void) => () => false
   async start() {}
   async reload() {}
   profile(id: string | null | undefined) { return id ? (this.fake.profiles.get(id) ?? null) : null }

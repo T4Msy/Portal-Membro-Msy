@@ -1036,3 +1036,19 @@ body[data-page="space"] .sp-app-dl .fa-android { font-size: 1.35rem; color: #3dd
 body[data-page="space"] .sp-app-dl span { display: flex; flex-direction: column; line-height: 1.25; }
 body[data-page="space"] .sp-app-dl b { font-size: .8rem; }
 body[data-page="space"] .sp-app-dl small { font-size: .68rem; color: #9ca3af; }
+
+/* ── Encerrar sala com código pela lista de canais ── */
+body[data-page="space"] .sp-ch-deletable { position: relative; }
+body[data-page="space"] .sp-ch-deletable > .sp-ch { padding-right: 38px; }
+body[data-page="space"] .sp-ch-del {
+  position: absolute; top: 3px; right: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px !important; height: 28px !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
+  border: 0; border-radius: 7px; background: transparent; color: var(--text-3); cursor: pointer; font-size: .75rem;
+}
+body[data-page="space"] .sp-ch-del:hover { background: rgba(239, 68, 68, .15); color: #f87171; }
+@media (hover: hover) {
+  body[data-page="space"] .sp-ch-del { opacity: 0; transition: opacity .15s; }
+  body[data-page="space"] .sp-ch-deletable:hover .sp-ch-del,
+  body[data-page="space"] .sp-ch-del:focus-visible { opacity: 1; }
+}

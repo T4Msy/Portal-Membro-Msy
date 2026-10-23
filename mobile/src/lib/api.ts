@@ -25,6 +25,7 @@ export interface Room {
   join_code: string | null
   user_limit: number
   position: number
+  created_by?: string | null
 }
 
 /** Erros do banco/Auth em português (mesmos códigos do site do MSY Space). */
@@ -59,7 +60,7 @@ export async function canAccessSpace(): Promise<boolean> {
   return Boolean(data)
 }
 
-const CHANNEL_FIELDS = 'id, category_id, name, kind, is_private, is_temporary, join_code, user_limit, position'
+const CHANNEL_FIELDS = 'id, category_id, name, kind, is_private, is_temporary, join_code, user_limit, position, created_by'
 
 export async function voiceRooms(): Promise<Room[]> {
   const { data, error } = await supabase.from('space_channels').select(CHANNEL_FIELDS).eq('kind', 'voice').order('position')
@@ -93,6 +94,18 @@ export async function joinByCode(code: string): Promise<string> {
   const { data, error } = await supabase.rpc('space_join_room', { p_code: normalizeCode(code) })
   if (error) throw error
   return String(data)
+}
+
+/** Gestão do Space (pode encerrar qualquer sala com código). */
+export async function canManageSpace(): Promise<boolean> {
+  const { data } = await supabase.rpc('space_can_manage')
+  return data === true
+}
+
+/** Encerra uma sala com código (quem criou ou a gestão; regra no banco). */
+export async function deleteRoom(id: string): Promise<void> {
+  const { error } = await supabase.rpc('space_delete_room', { p_channel: id })
+  if (error) throw error
 }
 
 export async function createRoom(name: string): Promise<{ id: string; code: string }> {
