@@ -466,6 +466,7 @@ body[data-page="space"] .sp-tile-grid {
   flex: 1; min-height: 0; overflow-y: auto;
   display: flex; flex-wrap: wrap; gap: 12px;
   justify-content: center; align-content: center;
+  padding: 6px;
 }
 body[data-page="space"] .sp-tile-grid .sp-tile { flex: none; aspect-ratio: auto; min-height: 0; width: 250px; height: 141px; }
 body[data-page="space"] .sp-tile-strip { display: flex; gap: 10px; overflow-x: auto; flex-shrink: 0; padding-bottom: 4px; }

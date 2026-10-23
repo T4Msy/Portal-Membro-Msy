@@ -528,8 +528,9 @@ export class VoiceRoomView {
     // Destaque: um quadro só, no maior tamanho que couber.
     const tiles = [...grid.children];
     const gap = 12;
-    const W = grid.clientWidth - 1;
-    const H = grid.clientHeight - 1;
+    // Folga de 6px em volta (CSS): o brilho e o anel de quem fala não criam barra de rolagem.
+    const W = grid.clientWidth - 13;
+    const H = grid.clientHeight - 13;
     if (W <= 0 || H <= 0) return;
     const ars = tiles.map((n) => Math.min(21 / 9, Math.max(9 / 16, n._ar || 16 / 9)));
     const key = `${W}x${H}:${tiles.map((n, i) => `${n.dataset.key}=${ars[i].toFixed(3)}`).join(',')}`;
