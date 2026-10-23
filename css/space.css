@@ -1326,6 +1326,7 @@ body[data-page="space"] .sp-nav-dl::after {
 .sp-appdl-list li > i { width: 18px; margin-top: 2px; text-align: center; color: #c084fc; }
 .sp-appdl-list b { color: #fff; }
 .sp-appdl-how { padding: 10px 12px; border-radius: 10px; background: rgba(61, 220, 132, .08); border: 1px solid rgba(61, 220, 132, .2); font-size: .8rem; color: #d1fae5; }
-.sp-appdl-how ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
+.sp-appdl-how ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.6; list-style: decimal; }
+.sp-appdl-how ol li { display: list-item; list-style: decimal; }
 .sp-appdl-go { background: linear-gradient(90deg, #16a34a, #3ddc84) !important; border: 0 !important; color: #04130a !important; font-weight: 800; }
 .sp-appdl-go:hover { filter: brightness(1.08); box-shadow: 0 8px 24px rgba(61, 220, 132, .35); }
