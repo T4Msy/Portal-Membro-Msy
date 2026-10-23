@@ -264,3 +264,9 @@ Limitações conhecidas:
   cada fala e reiniciaria); menos efeitos no celular; tudo desliga com "reduzir movimento" do sistema.
 - Grade da call com 6px de folga (o brilho/anel não cria barra de rolagem; `layoutGrid` desconta).
 - Testado no Brave (CSS do commit aplicado no site publicado + call de teste com câmera falsa; sala apagada depois).
+
+## 22/10/2026 — Download do app vira ícone ao lado de "MSY Space" (pedido do dono, com print)
+- O cartão grande "Baixar app Android" saiu da coluna de canais. No lugar: ícone de download (com bolinha verde) ao
+  lado da marca; ao clicar abre a janela `openAppDownload()` (`ui/app-download.js`): versão/tamanho/data (de
+  `latest.json`), o que o app faz, como instalar e o botão "Baixar app". Não aparece no iPhone.
+- Testado no site publicado: ícone no cabeçalho, janela com "Versão 0.5 · 48 MB · 22/10/2026", sem o cartão antigo.
