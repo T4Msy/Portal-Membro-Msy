@@ -240,3 +240,12 @@ Limitações conhecidas:
   (Font Awesome 6, os do site). A call saiu da tela e foi para o `SpaceStore` (continua ao navegar).
 - Conferido no emulador com dados de exemplo (lista, call, folha, chat). APK 0.4 publicado no bucket `space-app`
   (SHA-256 conferido, 50 MB). **Falta teste real** com login e call entre celular e site.
+
+## 22/10/2026 — Encerrar salas com código pela lista (pedido do dono: "muito importante")
+- Site (`ui/nav.js` `deleteRoom` + `.sp-ch-del`): lixeira ao lado de cada sala com código para quem criou ou para a
+  gestão do Space (regra no banco: `space_delete_room`). Confirma, tira você da call se estiver nela e atualiza a lista.
+  No computador a lixeira aparece ao passar o mouse; no celular fica sempre visível.
+- App 0.5: lixeira na linha da sala, segurar a sala ou botão "Encerrar sala" na folha "Entrar na voz".
+- Testado no site publicado: lixeira em "CineMsy 🎃🦇" e "Teste lixeira"; encerrei só a de teste → sumiu da lista e do
+  banco; a "CineMsy" ficou. APK 0.5 publicado no bucket (SHA-256 conferido).
+- Obs.: o jsDelivr falhou ao servir parte dos módulos na injeção de teste; o teste foi feito no site publicado.
