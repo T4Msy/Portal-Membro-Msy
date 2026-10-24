@@ -76,6 +76,7 @@ Resumo de `Masayoshi-Plataforma/docs/DECISOES.md` e `WEBRTC.md`:
 - **D8** "Parar de assistir" a tela economiza a banda de quem transmite.
 - Sem TURN (o da Cloudflare pede cartão): quem está em CGNAT/4G restritivo pode não conectar.
 - P2P mesh: bom para voz com até ~15 pessoas; tela para muitos espectadores pesa no upload de quem transmite.
+- **D9** Orçamento de envio (`voice/webrtc/budget.js`): câmera e tela dividem um teto fixo pelo número de conexões (a câmera cai de 720p/30 para até 180p/12 e a tela usa no máximo ~6 Mb/s somando todos os espectadores); o microfone fica sempre com prioridade alta, DTX e FEC. Recalculado a cada entrada/saída, início/fim de tela e "parar de assistir". Sem isso, cada conexão disputava o upload inteiro e a voz chiava/sumia com sala cheia.
 
 ## Chamada persistente (sobreposição)
 O portal é multipágina: trocar de aba recarrega a página e mataria a chamada. Solução:

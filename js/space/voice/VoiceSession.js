@@ -3,16 +3,11 @@ import { AudioOutput } from './media/audioOutput.js';
 import { getCameraTrack, getMicTrack, mediaErrorMessage } from './media/devices.js';
 import { applyPresetToTrack, captureScreen, SCREEN_PRESETS, surfaceLabel } from './media/screen.js';
 import { SpeakingDetector } from './media/speaking.js';
+import { planEncodings } from './webrtc/budget.js';
 import { getIceServers, hasTurn } from './webrtc/iceServers.js';
 import { MeshTransport } from './webrtc/MeshTransport.js';
 import { SignalingChannel } from './webrtc/SignalingChannel.js';
 import { SLOTS } from './webrtc/types.js';
-const ENCODINGS = {
-    mic: { maxBitrate: 48_000, priority: 'high', networkPriority: 'high' },
-    camera: { maxBitrate: 1_200_000, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
-    screen: { maxBitrate: SCREEN_PRESETS.motion.maxBitrate, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
-    screenAudio: { maxBitrate: 128_000, priority: 'medium', networkPriority: 'medium' },
-};
 export const REACTIONS = ['👍', '😂', '🔥', '👏', '😮', '❤️', '💀', '🎉'];
 let reactionSeq = 1;
 /**
@@ -37,6 +32,7 @@ export class VoiceSession {
     watchedMic = new Map();
     userLimit = 15;
     lastReactionAt = 0;
+    encodingKeys = {};
     disposed = false;
     constructor(deps) {
         this.deps = deps;
@@ -97,14 +93,17 @@ export class VoiceSession {
             return;
         this.patch({ turnAvailable: hasTurn(ice) });
         const meta = this.buildMeta();
+        const initialEncodings = this.planEncodings();
         this.signaling = new SignalingChannel(channelId, meta, {
             onPeers: (peers) => this.onPeers(peers),
             onSignal: (env) => this.transport?.handleSignal(env),
             onMeta: (meta) => this.onRemoteMeta(meta),
             onReaction: (ev) => this.showReaction(ev.from, ev.emoji),
             onWatch: (ev) => {
-                if (ev.to === this.sessionId)
-                    this.transport?.setPeerWatching(ev.from, ev.watching);
+                if (ev.to !== this.sessionId)
+                    return;
+                this.transport?.setPeerWatching(ev.from, ev.watching);
+                this.rebalance();
             },
             onStatus: (s) => this.onSignalingStatus(s),
         });
@@ -112,7 +111,8 @@ export class VoiceSession {
             onRemoteTrack: (peerId, slot, track, stream) => this.onRemoteTrack(peerId, slot, track, stream),
             onPeerState: (peerId, state) => this.onPeerState(peerId, state),
             onStats: (peerId, stats) => this.onStats(peerId, stats),
-        }, ENCODINGS);
+        }, initialEncodings);
+        this.rememberEncodings(initialEncodings);
         if (this.micTrack)
             await this.transport.setTrack('mic', this.micTrack);
         try {
@@ -286,7 +286,7 @@ export class VoiceSession {
         this.localStreams.screen.addTrack(cap.video);
         if (cap.audio)
             this.localStreams.screenAudio.addTrack(cap.audio);
-        this.transport?.setEncoding('screen', { ...ENCODINGS.screen, maxBitrate: preset.maxBitrate, maxFramerate: preset.frameRate });
+        this.rebalance();
         await this.transport?.setTrack('screen', cap.video);
         await this.transport?.setTrack('screenAudio', cap.audio);
         this.patchLocal({ screen: new MediaStream([cap.video]), screenLabel: surfaceLabel(cap.surface), screenHasAudio: Boolean(cap.audio) });
@@ -303,12 +303,13 @@ export class VoiceSession {
         s.video.stop();
         s.audio?.stop();
         this.patchLocal({ screen: null, screenLabel: null, screenHasAudio: false });
+        this.rebalance();
         this.publishVoiceState();
     }
     async setScreenPreset(id) {
         const preset = SCREEN_PRESETS[id];
         this.patch({ screenPreset: id });
-        this.transport?.setEncoding('screen', { ...ENCODINGS.screen, maxBitrate: preset.maxBitrate, maxFramerate: preset.frameRate });
+        this.rebalance();
         if (this.screenTracks)
             await applyPresetToTrack(this.screenTracks.video, preset);
     }
@@ -440,6 +441,7 @@ export class VoiceSession {
         this.speaking.unwatch(id);
     }
     onPeerState(peerId, state) {
+        this.rebalance();
         const p = this.peers.get(peerId);
         if (!p)
             return;
@@ -461,6 +463,32 @@ export class VoiceSession {
             up += x.stats?.outKbps ?? 0;
         this.patch({ uploadKbps: up });
         this.emitParticipants();
+    }
+    // ---- Orçamento de envio (ver webrtc/budget.js) -------------------------------------
+    planEncodings() {
+        return planEncodings({
+            peers: this.transport?.peerCount() ?? 0,
+            screenViewers: this.transport?.screenViewers() ?? 0,
+            sharingScreen: Boolean(this.screenTracks),
+            screenPreset: SCREEN_PRESETS[this.snapshot.screenPreset] ?? SCREEN_PRESETS.motion,
+        });
+    }
+    /** Recalcula bitrate/fps/resolução quando a sala muda; só reaplica o que mudou. */
+    rebalance() {
+        if (!this.transport || this.disposed)
+            return;
+        const plan = this.planEncodings();
+        for (const slot of SLOTS) {
+            const key = JSON.stringify(plan[slot]);
+            if (this.encodingKeys[slot] === key)
+                continue;
+            this.encodingKeys[slot] = key;
+            this.transport.setEncoding(slot, plan[slot]);
+        }
+    }
+    rememberEncodings(plan) {
+        for (const slot of SLOTS)
+            this.encodingKeys[slot] = JSON.stringify(plan[slot]);
     }
     onSignalingStatus(s) {
         if (this.disposed || this.snapshot.status === 'joining' || this.snapshot.status === 'error')
