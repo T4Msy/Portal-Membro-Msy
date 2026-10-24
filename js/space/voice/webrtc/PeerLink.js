@@ -123,8 +123,13 @@ export class PeerLink {
             return;
         const enc = this.encodings[slot];
         Object.assign(first, toEncoding(enc));
+        // Campo ausente = sem limite (desfaz uma redução anterior).
         if (enc.maxBitrate === undefined)
             delete first.maxBitrate;
+        if (enc.maxFramerate === undefined)
+            delete first.maxFramerate;
+        if (enc.scaleResolutionDownBy === undefined && SLOT_KIND[slot] === 'video')
+            first.scaleResolutionDownBy = 1;
         try {
             await Promise.race([sender.setParameters(params), new Promise((r) => window.setTimeout(r, 3000))]);
         }
