@@ -1,4 +1,5 @@
 // Portado de Masayoshi-Plataforma/src/features/voice/webrtc/PeerLink.ts (TS -> JS automático). Ver docs/msy-space/README.md
+import { preferHardwareCodecs } from './codecs.js';
 import { enableOpusStereo } from './sdp.js';
 import { SLOTS, SLOT_KIND } from './types.js';
 const MAX_ICE_RESTARTS = 3;
@@ -58,6 +59,8 @@ export class PeerLink {
                     streams: [localStreams[slot]],
                     sendEncodings: [toEncoding(encodings[slot])],
                 });
+                if (SLOT_KIND[slot] === 'video')
+                    preferHardwareCodecs(t);
                 this.senders[slot] = t.sender;
             }
         }
@@ -260,6 +263,8 @@ export class PeerLink {
                 continue;
             this.senders[slot] = t.sender;
             t.direction = 'sendrecv';
+            if (SLOT_KIND[slot] === 'video')
+                preferHardwareCodecs(t);
             const track = this.tracks[slot];
             if (track)
                 await t.sender.replaceTrack(track);

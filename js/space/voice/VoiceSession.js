@@ -471,6 +471,7 @@ export class VoiceSession {
             screenViewers: this.transport?.screenViewers() ?? 0,
             sharingScreen: Boolean(this.screenTracks),
             screenPreset: SCREEN_PRESETS[this.snapshot.screenPreset] ?? SCREEN_PRESETS.motion,
+            screenHeight: this.screenTracks?.video.getSettings().height,
         });
     }
     /** Recalcula bitrate/fps/resolução quando a sala muda; só reaplica o que mudou. */
