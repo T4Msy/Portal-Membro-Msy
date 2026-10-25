@@ -1,6 +1,6 @@
 // Portado de Masayoshi-Plataforma/src/features/voice/webrtc/MeshTransport.ts (TS -> JS automático). Ver docs/msy-space/README.md
 import { PeerLink } from './PeerLink.js';
-import { MAX_SCREEN_LEVEL } from './screenQuality.js';
+import { clampScreenLevel } from './screenQuality.js';
 import { SLOTS, } from './types.js';
 /**
  * Alguém que some da presença NÃO é desconectado enquanto a mídia P2P estiver
@@ -85,7 +85,7 @@ export class MeshTransport {
     }
     /** Qualidade da tela só para um espectador (ele mede e pede; os outros não mudam). */
     setPeerScreenLevel(peerSessionId, level) {
-        const l = Math.max(0, Math.min(MAX_SCREEN_LEVEL, Math.round(Number(level) || 0)));
+        const l = clampScreenLevel(level);
         this.screenLevels.set(peerSessionId, l);
         this.links.get(peerSessionId)?.setScreenLevel(l);
     }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { planEncodings, SCREEN_UPLOAD_BUDGET } from '../js/space/voice/webrtc/budget.js';
 import { enableOpusStereo } from '../js/space/voice/webrtc/sdp.js';
 import { orderCodecs } from '../js/space/voice/webrtc/codecs.js';
-import { MAX_SCREEN_LEVEL, ScreenQualityController, screenHealth, screenLevelEncoding } from '../js/space/voice/webrtc/screenQuality.js';
+import { MAX_SCREEN_LEVEL, SCREEN_QUALITY_CHOICES, ScreenQualityController, screenHealth, screenLevelEncoding } from '../js/space/voice/webrtc/screenQuality.js';
 
 const motion = { maxBitrate: 2_500_000, frameRate: 30, height: 720 };
 const high = { maxBitrate: 4_500_000, frameRate: 60, height: 1080 };
@@ -131,4 +131,25 @@ test('nível reduz só a conexão daquele espectador, sem passar do orçamento',
   const l3 = screenLevelEncoding(base, 3, 1080);
   assert.deepEqual([l3.maxBitrate, l3.maxFramerate, l3.scaleResolutionDownBy], [500_000, 10, 3]);
   assert.equal(screenLevelEncoding(base, 1, 500).scaleResolutionDownBy, 1); // captura pequena: não reduz à toa
+});
+
+test('opções de qualidade manual', () => {
+  assert.deepEqual(SCREEN_QUALITY_CHOICES.map((c) => c.level), [0, 1, 2, 3]);
+});
+
+test('com escolha manual, o automático reduz a partir dela e volta até ela', () => {
+  const q = new ScreenQualityController();
+  q.setFloor(2); // pessoa escolheu "Baixa"
+  assert.equal(q.level, 2);
+  assert.equal(q.sample({ bad: true }), null);
+  assert.equal(q.sample({ bad: true }), 3); // travou: baixa além da escolha
+  let out = null;
+  for (let i = 0; i < 100 && out === null; i++) out = q.sample({ bad: false });
+  assert.equal(out, 2); // recuperou: volta até a escolha...
+  for (let i = 0; i < 100; i++) q.sample({ bad: false });
+  assert.equal(q.level, 2); // ...e não passa dela
+  q.setFloor(0); // voltou para "Automático": qualidade cheia na hora
+  assert.equal(q.level, 0);
+  q.setFloor(1);
+  assert.equal(q.level, 1); // pediu menos: vale na hora
 });

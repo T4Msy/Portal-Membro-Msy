@@ -17,6 +17,21 @@ export const SCREEN_LEVELS = [
 ];
 export const MAX_SCREEN_LEVEL = SCREEN_LEVELS.length - 1;
 
+/**
+ * Escolha manual de quem assiste. É um TETO: o automático continua valendo e pode
+ * baixar mais se o aparelho travar, mas nunca sobe acima do que a pessoa escolheu.
+ */
+export const SCREEN_QUALITY_CHOICES = [
+  { level: 0, label: 'Automático', hint: 'A melhor que o seu aparelho e a sua internet aguentarem' },
+  { level: 1, label: 'Média', hint: 'Até 720p e 20 fps' },
+  { level: 2, label: 'Baixa', hint: 'Até 540p e 15 fps' },
+  { level: 3, label: 'Muito baixa', hint: 'Até 360p e 10 fps. Economiza internet e bateria' },
+];
+
+export function clampScreenLevel(level) {
+  return Math.max(0, Math.min(MAX_SCREEN_LEVEL, Math.round(Number(level) || 0)));
+}
+
 const MIN_FRAMES = 10; // tela parada manda poucos quadros: sem amostra suficiente, não decide
 const DROPPED_RATIO = 0.15;
 const DECODE_MS = 35;
@@ -67,6 +82,21 @@ export class ScreenQualityController {
   hold = 0;
   upAfter = 15;
   sinceUp = Infinity;
+  floor = 0;
+
+  /**
+   * Escolha manual (teto de qualidade = piso de nível). Pedir MAIS qualidade vale na
+   * hora (recomeça da escolha); pedir menos também; o automático continua por cima.
+   */
+  setFloor(floor) {
+    const f = clampScreenLevel(floor);
+    if (f === this.floor) return;
+    this.level = f < this.floor ? f : Math.max(this.level, f);
+    this.floor = f;
+    this.badStreak = 0;
+    this.goodStreak = 0;
+    this.hold = 0;
+  }
 
   /** @returns {number|null} novo nível, ou null se não mudou */
   sample(health) {
@@ -87,7 +117,7 @@ export class ScreenQualityController {
       return null;
     }
     this.badStreak = 0;
-    if (this.level > 0 && ++this.goodStreak >= this.upAfter) {
+    if (this.level > this.floor && ++this.goodStreak >= this.upAfter) {
       this.level--;
       this.goodStreak = 0;
       this.hold = 2;

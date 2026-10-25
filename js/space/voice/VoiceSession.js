@@ -473,9 +473,15 @@ export class VoiceSession {
         this.patch({ uploadKbps: up });
         this.emitParticipants();
     }
+    /** Escolha manual da qualidade das telas que recebo (teto; o automático continua). */
+    setScreenQualityCap() {
+        for (const p of this.peers.values())
+            this.adaptScreenQuality(p, null);
+    }
     /**
      * Espectador: se a tela de alguém está pesando neste aparelho, pede uma versão
      * mais leve só para mim (ver webrtc/screenQuality.js). Os outros não são afetados.
+     * O pedido é o mais leve entre a escolha manual (teto) e o automático.
      */
     adaptScreenQuality(p, health) {
         const watching = p.meta.screen && !this.snapshot.notWatching.includes(p.sessionId);
@@ -490,19 +496,26 @@ export class VoiceSession {
         let q = this.screenQuality.get(p.sessionId);
         if (!q) {
             q = new ScreenQualityController();
+            q.sent = 0; // quem transmite começa no nível 0 para cada espectador
             q.sentAt = 0;
             this.screenQuality.set(p.sessionId, q);
         }
-        const level = q.sample(health);
+        // A escolha manual é o ponto de partida; o automático só reduz a partir dela.
+        q.setFloor(this.deps.prefs().screenQualityCap);
+        const autoChanged = q.sample(health);
+        if (autoChanged !== null)
+            console.info('[MSY][space] Qualidade automática da tela ajustada para o nível', autoChanged, health?.reasons ?? []);
+        const level = q.level;
         // Muda o nível, ou reforça a cada 30 s enquanto reduzido (mensagem perdida / reconexão).
-        if (level !== null || (q.level > 0 && Date.now() - q.sentAt > 30_000)) {
+        if (level !== q.sent || (level > 0 && Date.now() - q.sentAt > 30_000)) {
+            q.sent = level;
             q.sentAt = Date.now();
-            this.signaling?.sendScreenQuality({ from: this.sessionId, to: p.sessionId, level: q.level });
-            if (level !== null)
-                console.info('[MSY][space] Qualidade da tela recebida ajustada para o nível', level, health?.reasons ?? []);
+            this.signaling?.sendScreenQuality({ from: this.sessionId, to: p.sessionId, level });
         }
-        if ((this.snapshot.screenLevels[p.sessionId] ?? 0) !== q.level)
-            this.patch({ screenLevels: { ...this.snapshot.screenLevels, [p.sessionId]: q.level } });
+        const prev = this.snapshot.screenLevels[p.sessionId];
+        const auto = q.level > q.floor;
+        if (prev?.level !== level || prev?.auto !== auto)
+            this.patch({ screenLevels: { ...this.snapshot.screenLevels, [p.sessionId]: { level, auto } } });
     }
     // ---- Orçamento de envio (ver webrtc/budget.js) -------------------------------------
     planEncodings() {

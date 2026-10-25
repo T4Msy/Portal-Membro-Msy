@@ -580,6 +580,16 @@ body[data-page="space"] .sp-stage-bar {
 }
 body[data-page="space"] .sp-stage-bar > .fa-display { color: var(--sp-accent); }
 body[data-page="space"] .sp-stage-who b { color: #fff; }
+body[data-page="space"] .sp-quality { position: relative; }
+body[data-page="space"] .sp-stage-btn.is-open { background: rgba(168, 85, 247, .25); color: #e9d5ff; }
+body[data-page="space"] .sp-quality .sp-quality-pop {
+  top: calc(100% + 6px); bottom: auto; left: auto; right: 0; transform: none; z-index: 6;
+  width: min(calc(100vw - 32px), 300px); padding: 12px;
+  display: grid; gap: 6px; text-align: left;
+}
+body[data-page="space"] .sp-quality-pop h3 { margin: 0 0 2px; font-size: .88rem; color: #fff; }
+body[data-page="space"] .sp-quality-pop .sp-preset { width: 100%; background: none; color: inherit; font: inherit; text-align: left; }
+body[data-page="space"] .sp-quality-pop .sp-hint { margin: 2px 0 0; font-size: .68rem; line-height: 1.45; }
 body[data-page="space"] .sp-stage-lite {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 8px; border-radius: 999px;
