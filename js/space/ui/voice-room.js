@@ -363,6 +363,7 @@ export class VoiceRoomView {
         ? `<div class="sp-stage-tabs">${screens.map((s) => `<button data-act="pick-screen" data-id="${esc(s.sessionId)}" class="${s.sessionId === active.sessionId ? 'is-on' : ''}">${esc(s.name)}</button>`).join('')}</div>`
         : `<span class="sp-stage-who"><b>${esc(active.isLocal ? 'Você' : active.name)}</b> está transmitindo${active.label ? ` · ${esc(active.label)}` : ''}</span>`}
       ${active.hasAudio ? `<span title="Com áudio">${icon('fa-volume-high')}</span>` : ''}
+      ${!active.isLocal && snap.screenLevels?.[active.sessionId] ? `<span class="sp-stage-lite" title="Seu aparelho estava travando: a transmissão chega mais leve só para você e volta ao normal sozinha">${icon('fa-gauge-simple')} Modo leve</span>` : ''}
       <span class="sp-grow"></span>
       ${!active.isLocal ? `<button class="sp-stage-btn" data-act="watch" data-id="${esc(active.sessionId)}" data-watching="${active.watching}" title="${active.watching ? 'Parar de receber esta transmissão (economiza internet)' : 'Voltar a assistir'}">${icon(active.watching ? 'fa-eye-slash' : 'fa-eye')} ${active.watching ? 'Parar de assistir' : 'Assistir'}</button>` : ''}
       <button class="sp-stage-btn" data-act="pip" title="Janela flutuante (continua vendo em outras abas)">${icon('fa-clone')}</button>

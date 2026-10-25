@@ -23,24 +23,13 @@ const CAMERA_TIERS = [
 ];
 
 /**
- * A tela também limita resolução e fps: cada espectador custa uma codificação
- * inteira no PC de quem transmite (e uma decodificação no celular de quem assiste).
- * [até N espectadores, altura máxima, fps máximo]
- */
-const SCREEN_TIERS = [
-  [1, Infinity, Infinity],
-  [3, 1080, 30],
-  [6, 720, 20],
-  [Infinity, 540, 15],
-];
-
-/**
+ * A tela só divide o upload entre os espectadores; resolução e fps ficam no preset.
+ * Quem não aguenta pede menos só para si (ver screenQuality.js).
  * @param {{ peers: number, screenViewers: number, sharingScreen: boolean,
- *           screenPreset: { maxBitrate: number, frameRate: number, height?: number },
- *           screenHeight?: number }} input  screenHeight = altura real da captura
+ *           screenPreset: { maxBitrate: number, frameRate: number } }} input
  * @returns {Record<'mic'|'camera'|'screen'|'screenAudio', object>} encodings por slot
  */
-export function planEncodings({ peers, screenViewers, sharingScreen, screenPreset, screenHeight }) {
+export function planEncodings({ peers, screenViewers, sharingScreen, screenPreset }) {
   const n = Math.max(1, peers);
   const viewers = Math.max(1, screenViewers);
 
@@ -54,12 +43,10 @@ export function planEncodings({ peers, screenViewers, sharingScreen, screenPrese
     networkPriority: 'low',
   };
 
-  const [, maxHeight, maxFps] = SCREEN_TIERS.find(([max]) => viewers <= max);
-  const sourceHeight = screenHeight || screenPreset.height || 720;
   const screen = {
     maxBitrate: Math.min(screenPreset.maxBitrate, Math.max(SCREEN_MIN_PER_VIEWER, Math.floor(SCREEN_UPLOAD_BUDGET / viewers))),
-    scaleResolutionDownBy: Math.max(1, Math.round((sourceHeight / maxHeight) * 100) / 100),
-    maxFramerate: Math.min(screenPreset.frameRate, maxFps),
+    scaleResolutionDownBy: 1,
+    maxFramerate: screenPreset.frameRate,
     priority: 'medium',
     networkPriority: 'medium',
   };

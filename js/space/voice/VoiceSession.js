@@ -4,6 +4,7 @@ import { getCameraTrack, getMicTrack, mediaErrorMessage } from './media/devices.
 import { applyPresetToTrack, captureScreen, SCREEN_PRESETS, surfaceLabel } from './media/screen.js';
 import { SpeakingDetector } from './media/speaking.js';
 import { planEncodings } from './webrtc/budget.js';
+import { ScreenQualityController } from './webrtc/screenQuality.js';
 import { getIceServers, hasTurn } from './webrtc/iceServers.js';
 import { MeshTransport } from './webrtc/MeshTransport.js';
 import { SignalingChannel } from './webrtc/SignalingChannel.js';
@@ -33,6 +34,7 @@ export class VoiceSession {
     userLimit = 15;
     lastReactionAt = 0;
     encodingKeys = {};
+    screenQuality = new Map(); // quem transmite -> controle da qualidade que EU recebo
     disposed = false;
     constructor(deps) {
         this.deps = deps;
@@ -58,6 +60,7 @@ export class VoiceSession {
             reactions: [],
             screenPreset: deps.prefs().screenPreset ?? 'motion',
             notWatching: [],
+            screenLevels: {},
             audioBlocked: false,
             turnAvailable: false,
             uploadKbps: 0,
@@ -104,6 +107,10 @@ export class VoiceSession {
                     return;
                 this.transport?.setPeerWatching(ev.from, ev.watching);
                 this.rebalance();
+            },
+            onScreenQuality: (ev) => {
+                if (ev.to === this.sessionId && this.screenTracks)
+                    this.transport?.setPeerScreenLevel(ev.from, ev.level);
             },
             onStatus: (s) => this.onSignalingStatus(s),
         });
@@ -302,6 +309,7 @@ export class VoiceSession {
         s.video.onended = null;
         s.video.stop();
         s.audio?.stop();
+        this.transport?.resetScreenLevels();
         this.patchLocal({ screen: null, screenLabel: null, screenHasAudio: false });
         this.rebalance();
         this.publishVoiceState();
@@ -458,11 +466,43 @@ export class VoiceSession {
         if (!p)
             return;
         p.stats = stats;
+        this.adaptScreenQuality(p, stats.screenHealth);
         let up = 0;
         for (const x of this.peers.values())
             up += x.stats?.outKbps ?? 0;
         this.patch({ uploadKbps: up });
         this.emitParticipants();
+    }
+    /**
+     * Espectador: se a tela de alguém está pesando neste aparelho, pede uma versão
+     * mais leve só para mim (ver webrtc/screenQuality.js). Os outros não são afetados.
+     */
+    adaptScreenQuality(p, health) {
+        const watching = p.meta.screen && !this.snapshot.notWatching.includes(p.sessionId);
+        if (!watching) {
+            this.screenQuality.delete(p.sessionId); // quem transmite zera o nível ao parar/retomar
+            if (this.snapshot.screenLevels[p.sessionId]) {
+                const { [p.sessionId]: _gone, ...rest } = this.snapshot.screenLevels;
+                this.patch({ screenLevels: rest });
+            }
+            return;
+        }
+        let q = this.screenQuality.get(p.sessionId);
+        if (!q) {
+            q = new ScreenQualityController();
+            q.sentAt = 0;
+            this.screenQuality.set(p.sessionId, q);
+        }
+        const level = q.sample(health);
+        // Muda o nível, ou reforça a cada 30 s enquanto reduzido (mensagem perdida / reconexão).
+        if (level !== null || (q.level > 0 && Date.now() - q.sentAt > 30_000)) {
+            q.sentAt = Date.now();
+            this.signaling?.sendScreenQuality({ from: this.sessionId, to: p.sessionId, level: q.level });
+            if (level !== null)
+                console.info('[MSY][space] Qualidade da tela recebida ajustada para o nível', level, health?.reasons ?? []);
+        }
+        if ((this.snapshot.screenLevels[p.sessionId] ?? 0) !== q.level)
+            this.patch({ screenLevels: { ...this.snapshot.screenLevels, [p.sessionId]: q.level } });
     }
     // ---- Orçamento de envio (ver webrtc/budget.js) -------------------------------------
     planEncodings() {
@@ -471,7 +511,6 @@ export class VoiceSession {
             screenViewers: this.transport?.screenViewers() ?? 0,
             sharingScreen: Boolean(this.screenTracks),
             screenPreset: SCREEN_PRESETS[this.snapshot.screenPreset] ?? SCREEN_PRESETS.motion,
-            screenHeight: this.screenTracks?.video.getSettings().height,
         });
     }
     /** Recalcula bitrate/fps/resolução quando a sala muda; só reaplica o que mudou. */

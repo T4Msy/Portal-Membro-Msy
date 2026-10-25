@@ -1,5 +1,6 @@
 // Portado de Masayoshi-Plataforma/src/features/voice/webrtc/PeerLink.ts (TS -> JS automático). Ver docs/msy-space/README.md
 import { preferHardwareCodecs } from './codecs.js';
+import { screenHealth, screenLevelEncoding } from './screenQuality.js';
 import { enableOpusStereo } from './sdp.js';
 import { SLOTS, SLOT_KIND } from './types.js';
 const MAX_ICE_RESTARTS = 3;
@@ -40,6 +41,8 @@ export class PeerLink {
     encodingsDirty = false;
     restarts = 0;
     lastBytes = { out: 0, in: 0, at: 0 };
+    lastScreenIn = null;
+    screenLevel = 0; // nível pedido por este espectador para a MINHA tela
     state = 'new';
     closed = false;
     constructor(remoteId, epoch, polite, iceServers, localStreams, tracks, encodings, cb) {
@@ -94,6 +97,19 @@ export class PeerLink {
     handle(env) {
         this.queue = this.queue.then(() => this.process(env)).catch((e) => console.warn('[webrtc] sinal', this.remoteId, e));
     }
+    setScreenLevel(level) {
+        if (this.closed || this.screenLevel === level)
+            return;
+        this.screenLevel = level;
+        void this.applyEncoding('screen');
+    }
+    /** Encoding efetivo do slot para esta conexão (a tela respeita o nível do espectador). */
+    encodingFor(slot) {
+        const enc = this.encodings[slot];
+        if (slot !== 'screen' || !this.screenLevel)
+            return enc;
+        return screenLevelEncoding(enc, this.screenLevel, this.tracks.screen?.getSettings?.().height);
+    }
     async setTrack(slot, track) {
         if (this.closed)
             return;
@@ -124,7 +140,7 @@ export class PeerLink {
         const first = params.encodings?.[0];
         if (!first)
             return;
-        const enc = this.encodings[slot];
+        const enc = this.encodingFor(slot);
         Object.assign(first, toEncoding(enc));
         // Campo ausente = sem limite (desfaz uma redução anterior).
         if (enc.maxBitrate === undefined)
@@ -158,6 +174,7 @@ export class PeerLink {
         let relayed = false;
         let inFps = null;
         let limitation = null;
+        let screenIn = null;
         const candidates = new Map();
         report.forEach((s) => {
             if (s.type === 'local-candidate')
@@ -182,6 +199,15 @@ export class PeerLink {
                 inBytes += r.bytesReceived;
                 if (r.kind === 'video' && typeof r.framesPerSecond === 'number')
                     inFps = Math.max(inFps ?? 0, r.framesPerSecond);
+                if (r.kind === 'video' && slotForMid(r.mid ?? null) === 'screen') {
+                    screenIn = {
+                        framesReceived: r.framesReceived ?? 0,
+                        framesDecoded: r.framesDecoded ?? 0,
+                        framesDropped: r.framesDropped ?? 0,
+                        totalDecodeTime: r.totalDecodeTime ?? 0,
+                        totalFreezesDuration: r.totalFreezesDuration ?? 0,
+                    };
+                }
             }
         });
         const now = performance.now();
@@ -189,7 +215,9 @@ export class PeerLink {
         const outKbps = this.lastBytes.at && dt > 0 ? Math.max(0, ((outBytes - this.lastBytes.out) * 8) / 1000 / dt) : 0;
         const inKbps = this.lastBytes.at && dt > 0 ? Math.max(0, ((inBytes - this.lastBytes.in) * 8) / 1000 / dt) : 0;
         this.lastBytes = { out: outBytes, in: inBytes, at: now };
-        return { rttMs, outKbps: Math.round(outKbps), inKbps: Math.round(inKbps), relayed, inFps, limitation };
+        const health = screenHealth(this.lastScreenIn, screenIn);
+        this.lastScreenIn = screenIn;
+        return { rttMs, outKbps: Math.round(outKbps), inKbps: Math.round(inKbps), relayed, inFps, limitation, screenHealth: health };
     }
     close() {
         if (this.closed)

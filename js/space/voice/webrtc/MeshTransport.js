@@ -1,5 +1,6 @@
 // Portado de Masayoshi-Plataforma/src/features/voice/webrtc/MeshTransport.ts (TS -> JS automático). Ver docs/msy-space/README.md
 import { PeerLink } from './PeerLink.js';
+import { MAX_SCREEN_LEVEL } from './screenQuality.js';
 import { SLOTS, } from './types.js';
 /**
  * Alguém que some da presença NÃO é desconectado enquanto a mídia P2P estiver
@@ -27,6 +28,7 @@ export class MeshTransport {
     tracks = { mic: null, camera: null, screen: null, screenAudio: null };
     encodings;
     notWatching = new Set();
+    screenLevels = new Map(); // espectador -> nível pedido (ver screenQuality.js)
     statsTimer;
     closed = false;
     constructor(selfId, localStreams, iceServers, send, events, initialEncodings) {
@@ -55,8 +57,11 @@ export class MeshTransport {
             this.notWatching.delete(peerSessionId);
         else
             this.notWatching.add(peerSessionId);
+        // Parou/voltou a assistir: recomeça na qualidade cheia (o espectador mede de novo).
+        this.screenLevels.delete(peerSessionId);
         const link = this.links.get(peerSessionId);
         if (link) {
+            link.setScreenLevel(0);
             void link.setTrack('screen', this.effectiveTrack('screen', peerSessionId));
             void link.setTrack('screenAudio', this.effectiveTrack('screenAudio', peerSessionId));
         }
@@ -77,6 +82,17 @@ export class MeshTransport {
             this.absent.add(id);
             this.scheduleDrop(id, link.state === 'connected' ? ABSENT_MAX_MS : LEAVE_GRACE_OTHER_MS);
         }
+    }
+    /** Qualidade da tela só para um espectador (ele mede e pede; os outros não mudam). */
+    setPeerScreenLevel(peerSessionId, level) {
+        const l = Math.max(0, Math.min(MAX_SCREEN_LEVEL, Math.round(Number(level) || 0)));
+        this.screenLevels.set(peerSessionId, l);
+        this.links.get(peerSessionId)?.setScreenLevel(l);
+    }
+    resetScreenLevels() {
+        this.screenLevels.clear();
+        for (const link of this.links.values())
+            link.setScreenLevel(0);
     }
     /** Estado atual da conexão com um participante (a sinalização pode chegar antes da presença). */
     linkState(peerSessionId) {
@@ -159,6 +175,7 @@ export class MeshTransport {
             },
             onFatal: () => this.recreate(remoteId, link),
         });
+        link.screenLevel = this.screenLevels.get(remoteId) ?? 0;
         this.links.set(remoteId, link);
         this.events.onPeerState(remoteId, link.state);
         return link;
@@ -178,6 +195,7 @@ export class MeshTransport {
         this.links.delete(id);
         link.close();
         this.notWatching.delete(id);
+        this.screenLevels.delete(id);
         this.events.onPeerState(id, 'closed');
     }
     async collectStats() {

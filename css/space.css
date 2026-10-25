@@ -580,6 +580,12 @@ body[data-page="space"] .sp-stage-bar {
 }
 body[data-page="space"] .sp-stage-bar > .fa-display { color: var(--sp-accent); }
 body[data-page="space"] .sp-stage-who b { color: #fff; }
+body[data-page="space"] .sp-stage-lite {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(250, 204, 21, .12); color: #facc15;
+  font-size: .7rem; white-space: nowrap;
+}
 body[data-page="space"] .sp-stage-tabs { display: flex; gap: 4px; overflow-x: auto; }
 body[data-page="space"] .sp-stage-tabs button,
 body[data-page="space"] .sp-stage-btn {
