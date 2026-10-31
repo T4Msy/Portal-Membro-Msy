@@ -1961,6 +1961,136 @@
        '<div class="modal-anexos-list">' + items + '</div>';
    }
 
+   /* ── Notificação por WhatsApp (bot Corvus via /api/whatsapp) ── */
+   const WHATSAPP_DM_GAP_MS = 6000; // o bot exige 5 s entre mensagens no privado
+
+   async function whatsappApi(method, body) {
+     const session = await Auth.getSession();
+     const res = await fetch('/api/whatsapp', {
+       method,
+       headers: { Authorization: `Bearer ${session?.access_token || ''}`, 'Content-Type': 'application/json' },
+       body: body ? JSON.stringify(body) : undefined,
+     });
+     const data = await res.json().catch(() => ({}));
+     if (!res.ok) throw new Error(data.erro || `Erro ${res.status}`);
+     return data;
+   }
+
+   function defaultActivityNotice(act) {
+     const deadline = Utils.hasExtendedDeadline(act)
+       ? Utils.formatActivityDeadline(act.extended_deadline, act.extended_deadline_time)
+       : Utils.formatActivityDeadline(act);
+     return `📚 *Atividade no Portal MSY*\n\n*${act.title}*\n⏰ Prazo: ${deadline}\n\nAcesse: https://www.portalmsy.site/atividades.html`;
+   }
+
+   async function openWhatsAppNotify(act, recipientIds) {
+     let overlay = document.getElementById('whatsappNotifyModal');
+     if (!overlay) {
+       overlay = document.createElement('div');
+       overlay.className = 'modal-overlay';
+       overlay.id = 'whatsappNotifyModal';
+       document.body.appendChild(overlay);
+     }
+     overlay.innerHTML = `
+       <div class="modal">
+         <div class="modal-header">
+           <div class="modal-title"><i class="fa-brands fa-whatsapp"></i> Notificação</div>
+           <button class="modal-close" id="wnClose"><i class="fa-solid fa-xmark"></i></button>
+         </div>
+         <div class="modal-body" id="wnBody"><div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div></div>
+         <div class="modal-footer" id="wnFooter"></div>
+       </div>`;
+     overlay.classList.add('open');
+     const close = () => overlay.classList.remove('open');
+     document.getElementById('wnClose').addEventListener('click', close);
+
+     let grupos, comWhatsapp, members;
+     try {
+       const [api, { data, error }] = await Promise.all([
+         whatsappApi('GET'),
+         db.from('profiles').select('id,name').eq('status', 'ativo').order('name'),
+       ]);
+       if (error) throw error;
+       grupos = api.grupos;
+       comWhatsapp = new Set(api.comWhatsapp);
+       members = data || [];
+     } catch (err) {
+       console.error('[MSY][whatsapp]', err);
+       document.getElementById('wnBody').innerHTML = `<div class="empty-state">${Utils.escapeHtml(err.message || 'Erro ao carregar.')}</div>`;
+       return;
+     }
+
+     const recipients = new Set(recipientIds);
+     const option = (type, id, label, { checked = false, disabled = false, hint = '' } = {}) => `
+       <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:${disabled ? 'not-allowed' : 'pointer'};opacity:${disabled ? .5 : 1}">
+         <input type="checkbox" class="wn-target" data-type="${type}" value="${Utils.escapeHtml(id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} style="width:auto;margin:0">
+         <span>${Utils.escapeHtml(label)}</span>
+         ${hint ? `<span style="font-size:.72rem;color:var(--text-3)">${Utils.escapeHtml(hint)}</span>` : ''}
+       </label>`;
+
+     document.getElementById('wnBody').innerHTML = `
+       <div class="form-group" style="margin-bottom:14px">
+         <label class="form-label"><i class="fa-solid fa-users"></i> Grupos</label>
+         ${grupos.map(g => option('grupo', g.id, g.nome)).join('') || '<div style="font-size:.8rem;color:var(--text-3)">O bot não está em nenhum grupo.</div>'}
+       </div>
+       <div class="form-group" style="margin-bottom:14px">
+         <label class="form-label"><i class="fa-solid fa-user"></i> Pessoas (privado)</label>
+         ${members.map(m => {
+           const has = comWhatsapp.has(m.id);
+           return option('membro', m.id, m.name, {
+             checked: has && recipients.has(m.id),
+             disabled: !has,
+             hint: has ? (recipients.has(m.id) ? 'responsável' : '') : 'sem WhatsApp cadastrado',
+           });
+         }).join('')}
+       </div>
+       <div class="form-group" style="margin-bottom:0">
+         <label class="form-label">Mensagem</label>
+         <textarea class="form-input form-textarea" id="wnMessage" style="min-height:130px">${Utils.escapeHtml(defaultActivityNotice(act))}</textarea>
+         <div id="wnProgress" style="font-size:.78rem;color:var(--text-3);margin-top:8px"></div>
+       </div>`;
+     document.getElementById('wnFooter').innerHTML = `
+       <button class="btn btn-ghost" id="wnCancel">Cancelar</button>
+       <button class="btn btn-primary" id="wnSend"><i class="fa-solid fa-paper-plane"></i> Enviar</button>`;
+     document.getElementById('wnCancel').addEventListener('click', close);
+
+     document.getElementById('wnSend').addEventListener('click', async () => {
+       const targets = [...overlay.querySelectorAll('.wn-target:checked')].map(el => ({ type: el.dataset.type, id: el.value }));
+       const mensagem = document.getElementById('wnMessage').value.trim();
+       if (!targets.length) { Utils.showToast('Escolha pelo menos um grupo ou pessoa.', 'error'); return; }
+       if (!mensagem) { Utils.showToast('Escreva a mensagem.', 'error'); return; }
+
+       const btn = document.getElementById('wnSend');
+       const progress = document.getElementById('wnProgress');
+       btn.disabled = true;
+       const names = Object.fromEntries([...grupos.map(g => [g.id, g.nome]), ...members.map(m => [m.id, m.name])]);
+       const failed = [];
+       let lastDm = 0;
+       for (const [i, t] of targets.entries()) {
+         progress.textContent = `Enviando ${i + 1} de ${targets.length}: ${names[t.id] || ''}...`;
+         if (t.type === 'membro') {
+           const wait = WHATSAPP_DM_GAP_MS - (Date.now() - lastDm);
+           if (wait > 0) await new Promise(r => setTimeout(r, wait));
+         }
+         try {
+           await whatsappApi('POST', t.type === 'grupo' ? { grupo: t.id, mensagem } : { membro: t.id, mensagem });
+         } catch (err) {
+           console.error('[MSY][whatsapp]', err);
+           failed.push(`${names[t.id] || t.id}: ${err.message}`);
+         }
+         if (t.type === 'membro') lastDm = Date.now();
+       }
+       btn.disabled = false;
+       if (failed.length) {
+         progress.textContent = `Falhou: ${failed.join(' · ')}`;
+         Utils.showToast(`${targets.length - failed.length} de ${targets.length} enviadas.`, 'error');
+       } else {
+         Utils.showToast('Notificação enviada no WhatsApp!');
+         close();
+       }
+     });
+   }
+
    async function openActivityModal(id, acts, profile, onSuccess = null, permissions = null) {
      const act = acts.find(a => a.id === id);
      if (!act) return;
@@ -2151,9 +2281,14 @@
      const submitFooter = canRespond
        ? `<button class="btn btn-ghost" id="cancelModal">Cancelar</button><button class="btn btn-primary" id="submitActivity"><i class="fa-solid fa-paper-plane"></i> Enviar Resposta</button>`
        : `<button class="btn btn-outline" id="cancelModal">Fechar</button>`;
-     document.getElementById('modalFooter').innerHTML = submitFooter;
-   
+     const notifyBtn = canGerenciar
+       ? `<button class="btn btn-outline" id="notifyActivity" style="margin-right:auto"><i class="fa-brands fa-whatsapp"></i> Notificação</button>`
+       : '';
+     document.getElementById('modalFooter').innerHTML = notifyBtn + submitFooter;
+
      modal.classList.add('open');
+
+     document.getElementById('notifyActivity')?.addEventListener('click', () => openWhatsAppNotify(act, recipientIds));
 
      // Carregar nomes dos membros colaborativos
     if (isCollaborative) {
@@ -4250,7 +4385,18 @@
          <input class="form-input" type="date" id="em-joindate" value="${m.join_date||''}">
          <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Corrige a data real de entrada do membro (diferente da criação da conta).</div>
        </div>
+       <div class="form-group" style="margin-top:14px">
+         <label class="form-label"><i class="fa-brands fa-whatsapp"></i> WhatsApp</label>
+         <input class="form-input" id="em-whatsapp" inputmode="tel" placeholder="(34) 99999-9999">
+         <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Usado para notificações do bot Corvus no privado. Só a diretoria e quem gerencia atividades vê.</div>
+       </div>
      `;
+
+     db.from('member_whatsapp').select('whatsapp').eq('user_id', m.id).maybeSingle().then(({ data, error }) => {
+       if (error) { console.warn('[MSY][membros] Erro ao carregar WhatsApp:', error); return; }
+       const input = document.getElementById('em-whatsapp');
+       if (input && data?.whatsapp) input.value = `+${data.whatsapp}`;
+     });
    
      footer.innerHTML = `
        <button class="btn btn-ghost" id="editMemberCancel">Cancelar</button>
@@ -4280,10 +4426,23 @@
        const join_date = document.getElementById('em-joindate').value || m.join_date;
    
        if (!name) { Utils.showToast('Nome obrigatório.', 'error'); return; }
-   
+
+       // WhatsApp: só dígitos; sem DDI (10–11 dígitos) assume Brasil (55).
+       let whatsapp = document.getElementById('em-whatsapp').value.replace(/\D/g, '');
+       if (whatsapp.length === 10 || whatsapp.length === 11) whatsapp = `55${whatsapp}`;
+       if (whatsapp && !/^[0-9]{12,13}$/.test(whatsapp)) { Utils.showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
+
        const btn = document.getElementById('editMemberSave');
        btn.disabled = true; btn.textContent = 'Salvando...';
-   
+
+       const { error: waError } = whatsapp
+         ? await db.from('member_whatsapp').upsert({ user_id: m.id, whatsapp, updated_at: new Date().toISOString() })
+         : await db.from('member_whatsapp').delete().eq('user_id', m.id);
+       if (waError) {
+         console.error('[MSY][membros] Erro ao salvar WhatsApp:', waError);
+         Utils.showToast('Não foi possível salvar o WhatsApp.', 'error');
+       }
+
        const { error } = await db.from('profiles').update({ name, initials: initials||Utils.getInitials(name), role, color, bio, status, join_date }).eq('id', m.id);
        if (!error) {
          modal.classList.remove('open');
