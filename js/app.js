@@ -1961,20 +1961,7 @@
        '<div class="modal-anexos-list">' + items + '</div>';
    }
 
-   /* ── Notificação por WhatsApp (bot Corvus via /api/whatsapp) ── */
-   const WHATSAPP_DM_GAP_MS = 6000; // o bot exige 5 s entre mensagens no privado
-
-   async function whatsappApi(method, body) {
-     const session = await Auth.getSession();
-     const res = await fetch('/api/whatsapp', {
-       method,
-       headers: { Authorization: `Bearer ${session?.access_token || ''}`, 'Content-Type': 'application/json' },
-       body: body ? JSON.stringify(body) : undefined,
-     });
-     const data = await res.json().catch(() => ({}));
-     if (!res.ok) throw new Error(data.erro || `Erro ${res.status}`);
-     return data;
-   }
+   /* ── Notificação por WhatsApp (bot Corvus via WhatsAppManager, push.js) ── */
 
    /** Só dígitos; sem DDI (10–11 dígitos) assume Brasil. '' → null (apagar), inválido → false. */
    function normalizeWhatsapp(value) {
@@ -2032,7 +2019,7 @@
      let grupos, comWhatsapp, members;
      try {
        const [api, { data, error }] = await Promise.all([
-         whatsappApi('GET'),
+         WhatsAppManager.request('GET'),
          db.from('profiles').select('id,name').eq('status', 'ativo').order('name'),
        ]);
        if (error) throw error;
@@ -2090,20 +2077,15 @@
        btn.disabled = true;
        const names = Object.fromEntries([...grupos.map(g => [g.id, g.nome]), ...members.map(m => [m.id, m.name])]);
        const failed = [];
-       let lastDm = 0;
        for (const [i, t] of targets.entries()) {
          progress.textContent = `Enviando ${i + 1} de ${targets.length}: ${names[t.id] || ''}...`;
-         if (t.type === 'membro') {
-           const wait = WHATSAPP_DM_GAP_MS - (Date.now() - lastDm);
-           if (wait > 0) await new Promise(r => setTimeout(r, wait));
-         }
          try {
-           await whatsappApi('POST', t.type === 'grupo' ? { grupo: t.id, mensagem } : { membro: t.id, mensagem });
+           if (t.type === 'grupo') await WhatsAppManager.request('POST', { grupo: t.id, mensagem });
+           else await WhatsAppManager.sendToUser(t.id, mensagem);
          } catch (err) {
            console.error('[MSY][whatsapp]', err);
            failed.push(`${names[t.id] || t.id}: ${err.message}`);
          }
-         if (t.type === 'membro') lastDm = Date.now();
        }
        btn.disabled = false;
        if (failed.length) {
@@ -2790,8 +2772,12 @@
              <input type="checkbox" id="na-notif-email" style="accent-color:#60a5fa;width:15px;height:15px">
              <i class="fa-solid fa-envelope" style="color:#60a5fa"></i> Email
            </label>
+           <label class="activity-modal-notif" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
+             <input type="checkbox" id="na-notif-whatsapp" ${isEditing ? '' : 'checked'} style="accent-color:#25d366;width:15px;height:15px">
+             <i class="fa-brands fa-whatsapp" style="color:#25d366"></i> WhatsApp
+           </label>
          </div>
-         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado.</div>
+         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado. WhatsApp vai no privado de quem tem número cadastrado no Perfil.</div>
        </div>
      `;
      document.getElementById('modalFooter').innerHTML = `
@@ -3068,6 +3054,7 @@
        const channels = [];
        if (document.getElementById('na-notif-push')?.checked)  channels.push('push');
        if (document.getElementById('na-notif-email')?.checked) channels.push('email');
+       if (document.getElementById('na-notif-whatsapp')?.checked) channels.push('whatsapp');
 
        if (!title || !deadline || !deadlineTime || !desc) {
          Utils.showToast('Preencha título, prazo, horário e descrição.', 'error'); return;

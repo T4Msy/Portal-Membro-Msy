@@ -194,6 +194,45 @@
        }
      },
    };
+
+   /* ============================================================
+      WhatsAppManager — mensagens pelo bot Corvus (/api/whatsapp)
+      ============================================================ */
+   /** @global {object} WhatsAppManager — envia WhatsApp via /api/whatsapp (Vercel → bot Corvus).
+    *  Mensagens no privado entram numa fila com intervalo, porque o bot recusa
+    *  envios a menos de 5 s um do outro. */
+   const WhatsAppManager = {
+     DM_GAP_MS: 6000,
+     _queue: Promise.resolve(),
+     _lastDm: 0,
+
+     async request(method, body) {
+       const { data: { session } } = await db.auth.getSession();
+       const res = await fetch('/api/whatsapp', {
+         method,
+         headers: { Authorization: `Bearer ${session?.access_token || ''}`, 'Content-Type': 'application/json' },
+         body: body ? JSON.stringify(body) : undefined,
+       });
+       const data = await res.json().catch(() => ({}));
+       if (!res.ok) throw Object.assign(new Error(data.erro || `Erro ${res.status}`), { status: res.status });
+       return data;
+     },
+
+     /** Envia no privado do membro respeitando o intervalo da fila. */
+     sendToUser(userId, mensagem) {
+       const job = this._queue.then(async () => {
+         const wait = this.DM_GAP_MS - (Date.now() - this._lastDm);
+         if (wait > 0) await new Promise(r => setTimeout(r, wait));
+         try {
+           return await this.request('POST', { membro: userId, mensagem });
+         } finally {
+           this._lastDm = Date.now();
+         }
+       });
+       this._queue = job.catch(() => {});
+       return job;
+     },
+   };
    
    /* ============================================================
       NotifPrefs — salva preferências e despacha notificações
@@ -249,6 +288,16 @@
              subject: type === 'activity' ? 'Atividade — MSY Portal' : 'Notificação — MSY Portal',
              message: message,
              link:    link,
+           });
+         }
+
+         // WhatsApp vai pela fila (um por vez); não segura quem chamou.
+         if (channels.includes('whatsapp')) {
+           const text = `${icon || '🔔'} *MSY Portal*\n\n${message}${link ? `\n\nAcesse: https://www.portalmsy.site/${link}` : ''}`;
+           WhatsAppManager.sendToUser(targetUserId, text).catch(err => {
+             // 404 = membro sem WhatsApp cadastrado: só registra.
+             console.warn(`[MSY][whatsapp] Não enviado para ${prefs?.name || targetUserId}:`, err.message);
+             if (err.status !== 404) Utils.showToast(`WhatsApp não enviado para ${prefs?.name || 'membro'}: ${err.message}`, 'error');
            });
          }
    
