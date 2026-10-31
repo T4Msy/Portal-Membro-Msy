@@ -21,6 +21,11 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZHpna3hwb3lxYXV4ZGNqeWF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1OTg4OTgsImV4cCI6MjA4OTE3NDg5OH0.HlYCSLVnDF2FlASgUCSyfd3ZMi1VJXCxHszOhwBy9KQ';
 const CORVUS_API_URL = (process.env.CORVUS_API_URL || 'http://163.176.188.246:3000').replace(/\/$/, '');
 const MANAGE_PERMS = ['gerenciar_atividades', 'criar_atividades', 'editar_atividades'];
+// Fase de testes: só estes usuários podem usar (mesma lista de WhatsAppManager em js/push.js).
+const ALLOWED_USERS = [
+  'd15bace3-ea81-4d56-ac21-0af611e6cf1e', // Xitter
+  'bcba3663-c3f9-4e2f-a134-1e2b240f11f6', // Tales Masayoshi
+];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function supabase(path, userToken) {
@@ -56,6 +61,9 @@ async function authorize(req) {
     user = await supabase('/auth/v1/user', token);
   } catch {
     throw Object.assign(new Error('Sessão expirada. Faça login de novo.'), { status: 401 });
+  }
+  if (!ALLOWED_USERS.includes(user.id)) {
+    throw Object.assign(new Error('Notificação por WhatsApp ainda em testes.'), { status: 403 });
   }
 
   const [profiles, perms] = await Promise.all([

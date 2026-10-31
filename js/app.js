@@ -2288,7 +2288,7 @@
      const submitFooter = canRespond
        ? `<button class="btn btn-ghost" id="cancelModal">Cancelar</button><button class="btn btn-primary" id="submitActivity"><i class="fa-solid fa-paper-plane"></i> Enviar Resposta</button>`
        : `<button class="btn btn-outline" id="cancelModal">Fechar</button>`;
-     const notifyBtn = canGerenciar
+     const notifyBtn = canGerenciar && WhatsAppManager.canUse(profile.id)
        ? `<button class="btn btn-outline" id="notifyActivity" style="margin-right:auto"><i class="fa-brands fa-whatsapp"></i> Notificação</button>`
        : '';
      document.getElementById('modalFooter').innerHTML = notifyBtn + submitFooter;
@@ -2772,12 +2772,13 @@
              <input type="checkbox" id="na-notif-email" style="accent-color:#60a5fa;width:15px;height:15px">
              <i class="fa-solid fa-envelope" style="color:#60a5fa"></i> Email
            </label>
+           ${WhatsAppManager.canUse(profile.id) ? `
            <label class="activity-modal-notif" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
              <input type="checkbox" id="na-notif-whatsapp" ${isEditing ? '' : 'checked'} style="accent-color:#25d366;width:15px;height:15px">
              <i class="fa-brands fa-whatsapp" style="color:#25d366"></i> WhatsApp
-           </label>
+           </label>` : ''}
          </div>
-         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado. WhatsApp vai no privado de quem tem número cadastrado no Perfil.</div>
+         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado.${WhatsAppManager.canUse(profile.id) ? ' WhatsApp vai no privado de quem tem número cadastrado no Perfil.' : ''}</div>
        </div>
      `;
      document.getElementById('modalFooter').innerHTML = `

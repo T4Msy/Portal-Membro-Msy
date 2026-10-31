@@ -202,9 +202,19 @@
     *  Mensagens no privado entram numa fila com intervalo, porque o bot recusa
     *  envios a menos de 5 s um do outro. */
    const WhatsAppManager = {
+     // Fase de testes: só Xitter e Tales veem as opções de WhatsApp.
+     // A mesma lista é conferida no servidor (api/whatsapp.js).
+     ALLOWED_USERS: [
+       'd15bace3-ea81-4d56-ac21-0af611e6cf1e', // Xitter
+       'bcba3663-c3f9-4e2f-a134-1e2b240f11f6', // Tales Masayoshi
+     ],
      DM_GAP_MS: 6000,
      _queue: Promise.resolve(),
      _lastDm: 0,
+
+     canUse(userId) {
+       return this.ALLOWED_USERS.includes(userId);
+     },
 
      async request(method, body) {
        const { data: { session } } = await db.auth.getSession();
