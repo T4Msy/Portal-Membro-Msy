@@ -1976,6 +1976,31 @@
      return data;
    }
 
+   /** Só dígitos; sem DDI (10–11 dígitos) assume Brasil. '' → null (apagar), inválido → false. */
+   function normalizeWhatsapp(value) {
+     let digits = String(value || '').replace(/\D/g, '');
+     if (!digits) return null;
+     if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+     return /^[0-9]{12,13}$/.test(digits) ? digits : false;
+   }
+
+   async function loadWhatsappInto(inputId, userId) {
+     const { data, error } = await db.from('member_whatsapp').select('whatsapp').eq('user_id', userId).maybeSingle();
+     if (error) { console.warn('[MSY][whatsapp] Erro ao carregar WhatsApp:', error); return; }
+     const input = document.getElementById(inputId);
+     if (input && data?.whatsapp) input.value = `+${data.whatsapp}`;
+   }
+
+   async function saveWhatsapp(userId, whatsapp) {
+     const { error } = whatsapp
+       ? await db.from('member_whatsapp').upsert({ user_id: userId, whatsapp, updated_at: new Date().toISOString() })
+       : await db.from('member_whatsapp').delete().eq('user_id', userId);
+     if (error) {
+       console.error('[MSY][whatsapp] Erro ao salvar WhatsApp:', error);
+       Utils.showToast('Não foi possível salvar o WhatsApp.', 'error');
+     }
+   }
+
    function defaultActivityNotice(act) {
      const deadline = Utils.hasExtendedDeadline(act)
        ? Utils.formatActivityDeadline(act.extended_deadline, act.extended_deadline_time)
@@ -4392,11 +4417,7 @@
        </div>
      `;
 
-     db.from('member_whatsapp').select('whatsapp').eq('user_id', m.id).maybeSingle().then(({ data, error }) => {
-       if (error) { console.warn('[MSY][membros] Erro ao carregar WhatsApp:', error); return; }
-       const input = document.getElementById('em-whatsapp');
-       if (input && data?.whatsapp) input.value = `+${data.whatsapp}`;
-     });
+     loadWhatsappInto('em-whatsapp', m.id);
    
      footer.innerHTML = `
        <button class="btn btn-ghost" id="editMemberCancel">Cancelar</button>
@@ -4427,21 +4448,13 @@
    
        if (!name) { Utils.showToast('Nome obrigatório.', 'error'); return; }
 
-       // WhatsApp: só dígitos; sem DDI (10–11 dígitos) assume Brasil (55).
-       let whatsapp = document.getElementById('em-whatsapp').value.replace(/\D/g, '');
-       if (whatsapp.length === 10 || whatsapp.length === 11) whatsapp = `55${whatsapp}`;
-       if (whatsapp && !/^[0-9]{12,13}$/.test(whatsapp)) { Utils.showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
+       const whatsapp = normalizeWhatsapp(document.getElementById('em-whatsapp').value);
+       if (whatsapp === false) { Utils.showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
 
        const btn = document.getElementById('editMemberSave');
        btn.disabled = true; btn.textContent = 'Salvando...';
 
-       const { error: waError } = whatsapp
-         ? await db.from('member_whatsapp').upsert({ user_id: m.id, whatsapp, updated_at: new Date().toISOString() })
-         : await db.from('member_whatsapp').delete().eq('user_id', m.id);
-       if (waError) {
-         console.error('[MSY][membros] Erro ao salvar WhatsApp:', waError);
-         Utils.showToast('Não foi possível salvar o WhatsApp.', 'error');
-       }
+       await saveWhatsapp(m.id, whatsapp);
 
        const { error } = await db.from('profiles').update({ name, initials: initials||Utils.getInitials(name), role, color, bio, status, join_date }).eq('id', m.id);
        if (!error) {
@@ -7819,6 +7832,11 @@
                <input class="form-input" type="date" id="p-birthdate" value="${profile.birth_date||''}" max="${new Date().toISOString().split('T')[0]}">
                <div style="font-size:.7rem;color:var(--text-3);margin-top:4px">Apenas você pode editar esta informação.</div>
              </div>
+             <div class="form-group" style="margin-bottom:14px">
+               <label class="form-label"><i class="fa-brands fa-whatsapp" style="color:var(--gold)"></i> WhatsApp</label>
+               <input class="form-input" id="p-whatsapp" inputmode="tel" placeholder="(34) 99999-9999">
+               <div style="font-size:.7rem;color:var(--text-3);margin-top:4px">Para receber avisos do bot Corvus no privado. Só a diretoria e quem gerencia atividades vê.</div>
+             </div>
              <div class="form-group" style="margin-bottom:18px">
                <label class="form-label">Cor do Avatar</label>
                <div class="color-picker-row" id="colorPickerRow">
@@ -8226,19 +8244,25 @@
        else Utils.showToast('Erro ao remover foto.', 'error');
      });
    
+     loadWhatsappInto('p-whatsapp', profile.id);
+
      // Save profile
      document.getElementById('saveProfileBtn').addEventListener('click', async () => {
        const name     = document.getElementById('p-name').value.trim();
        const initials = document.getElementById('p-initials').value.trim().toUpperCase().slice(0, 2);
        const bio      = document.getElementById('p-bio').value.trim();
        const color    = document.getElementById('p-color').value;
-   
+
        if (!name) { Utils.showToast('Nome obrigatório.', 'error'); return; }
-   
+
+       const whatsapp = normalizeWhatsapp(document.getElementById('p-whatsapp').value);
+       if (whatsapp === false) { Utils.showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
+
        const btn = document.getElementById('saveProfileBtn');
        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
-   
+
        const birth_date = document.getElementById('p-birthdate')?.value || null;
+       await saveWhatsapp(profile.id, whatsapp);
    
        const { error } = await db.from('profiles').update({
          name,
