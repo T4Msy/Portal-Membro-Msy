@@ -9,6 +9,7 @@
 //   PUT      /<bucket>/<caminho>      logado; só no próprio caminho (1º nível = seu id, ou avatars/<seu id>)
 //   DELETE   /<bucket>/<caminho>      dono do caminho ou diretoria (Jornal: editores)
 //   POST     /_import {bucket, path}  diretoria; copia um arquivo do Supabase Storage para o R2
+//   POST     /_cleanup[?dry=1]       diretoria; apaga órfãos com mais de 7 dias (máx. 1x a cada 20h)
 //
 // Login: valida o JWT do Supabase (ES256) pela chave PÚBLICA do projeto (JWKS). Nenhum segredo aqui.
 // Binding necessário: R2 bucket "MEDIA" -> msy-portal-media.
@@ -169,6 +170,63 @@ async function handleDelete(req, env, target, user) {
   return json(req, { removed: target.key })
 }
 
+// ---------- Limpeza de órfãos ----------
+// Disparada pelo portal quando alguém da diretoria entra (POST /_cleanup), no máximo 1x a cada
+// 20h. Apaga do R2 arquivos com mais de 7 dias que nenhuma tabela cita (public.media_unreferenced).
+// Mesmas travas da limpeza do Supabase: até 300 por vez e nada se >60% parecer órfão.
+const CLEANUP_MARKER = '_meta/last-cleanup'
+const CLEANUP_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const CLEANUP_EVERY_MS = 20 * 60 * 60 * 1000
+const CLEANUP_MAX = 300
+const CLEANUP_MAX_RATIO = 0.6
+const SAFE_NAME = /^[A-Za-z0-9._-]+$/
+
+async function handleCleanup(req, env, user, url) {
+  if (!(await isDiretoria(req, user))) return json(req, { error: 'Só a diretoria.' }, 403)
+  const dry = url.searchParams.get('dry') === '1'
+  const marker = await env.MEDIA.head(CLEANUP_MARKER)
+  const lastAt = Number(marker?.customMetadata?.at || 0)
+  if (!dry && Date.now() - lastAt < CLEANUP_EVERY_MS) return json(req, { skipped: 'recente', lastAt: new Date(lastAt).toISOString() })
+
+  const objects = []
+  let cursor
+  do {
+    const page = await env.MEDIA.list({ cursor, limit: 1000 })
+    objects.push(...page.objects.filter((o) => !o.key.startsWith('_meta/')))
+    cursor = page.truncated ? page.cursor : undefined
+  } while (cursor)
+
+  const baseName = (key) => key.split('/').pop()
+  const old = objects.filter((o) => o.uploaded.getTime() < Date.now() - CLEANUP_MIN_AGE_MS && SAFE_NAME.test(baseName(o.key)))
+  const unreferenced = new Set()
+  const names = [...new Set(old.map((o) => baseName(o.key)))]
+  for (let i = 0; i < names.length; i += 1000) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/media_unreferenced`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${user.token}`, apikey: req.headers.get('apikey') || '', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_names: names.slice(i, i + 1000) }),
+    })
+    if (!res.ok) return json(req, { error: `media_unreferenced ${res.status}` }, 502)
+    for (const n of await res.json()) unreferenced.add(n)
+  }
+  const orphans = old.filter((o) => unreferenced.has(baseName(o.key)))
+
+  if (objects.length && orphans.length / objects.length > CLEANUP_MAX_RATIO) {
+    console.error('[MSY][media-cleanup] Abortado: proporção suspeita', { total: objects.length, orphans: orphans.length })
+    return json(req, { error: 'Proporção de órfãos suspeita, nada foi apagado.', total: objects.length, orphans: orphans.length }, 409)
+  }
+  const batch = orphans.slice(0, CLEANUP_MAX)
+  const bytes = batch.reduce((sum, o) => sum + o.size, 0)
+  if (dry) return json(req, { dry: true, total: objects.length, orphans: orphans.length, bytes, keys: batch.map((o) => o.key) })
+
+  if (batch.length) await env.MEDIA.delete(batch.map((o) => o.key))
+  await env.MEDIA.put(CLEANUP_MARKER, JSON.stringify({ removed: batch.length, bytes }), {
+    customMetadata: { at: String(Date.now()), by: user.id },
+  })
+  console.log('[MSY][media-cleanup]', { total: objects.length, removed: batch.length, bytes, keys: batch.map((o) => o.key) })
+  return json(req, { total: objects.length, removed: batch.length, bytes, remaining: orphans.length - batch.length })
+}
+
 // Copia do Supabase Storage (público) para o R2. Usado uma vez na migração; não sobrescreve.
 async function handleImport(req, env, user) {
   if (!(await isDiretoria(req, user))) return json(req, { error: 'Só a diretoria.' }, 403)
@@ -194,6 +252,10 @@ export default {
       if (url.pathname === '/_import' && req.method === 'POST') {
         const user = await verifyUser(req)
         return user ? handleImport(req, env, user) : json(req, { error: 'Unauthorized' }, 401)
+      }
+      if (url.pathname === '/_cleanup' && req.method === 'POST') {
+        const user = await verifyUser(req)
+        return user ? handleCleanup(req, env, user, url) : json(req, { error: 'Unauthorized' }, 401)
       }
       const target = parseKey(url.pathname)
       if (!target) return json(req, { error: 'Not found' }, 404)

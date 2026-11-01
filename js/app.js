@@ -488,6 +488,7 @@
      /* Aplicar ViewMode: mascara tier se admin estiver em modo visualizacao */
      const profile = ViewMode.maskProfile(profileRaw);
      const isRealAdmin = profileRaw.tier === 'diretoria';
+     if (isRealAdmin) _scheduleMediaCleanup();
      if (!await MSYTabAccess.guardPage(activePage, profile)) return null;
 
      /* Injetar banner de ViewMode se ativo */
@@ -1455,6 +1456,32 @@
    }
    async function _activityFiles() {
      return (await _mediaStore()).createMediaStorage(db).from('activity-files');
+   }
+
+   // Limpeza de órfãos do R2: roda em segundo plano quando a diretoria abre o portal.
+   // O Worker só executa de fato 1x a cada 20h; aqui evita repetir a chamada no mesmo dia.
+   function _scheduleMediaCleanup() {
+     const key = 'msy_media_cleanup_day';
+     const today = new Date().toISOString().slice(0, 10);
+     try { if (localStorage.getItem(key) === today) return; } catch { /* sem storage: Worker limita */ }
+     setTimeout(async () => {
+       try {
+         const { data } = await db.auth.getSession();
+         if (!data?.session) return;
+         const { MEDIA_BASE_URL } = await _mediaStore();
+         const res = await fetch(`${MEDIA_BASE_URL}/_cleanup`, {
+           method: 'POST',
+           headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: db.supabaseKey },
+         });
+         if (res.ok) {
+           try { localStorage.setItem(key, today); } catch { /* ignore */ }
+         } else {
+           console.warn('[MSY][media-cleanup] Worker respondeu', res.status);
+         }
+       } catch (err) {
+         console.warn('[MSY][media-cleanup]', err);
+       }
+     }, 8000);
    }
 
    function _buildAttachmentStoragePath(profileId, fileName, scope = 'activity-attachments') {
