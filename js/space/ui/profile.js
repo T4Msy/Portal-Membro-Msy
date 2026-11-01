@@ -35,6 +35,7 @@ export function openProfileCard({ profile, ownProfile, workspace }) {
   };
   render();
   document.body.appendChild(wrap);
+  wrap.querySelector('[data-close]')?.focus();
   let removals = new Set();
   const previews = new Map();
   const close = () => { for (const url of previews.values()) URL.revokeObjectURL(url); wrap.remove(); };

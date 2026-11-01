@@ -73,12 +73,16 @@ export class SpaceStore {
     void canManageSpace().then((canManage) => this.patch({ canManage }))
     // Estrutura ao vivo (canal criado/apagado no site aparece aqui), como o 'space:workspace' do site.
     let ch = supabase.channel('space:workspace', { config: { private: true } })
-    for (const table of ['space_channels', 'space_categories', 'space_channel_members']) {
+    for (const table of ['space_channels', 'space_categories']) {
       ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
         if (this.reloadTimer) clearTimeout(this.reloadTimer)
         this.reloadTimer = setTimeout(() => void this.reload().catch(() => undefined), 300)
       })
     }
+    ch = ch.on('broadcast', { event: 'membership_changed' }, () => {
+      if (this.reloadTimer) clearTimeout(this.reloadTimer)
+      this.reloadTimer = setTimeout(() => void this.reload().catch(() => undefined), 300)
+    })
     this.structure = ch.subscribe()
 
     // Presença global: quem está em cada sala de voz (mesmo formato do site).
@@ -91,6 +95,7 @@ export class SpaceStore {
 
   async reload(): Promise<void> {
     const w = await loadWorkspace()
+    if (this.snap.voiceRoom && !w.channels.some((room) => room.id === this.snap.voiceRoom?.id)) this.leaveVoice()
     this.patch({ ...w, ready: true })
   }
 
@@ -121,7 +126,7 @@ export class SpaceStore {
     if (current && this.snap.voiceRoom?.id === room.id && current.getSnapshot().status !== 'error') return current
     current?.leave()
     const voice = new MobileVoice(this.userId, room.is_temporary, (state) => {
-      this.meta = { ...this.meta, voice: state }
+      this.meta = { ...this.meta, voice: room.is_private ? null : state }
       this.throttle.push(this.meta)
     })
     // Caiu com erro (sala cheia, sem conexão): some da barra de "voz conectada".

@@ -51,7 +51,6 @@ export class VoiceRoomView {
     this.shownReactions = new Set();
     this.selectedScreen = null;
     this.menu = null; // 'screen' | 'react' | null
-    this.volumeFor = null;
     this.focusKey = null; // quadro em destaque (clicou na câmera de alguém, como no Discord)
     this.withAudio = true;
     this.onChange = () => this.render();
@@ -77,13 +76,6 @@ export class VoiceRoomView {
     }, { signal });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) unlockOrientation(); }, { signal });
     // Botão direito (ou toque longo) no quadro de alguém: volume dessa pessoa.
-    this.el.addEventListener('contextmenu', (e) => {
-      const tile = e.target.closest('.sp-tile[data-remote]');
-      if (!tile) return;
-      e.preventDefault();
-      this.volumeFor = this.volumeFor === tile.dataset.key ? null : tile.dataset.key;
-      this.render();
-    }, { signal });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.focusKey && !document.fullscreenElement) { this.focusKey = null; this.render(); }
     }, { signal });
@@ -209,7 +201,6 @@ export class VoiceRoomView {
   }
 
   tileModels(snap) {
-    const vol = this.voice.prefs.get().userVolumes || {};
     const look = (userId) => {
       const p = this.workspace.profile(userId);
       return { profile: p, name: displayName(p), color: safeColor(p?.color, '#d9d9d9') };
@@ -218,13 +209,12 @@ export class VoiceRoomView {
       key: snap.local.sessionId, userId: this.me.id, ...look(this.me.id), isLocal: true,
       muted: snap.local.muted || !snap.local.micAvailable, deafened: snap.local.deafened,
       speaking: snap.local.speaking && !snap.local.muted, sharing: Boolean(snap.local.screen),
-      camera: snap.local.camera, link: null, stats: null, voiceVolume: 1, streamVolume: 1,
+      camera: snap.local.camera, link: null, stats: null,
     };
     return [local, ...snap.participants.map((p) => ({
       key: p.sessionId, userId: p.userId, ...look(p.userId), isLocal: false,
       muted: p.meta.muted, deafened: p.meta.deafened, speaking: p.speaking && !p.meta.muted,
       sharing: p.meta.screen, camera: liveCamera(p.camera), link: p.link, stats: p.stats,
-      voiceVolume: vol[p.userId] ?? 1, streamVolume: vol[`${p.userId}:stream`] ?? 1,
     }))];
   }
 
@@ -258,7 +248,7 @@ export class VoiceRoomView {
           <div class="sp-tile-foot"><button class="sp-tile-name" data-space-user="${esc(t.userId)}"></button><span class="sp-grow"></span><span class="sp-tile-icons"></span></div>
           <div class="sp-tile-conn" hidden></div><div class="sp-tile-stats" hidden></div><div class="sp-tile-fx"></div>
           <button class="sp-tile-full" data-act="tile-full" title="Tela cheia" aria-label="Ver câmera em tela cheia">${icon('fa-expand')}</button>
-          ${t.isLocal ? '' : `<button class="sp-tile-vol" data-act="tile-volume" title="Volume desta pessoa" aria-label="Volume desta pessoa">${icon('fa-sliders')}</button>`}`;
+          ${t.isLocal ? '' : `<button class="sp-tile-vol" data-member-menu data-user="${esc(t.userId)}" aria-haspopup="menu" title="Ações do membro" aria-label="Ações para ${esc(t.name)}">${icon('fa-ellipsis')}</button>`}`;
         if (!t.isLocal) node.dataset.remote = '1';
         this.tiles.set(t.key, node);
       }
@@ -314,26 +304,7 @@ export class VoiceRoomView {
       if (t.stats && !compact) stats.textContent = `${t.stats.rttMs !== null ? `${t.stats.rttMs} ms · ` : ''}${formatKbps(t.stats.inKbps)}${t.stats.relayed ? ' · TURN' : ''}`;
 
       this.renderReactions(node.querySelector('.sp-tile-fx'), snap.reactions.filter((r) => r.sessionId === t.key));
-      this.renderVolumeMenu(node, t);
     });
-  }
-
-  renderVolumeMenu(node, t) {
-    let menu = node.querySelector('.sp-volume');
-    if (this.volumeFor !== t.key || t.isLocal) { menu?.remove(); return; }
-    if (!menu) {
-      menu = document.createElement('div');
-      menu.className = 'sp-volume';
-      menu.innerHTML = `
-        <label>Voz <span data-v="voice"></span><input type="range" min="0" max="2" step="0.05" data-vol="voice"></label>
-        <label>Áudio da transmissão <span data-v="stream"></span><input type="range" min="0" max="3" step="0.05" data-vol="stream"></label>
-        <button class="btn btn-ghost btn-sm" data-act="volume-close">Fechar</button>`;
-      menu.querySelector('[data-vol="voice"]').value = t.voiceVolume;
-      menu.querySelector('[data-vol="stream"]').value = t.streamVolume;
-      node.appendChild(menu);
-    }
-    menu.querySelector('[data-v="voice"]').textContent = `${Math.round(t.voiceVolume * 100)}%`;
-    menu.querySelector('[data-v="stream"]').textContent = `${Math.round(t.streamVolume * 100)}%`;
   }
 
   renderReactions(fx, reactions) {
@@ -458,8 +429,6 @@ export class VoiceRoomView {
       case 'pip': this.togglePip(); break;
       case 'call-pip': await this.pip?.toggle(); this.render(); break;
       case 'tile-full': this.fullscreenTile(btn.closest('.sp-tile')); break;
-      case 'volume-close': this.volumeFor = null; this.render(); break;
-      case 'tile-volume': { const k = btn.closest('.sp-tile')?.dataset.key; this.volumeFor = this.volumeFor === k ? null : k; this.render(); break; }
       case 'copy-code': this.copy(this.channel.join_code, 'Código copiado.'); break;
       case 'copy-link': this.copy(`${location.origin}/space.html?sala=${encodeURIComponent(this.channel.join_code)}`, 'Link copiado.'); break;
       case 'close-room': await this.closeRoom(); break;
@@ -471,10 +440,6 @@ export class VoiceRoomView {
     const t = e.target;
     if (t.matches('[data-preset]')) this.voice.setScreenPreset(t.value);
     if (t.matches('[data-with-audio]')) this.withAudio = t.checked;
-    if (t.matches('[data-vol]')) {
-      const userId = t.closest('.sp-tile')?.dataset.user;
-      if (userId) this.voice.setUserVolume(userId, Number(t.value), t.dataset.vol);
-    }
   }
 
   async copy(text, ok) {

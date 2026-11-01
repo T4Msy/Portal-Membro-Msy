@@ -270,3 +270,17 @@ Limitações conhecidas:
   lado da marca; ao clicar abre a janela `openAppDownload()` (`ui/app-download.js`): versão/tamanho/data (de
   `latest.json`), o que o app faz, como instalar e o botão "Baixar app". Não aparece no iPhone.
 - Testado no site publicado: ícone no cabeçalho, janela com "Versão 0.5 · 48 MB · 22/10/2026", sem o cartão antigo.
+
+## 31/10/2026 — Menu de membros, canais administráveis e DMs (implementação local)
+- Adicionado menu acessível para membros da sala: perfil, abrir DM e volume somente quando há track de áudio remoto; volume local salvo em `space_preferences` e normalizado ao voltar a 100%. Áudio de tela mantém seu controle próprio.
+- Adicionada criação e edição de canais permanentes de texto/voz, categorias e membros autorizados via RPC `space_save_channel`. A permissão é `gerenciar_space` (diretoria ou permissão atribuída pelo painel Permissões).
+- Adicionadas conversas individuais, histórico paginado, envio otimista, atualização por Realtime e inbox por usuário. RLS e autorização dos tópicos estão na migration incremental `20261031_msy_space_channels_dm.sql`.
+- A migration também remove o acesso implícito do criador a canais privados existentes, preservando-o como membro explícito, impede movimentar mensagens para canal sem acesso e oculta salas privadas da presença global.
+- Verificações locais: `node --check` nos nove módulos JS alterados, `node --test --test-isolation=none tests/commission-calculator.test.mjs` (8 aprovados) e `git diff --check`. Não havia `psql`/Supabase CLI disponível para validar SQL localmente. Migration permanece sem execução remota; teste visual entre contas continua pendente após revisão/aplicação da migration.
+
+## 01/11/2026 — Diagnóstico de DM e reconciliação do Realtime
+- A chamada do menu é `space_dm_start({ p_peer })`, compatível com `public.space_dm_start(p_peer uuid)` na migration local. A função usa par único e `ON CONFLICT`, então reabrir a mesma conversa não cria outra.
+- A abertura da DM agora coalesce chamadas simultâneas para o mesmo membro, mostra estado de carregamento e registra status HTTP, código, mensagem, detalhes e dica retornados pela API sem expor credenciais. O erro PGRST202 ganha instrução para conferir migration/cache.
+- `space:workspace` já reconectava após `heartbeat timeout`; ao voltar para `SUBSCRIBED`, o cliente agora recarrega canais/categorias/membros para recuperar mudanças ocorridas durante a queda. Logs repetidos idênticos continuam deduplicados.
+- O projeto configurado é `lldzgkxpoyqauxdcjyaw`. Não há acesso remoto/CLI/psql nesta sessão, então não foi possível confirmar se as migrations sociais foram aplicadas nem capturar o JSON completo do 404 reportado. Validação com duas contas e terceira conta segue pendente.
+- Migration corretiva local: `supabase/migrations/20261101_msy_space_rpc_realtime_cache.sql`. Executar apenas depois da migration social original; verifica assinaturas e privilégios, então envia `NOTIFY pgrst, 'reload schema'`.

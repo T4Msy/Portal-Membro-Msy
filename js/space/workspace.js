@@ -1,5 +1,5 @@
 // Estrutura do MSY Space: categorias, canais e perfis do portal.
-// Atualiza ao vivo pelo tópico privado 'space:workspace' (postgres_changes filtrado por RLS).
+// Atualiza ao vivo: alterações de canais por Postgres Changes; membresias via broadcast sem dados.
 import { supabase } from './lib/supabase.js';
 
 const PROFILE_FIELDS = 'id,name,initials,tier';
@@ -11,24 +11,28 @@ export class Workspace extends EventTarget {
     this.me = me;
     this.categories = [];
     this.channels = [];
+    this.channelMembers = new Map();
     this.profiles = new Map();
     this.canManage = false;
     this.channel = null;
     this.reloadTimer = null;
+    this.channelIssue = null;
   }
 
   async load() {
-    const [cats, chans, profs, spaceProfiles, manage] = await Promise.all([
+    const [cats, chans, profs, spaceProfiles, manage, memberships] = await Promise.all([
       supabase.from('space_categories').select('*').order('position'),
       supabase.from('space_channels').select('*').order('position').order('created_at'),
       supabase.from('profiles').select(PROFILE_FIELDS).eq('status', 'ativo'),
       supabase.from('space_profiles').select(SPACE_PROFILE_FIELDS),
       supabase.rpc('space_can_manage'),
+      supabase.from('space_channel_members').select('channel_id,user_id'),
     ]);
     if (cats.error) throw cats.error;
     if (chans.error) throw chans.error;
     if (profs.error) throw profs.error;
     if (spaceProfiles.error) throw spaceProfiles.error;
+    if (memberships.error) throw memberships.error;
     this.categories = cats.data || [];
     this.channels = chans.data || [];
     const custom = new Map((spaceProfiles.data || []).map((p) => [p.user_id, p]));
@@ -47,20 +51,31 @@ export class Workspace extends EventTarget {
       }];
     }));
     this.canManage = manage.data === true;
+    this.channelMembers = new Map();
+    for (const row of memberships.data || []) {
+      if (!this.channelMembers.has(row.channel_id)) this.channelMembers.set(row.channel_id, []);
+      this.channelMembers.get(row.channel_id).push(row.user_id);
+    }
     this.emit();
   }
 
   async reloadChannels() {
-    const [cats, chans] = await Promise.all([
+    const [cats, chans, memberships] = await Promise.all([
       supabase.from('space_categories').select('*').order('position'),
       supabase.from('space_channels').select('*').order('position').order('created_at'),
+      supabase.from('space_channel_members').select('channel_id,user_id'),
     ]);
-    if (cats.error || chans.error) {
-      console.warn('[MSY][space] Falha ao atualizar canais:', cats.error || chans.error);
+    if (cats.error || chans.error || memberships.error) {
+      console.warn('[MSY][space] Falha ao atualizar canais:', cats.error || chans.error || memberships.error);
       return;
     }
     this.categories = cats.data || [];
     this.channels = chans.data || [];
+    this.channelMembers = new Map();
+    for (const row of memberships.data || []) {
+      if (!this.channelMembers.has(row.channel_id)) this.channelMembers.set(row.channel_id, []);
+      this.channelMembers.get(row.channel_id).push(row.user_id);
+    }
     this.emit();
   }
 
@@ -70,12 +85,31 @@ export class Workspace extends EventTarget {
       clearTimeout(this.reloadTimer);
       this.reloadTimer = setTimeout(() => this.reloadChannels(), 300);
     };
+    if (this.channel) supabase.removeChannel(this.channel);
     let ch = supabase.channel('space:workspace', { config: { private: true } });
-    for (const table of ['space_channels', 'space_categories', 'space_channel_members']) {
+    for (const table of ['space_channels', 'space_categories']) {
       ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, schedule);
     }
-    this.channel = ch.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') console.warn('[MSY][space] Canal de estrutura indisponível.');
+    ch = ch.on('broadcast', { event: 'membership_changed' }, schedule);
+    this.channel = ch.subscribe((status, error) => {
+      if (status === 'SUBSCRIBED') {
+        if (this.channelIssue) {
+          console.info('[MSY][space] Canal de estrutura restabelecido; atualizando estrutura após a reconexão.');
+          schedule();
+        }
+        this.channelIssue = null;
+        return;
+      }
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        const message = typeof error === 'string' ? error : error?.message || null;
+        const details = typeof error === 'string' ? null : error?.details || error?.hint || null;
+        const issue = `${status}:${error?.code || ''}:${message || ''}:${details || ''}`;
+        if (issue === this.channelIssue) return;
+        this.channelIssue = issue;
+        console.warn('[MSY][space] Falha ao assinar space:workspace:', {
+          status, code: error?.code || null, message, details,
+        });
+      }
     });
   }
 

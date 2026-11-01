@@ -9,6 +9,10 @@ import { ChatView } from './ui/chat.js';
 import { VoiceRoomView } from './ui/voice-room.js';
 import { CallDock } from './ui/call-dock.js';
 import { CallPip } from './ui/call-pip.js';
+import { DmView } from './ui/dm.js';
+import { MemberMenu } from './ui/member-menu.js';
+import { supabase } from './lib/supabase.js';
+import { rpcErrorContext, rpcFailureMessage } from './lib/rpc-error.js';
 import { esc, icon, toast } from './ui/dom.js';
 import { followVisualViewport } from './ui/viewport.js';
 import { openProfileCard } from './ui/profile.js?v=20261023-avatar8mb';
@@ -79,6 +83,53 @@ async function initSpace() {
   let view = null;
   let selectedId = null;
   let shellOn = false;
+  let dmOpening = null;
+  const openDirectMessage = (peerId = null) => {
+    if (dmOpening) {
+      if (dmOpening.peerId === peerId) return dmOpening.promise;
+      return dmOpening.promise.catch(() => {}).then(() => openDirectMessage(peerId));
+    }
+    const promise = (async () => {
+      let conversationId = null;
+      if (peerId) {
+        const target = workspace.profile(peerId);
+        const loading = document.createElement('div');
+        loading.className = 'sp-dm-opening'; loading.setAttribute('role', 'status'); loading.setAttribute('aria-live', 'polite');
+        loading.innerHTML = `<span><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Abrindo conversa com ${esc(target?.name || 'membro')}…</span>`;
+        main.setAttribute('aria-busy', 'true'); main.appendChild(loading);
+        let response;
+        try {
+          response = await supabase.rpc('space_dm_start', { p_peer: peerId });
+        } catch (error) {
+          loading.remove(); main.removeAttribute('aria-busy');
+          console.error('[MSY][space] Falha ao abrir DM:', rpcErrorContext(error));
+          toast(rpcFailureMessage(error, 'space_dm_start', 'Não foi possível abrir a conversa. Verifique sua conexão.'), 'error');
+          return;
+        }
+        const { data, error, status, statusText } = response;
+        if (error) {
+          loading.remove(); main.removeAttribute('aria-busy');
+          console.error('[MSY][space] Falha ao abrir DM:', rpcErrorContext(error, { status, statusText }));
+          toast(/INVALID_PEER/.test(error.message || '') ? 'Este membro não está disponível para conversa.'
+            : /FORBIDDEN|42501/i.test(error.message || '') ? 'Você não tem permissão para abrir esta conversa.'
+              : rpcFailureMessage({ ...error, status }, 'space_dm_start', 'Não foi possível abrir a conversa. Verifique sua conexão.'), 'error');
+          return;
+        }
+        conversationId = data;
+        loading.remove(); main.removeAttribute('aria-busy');
+      }
+      view?.destroy(); view = null; selectedId = null;
+      nav.select(null); app.classList.remove('is-nav-open');
+      if (shellOn) shell.showSpace();
+      history.replaceState(null, '', 'space.html#dm'); shell.spaceUrl = 'space.html#dm';
+      view = new DmView(main, { workspace, me: profile, onToggleNav: toggleNav, initialConversation: conversationId });
+      await view.mount(); dock.render();
+    })();
+    dmOpening = { peerId, promise };
+    const clear = () => { if (dmOpening?.promise === promise) dmOpening = null; };
+    promise.then(clear, clear);
+    return promise;
+  };
 
   const select = (id) => {
     const channel = workspace.getChannel(id);
@@ -105,8 +156,15 @@ async function initSpace() {
     else main.innerHTML = `<div class="sp-lobby"><div class="sp-lobby-orb">${icon('fa-satellite-dish')}</div><h2>Nenhum canal ainda</h2><p class="sp-muted">A gestão do Space ainda não criou canais.</p></div>`;
   };
 
-  const nav = new SpaceNav(content.querySelector('.sp-nav'), { workspace, voice, online, me: profile, onSelect: select });
+  const nav = new SpaceNav(content.querySelector('.sp-nav'), { workspace, voice, online, me: profile, onSelect: select, onOpenDM: () => openDirectMessage() });
   nav.mount();
+
+  const memberMenu = new MemberMenu({ workspace, voice, me: profile, onDirectMessage: (id) => openDirectMessage(id) });
+  memberMenu.mount();
+  document.addEventListener('space:open-profile', (event) => {
+    const person = workspace.profile(event.detail?.userId);
+    if (person) openProfileCard({ profile: person, ownProfile: person.id === profile.id, workspace });
+  });
 
   const shell = new CallShell({
     voice,
@@ -124,6 +182,7 @@ async function initSpace() {
 
   // Canal sumiu (sala encerrada / acesso removido): volta para um canal válido.
   workspace.addEventListener('change', () => {
+    if (voice.channelId && !workspace.getChannel(voice.channelId)) voice.leave();
     if (selectedId && !workspace.getChannel(selectedId)) showFirst();
   });
 
@@ -135,12 +194,17 @@ async function initSpace() {
     history.replaceState(null, '', 'space.html');
     await nav.joinByCode(params.get('sala'));
   }
-  if (!selectedId) {
+  if (location.hash === '#dm') await openDirectMessage();
+  if (!selectedId && location.hash !== '#dm') {
     const target = [fromHash, last].find((id) => id && workspace.getChannel(id));
     if (target) select(target); else showFirst();
   }
 
-  window.addEventListener('pagehide', () => { online.stop(); workspace.close(); prefs.flushOnExit(); });
+  window.addEventListener('pagehide', () => { view?.destroy(); memberMenu.destroy(); online.stop(); workspace.close(); prefs.flushOnExit(); });
+  const authListener = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) { view?.destroy(); memberMenu.destroy(); online.stop(); workspace.close(); }
+  });
+  window.addEventListener('pagehide', () => authListener.data?.subscription?.unsubscribe?.(), { once: true });
   // Aba indo para o fundo (no celular pode nunca mais voltar): grava as preferências pendentes.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') prefs.flushOnExit(); });
 }
