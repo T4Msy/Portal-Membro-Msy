@@ -1394,8 +1394,11 @@
    /* ============================================================
       UTILS: ANEXOS — tipos de arquivo e ícones
       ============================================================ */
-   const ACTIVITY_FILE_MAX_BYTES = 100 * 1024 * 1024;
-   const ACTIVITY_FILE_MAX_LABEL = '100MB';
+   // Arquivos grandes custam tráfego toda vez que alguém abre (cota de egress do Supabase).
+   // O bucket activity-files também barra acima de 20MB.
+   const ACTIVITY_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
+   const ACTIVITY_FILE_MAX_BYTES = 10 * 1024 * 1024;
+   const ACTIVITY_FILE_MAX_LABEL = '20MB para vídeos e 10MB para outros arquivos';
 
    const AnexoUtils = {
      getFileIcon(tipo, nome) {
@@ -1448,6 +1451,11 @@
      const stamp = Date.now();
      const nonce = Math.random().toString(36).slice(2, 8);
      return `${profileId}/${scope}/${stamp}_${nonce}_${_sanitizeAttachmentName(fileName)}`;
+   }
+
+   function _isActivityFileTooLarge(file) {
+     const isVideo = AnexoUtils.getFileIcon(file.type, file.name).label === 'Vídeo';
+     return file.size > (isVideo ? ACTIVITY_VIDEO_MAX_BYTES : ACTIVITY_FILE_MAX_BYTES);
    }
 
    function _formatActivityUploadError(error) {
@@ -2239,7 +2247,7 @@
          <div class="upload-zone" id="uploadZone">
            <div class="upload-zone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
            <div class="upload-zone-text">Clique para anexar arquivo (opcional)</div>
-           <div class="upload-zone-hint">PDF, DOC, XLSX, PPTX, PNG, JPG, MP4... — máx. 100MB</div>
+           <div class="upload-zone-hint">PDF, DOC, XLSX, PPTX, PNG, JPG, MP4... — vídeo até 20MB, demais até 10MB</div>
            <input type="file" id="fileInput" style="display:none">
          </div>
          <div id="fileChosen" style="font-size:.78rem;color:var(--gold);margin-top:8px;display:none"></div>
@@ -2314,7 +2322,11 @@
 
      function handleFileSelected(f) {
        if (!f) return;
-       if (f.size > ACTIVITY_FILE_MAX_BYTES) { Utils.showToast(`Arquivo muito grande. Máximo: ${ACTIVITY_FILE_MAX_LABEL}.`, 'error'); return; }
+       if (_isActivityFileTooLarge(f)) {
+         if (fileInput) fileInput.value = '';
+         Utils.showToast(`Arquivo muito grande. Máximo: ${ACTIVITY_FILE_MAX_LABEL}.`, 'error');
+         return;
+       }
        fileChosen.innerHTML = `
          <div style="display:flex;align-items:center;gap:8px;background:var(--black-4);border:1px solid var(--border-gold);border-radius:var(--radius);padding:8px 12px">
            <i class="fa-solid fa-paperclip" style="color:var(--gold)"></i>
@@ -2736,7 +2748,7 @@
          <div class="activity-attachment-dropzone" id="na-attachment-zone" role="button" tabindex="0">
            <div class="activity-attachment-dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
            <div class="activity-attachment-dropzone-text">Clique ou arraste arquivos para anexar</div>
-           <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Até 100MB por arquivo.</div>
+           <div class="activity-attachment-dropzone-hint">PDF, imagens, vídeos e documentos. Vídeo até 20MB, demais até 10MB.</div>
            <div class="activity-attachment-dropzone-cta">Selecionar arquivos</div>
          </div>
          <button type="button" class="activity-attachment-open-btn" id="na-attachment-open-btn">
@@ -2925,8 +2937,8 @@
 
        const seen = new Set(attachmentState.files.map(f => `${f.name}_${f.size}_${f.lastModified}`));
        for (const file of incoming) {
-         if (file.size > ACTIVITY_FILE_MAX_BYTES) {
-           Utils.showToast(`Arquivo "${file.name}" é maior que ${ACTIVITY_FILE_MAX_LABEL}.`, 'error');
+         if (_isActivityFileTooLarge(file)) {
+           Utils.showToast(`Arquivo "${file.name}" é grande demais. Máximo: ${ACTIVITY_FILE_MAX_LABEL}.`, 'error');
            continue;
          }
          const key = `${file.name}_${file.size}_${file.lastModified}`;
