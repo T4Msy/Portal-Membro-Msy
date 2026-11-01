@@ -2,7 +2,7 @@
    Cache leve para midia/manifest | HTML/JS/CSS ficam com a rede
    Supabase/CDNs ficam network-only para proteger dados autenticados. */
 
-const CACHE_VERSION  = 'msy-v56-opera-navigation-fix';
+const CACHE_VERSION  = 'msy-v57-r2-network-only';
 const ASSETS_CACHE   = `${CACHE_VERSION}-assets`;
 
 /* Arquivos seguros para cache. Paginas, JS e CSS ficam fora do SW para evitar
@@ -19,6 +19,7 @@ const PRECACHE_ASSETS = [
 const NETWORK_ONLY = [
   'supabase.co',
   'supabase.io',
+  'msy-media.miguelalvesmm08.workers.dev', // arquivos no Cloudflare R2 (js/core/media-store.js)
   'fonts.googleapis.com',
   'cdnjs.cloudflare.com',
   'cdn.jsdelivr.net',
