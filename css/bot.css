@@ -113,7 +113,7 @@
   background: var(--black-3); border: 1px solid var(--border-faint); border-radius: var(--radius);
   font-size: .85rem; color: var(--text-2); transition: border-color .15s;
 }
-.bot-access-item input { width: auto; margin: 0; accent-color: #25d366; }
+.bot-access-item input { width: auto; min-height: 0; height: auto; margin: 0; accent-color: #25d366; }
 .bot-access-item.is-on { border-color: rgba(37,211,102,.4); color: var(--text-1); }
 .bot-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 

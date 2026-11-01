@@ -7142,7 +7142,7 @@ body[data-page="membros"] #memberProfileModal .member-preview-options button:hov
 .wn-options { display: flex; flex-direction: column; }
 .wn-options-scroll { max-height: 260px; overflow-y: auto; padding-right: 4px; }
 .wn-option { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; font-size: .86rem; color: var(--text-1); }
-.wn-option input { width: auto; margin: 0; accent-color: #25d366; }
+.wn-option input { width: auto; min-height: 0; height: auto; margin: 0; accent-color: #25d366; }
 .wn-option.is-disabled { cursor: not-allowed; opacity: .5; }
 .wn-hint { font-size: .72rem; color: var(--text-3); }
 .wn-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
