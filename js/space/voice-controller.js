@@ -15,6 +15,7 @@ export class VoiceController extends EventTarget {
     this.workspace = workspace;
     this.toast = toast;
     this.session = null;
+    this.activeChannel = null;
     this.unsubscribe = null;
     this.snapshot = null;
     this.touchTimer = null;
@@ -69,11 +70,16 @@ export class VoiceController extends EventTarget {
     await explainBeforeAsking(['microphone']);
     if (current) this.leave();
     this.leftOnPurpose = false;
+    this.activeChannel = channel;
 
     const session = new VoiceSession({
       userId: this.me.id,
       prefs: () => this.prefs.get(),
-      onVoiceState: (state) => this.online.setVoice(state),
+      // Salas privadas não aparecem na presença global; a sala autorizada usa seu tópico próprio.
+      onVoiceState: (state) => {
+        const privateChannel = state?.channelId === this.activeChannel?.id && this.activeChannel?.is_private;
+        this.online.setVoice(privateChannel ? null : state);
+      },
     });
     this.session = session;
     this.unsubscribe = session.subscribe(() => this.onSnapshot(session));
@@ -108,6 +114,7 @@ export class VoiceController extends EventTarget {
     this.unsubscribe = null;
     session.leave();
     this.session = null;
+    this.activeChannel = null;
     this.snapshot = null;
     this.syncRoomHeartbeat();
     this.emit();
@@ -123,6 +130,7 @@ export class VoiceController extends EventTarget {
       this.unsubscribe?.();
       this.unsubscribe = null;
       this.session = null;
+      this.activeChannel = null;
       this.snapshot = null;
     }
     if (prevStatus !== this.snapshot?.status) this.syncRoomHeartbeat();
@@ -192,10 +200,17 @@ export class VoiceController extends EventTarget {
 
   /** kind: 'voice' (até 200%) ou 'stream' (áudio da transmissão, até 300%). */
   setUserVolume(userId, volume, kind) {
-    this.run((s) => s.setUserVolume(userId, volume, kind));
+    const normalized = Math.max(0, Math.min(kind === 'voice' ? 2 : 3, Number(volume) || 0));
+    this.run((s) => s.setUserVolume(userId, normalized, kind));
     const key = kind === 'voice' ? userId : `${userId}:stream`;
-    this.prefs.update({ userVolumes: { ...(this.prefs.get().userVolumes || {}), [key]: volume } });
+    const userVolumes = { ...(this.prefs.get().userVolumes || {}) };
+    if (Math.abs(normalized - 1) < 0.001) delete userVolumes[key];
+    else userVolumes[key] = normalized;
+    this.prefs.update({ userVolumes });
   }
+
+  hasRemoteAudio(userId) { return Boolean(this.session?.hasRemoteAudio(userId)); }
+  hasRemoteScreenAudio(userId) { return Boolean(this.session?.hasRemoteScreenAudio(userId)); }
 
   async changeInputDevice(prefs) { await this.session?.changeInputDevice(prefs); }
   async changeOutputDevice(deviceId) { await this.session?.changeOutputDevice(deviceId); }

@@ -5,15 +5,17 @@ import { openVoiceSettings } from './settings.js';
 import { listDevices } from '../voice/media/devices.js';
 import { getCapabilities } from '../voice/media/capabilities.js';
 import { openAppDownload } from './app-download.js';
+import { rpcFailureMessage } from '../lib/rpc-error.js';
 
 export class SpaceNav {
-  constructor(container, { workspace, voice, online, me, onSelect }) {
+  constructor(container, { workspace, voice, online, me, onSelect, onOpenDM }) {
     this.el = container;
     this.workspace = workspace;
     this.voice = voice;
     this.online = online;
     this.me = me;
     this.onSelect = onSelect;
+    this.onOpenDM = onOpenDM;
     this.selectedId = null;
     this.deviceMenu = null;
     this.devices = { inputs: [], outputs: [], cameras: [] };
@@ -59,19 +61,22 @@ export class SpaceNav {
       const unique = people.filter((p, i) => people.findIndex((x) => x.userId === p.userId) === i);
       // Sala com código: quem criou (ou a gestão do Space) pode encerrar direto pela lista.
       const canDelete = c.is_temporary && (c.created_by === this.me.id || this.workspace.canManage);
-      return `<li class="${canDelete ? 'sp-ch-deletable' : ''}">
+      const canEdit = this.workspace.canManage && !c.is_temporary;
+      return `<li class="${canDelete || canEdit ? 'sp-ch-deletable' : ''}">
         <button class="sp-ch ${this.selectedId === c.id ? 'is-active' : ''} ${this.voice.channelId === c.id ? 'is-connected' : ''}" data-act="select" data-id="${esc(c.id)}">
           ${icon(c.kind === 'voice' ? 'fa-volume-high' : 'fa-hashtag')}
           <span class="sp-ch-name">${esc(c.name)}</span>
           ${c.is_private ? `<span class="sp-ch-lock">${icon('fa-lock')}</span>` : ''}
           ${c.kind === 'voice' && unique.length ? `<span class="sp-ch-count">${unique.length}</span>` : ''}
         </button>
+        ${canEdit ? `<button class="sp-ch-del sp-ch-edit" data-act="edit-channel" data-id="${esc(c.id)}" title="Editar canal e membros autorizados" aria-label="Editar canal ${esc(c.name)}">${icon('fa-gear')}</button>` : ''}
         ${canDelete ? `<button class="sp-ch-del" data-act="delete-room" data-id="${esc(c.id)}" title="Encerrar sala" aria-label="Encerrar sala ${esc(c.name)}">${icon('fa-trash')}</button>` : ''}
         ${unique.length ? `<ul class="sp-ch-people">${unique.map((p) => {
           const prof = this.workspace.profile(p.userId);
-          return `<li class="${speaking.has(p.userId) ? 'is-speaking' : ''}">${avatarHtml(prof, 22)}<span>${esc(displayName(prof))}</span>
+          return `<li class="${speaking.has(p.userId) ? 'is-speaking' : ''}">${avatarHtml(prof, 22)}<button class="sp-person-name" data-space-user="${esc(p.userId)}">${esc(displayName(prof))}</button>
             ${p.screen ? `<i class="fa-solid fa-display sp-live" title="Transmitindo"></i>` : ''}
-            ${p.deafened ? icon('fa-volume-xmark') : p.muted ? icon('fa-microphone-slash') : ''}</li>`;
+            ${p.deafened ? icon('fa-volume-xmark') : p.muted ? icon('fa-microphone-slash') : ''}
+            ${prof?.id !== this.me.id ? `<button class="sp-person-more" data-member-menu data-user="${esc(p.userId)}" aria-haspopup="menu" aria-label="Ações para ${esc(displayName(prof))}" title="Ações do membro">${icon('fa-ellipsis')}</button>` : ''}</li>`;
         }).join('')}</ul>` : ''}
       </li>`;
     };
@@ -98,6 +103,8 @@ export class SpaceNav {
         <button class="sp-icon-btn sp-nav-close" data-act="close-nav" aria-label="Fechar">${icon('fa-xmark')}</button>
       </div>
       <div class="sp-nav-actions">
+        ${this.workspace.canManage ? `<button class="sp-pill" data-act="create-channel">${icon('fa-plus')} Criar canal</button>` : ''}
+        <button class="sp-pill" data-act="messages">${icon('fa-message')} Mensagens</button>
         <button class="sp-pill" data-act="create-room">${icon('fa-plus')} Criar sala</button>
         <button class="sp-pill" data-act="join-room">${icon('fa-key')} Usar código</button>
       </div>
@@ -241,6 +248,9 @@ export class SpaceNav {
     if (act === 'deafen') this.voice.toggleDeafen();
     if (act === 'settings') { this.deviceMenu = null; this.render(); openVoiceSettings({ prefs: this.voice.prefs, voice: this.voice }); }
     if (act === 'create-room') await this.createRoom();
+    if (act === 'create-channel') await this.editChannel();
+    if (act === 'edit-channel') await this.editChannel(this.workspace.getChannel(btn.dataset.id));
+    if (act === 'messages') this.onOpenDM?.();
     if (act === 'join-room') await this.joinRoom();
     if (act === 'app-download') openAppDownload();
     if (act === 'delete-room') await this.deleteRoom(btn.dataset.id);
@@ -258,6 +268,56 @@ export class SpaceNav {
     await this.workspace.reloadChannels();
     toast(`Sala criada! Código: ${room.join_code}`);
     this.onSelect(room.id);
+  }
+
+  async editChannel(channel = null) {
+    if (!this.workspace.canManage) return toast('Você não tem permissão para administrar canais.', 'error');
+    const members = [...this.workspace.profiles.values()].sort((a, b) => displayName(a).localeCompare(displayName(b), 'pt-BR'));
+    const existing = new Set((channel?.is_private ? this.workspace.channelMembers?.get(channel.id) : []) || []);
+    const wrap = document.createElement('div'); wrap.className = 'modal-overlay open sp-modal';
+    wrap.innerHTML = `<section class="modal sp-channel-modal" role="dialog" aria-modal="true" aria-labelledby="spChannelTitle">
+      <header class="modal-header"><h2 class="modal-title" id="spChannelTitle">${channel ? 'Editar canal' : 'Criar canal'}</h2><button class="modal-close" data-close aria-label="Fechar">${icon('fa-xmark')}</button></header>
+      <form class="modal-body"><label class="sp-profile-field">Nome<input class="form-input" name="name" required minlength="1" maxlength="40" value="${esc(channel?.name || '')}" placeholder="Ex.: equipe-projetos"></label>
+        <label class="sp-profile-field">Tipo<select class="form-input" name="kind" ${channel ? 'disabled' : ''}><option value="text" ${channel?.kind === 'text' ? 'selected' : ''}>Texto</option><option value="voice" ${channel?.kind === 'voice' ? 'selected' : ''}>Voz</option></select></label>
+        <label class="sp-profile-field">Categoria<select class="form-input" name="category"><option value="">Sem categoria</option>${this.workspace.categories.map((c) => `<option value="${esc(c.id)}" ${channel?.category_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+        <label class="sp-check"><input type="checkbox" name="private" ${channel?.is_private ? 'checked' : ''}><span>Canal privado<small>Só membros autorizados e a gestão poderão encontrá-lo e acessá-lo.</small></span></label>
+        <fieldset class="sp-channel-members"><legend>Membros autorizados</legend><div>${members.map((p) => `<label><input type="checkbox" name="member" value="${esc(p.id)}" ${existing.has(p.id) ? 'checked' : ''}><span>${esc(displayName(p))}</span></label>`).join('')}</div></fieldset>
+        <p class="sp-channel-error" data-error role="alert" hidden></p>
+        <footer class="modal-footer"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Salvar</button></footer></form></section>`;
+    document.body.appendChild(wrap);
+    const form = wrap.querySelector('form');
+    const nameField = form.querySelector('[name="name"]'); const kindField = form.querySelector('[name="kind"]');
+    const categoryField = form.querySelector('[name="category"]'); const privateBox = form.querySelector('[name="private"]');
+    const membersBox = wrap.querySelector('.sp-channel-members');
+    const sync = () => { membersBox.hidden = !privateBox.checked; };
+    privateBox.addEventListener('change', sync); sync();
+    const close = () => wrap.remove();
+    wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = nameField.value.trim();
+      if (!name) { nameField.focus(); return; }
+      const save = form.querySelector('[type="submit"]'); save.disabled = true;
+      try {
+        const selected = [...form.querySelectorAll('[name="member"]:checked')].map((n) => n.value);
+        const { data, error } = await supabase.rpc('space_save_channel', {
+          p_channel: channel?.id || null, p_name: name, p_kind: kindField.value,
+          p_category: categoryField.value || null, p_private: privateBox.checked, p_members: selected,
+        });
+        if (error) throw error;
+        await this.workspace.reloadChannels(); close();
+        if (!channel && data) this.onSelect(data);
+        toast(channel ? 'Canal atualizado.' : 'Canal criado.');
+      } catch (err) {
+        console.error('[MSY][space] Falha ao salvar canal:', err);
+        const error = wrap.querySelector('[data-error]'); error.hidden = false;
+        error.textContent = /FORBIDDEN|42501|permission/i.test(err.message || '') ? 'Você não tem permissão para administrar canais.'
+          : /INVALID_MEMBER/.test(err.message || '') ? 'Um dos membros selecionados não está mais ativo. Atualize a tela e tente novamente.'
+            : rpcFailureMessage(err, 'space_save_channel', 'Não foi possível salvar. Confira os dados e tente novamente.');
+        save.disabled = false;
+      }
+    });
+    nameField.focus();
   }
 
   async joinRoom(prefill = '') {

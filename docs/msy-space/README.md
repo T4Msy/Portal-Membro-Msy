@@ -85,3 +85,14 @@ O portal é multipágina: trocar de aba recarrega a página e mataria a chamada.
 - Mesmo domínio → a sessão de login é a mesma; as páginas não precisam mudar.
 - Ao sair da chamada, a moldura some e a página atual vira a página normal de novo.
 - Fechar/recarregar a aba pede confirmação enquanto houver chamada.
+
+## Recursos sociais e canais privados (31/10/2026)
+
+- A lista de participantes e os quadros da chamada abrem o menu por clique direito; o botão de opções funciona em toque e teclado. O cartão reutiliza `ui/profile.js`. O volume remoto é associado ao `userId` do participante, mantido nas `space_preferences` do usuário local, em 100% por padrão e de 0% a 200%. O áudio de compartilhamento continua com controle separado (até 300%).
+- Canais permanentes de texto e voz usam `space_channels`, `space_categories` e `space_channel_members`. Criar, editar e administrar membros exige `gerenciar_space`: diretoria ou membro que recebeu a permissão no painel **Permissões**. A ação só aparece para quem pode administrar, mas a RPC também valida no banco.
+- Canais privados só aparecem e aceitam mensagens, voz e tópicos Realtime para a gestão e os membros da lista autorizada. A presença global não anuncia IDs de salas privadas; a presença da chamada é recebida pelo tópico privado da sala.
+- DMs são individuais. `space_dm_conversations`, `space_dm_participants` e `space_dm_messages` têm políticas RLS; `space_dm_start` impede DM consigo mesmo e só permite abrir conversa com membro ativo que também tenha acesso ao MSY Space. `space:dm:<id>` é limitado aos participantes; `space:dm-inbox:<user_id>` só autoriza o próprio usuário e as linhas continuam filtradas por RLS.
+- Migração local a revisar: `supabase/migrations/20261031_msy_space_channels_dm.sql`. Ela não é aplicada automaticamente. Depois de aprovação, executar manualmente no SQL Editor conectado ao Supabase do portal.
+- Depois dela, `supabase/migrations/20261101_msy_space_rpc_realtime_cache.sql` valida a existência, assinatura e permissão das RPCs de DM/canais e solicita recarga do cache PostgREST. Se a verificação disser que uma RPC está ausente, aplicar primeiro a migration social de 31/10; não executar a corretiva isoladamente.
+- Limitações atuais: DMs não têm notificações externas, anexos, indicadores de leitura, busca no texto nem edição/remoção. O recebimento em tempo real depende da conexão do Supabase.
+- A autorização Realtime é verificada ao entrar no tópico e pode ficar em cache durante a assinatura; clientes atualizados recebem o aviso genérico de alteração de membros e recarregam a estrutura para sair dos tópicos sem acesso. A revogação imediata de clientes antigos ou adulterados depende de reconectar/renovar a autorização Realtime.

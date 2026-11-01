@@ -230,6 +230,22 @@ export class VoiceSession {
             this.audio.setVolume(`${p.sessionId}:${kind === 'voice' ? 'mic' : 'screenAudio'}`, volume);
         }
     }
+    hasRemoteAudio(userId) {
+        for (const [peerId, peer] of this.peers) {
+            if (peer.userId !== userId) continue;
+            const stream = this.remoteStreams.get(peerId)?.mic;
+            if (stream?.getAudioTracks().some((track) => track.readyState === 'live')) return true;
+        }
+        return false;
+    }
+    hasRemoteScreenAudio(userId) {
+        for (const [peerId, peer] of this.peers) {
+            if (peer.userId !== userId || !peer.meta.screenAudio) continue;
+            const stream = this.remoteStreams.get(peerId)?.screenAudio;
+            if (stream?.getAudioTracks().some((track) => track.readyState === 'live')) return true;
+        }
+        return false;
+    }
     // ---- Câmera -------------------------------------------------------------------
     async toggleCamera() {
         if (this.cameraTrack) {
