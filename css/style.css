@@ -7132,3 +7132,44 @@ body[data-page="membros"] #memberProfileModal .member-preview-options button:hov
 @media (prefers-reduced-motion: reduce) {
   .nav-item-halloween .fa-ghost { animation: none; }
 }
+
+/* ============================================================
+   ENVIO PELO BOT CORVUS (renderWhatsAppComposer em app.js)
+   Modal "Notificação" das atividades e Central do Bot.
+   ============================================================ */
+.wn-composer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.wn-composer .form-group { margin-bottom: 14px; }
+.wn-options { display: flex; flex-direction: column; }
+.wn-options-scroll { max-height: 260px; overflow-y: auto; padding-right: 4px; }
+.wn-option { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; font-size: .86rem; color: var(--text-1); }
+.wn-option input { width: auto; margin: 0; accent-color: #25d366; }
+.wn-option.is-disabled { cursor: not-allowed; opacity: .5; }
+.wn-hint { font-size: .72rem; color: var(--text-3); }
+.wn-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.wn-shortcut {
+  background: var(--black-3); border: 1px solid var(--border-faint); border-radius: 999px;
+  color: var(--text-2); font-size: .72rem; padding: 4px 10px; cursor: pointer; transition: all .15s;
+}
+.wn-shortcut:hover { border-color: #25d366; color: #25d366; }
+.wn-shortcut i { font-size: .65rem; margin-right: 3px; }
+.wn-message { min-height: 140px; }
+.wn-preview-label { font-size: .72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.wn-preview-label i { color: #25d366; }
+.wn-preview {
+  background: #0b141a; border-radius: var(--radius); padding: 14px;
+  background-image: radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px); background-size: 14px 14px;
+}
+.wn-bubble {
+  max-width: 90%; margin-left: auto; background: #005c4b; color: #e9edef; border-radius: 8px 0 8px 8px;
+  padding: 7px 9px 5px; font-size: .86rem; line-height: 1.4; word-break: break-word; box-shadow: 0 1px .5px rgba(0,0,0,.13);
+}
+.wn-bubble code { font-family: ui-monospace, monospace; font-size: .8rem; }
+.wn-bubble .wn-hint { color: rgba(233,237,239,.6); }
+.wn-bubble-time { text-align: right; font-size: .66rem; color: rgba(233,237,239,.6); margin-top: 2px; }
+.wn-progress { font-size: .78rem; color: var(--text-3); margin-top: 8px; min-height: 1em; }
+.wn-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.wn-count { font-size: .78rem; color: var(--text-3); }
+@media (max-width: 760px) {
+  .wn-composer { grid-template-columns: 1fr; }
+}
+.modal .wn-composer { grid-template-columns: 1fr; }

@@ -1,96 +1,140 @@
 /* ============================================================
    BOT CORVUS — central do bot de WhatsApp (bot.html)
+   Painel em cartões. O formulário de envio (.wn-*) está em style.css.
    ============================================================ */
 
-.bot-stats { margin-bottom: 20px; }
-
-.bot-tabs { margin-bottom: 16px; }
-.bot-tabs .filter-btn i { font-size: .75rem; margin-right: 4px; }
-
-.bot-panel { padding: 20px; }
-
-.bot-help {
-  font-size: .8rem;
-  color: var(--text-3);
-  margin-bottom: 16px;
-  line-height: 1.5;
-}
-
 .bot-muted { font-size: .75rem; color: var(--text-3); }
+.bot-help { font-size: .8rem; color: var(--text-3); margin-bottom: 16px; line-height: 1.5; }
 
-.bot-table { display: flex; flex-direction: column; gap: 8px; }
-
-.bot-row {
+/* ── Saúde ─────────────────────────────────────────────── */
+.bot-health {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(160px, 220px) auto auto;
+  grid-template-columns: auto 1fr;
+  gap: 16px 28px;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--black-3);
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  border-left: 3px solid #25d366;
 }
-
-.bot-row-radio {
-  grid-template-columns: auto 1fr auto;
-  cursor: pointer;
+.bot-health.is-offline { border-left-color: var(--red-bright); }
+.bot-health-main { display: flex; align-items: center; gap: 14px; }
+.bot-health-title { font-family: 'Cinzel', serif; font-size: 1.25rem; font-weight: 700; color: var(--text-1); }
+.bot-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #25d366; box-shadow: 0 0 0 4px rgba(37,211,102,.18);
+  animation: bot-pulse 2s ease-in-out infinite;
 }
-.bot-row-radio input { width: auto; margin: 0; }
+.is-offline .bot-dot { background: var(--red-bright); box-shadow: 0 0 0 4px rgba(239,68,68,.18); animation: none; }
+@keyframes bot-pulse { 50% { box-shadow: 0 0 0 8px rgba(37,211,102,.05); } }
+.bot-health-facts { display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: flex-end; }
+.bot-health-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.bot-health-facts b { font-size: .88rem; color: var(--text-1); font-weight: 600; }
+.bot-failures { grid-column: 1 / -1; font-size: .8rem; color: var(--text-2); }
+.bot-failures summary { cursor: pointer; color: #f59e0b; }
+.bot-failure { padding: 6px 0 0 18px; }
 
-.bot-row-name { font-size: .88rem; color: var(--text-1); font-weight: 600; }
+.bot-stats { margin-bottom: 18px; }
 
-.bot-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: .8rem;
-  color: var(--text-2);
-  cursor: pointer;
+/* ── Navegação entre seções ────────────────────────────── */
+.bot-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.bot-nav a {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 999px;
+  background: var(--black-3); border: 1px solid var(--border-faint);
+  color: var(--text-2); font-size: .8rem; text-decoration: none; transition: all .15s;
 }
-.bot-check input { width: auto; margin: 0; accent-color: #25d366; }
+.bot-nav a:hover { border-color: var(--border-gold); color: var(--gold); }
 
-.bot-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
+.bot-section { margin-bottom: 24px; scroll-margin-top: 80px; }
+.bot-section.card { padding: 22px; }
+.bot-section-title {
+  font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700; color: var(--text-1);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
 }
+.bot-section-title i { color: var(--gold); font-size: .9rem; }
 
+/* ── Etiquetas e interruptores ─────────────────────────── */
+.bot-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.bot-tag {
+  font-size: .68rem; padding: 3px 9px; border-radius: 999px;
+  background: var(--black-4, rgba(255,255,255,.04)); border: 1px solid var(--border-faint); color: var(--text-3);
+}
+.bot-tag.is-on   { background: rgba(37,211,102,.1);  border-color: rgba(37,211,102,.3);  color: #4ade80; }
+.bot-tag.is-off  { background: var(--red-subtle);    border-color: var(--border-red);     color: var(--red-bright); }
+.bot-tag.is-warn { background: rgba(245,158,11,.1);  border-color: rgba(245,158,11,.3);  color: #fbbf24; }
+.bot-tag.is-gold { background: rgba(201,168,76,.1);  border-color: var(--border-gold);    color: var(--gold); }
+
+.bot-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .8rem; color: var(--text-2); user-select: none; }
+.bot-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.bot-switch-track {
+  position: relative; width: 34px; height: 19px; border-radius: 999px;
+  background: var(--black-4, #2a2a30); border: 1px solid var(--border-faint); transition: background .2s;
+  flex-shrink: 0;
+}
+.bot-switch-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--text-3); transition: transform .2s, background .2s;
+}
+.bot-switch input:checked + .bot-switch-track { background: rgba(37,211,102,.25); border-color: rgba(37,211,102,.5); }
+.bot-switch input:checked + .bot-switch-track::after { transform: translateX(15px); background: #25d366; }
+.bot-switch input:focus-visible + .bot-switch-track { outline: 2px solid var(--gold); outline-offset: 2px; }
+.bot-switch input:disabled + .bot-switch-track { opacity: .5; }
+
+/* ── Grupos ────────────────────────────────────────────── */
+.bot-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.bot-group { padding: 18px; display: flex; flex-direction: column; gap: 12px; border-top: 3px solid var(--border-faint); }
+.bot-group.is-active { border-top-color: #25d366; }
+.bot-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bot-group-name { font-size: .95rem; font-weight: 700; color: var(--text-1); word-break: break-word; }
+.bot-star { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 1rem; padding: 2px; }
+.bot-star:hover, .bot-star.is-default { color: var(--gold); }
+.bot-switches { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.bot-rank-btn { align-self: flex-start; }
+
+.bot-rank-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.bot-rank-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--gold); margin-bottom: 8px; }
+.bot-rank-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-faint); font-size: .84rem; }
+.bot-rank-name { color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Pessoas ───────────────────────────────────────────── */
+.bot-people { display: flex; flex-direction: column; gap: 8px; }
+.bot-person {
+  display: grid; grid-template-columns: minmax(0, 1fr) 190px auto auto; align-items: center; gap: 14px;
+  padding: 12px 14px; background: var(--black-3); border: 1px solid var(--border-faint); border-radius: var(--radius);
+}
+.bot-person-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bot-person-name { font-size: .9rem; font-weight: 600; color: var(--text-1); }
+.bot-crown { color: var(--gold); font-size: .7rem; }
+
+/* ── Acesso ────────────────────────────────────────────── */
+.bot-access { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.bot-access-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
+  background: var(--black-3); border: 1px solid var(--border-faint); border-radius: var(--radius);
+  font-size: .85rem; color: var(--text-2); transition: border-color .15s;
+}
+.bot-access-item input { width: auto; margin: 0; accent-color: #25d366; }
+.bot-access-item.is-on { border-color: rgba(37,211,102,.4); color: var(--text-1); }
+.bot-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* ── Histórico ─────────────────────────────────────────── */
+.bot-filters { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .bot-history { display: flex; flex-direction: column; gap: 10px; }
+.bot-history-item { padding: 12px 14px; background: var(--black-3); border: 1px solid var(--border-faint); border-radius: var(--radius); }
+.bot-history-item.is-failed { border-color: var(--border-red); }
+.bot-history-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .8rem; color: var(--text-2); margin-bottom: 8px; }
+.bot-resend { margin-left: auto; }
+.bot-history-msg { font-size: .84rem; color: var(--text-1); line-height: 1.45; word-break: break-word; }
+.bot-history-error { font-size: .75rem; color: var(--red-bright); margin-top: 6px; }
 
-.bot-history-item {
-  padding: 12px 14px;
-  background: var(--black-3);
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius);
+@media (max-width: 900px) {
+  .bot-filters { grid-template-columns: 1fr 1fr; }
+  .bot-filters input { grid-column: 1 / -1; }
 }
-
-.bot-history-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  font-size: .8rem;
-  color: var(--text-2);
-  margin-bottom: 8px;
-}
-
-.bot-history-msg {
-  font-size: .82rem;
-  color: var(--text-1);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.bot-history-error {
-  font-size: .75rem;
-  color: var(--red-bright);
-  margin-top: 6px;
-}
-
 @media (max-width: 640px) {
-  .bot-row { grid-template-columns: 1fr auto; }
-  .bot-row .bot-phone { grid-column: 1 / -1; }
-  .bot-row-radio { grid-template-columns: auto 1fr; }
-  .bot-row-radio .bot-muted { grid-column: 2; }
+  .bot-health { grid-template-columns: 1fr; }
+  .bot-health-facts { justify-content: flex-start; }
+  .bot-person { grid-template-columns: 1fr auto; }
+  .bot-person-info, .bot-person .bot-phone { grid-column: 1 / -1; }
+  .bot-rank-cols { grid-template-columns: 1fr; }
 }

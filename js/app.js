@@ -2056,10 +2056,21 @@
      return `📚 *Atividade no Portal MSY*\n\n*${act.title}*\n⏰ Prazo: ${deadline}\n\nAcesse: https://www.portalmsy.site/atividades.html`;
    }
 
+   /** Converte a formatação do WhatsApp (*negrito*, _itálico_, ~riscado~, ```mono```) em HTML seguro. */
+   function whatsappToHtml(text) {
+     return Utils.escapeHtml(text)
+       .replace(/```([\s\S]+?)```/g, '<code>$1</code>')
+       .replace(/(^|[\s(])\*(?!\s)([^*\n]+?)\*(?=[\s).,!?:;]|$)/gm, '$1<b>$2</b>')
+       .replace(/(^|[\s(])_(?!\s)([^_\n]+?)_(?=[\s).,!?:;]|$)/gm, '$1<i>$2</i>')
+       .replace(/(^|[\s(])~(?!\s)([^~\n]+?)~(?=[\s).,!?:;]|$)/gm, '$1<s>$2</s>')
+       .replace(/\n/g, '<br>');
+   }
+
    /**
     * Formulário de envio pelo bot (grupos + pessoas + mensagem) dentro de `root`.
     * Usado no modal "Notificação" das atividades e na Central do Bot (bot.html).
-    * O grupo padrão (bot_settings.default_group) já vem marcado.
+    * O grupo padrão (bot_settings.default_group) já vem marcado; atalhos marcam
+    * a diretoria, todos ou os responsáveis; a prévia mostra o balão do WhatsApp.
     */
    async function renderWhatsAppComposer(root, { message = '', recipientIds = [], onSent = null } = {}) {
      root.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>';
@@ -2068,7 +2079,7 @@
      try {
        const [api, { data, error }, s] = await Promise.all([
          WhatsAppManager.request('GET'),
-         db.from('profiles').select('id,name').eq('status', 'ativo').order('name'),
+         db.from('profiles').select('id,name,tier').eq('status', 'ativo').order('name'),
          WhatsAppManager.settings({ refresh: true }),
        ]);
        if (error) throw error;
@@ -2084,44 +2095,92 @@
 
      const recipients = new Set(recipientIds);
      const option = (type, id, label, { checked = false, disabled = false, hint = '' } = {}) => `
-       <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:${disabled ? 'not-allowed' : 'pointer'};opacity:${disabled ? .5 : 1}">
-         <input type="checkbox" class="wn-target" data-type="${type}" value="${Utils.escapeHtml(id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} style="width:auto;margin:0">
+       <label class="wn-option ${disabled ? 'is-disabled' : ''}">
+         <input type="checkbox" class="wn-target" data-type="${type}" value="${Utils.escapeHtml(id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
          <span>${Utils.escapeHtml(label)}</span>
-         ${hint ? `<span style="font-size:.72rem;color:var(--text-3)">${Utils.escapeHtml(hint)}</span>` : ''}
+         ${hint ? `<span class="wn-hint">${Utils.escapeHtml(hint)}</span>` : ''}
        </label>`;
+     const shortcut = (key, icon, label) => `<button type="button" class="wn-shortcut" data-pick="${key}"><i class="fa-solid ${icon}"></i> ${label}</button>`;
 
      root.innerHTML = `
-       <div class="form-group" style="margin-bottom:14px">
-         <label class="form-label"><i class="fa-solid fa-users"></i> Grupos</label>
-         ${grupos.map(g => option('grupo', g.id, g.nome, {
-           checked: !recipientIds.length && g.id === settings.default_group,
-           hint: g.id === settings.default_group ? 'padrão' : '',
-         })).join('') || '<div style="font-size:.8rem;color:var(--text-3)">O bot não está em nenhum grupo (ou está desconectado).</div>'}
-       </div>
-       <div class="form-group" style="margin-bottom:14px">
-         <label class="form-label"><i class="fa-solid fa-user"></i> Pessoas (privado)</label>
-         ${members.map(m => {
-           const has = comWhatsapp.has(m.id);
-           return option('membro', m.id, m.name, {
-             checked: has && recipients.has(m.id),
-             disabled: !has,
-             hint: has ? (recipients.has(m.id) ? 'responsável' : '') : 'sem WhatsApp ou desativado',
-           });
-         }).join('')}
-       </div>
-       <div class="form-group" style="margin-bottom:0">
-         <label class="form-label">Mensagem</label>
-         <textarea class="form-input form-textarea wn-message" style="min-height:130px" placeholder="Escreva o aviso... (*negrito*, _itálico_)">${Utils.escapeHtml(message)}</textarea>
-         <div class="wn-progress" style="font-size:.78rem;color:var(--text-3);margin-top:8px"></div>
-       </div>
-       <div style="display:flex;justify-content:flex-end;margin-top:14px">
-         <button class="btn btn-primary wn-send"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+       <div class="wn-composer">
+         <div class="wn-targets">
+           <div class="form-group">
+             <label class="form-label"><i class="fa-solid fa-users"></i> Grupos</label>
+             <div class="wn-options">
+               ${grupos.map(g => option('grupo', g.id, g.nome, {
+                 checked: !recipientIds.length && g.id === settings.default_group,
+                 hint: g.id === settings.default_group ? 'padrão' : '',
+               })).join('') || '<div class="wn-hint">O bot não está em nenhum grupo (ou está desconectado).</div>'}
+             </div>
+           </div>
+           <div class="form-group">
+             <label class="form-label"><i class="fa-solid fa-user"></i> Pessoas (privado)</label>
+             <div class="wn-shortcuts">
+               ${recipientIds.length ? shortcut('responsaveis', 'fa-user-check', 'Responsáveis') : ''}
+               ${shortcut('diretoria', 'fa-crown', 'Toda a diretoria')}
+               ${shortcut('todos', 'fa-users', 'Todos')}
+               ${shortcut('nenhum', 'fa-xmark', 'Limpar')}
+             </div>
+             <div class="wn-options wn-options-scroll">
+               ${members.map(m => {
+                 const has = comWhatsapp.has(m.id);
+                 return option('membro', m.id, m.name, {
+                   checked: has && recipients.has(m.id),
+                   disabled: !has,
+                   hint: has ? (recipients.has(m.id) ? 'responsável' : '') : 'sem WhatsApp ou desativado',
+                 });
+               }).join('')}
+             </div>
+           </div>
+         </div>
+         <div class="wn-write">
+           <div class="form-group">
+             <label class="form-label">Mensagem</label>
+             <textarea class="form-input form-textarea wn-message" placeholder="Escreva o aviso... (*negrito*, _itálico_, ~riscado~)">${Utils.escapeHtml(message)}</textarea>
+           </div>
+           <div class="wn-preview-label"><i class="fa-brands fa-whatsapp"></i> Prévia no WhatsApp</div>
+           <div class="wn-preview"><div class="wn-bubble"><div class="wn-bubble-text"></div><div class="wn-bubble-time"></div></div></div>
+           <div class="wn-progress"></div>
+           <div class="wn-footer">
+             <span class="wn-count"></span>
+             <button class="btn btn-primary wn-send"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+           </div>
+         </div>
        </div>`;
+
+     const textarea = root.querySelector('.wn-message');
+     const updatePreview = () => {
+       root.querySelector('.wn-bubble-text').innerHTML = whatsappToHtml(textarea.value) || '<span class="wn-hint">A mensagem aparece aqui.</span>';
+       root.querySelector('.wn-bubble-time').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+     };
+     const updateCount = () => {
+       const checked = [...root.querySelectorAll('.wn-target:checked')];
+       const g = checked.filter(el => el.dataset.type === 'grupo').length;
+       const p = checked.length - g;
+       root.querySelector('.wn-count').textContent = checked.length
+         ? [g && `${g} grupo${g > 1 ? 's' : ''}`, p && `${p} pessoa${p > 1 ? 's' : ''}`].filter(Boolean).join(' + ')
+         : 'Ninguém escolhido';
+     };
+     textarea.addEventListener('input', updatePreview);
+     root.querySelectorAll('.wn-target').forEach(el => el.addEventListener('change', updateCount));
+     root.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
+       const pick = btn.dataset.pick;
+       const tierOf = Object.fromEntries(members.map(m => [m.id, m.tier]));
+       root.querySelectorAll('.wn-target[data-type="membro"]:not(:disabled)').forEach(el => {
+         el.checked = pick === 'todos'
+           || (pick === 'diretoria' && tierOf[el.value] === 'diretoria')
+           || (pick === 'responsaveis' && recipients.has(el.value));
+       });
+       updateCount();
+     }));
+     updatePreview();
+     updateCount();
 
      const btn = root.querySelector('.wn-send');
      btn.addEventListener('click', async () => {
        const targets = [...root.querySelectorAll('.wn-target:checked')].map(el => ({ type: el.dataset.type, id: el.value }));
-       const mensagem = root.querySelector('.wn-message').value.trim();
+       const mensagem = textarea.value.trim();
        if (!targets.length) { Utils.showToast('Escolha pelo menos um grupo ou pessoa.', 'error'); return; }
        if (!mensagem) { Utils.showToast('Escreva a mensagem.', 'error'); return; }
 

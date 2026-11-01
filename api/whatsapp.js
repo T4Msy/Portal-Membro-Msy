@@ -6,9 +6,13 @@
    nunca no navegador. Quem chama precisa estar logado no portal e estar
    em bot_settings.allowed_senders (editável na Central do Bot, bot.html).
 
-   GET  → { conectado, grupos: [{ id, nome, participantes }], comWhatsapp: [user_id] }
-   POST → { grupo, mensagem }  envia num grupo do WhatsApp
-          { membro, mensagem } envia no privado do membro (user_id)
+   GET               → { conectado, grupos: [{ id, nome, participantes, ativo, boasVindas, antilink, botAdmin }], comWhatsapp: [user_id] }
+   GET ?r=saude      → saúde do bot (conexão, reconexões, falhas recentes)
+   GET ?r=membros    → números que estão no grupo do privado (Masayoshi)
+   GET ?r=ranking&grupo=ID → top de XP e de mensagens do grupo
+   PATCH { grupo, ativo?, boasVindas?, antilink? } → liga/desliga no grupo
+   POST  { grupo, mensagem }  envia num grupo do WhatsApp
+         { membro, mensagem } envia no privado do membro (user_id)
    Todo envio fica registrado em bot_messages.
 
    Env na Vercel:
@@ -92,6 +96,28 @@ module.exports = async (req, res) => {
     }
     const { token, userId } = await authorize(req);
 
+    const GROUP_RE = /^[0-9-]+@g\.us$/;
+
+    if (req.method === 'GET' && req.query?.r) {
+      let path;
+      if (req.query.r === 'saude') path = '/status';
+      else if (req.query.r === 'membros') path = '/membros';
+      else if (req.query.r === 'ranking' && GROUP_RE.test(String(req.query.grupo || ''))) {
+        path = `/grupos/${encodeURIComponent(req.query.grupo)}/ranking`;
+      } else return res.status(400).json({ erro: 'Consulta inválida.' });
+      const out = await corvus(path);
+      return res.status(out.status).json(out.data);
+    }
+
+    if (req.method === 'PATCH') {
+      const body = req.body || {};
+      if (!GROUP_RE.test(String(body.grupo || ''))) return res.status(400).json({ erro: 'Grupo inválido.' });
+      const patch = {};
+      for (const k of ['ativo', 'boasVindas', 'antilink']) if (typeof body[k] === 'boolean') patch[k] = body[k];
+      const out = await corvus(`/grupos/${encodeURIComponent(body.grupo)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      return res.status(out.status).json(out.data);
+    }
+
     if (req.method === 'GET') {
       const [status, grupos, contatos] = await Promise.all([
         corvus('/status'),
@@ -101,7 +127,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({
         conectado: Boolean(status.data.conectado),
         grupos: grupos.status === 200
-          ? grupos.data.grupos.map(g => ({ id: g.id, nome: g.nome, participantes: g.participantes }))
+          ? grupos.data.grupos
           : [],
         comWhatsapp: contatos.map(c => c.user_id)
       });
@@ -139,7 +165,7 @@ module.exports = async (req, res) => {
       return res.status(sent.status).json(sent.data);
     }
 
-    res.setHeader('Allow', 'GET, POST');
+    res.setHeader('Allow', 'GET, POST, PATCH');
     return res.status(405).json({ erro: 'Método não permitido.' });
   } catch (err) {
     if (!err.status) console.error('[MSY][whatsapp]', err);

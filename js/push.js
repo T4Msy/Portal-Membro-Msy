@@ -222,9 +222,10 @@
        return !!s?.allowed_senders?.includes(userId);
      },
 
-     async request(method, body) {
+     async request(method, body, query) {
        const { data: { session } } = await db.auth.getSession();
-       const res = await fetch('/api/whatsapp', {
+       const qs = query ? `?${new URLSearchParams(query)}` : '';
+       const res = await fetch(`/api/whatsapp${qs}`, {
          method,
          headers: { Authorization: `Bearer ${session?.access_token || ''}`, 'Content-Type': 'application/json' },
          body: body ? JSON.stringify(body) : undefined,
