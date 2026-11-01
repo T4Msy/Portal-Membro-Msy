@@ -55,7 +55,8 @@ sem mudar de plano.
 - **Worker** `msy-media` → `https://msy-media.miguelalvesmm08.workers.dev`, com o binding R2 `MEDIA` → `msy-portal-media`.
 - Plano grátis do R2: 10 GB guardados, 1 milhão de escritas e 10 milhões de leituras por mês, **egress grátis**.
   Se passar, ele **cobra no cartão e continua funcionando** (não bloqueia como o Supabase Free).
-  Uso em 01/11/2026: ~310 MB, cobrança US$ 0,00. Dá para criar alerta de cobrança em *Billing*.
+  Uso em 01/11/2026: ~310 MB, cobrança US$ 0,00. **Alerta de cobrança** "MSY Portal - qualquer cobranca"
+  criado em 01/11/2026: e-mail para o Xitter assim que a fatura passar de **US$ 1** (R2 → Billing Dashboard).
 
 **Nenhum segredo fica no Cloudflare.** O Worker valida o login pela chave **pública** (JWKS) do
 Supabase e, para saber se alguém é diretoria, chama o Supabase com o próprio token do usuário.
