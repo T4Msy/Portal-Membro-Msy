@@ -255,6 +255,12 @@ async function initFeed() {
     return profile.id;
   }
 
+  // Imagens do feed ficam no Cloudflare R2 (js/core/media-store.js).
+  async function feedMedia() {
+    const { createMediaStorage } = await import('./core/media-store.js?v=20261101-r2');
+    return createMediaStorage(db).from('social-media');
+  }
+
   async function uploadFeedImage(file) {
     if (!file) return { url: null, storage_path: null };
     if (!file.type.startsWith('image/')) throw new Error('A imagem da atividade precisa ser uma imagem válida.');
@@ -270,20 +276,20 @@ async function initFeed() {
       .replace(/^-+|-+$/g, '')
       .slice(0, 42) || 'atividade';
     const path = `${ownerId}/feed-activity/${Date.now()}-${crypto.randomUUID()}-${safeName}.${ext}`;
-    const { error } = await db.storage.from('social-media').upload(path, file, {
+    const { error } = await (await feedMedia()).upload(path, file, {
       cacheControl: '31536000',
       upsert: false,
       contentType: file.type,
     });
     if (error) throw error;
-    const { data } = db.storage.from('social-media').getPublicUrl(path);
+    const { data } = (await feedMedia()).getPublicUrl(path);
     return { url: data.publicUrl, storage_path: path };
   }
 
   async function removeFeedImage(paths = []) {
     const clean = [...new Set((paths || []).filter(Boolean))];
     if (!clean.length) return;
-    const { error } = await db.storage.from('social-media').remove(clean);
+    const { error } = await (await feedMedia()).remove(clean);
     if (error) throw error;
   }
 

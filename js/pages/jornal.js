@@ -10,9 +10,11 @@ import {
   loadImage,
   normalizeMediaEditState,
   validateMediaFile,
-} from '../social/social_media.js?v=20260609-jornal-editor';
+} from '../social/social_media.js?v=20261101-r2';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
+
+import { createMediaStorage } from '../core/media-store.js?v=20261101-r2';
 
 const BUCKET = 'jornal-media';
 const TYPE_LABELS = {
@@ -1173,7 +1175,7 @@ async function savePost(event) {
       const { error } = await db.from('jornal_posts').update(payload).eq('id', existing.id);
       if (error) throw error;
       if (videoCover?.storage_path && existing.cover_storage_path) {
-        db.storage.from(BUCKET).remove([existing.cover_storage_path]).catch((err) => console.warn('[MSY][jornal] Capa antiga nao removida:', err));
+        createMediaStorage(db).from(BUCKET).remove([existing.cover_storage_path]).catch((err) => console.warn('[MSY][jornal] Capa antiga nao removida:', err));
       }
     } else {
       const { data, error } = await db.from('jornal_posts').insert(payload).select('id').single();
@@ -1189,7 +1191,7 @@ async function savePost(event) {
         if (error) throw error;
       }
       if (oldPaths.length) {
-        await db.storage.from(BUCKET).remove([...new Set(oldPaths)]).catch((err) => console.warn('[MSY][jornal] Fotos antigas não removidas:', err));
+        await createMediaStorage(db).from(BUCKET).remove([...new Set(oldPaths)]).catch((err) => console.warn('[MSY][jornal] Fotos antigas não removidas:', err));
       }
     }
 
@@ -1550,13 +1552,13 @@ async function uploadJornalFile(file, folder, options = {}) {
   const ext = (uploadFile.name.split('.').pop() || 'bin').toLowerCase();
   const safe = uploadFile.name.replace(/\.[^.]+$/, '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 42) || 'jornal';
   const path = `${state.profile.id}/${folder}/${Date.now()}-${createUploadId()}-${safe}.${ext}`;
-  const { error } = await db.storage.from(BUCKET).upload(path, uploadFile, {
+  const { error } = await createMediaStorage(db).from(BUCKET).upload(path, uploadFile, {
     cacheControl: '31536000',
     upsert: false,
     contentType: uploadFile.type,
   });
   if (error) throw error;
-  const { data } = db.storage.from(BUCKET).getPublicUrl(path);
+  const { data } = createMediaStorage(db).from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, storage_path: path };
 }
 
@@ -1572,7 +1574,7 @@ async function toggleArchive(post) {
 async function deletePost(post) {
   if (!await confirmAction('Excluir esta publicação e remover seus arquivos?')) return;
   const paths = [post.cover_storage_path, post.video_storage_path, ...(post.media || []).map((item) => item.storage_path)].filter(Boolean);
-  if (paths.length) await db.storage.from(BUCKET).remove([...new Set(paths)]).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
+  if (paths.length) await createMediaStorage(db).from(BUCKET).remove([...new Set(paths)]).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
   const { error } = await db.from('jornal_posts').delete().eq('id', post.id);
   if (error) return Utils.showToast(error.message || 'Erro ao excluir.', 'error');
   closeModal(document.getElementById('journalPostModal'));

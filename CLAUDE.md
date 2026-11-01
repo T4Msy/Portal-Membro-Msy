@@ -104,6 +104,12 @@ Granular permissions stored in `member_permissions.permissions` (JSON array). Ch
 | `js/icm_perfil.js` | **FROZEN** — ICM profile display |
 | `js/core/` | Lightweight global helpers: cache, realtime, a11y, theme, confirm dialogs |
 
+### File Storage (Cloudflare R2)
+
+Public files (activity attachments/responses, avatars, feed media, Jornal, Space profile media) live in **Cloudflare R2**, not Supabase Storage — R2 has free egress, and Supabase Free's 5 GB egress quota was being exceeded. Upload/read/delete go through the Worker `msy-media` (`cloudflare/media-worker/worker.js`, bucket `msy-portal-media`), which validates the Supabase JWT via the project's public JWKS and enforces the same path-ownership rules as the old storage policies.
+
+In the frontend, use `createMediaStorage(db).from(bucket)` from `js/core/media-store.js` (same `upload` / `getPublicUrl` / `remove` shape as `db.storage.from()`); classic scripts load it with dynamic `import()`. Never call `db.storage.from()` for `activity-files`, `social-media`, `jornal-media` or `space-profile-media`. Private buckets (`meeting-files`, `space-app`) still use Supabase Storage with signed URLs.
+
 ### Edge Functions (Deno/TypeScript)
 
 Located in `supabase/functions/`. Both are JWT-protected and `diretoria`-only:

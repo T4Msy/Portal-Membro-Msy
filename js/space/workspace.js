@@ -1,6 +1,7 @@
 // Estrutura do MSY Space: categorias, canais e perfis do portal.
 // Atualiza ao vivo pelo tópico privado 'space:workspace' (postgres_changes filtrado por RLS).
 import { supabase } from './lib/supabase.js';
+import { mediaPublicUrl } from '../core/media-store.js?v=20261101-r2';
 
 const PROFILE_FIELDS = 'id,name,initials,tier';
 const SPACE_PROFILE_FIELDS = 'user_id,display_name,bio,accent_color,avatar_path,banner_path';
@@ -34,7 +35,7 @@ export class Workspace extends EventTarget {
     const custom = new Map((spaceProfiles.data || []).map((p) => [p.user_id, p]));
     this.profiles = new Map((profs.data || []).map((p) => {
       const extra = custom.get(p.id) || {};
-      const publicUrl = (path) => path ? supabase.storage.from('space-profile-media').getPublicUrl(path).data.publicUrl : null;
+      const publicUrl = (path) => path ? mediaPublicUrl('space-profile-media', path) : null;
       return [p.id, {
         ...p,
         name: extra.display_name || p.name,
@@ -91,7 +92,7 @@ export class Workspace extends EventTarget {
   applySpaceProfile(userId, extra) {
     const current = this.profiles.get(userId);
     if (!current) return;
-    const publicUrl = (path) => path ? supabase.storage.from('space-profile-media').getPublicUrl(path).data.publicUrl : null;
+    const publicUrl = (path) => path ? mediaPublicUrl('space-profile-media', path) : null;
     this.profiles.set(userId, { ...current, ...extra,
       name: extra.display_name || current.name,
       color: extra.accent_color || current.color,

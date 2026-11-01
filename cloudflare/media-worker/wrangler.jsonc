@@ -1,0 +1,10 @@
+// Worker msy-media (conta Cloudflare do portal). Publicado hoje pelo painel do Cloudflare
+// (Workers & Pages → msy-media → Edit code). Com o Wrangler: `npx wrangler deploy` nesta pasta.
+{
+  "name": "msy-media",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "msy-portal-media" }
+  ]
+}

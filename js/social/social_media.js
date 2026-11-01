@@ -3,6 +3,8 @@
    Compressao, preview, upload e edicao de midia social.
    ============================================================ */
 
+import { createMediaStorage } from '../core/media-store.js?v=20261101-r2';
+
 const SOCIAL_BUCKET = 'social-media';
 const STORY_IMAGE_EXPORT_MIME = 'image/webp';
 const VIDEO_EXPORT_MIME = 'video/webm;codecs=vp9,opus';
@@ -128,7 +130,7 @@ export async function uploadSocialMedia(db, userId, file, folder = 'posts', opti
     .slice(0, 42) || 'media';
   const path = `${ownerId}/${folder}/${Date.now()}-${safeRandomId()}-${safeName}.${ext}`;
 
-  const { error } = await db.storage.from(SOCIAL_BUCKET).upload(path, uploadFile, {
+  const { error } = await createMediaStorage(db).from(SOCIAL_BUCKET).upload(path, uploadFile, {
     cacheControl: '31536000',
     upsert: false,
     contentType: uploadFile.type,
@@ -138,7 +140,7 @@ export async function uploadSocialMedia(db, userId, file, folder = 'posts', opti
     throw normalizeSocialUploadError(error, path);
   }
 
-  const { data } = db.storage.from(SOCIAL_BUCKET).getPublicUrl(path);
+  const { data } = createMediaStorage(db).from(SOCIAL_BUCKET).getPublicUrl(path);
   return {
     url: data.publicUrl,
     storage_path: path,
@@ -152,7 +154,7 @@ export async function uploadSocialMedia(db, userId, file, folder = 'posts', opti
 export async function removeSocialMedia(db, paths = []) {
   const cleanPaths = [...new Set((paths || []).filter(Boolean))];
   if (!cleanPaths.length) return;
-  const { error } = await db.storage.from(SOCIAL_BUCKET).remove(cleanPaths);
+  const { error } = await createMediaStorage(db).from(SOCIAL_BUCKET).remove(cleanPaths);
   if (error) throw error;
 }
 

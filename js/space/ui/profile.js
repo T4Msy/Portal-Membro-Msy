@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { createMediaStorage } from '../../core/media-store.js?v=20261101-r2';
 import { avatarHtml, displayName, esc, icon, safeColor, toast } from './dom.js';
 import { matchesProfileImageSignature, PROFILE_IMAGE_TYPES } from './profile-image.js';
 
@@ -124,7 +125,7 @@ export function openProfileCard({ profile, ownProfile, workspace }) {
         if (!file) continue;
         const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
         const path = `${profile.id}/${kind}-${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+        const { error } = await createMediaStorage(supabase).from(BUCKET).upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
         if (error) throw error;
         uploaded.push(path);
         paths[key] = path;
@@ -136,7 +137,7 @@ export function openProfileCard({ profile, ownProfile, workspace }) {
       const prior = [old.avatar_path, old.banner_path].filter(Boolean);
       const keep = new Set([payload.avatar_path, payload.banner_path].filter(Boolean));
       const stale = prior.filter((path) => !keep.has(path));
-      if (stale.length) await supabase.storage.from(BUCKET).remove(stale);
+      if (stale.length) await createMediaStorage(supabase).from(BUCKET).remove(stale);
       workspace.applySpaceProfile(profile.id, payload);
       toast('Perfil atualizado.');
       for (const url of previews.values()) URL.revokeObjectURL(url);
@@ -144,7 +145,7 @@ export function openProfileCard({ profile, ownProfile, workspace }) {
       render(false);
       removals = new Set();
     } catch (error) {
-      if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
+      if (uploaded.length) await createMediaStorage(supabase).from(BUCKET).remove(uploaded);
       for (const url of previews.values()) URL.revokeObjectURL(url);
       previews.clear();
       console.error('[MSY][space] Falha ao salvar perfil:', error);

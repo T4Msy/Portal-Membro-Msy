@@ -1447,6 +1447,16 @@
        .replace(/[^a-zA-Z0-9._-]/g, '_');
    }
 
+   // Anexos e avatares ficam no Cloudflare R2 (egress grátis); mesmo formato do db.storage.from().
+   let _mediaModule = null;
+   async function _mediaStore() {
+     _mediaModule = _mediaModule || await import('./core/media-store.js?v=20261101-r2');
+     return _mediaModule;
+   }
+   async function _activityFiles() {
+     return (await _mediaStore()).createMediaStorage(db).from('activity-files');
+   }
+
    function _buildAttachmentStoragePath(profileId, fileName, scope = 'activity-attachments') {
      const stamp = Date.now();
      const nonce = Math.random().toString(36).slice(2, 8);
@@ -1752,14 +1762,11 @@
 
              const source = btn.dataset.source || 'response';
              const fileUrl = btn.dataset.url || '';
-             const storageMarker = '/storage/v1/object/public/activity-files/';
-             let storagePath = null;
-             if (fileUrl.includes(storageMarker)) {
-               storagePath = decodeURIComponent(fileUrl.split(storageMarker)[1]);
-             }
+             const parsed = (await _mediaStore()).parseMediaUrl(fileUrl);
+             const storagePath = parsed?.bucket === 'activity-files' ? parsed.path : null;
 
              if (storagePath) {
-               const { error: storageErr } = await db.storage.from('activity-files').remove([storagePath]);
+               const { error: storageErr } = await (await _activityFiles()).remove([storagePath]);
                if (storageErr) console.warn('Aviso storage:', storageErr.message);
              }
 
@@ -2382,14 +2389,14 @@
          const file = fi.files[0];
          const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
          const path = `${profile.id}/${id}/${Date.now()}_${sanitizedName}`;
-         const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file);
+         const { data: upData, error: upErr } = await (await _activityFiles()).upload(path, file);
          if (upErr) {
            Utils.showToast(`Erro no upload: ${_formatActivityUploadError(upErr)}`, 'error');
            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Resposta';
            return;
          }
          if (upData) {
-           const { data: urlData } = db.storage.from('activity-files').getPublicUrl(path);
+           const { data: urlData } = (await _activityFiles()).getPublicUrl(path);
            file_url = urlData.publicUrl; file_name = file.name;
          }
        }
@@ -2988,13 +2995,13 @@
        const uploaded = [];
        for (const [index, file] of (files || []).entries()) {
          const path = _buildAttachmentStoragePath(profile.id, `${index}_${file.name}`);
-         const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file);
+         const { data: upData, error: upErr } = await (await _activityFiles()).upload(path, file);
          if (upErr) {
-           await Promise.all(uploaded.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+           await (await _activityFiles()).remove(uploaded.map(item => item.path));
            return { ok: false, error: upErr, uploaded };
          }
          if (upData) {
-           const { data: urlData } = db.storage.from('activity-files').getPublicUrl(path);
+           const { data: urlData } = (await _activityFiles()).getPublicUrl(path);
            uploaded.push({
              path,
              file,
@@ -3010,7 +3017,7 @@
 
      async function cleanupUploadedAttachments(uploadedFiles) {
        if (!uploadedFiles || !uploadedFiles.length) return;
-       await Promise.all(uploadedFiles.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+       await (await _activityFiles()).remove(uploadedFiles.map(item => item.path));
      }
 
      async function attachFilesToActivities(activityIds, uploadedFiles) {
@@ -3246,7 +3253,7 @@
            ));
            modal.classList.remove('open');
            if (!attachResult.ok) {
-             await Promise.all(uploadedAttachments.map(item => db.storage.from('activity-files').remove([item.path]).catch(() => null)));
+             await (await _activityFiles()).remove(uploadedAttachments.map(item => item.path));
              Utils.showToast('Atividade criada, mas os anexos não puderam ser salvos.', 'error');
            } else {
              Utils.showToast(`Atividade colaborativa criada para ${allMembers.length} membros!`);
@@ -8203,7 +8210,7 @@
      // Avatar aparece em quase toda página: sobe no máximo 384px em WebP (~30KB em vez de MBs).
      async function _compressAvatar(file) {
        try {
-         const { compressImage } = await import('./social/social_media.js?v=20261101-avatar');
+         const { compressImage } = await import('./social/social_media.js?v=20261101-r2');
          return await compressImage(file, { maxWidth: 384, maxHeight: 384, quality: 0.85 });
        } catch (err) {
          console.warn('[MSY][perfil] Compressão do avatar falhou, enviando original:', err);
@@ -8229,7 +8236,7 @@
        const ext  = upload.name.split('.').pop();
        const path = `avatars/${profile.id}/avatar_${Date.now()}.${ext}`;
 
-       const { data: upData, error: upErr } = await db.storage.from('activity-files')
+       const { data: upData, error: upErr } = await (await _activityFiles())
          .upload(path, upload, { upsert: true, contentType: upload.type, cacheControl: '31536000' });
        if (upErr) {
          progress.style.display = 'none';
@@ -8237,7 +8244,7 @@
          return;
        }
    
-       const { data: urlData } = db.storage.from('activity-files').getPublicUrl(path);
+       const { data: urlData } = (await _activityFiles()).getPublicUrl(path);
        const avatar_url = urlData.publicUrl;
    
        const { error } = await db.from('profiles').update({ avatar_url }).eq('id', profile.id);

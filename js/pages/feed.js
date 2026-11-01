@@ -18,7 +18,7 @@ import {
   supportsVideoEditing,
   uploadSocialMedia,
   validateMediaFile,
-} from '../social/social_media.js?v=20261101-avatar';
+} from '../social/social_media.js?v=20261101-r2';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
