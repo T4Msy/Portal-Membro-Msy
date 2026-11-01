@@ -26,7 +26,7 @@ async function initBot() {
 
   const state = {
     api: null, health: null, dmPhones: new Set(), members: [], contacts: new Map(),
-    settings: null, history: [], sentToday: 0,
+    settings: null, history: [], sentToday: 0, automations: [],
   };
 
   /* ── Helpers ─────────────────────────────────────────── */
@@ -61,7 +61,7 @@ async function initBot() {
 
   async function loadData() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const [api, health, dm, membersRes, contactsRes, settings, todayRes] = await Promise.all([
+    const [api, health, dm, membersRes, contactsRes, settings, todayRes, autoRes] = await Promise.all([
       WhatsAppManager.request('GET').catch(err => ({ erro: err.message, conectado: false, grupos: [], comWhatsapp: [] })),
       WhatsAppManager.request('GET', null, { r: 'saude' }).catch(() => null),
       WhatsAppManager.request('GET', null, { r: 'membros' }).catch(() => ({ numeros: [] })),
@@ -69,6 +69,7 @@ async function initBot() {
       db.from('member_whatsapp').select('user_id,whatsapp,receive'),
       WhatsAppManager.settings({ refresh: true }),
       db.from('bot_messages').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+      db.from('bot_automations').select('*').order('sort'),
     ]);
     if (membersRes.error) throw membersRes.error;
     if (contactsRes.error) throw contactsRes.error;
@@ -79,6 +80,8 @@ async function initBot() {
     state.contacts = new Map((contactsRes.data || []).map(c => [c.user_id, c]));
     state.settings = settings || {};
     state.sentToday = todayRes.count || 0;
+    if (autoRes.error) console.warn('[MSY][bot] Erro ao carregar automações:', autoRes.error);
+    state.automations = autoRes.data || [];
   }
 
   async function reload() {
@@ -116,6 +119,7 @@ async function initBot() {
 
       <nav class="bot-nav">
         <a href="#botGrupos"><i class="fa-solid fa-users"></i> Grupos</a>
+        <a href="#botAuto"><i class="fa-solid fa-robot"></i> Automações</a>
         <a href="#botAviso"><i class="fa-solid fa-paper-plane"></i> Enviar aviso</a>
         <a href="#botPessoas"><i class="fa-solid fa-address-book"></i> Pessoas</a>
         <a href="#botAcesso"><i class="fa-solid fa-user-shield"></i> Acesso</a>
@@ -126,6 +130,12 @@ async function initBot() {
         <div class="bot-section-title"><i class="fa-solid fa-users"></i> Grupos</div>
         <div class="bot-help">Liga e desliga o Corvus em cada grupo (o mesmo que <b>/corvus ativar</b>), as boas-vindas e o antilink. A ⭐ marca o grupo padrão dos avisos. Para o bot entrar num grupo, adicione o número dele pelo WhatsApp.</div>
         <div class="bot-groups">${grupos.length ? grupos.map(groupCard).join('') : '<div class="empty-state">O bot não está em nenhum grupo ou está desconectado.</div>'}</div>
+      </section>
+
+      <section class="bot-section" id="botAuto">
+        <div class="bot-section-title"><i class="fa-solid fa-robot"></i> Automações</div>
+        <div class="bot-help">Mensagens que o Corvus manda sozinho. O grupo é o <b>grupo padrão</b> (⭐); o privado vai para quem tem WhatsApp e está ativo em Pessoas. Você pode ligar, desligar, mudar o destino, a antecedência e o texto.</div>
+        ${automationsHtml()}
       </section>
 
       <section class="bot-section card" id="botAviso">
@@ -153,6 +163,7 @@ async function initBot() {
 
     document.getElementById('botRefresh').addEventListener('click', () => { Utils.showLoading(content); reload(); });
     bindGroups();
+    bindAutomations();
     renderWhatsAppComposer(document.getElementById('botComposer'), { onSent: () => loadHistory() });
     bindPeople();
     bindAccess();
@@ -297,6 +308,142 @@ async function initBot() {
     state.settings = await WhatsAppManager.settings({ refresh: true }) || {};
   }
 
+  /* ── Automações (avisos que o bot manda sozinho) ─────── */
+  const AUTO_VARS = {
+    evento: ['titulo', 'data', 'hora', 'descricao', 'link'],
+    evento_cobranca: ['titulo', 'data', 'hora', 'pendentes', 'link'],
+    evento_inicio: ['titulo', 'data', 'hora', 'todos'],
+    atividade_nova: ['titulo', 'pessoas', 'prazo', 'link'],
+    atividade_prazo: ['titulo', 'data', 'hora', 'prazo', 'link'],
+    reuniao: ['titulo', 'data', 'hora', 'link'],
+    comunicado: ['titulo', 'categoria', 'conteudo', 'link'],
+  };
+  const SAMPLE = {
+    titulo: 'Reunião Geral', data: '05/11/2026', hora: '20:00', descricao: 'Pauta do mês',
+    link: 'https://www.portalmsy.site', pendentes: '@Duda @Julia', pessoas: '@Duda', todos: '@todos',
+    prazo: '05/11/2026 às 18:00', categoria: 'Geral', conteudo: 'Texto do comunicado...',
+  };
+  const varsOf = key => AUTO_VARS[
+    key.startsWith('evento_cobranca') ? 'evento_cobranca'
+      : key === 'evento_inicio' ? 'evento_inicio'
+        : key.startsWith('evento') ? 'evento'
+          : key === 'atividade_nova' ? 'atividade_nova'
+            : key.startsWith('atividade') ? 'atividade_prazo'
+              : key.startsWith('reuniao') ? 'reuniao' : 'comunicado'];
+  const renderSample = template => template.replace(/\{(\w+)\}/g, (all, k) => SAMPLE[k] ?? all);
+  const offsetLabel = min => min >= 1440 && min % 1440 === 0 ? `${min / 1440} dia(s) antes`
+    : min >= 60 && min % 60 === 0 ? `${min / 60} h antes` : min ? `${min} min antes` : 'na hora';
+
+  function automationsHtml() {
+    if (!state.automations.length) {
+      return '<div class="empty-state">As automações ainda não foram instaladas no banco.</div>';
+    }
+    const cats = [...new Set(state.automations.map(a => a.category))];
+    return cats.map(cat => `
+      <div class="bot-auto-cat">${esc(cat)}</div>
+      <div class="bot-autos">
+        ${state.automations.filter(a => a.category === cat).map(a => `
+          <div class="card bot-auto ${a.enabled ? 'is-on' : ''}" data-auto="${esc(a.key)}">
+            <div class="bot-auto-head">
+              <div>
+                <div class="bot-auto-label">${esc(a.label)}</div>
+                <div class="bot-muted">${esc(a.description || '')}</div>
+              </div>
+              ${toggle('data-field="enabled"', a.enabled, a.enabled ? 'Ligado' : 'Desligado')}
+            </div>
+            <div class="bot-auto-opts">
+              ${toggle('data-field="to_group"', a.to_group, 'No grupo padrão')}
+              ${toggle('data-field="to_private"', a.to_private, 'No privado')}
+              ${a.offset_minutes !== null ? `
+                <label class="bot-auto-offset">
+                  <input class="form-input" type="number" min="0" step="5" data-field="offset_minutes" value="${a.offset_minutes}">
+                  <span class="bot-muted">min antes <span class="bot-offset-hint">(${offsetLabel(a.offset_minutes)})</span></span>
+                </label>` : ''}
+            </div>
+            <details class="bot-auto-edit">
+              <summary><i class="fa-solid fa-pen"></i> Ver e editar a mensagem</summary>
+              <div class="bot-auto-edit-body">
+                <div>
+                  <textarea class="form-input form-textarea" data-field="template">${esc(a.template)}</textarea>
+                  <div class="bot-auto-vars">${varsOf(a.key).map(v => `<button type="button" class="wn-shortcut" data-var="${v}">{${v}}</button>`).join('')}</div>
+                </div>
+                <div>
+                  <div class="wn-preview-label"><i class="fa-brands fa-whatsapp"></i> Prévia (exemplo)</div>
+                  <div class="wn-preview"><div class="wn-bubble"><div class="wn-bubble-text">${whatsappToHtml(renderSample(a.template))}</div><div class="wn-bubble-time">20:00</div></div></div>
+                </div>
+              </div>
+              <div class="bot-actions"><button class="btn btn-primary btn-sm" data-save><i class="fa-solid fa-floppy-disk"></i> Salvar mensagem</button></div>
+            </details>
+          </div>`).join('')}
+      </div>`).join('');
+  }
+
+  async function saveAutomation(key, patch) {
+    const { error } = await db.from('bot_automations')
+      .update({ ...patch, updated_at: new Date().toISOString(), updated_by: profile.id })
+      .eq('key', key);
+    if (error) throw error;
+    Object.assign(state.automations.find(a => a.key === key), patch);
+  }
+
+  function bindAutomations() {
+    content.querySelectorAll('.bot-auto').forEach(card => {
+      const key = card.dataset.auto;
+      const textarea = card.querySelector('[data-field="template"]');
+      const bubble = card.querySelector('.wn-bubble-text');
+
+      card.querySelectorAll('input[type="checkbox"][data-field]').forEach(input => input.addEventListener('change', async () => {
+        const field = input.dataset.field;
+        input.disabled = true;
+        try {
+          await saveAutomation(key, { [field]: input.checked });
+          if (field === 'enabled') {
+            card.classList.toggle('is-on', input.checked);
+            input.closest('.bot-switch').querySelector('span:last-child').textContent = input.checked ? 'Ligado' : 'Desligado';
+          }
+          Utils.showToast('Automação atualizada!');
+        } catch (err) {
+          console.error('[MSY][bot]', err);
+          input.checked = !input.checked;
+          Utils.showToast('Erro ao salvar. Tente novamente.', 'error');
+        }
+        input.disabled = false;
+      }));
+
+      card.querySelector('[data-field="offset_minutes"]')?.addEventListener('change', async e => {
+        const value = Math.max(0, Math.round(Number(e.target.value) || 0));
+        try {
+          await saveAutomation(key, { offset_minutes: value });
+          card.querySelector('.bot-offset-hint').textContent = `(${offsetLabel(value)})`;
+          Utils.showToast('Antecedência salva!');
+        } catch (err) {
+          console.error('[MSY][bot]', err);
+          Utils.showToast('Erro ao salvar. Tente novamente.', 'error');
+        }
+      });
+
+      textarea.addEventListener('input', () => { bubble.innerHTML = whatsappToHtml(renderSample(textarea.value)); });
+      card.querySelectorAll('[data-var]').forEach(btn => btn.addEventListener('click', () => {
+        const tag = `{${btn.dataset.var}}`;
+        const at = textarea.selectionStart ?? textarea.value.length;
+        textarea.value = textarea.value.slice(0, at) + tag + textarea.value.slice(textarea.selectionEnd ?? at);
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+      }));
+      card.querySelector('[data-save]').addEventListener('click', async () => {
+        const template = textarea.value.trim();
+        if (!template) { Utils.showToast('A mensagem não pode ficar vazia.', 'error'); return; }
+        try {
+          await saveAutomation(key, { template });
+          Utils.showToast('Mensagem salva!');
+        } catch (err) {
+          console.error('[MSY][bot]', err);
+          Utils.showToast('Erro ao salvar. Tente novamente.', 'error');
+        }
+      });
+    });
+  }
+
   /* ── Pessoas ─────────────────────────────────────────── */
   function personTags(m) {
     const c = state.contacts.get(m.id);
@@ -384,7 +531,7 @@ async function initBot() {
     el.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i></div>';
     try {
       const { data, error } = await db.from('bot_messages')
-        .select('id,sent_by,target_type,target,target_name,message,ok,error,created_at')
+        .select('id,sent_by,target_type,target,target_name,message,ok,error,created_at,source')
         .order('created_at', { ascending: false })
         .limit(300);
       if (error) throw error;
@@ -407,7 +554,7 @@ async function initBot() {
         <input class="form-input" data-filter="busca" placeholder="Buscar mensagem, grupo ou pessoa..." value="${esc(filters.busca)}">
         ${select('tipo', [['', 'Grupos e privado'], ['grupo', 'Só grupos'], ['membro', 'Só privado']])}
         ${select('status', [['', 'Todos'], ['ok', 'Enviadas'], ['falha', 'Falhas']])}
-        ${select('autor', [['', 'Qualquer pessoa'], ...authors.map(id => [id, names[id] || '—'])])}
+        ${select('autor', [['', 'Qualquer pessoa'], ['auto', 'Automáticas'], ...authors.map(id => [id, names[id] || '—'])])}
         ${select('periodo', [['1', 'Hoje'], ['7', '7 dias'], ['30', '30 dias'], ['', 'Tudo']])}
       </div>
       <div class="bot-history" id="botHistoryList"></div>`;
@@ -427,7 +574,7 @@ async function initBot() {
     const rows = state.history.filter(h =>
       (!filters.tipo || h.target_type === filters.tipo) &&
       (!filters.status || (filters.status === 'ok') === h.ok) &&
-      (!filters.autor || h.sent_by === filters.autor) &&
+      (!filters.autor || (filters.autor === 'auto' ? !!h.source : h.sent_by === filters.autor)) &&
       (!minDate || new Date(h.created_at) >= minDate) &&
       (!busca || `${h.message} ${h.target_name || ''} ${names[h.target] || ''}`.toLowerCase().includes(busca)));
 
@@ -438,7 +585,8 @@ async function initBot() {
             <div class="bot-history-head">
               <span class="badge ${h.ok ? 'badge-done' : 'badge-red'}">${h.ok ? 'Enviada' : 'Falhou'}</span>
               <span><i class="fa-solid ${h.target_type === 'grupo' ? 'fa-users' : 'fa-user'}"></i> ${esc(h.target_name || names[h.target] || h.target)}</span>
-              <span class="bot-muted">por ${esc(names[h.sent_by] || '—')} · ${esc(Utils.formatDateTime(h.created_at))}</span>
+              ${h.source ? `<span class="bot-tag is-gold"><i class="fa-solid fa-robot"></i> ${esc(state.automations.find(a => a.key === h.source)?.label || 'Automático')}</span>` : ''}
+              <span class="bot-muted">${h.source ? 'automático' : `por ${esc(names[h.sent_by] || '—')}`} · ${esc(Utils.formatDateTime(h.created_at))}</span>
               ${h.ok ? '' : `<button class="btn btn-sm btn-outline bot-resend" data-resend="${h.id}"><i class="fa-solid fa-rotate-right"></i> Reenviar</button>`}
             </div>
             <div class="bot-history-msg">${whatsappToHtml(h.message)}</div>

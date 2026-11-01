@@ -2917,11 +2917,11 @@
            </label>
            ${canWhatsApp ? `
            <label class="activity-modal-notif" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--black-3);border:1px solid var(--border-faint);border-radius:var(--radius);padding:8px 14px;font-size:.82rem">
-             <input type="checkbox" id="na-notif-whatsapp" ${isEditing ? '' : 'checked'} style="accent-color:#25d366;width:15px;height:15px">
+             <input type="checkbox" id="na-notif-whatsapp" style="accent-color:#25d366;width:15px;height:15px">
              <i class="fa-brands fa-whatsapp" style="color:#25d366"></i> WhatsApp
            </label>` : ''}
          </div>
-         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado.${canWhatsApp ? ' WhatsApp vai no privado de quem tem número cadastrado no Perfil.' : ''}</div>
+         <div style="font-size:.68rem;color:var(--text-3);margin-top:8px"><i class="fa-solid fa-circle-info"></i> Push depende do membro ter ativado no dispositivo. Email é sempre enviado quando marcado.${canWhatsApp ? ' O aviso automático do bot (Central do Bot → Automações) já avisa no WhatsApp; marque WhatsApp só para mandar um aviso extra.' : ''}</div>
        </div>
      `;
      document.getElementById('modalFooter').innerHTML = `

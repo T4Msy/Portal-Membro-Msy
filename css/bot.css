@@ -138,3 +138,22 @@
   .bot-person-info, .bot-person .bot-phone { grid-column: 1 / -1; }
   .bot-rank-cols { grid-template-columns: 1fr; }
 }
+
+/* ── Automações ────────────────────────────────────────── */
+.bot-auto-cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--gold); margin: 14px 0 8px; }
+.bot-autos { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.bot-auto { padding: 16px; display: flex; flex-direction: column; gap: 12px; border-left: 3px solid var(--border-faint); }
+.bot-auto.is-on { border-left-color: #25d366; }
+.bot-auto-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.bot-auto-label { font-size: .92rem; font-weight: 700; color: var(--text-1); margin-bottom: 2px; }
+.bot-auto-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.bot-auto-offset { display: inline-flex; align-items: center; gap: 8px; }
+.bot-auto-offset input { width: 84px; min-height: 0; padding: 6px 8px; }
+.bot-auto-edit summary { cursor: pointer; font-size: .8rem; color: var(--gold); }
+.bot-auto-edit[open] summary { margin-bottom: 10px; }
+.bot-auto-edit-body { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.bot-auto-edit textarea { min-height: 120px; font-size: .84rem; }
+.bot-auto-vars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+@media (max-width: 640px) {
+  .bot-autos { grid-template-columns: 1fr; }
+}
