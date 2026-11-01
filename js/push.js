@@ -202,18 +202,24 @@
     *  Mensagens no privado entram numa fila com intervalo, porque o bot recusa
     *  envios a menos de 5 s um do outro. */
    const WhatsAppManager = {
-     // Fase de testes: só Xitter e Tales veem as opções de WhatsApp.
-     // A mesma lista é conferida no servidor (api/whatsapp.js).
-     ALLOWED_USERS: [
-       'd15bace3-ea81-4d56-ac21-0af611e6cf1e', // Xitter
-       'bcba3663-c3f9-4e2f-a134-1e2b240f11f6', // Tales Masayoshi
-     ],
      DM_GAP_MS: 6000,
      _queue: Promise.resolve(),
      _lastDm: 0,
+     _settings: null,
 
-     canUse(userId) {
-       return this.ALLOWED_USERS.includes(userId);
+     /** Configuração do bot (bot_settings). Só diretoria e liberados leem; para os demais vem null. */
+     async settings({ refresh = false } = {}) {
+       if (this._settings && !refresh) return this._settings;
+       const { data, error } = await db.from('bot_settings').select('*').eq('id', 1).maybeSingle();
+       if (error) console.warn('[MSY][whatsapp] Erro ao ler bot_settings:', error);
+       this._settings = data || null;
+       return this._settings;
+     },
+
+     /** Quem está em bot_settings.allowed_senders (a /api/whatsapp confere de novo). */
+     async canUse(userId) {
+       const s = await this.settings();
+       return !!s?.allowed_senders?.includes(userId);
      },
 
      async request(method, body) {
@@ -229,12 +235,12 @@
      },
 
      /** Envia no privado do membro respeitando o intervalo da fila. */
-     sendToUser(userId, mensagem) {
+     sendToUser(userId, mensagem, nome) {
        const job = this._queue.then(async () => {
          const wait = this.DM_GAP_MS - (Date.now() - this._lastDm);
          if (wait > 0) await new Promise(r => setTimeout(r, wait));
          try {
-           return await this.request('POST', { membro: userId, mensagem });
+           return await this.request('POST', { membro: userId, mensagem, nome });
          } finally {
            this._lastDm = Date.now();
          }
@@ -304,7 +310,7 @@
          // WhatsApp vai pela fila (um por vez); não segura quem chamou.
          if (channels.includes('whatsapp')) {
            const text = `${icon || '🔔'} *MSY Portal*\n\n${message}${link ? `\n\nAcesse: https://www.portalmsy.site/${link}` : ''}`;
-           WhatsAppManager.sendToUser(targetUserId, text).catch(err => {
+           WhatsAppManager.sendToUser(targetUserId, text, prefs?.name).catch(err => {
              // 404 = membro sem WhatsApp cadastrado: só registra.
              console.warn(`[MSY][whatsapp] Não enviado para ${prefs?.name || targetUserId}:`, err.message);
              if (err.status !== 404) Utils.showToast(`WhatsApp não enviado para ${prefs?.name || 'membro'}: ${err.message}`, 'error');

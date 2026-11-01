@@ -1,0 +1,96 @@
+/* ============================================================
+   BOT CORVUS — central do bot de WhatsApp (bot.html)
+   ============================================================ */
+
+.bot-stats { margin-bottom: 20px; }
+
+.bot-tabs { margin-bottom: 16px; }
+.bot-tabs .filter-btn i { font-size: .75rem; margin-right: 4px; }
+
+.bot-panel { padding: 20px; }
+
+.bot-help {
+  font-size: .8rem;
+  color: var(--text-3);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.bot-muted { font-size: .75rem; color: var(--text-3); }
+
+.bot-table { display: flex; flex-direction: column; gap: 8px; }
+
+.bot-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 220px) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--black-3);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius);
+}
+
+.bot-row-radio {
+  grid-template-columns: auto 1fr auto;
+  cursor: pointer;
+}
+.bot-row-radio input { width: auto; margin: 0; }
+
+.bot-row-name { font-size: .88rem; color: var(--text-1); font-weight: 600; }
+
+.bot-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .8rem;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.bot-check input { width: auto; margin: 0; accent-color: #25d366; }
+
+.bot-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.bot-history { display: flex; flex-direction: column; gap: 10px; }
+
+.bot-history-item {
+  padding: 12px 14px;
+  background: var(--black-3);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius);
+}
+
+.bot-history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: .8rem;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+
+.bot-history-msg {
+  font-size: .82rem;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bot-history-error {
+  font-size: .75rem;
+  color: var(--red-bright);
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .bot-row { grid-template-columns: 1fr auto; }
+  .bot-row .bot-phone { grid-column: 1 / -1; }
+  .bot-row-radio { grid-template-columns: auto 1fr; }
+  .bot-row-radio .bot-muted { grid-column: 2; }
+}
