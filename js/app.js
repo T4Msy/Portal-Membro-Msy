@@ -8200,6 +8200,17 @@
        });
      });
    
+     // Avatar aparece em quase toda página: sobe no máximo 384px em WebP (~30KB em vez de MBs).
+     async function _compressAvatar(file) {
+       try {
+         const { compressImage } = await import('./social/social_media.js?v=20261101-avatar');
+         return await compressImage(file, { maxWidth: 384, maxHeight: 384, quality: 0.85 });
+       } catch (err) {
+         console.warn('[MSY][perfil] Compressão do avatar falhou, enviando original:', err);
+         return file;
+       }
+     }
+
      // Avatar upload
      document.getElementById('uploadAvatarBtn').addEventListener('click', () => {
        document.getElementById('avatarFileInput').click();
@@ -8208,15 +8219,18 @@
      document.getElementById('avatarFileInput').addEventListener('change', async () => {
        const file = document.getElementById('avatarFileInput').files[0];
        if (!file) return;
-       if (file.size > 5 * 1024 * 1024) { Utils.showToast('Imagem muito grande. Máx 5MB.', 'error'); return; }
+       // A foto é comprimida antes de subir, então o limite aqui é só do arquivo escolhido.
+       if (file.size > 15 * 1024 * 1024) { Utils.showToast('Imagem muito grande. Máx 15MB.', 'error'); return; }
    
        const progress = document.getElementById('avatarUploadProgress');
        progress.style.display = 'block';
    
-       const ext  = file.name.split('.').pop();
+       const upload = await _compressAvatar(file);
+       const ext  = upload.name.split('.').pop();
        const path = `avatars/${profile.id}/avatar_${Date.now()}.${ext}`;
-   
-       const { data: upData, error: upErr } = await db.storage.from('activity-files').upload(path, file, { upsert: true });
+
+       const { data: upData, error: upErr } = await db.storage.from('activity-files')
+         .upload(path, upload, { upsert: true, contentType: upload.type, cacheControl: '31536000' });
        if (upErr) {
          progress.style.display = 'none';
          Utils.showToast('Erro ao enviar imagem.', 'error');

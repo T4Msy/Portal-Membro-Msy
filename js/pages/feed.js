@@ -18,7 +18,7 @@ import {
   supportsVideoEditing,
   uploadSocialMedia,
   validateMediaFile,
-} from '../social/social_media.js?v=20260609-ig-crop-final';
+} from '../social/social_media.js?v=20261101-avatar';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -5315,7 +5315,9 @@ async function saveSocialProfile() {
     if (avatarFile) {
       if (!avatarFile.type.startsWith('image/')) throw new Error('A foto do perfil precisa ser uma imagem.');
       validateMediaFile(avatarFile, { maxImageMB: 8, maxVideoMB: 0 });
-      social_avatar_url = (await uploadSocialMedia(db, state.profile.id, avatarFile, 'profile/avatar')).url;
+      social_avatar_url = (await uploadSocialMedia(db, state.profile.id, avatarFile, 'profile/avatar', {
+        compression: { maxWidth: 384, maxHeight: 384, quality: 0.85 },
+      })).url;
     }
     if (bannerFile) {
       if (!bannerFile.type.startsWith('image/')) throw new Error('O banner precisa ser uma imagem.');

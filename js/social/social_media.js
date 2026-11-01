@@ -113,10 +113,10 @@ function normalizeSocialUploadError(error, path) {
 }
 
 export async function uploadSocialMedia(db, userId, file, folder = 'posts', options = {}) {
-  const { skipCompression = false } = options;
+  const { skipCompression = false, compression = {} } = options;
   const ownerId = await resolveStorageOwnerId(db, userId);
   const mediaType = getMediaType(file);
-  const uploadFile = mediaType === 'image' && !skipCompression ? await compressImage(file) : file;
+  const uploadFile = mediaType === 'image' && !skipCompression ? await compressImage(file, compression) : file;
   const ext = (uploadFile.name.split('.').pop() || (mediaType === 'image' ? 'webp' : 'mp4')).toLowerCase();
   const safeName = uploadFile.name
     .replace(/\.[^.]+$/, '')
