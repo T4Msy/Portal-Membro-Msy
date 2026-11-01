@@ -4,14 +4,16 @@ Sistema de gestão interna para membros da Masayoshi Order.
 
 **Domínio:** [portalmsy.site](https://portalmsy.site)  
 **Hosting:** Vercel (deploy estático, branch `main`)<br>
-**Backend:** Supabase — [Dashboard](https://supabase.com/dashboard/project/lldzgkxpoyqauxdcjyaw)
+**Backend:** Supabase — [Dashboard](https://supabase.com/dashboard/project/lldzgkxpoyqauxdcjyaw) (login, banco, realtime, Edge Functions)<br>
+**Arquivos:** Cloudflare R2 via Worker `msy-media` (conta do Xitter) — veja [`INFRAESTRUTURA.md`](INFRAESTRUTURA.md)
 
 ---
 
 ## Stack
 
 - HTML + CSS + JavaScript puro (sem framework, sem build step obrigatório, sem npm)
-- Supabase (PostgreSQL + Auth + Edge Functions em Deno/TypeScript)
+- Supabase (PostgreSQL + Auth + Realtime + Edge Functions em Deno/TypeScript)
+- Cloudflare R2 + Worker `msy-media` — anexos, avatares, mídia do feed/Jornal/Space (egress grátis; ver `INFRAESTRUTURA.md`)
 - Web Push VAPID + Email via Resend API
 - Mercado Pago (integração de pagamentos — ainda em fase de teste)
 - Service Worker (`sw.js`) — Web Push, cache PWA e fallback offline
@@ -32,6 +34,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   ├── config.js       Configuração pública do frontend
 │   ├── config.example.js Template de configuração pública
 │   ├── core/           Helpers globais leves (tema, cache, realtime, acessibilidade)
+│   │   └── media-store.js  Cliente de arquivos (R2 via Worker msy-media) — use no lugar de db.storage
 │   ├── app.js          Core: auth, utils, sidebar, topbar, init de todas as páginas
 │   ├── modules.js      Biblioteca, Premiações, Ordem
 │   ├── modules2.js     Feed, Ranking, Busca, Presenças, Desempenho, Onboarding
@@ -45,6 +48,8 @@ Sistema de gestão interna para membros da Masayoshi Order.
 │   ├── payments.js     Integração Mercado Pago
 │   ├── push.js         Notificações Web Push + Email
 │   └── features.js     Feature flags por cargo
+├── cloudflare/
+│   └── media-worker/   Worker msy-media (worker.js + wrangler.jsonc) — arquivos no R2
 ├── supabase/
 │   └── functions/
 │       ├── send-email/ Edge Function: emails via Resend
@@ -146,6 +151,12 @@ Antes de trocar DNS ou promover produção, confirme no Supabase:
 - `http://localhost:8765/dashboard.html`
 
 Preserve URLs `.html` nesta fase para não quebrar redirects existentes.
+
+---
+
+## Arquivos e Anexos (Cloudflare R2)
+
+Desde 01/11/2026 os arquivos públicos (anexos e respostas de atividades, avatares, feed, Jornal, perfil do Space) ficam no **Cloudflare R2**, servidos pelo Worker `msy-media`. O Supabase continua com login, banco, realtime e Edge Functions. No código, use `createMediaStorage(db).from(bucket)` de `js/core/media-store.js` — nunca `db.storage.from()` para esses buckets. Arquitetura, contas, limites, limpeza automática e pendências: **[`INFRAESTRUTURA.md`](INFRAESTRUTURA.md)**.
 
 ---
 

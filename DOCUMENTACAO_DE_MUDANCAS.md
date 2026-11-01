@@ -39,6 +39,7 @@ O registro deve informar, no mínimo:
 | Comissionamento | `COMISSIONAMENTO.md` |
 | Checklist de release ou teste manual | `SMOKE_TESTS.md` |
 | Arquitetura, configuração ou operação geral | `README.md` |
+| Arquivos, uploads, Storage, Cloudflare R2, Worker `msy-media`, limpeza de órfãos | `INFRAESTRUTURA.md` |
 | Funcionalidade nova sem documento próprio | Novo arquivo `.md` na raiz, com nome descritivo |
 | Banco de dados | Comentários na migration e referência no documento do domínio |
 
@@ -77,6 +78,20 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 ## Aplicação atual
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
+
+## Arquivos no Cloudflare R2 e redução de egress do Supabase — 2026-11-01
+
+**O que mudou:** os arquivos públicos do portal (anexos e respostas de atividades, avatares, feed, direct, Jornal, perfil do MSY Space) passaram do Supabase Storage para o **Cloudflare R2** (conta do Xitter), servidos pelo Worker `msy-media`. O Supabase continua com login, banco, realtime e Edge Functions. No mesmo dia: limpeza diária de arquivos órfãos (Supabase e R2), limite de 20 MB (vídeo) / 10 MB (demais) nos anexos de atividade, avatar comprimido para 384 px WebP, prévias de vídeo que não baixam o arquivo à toa e 5 avatares antigos recomprimidos.
+
+**Por que mudou:** o plano Free do Supabase estourou a cota de Cached Egress (16,26 GB de 5 GB no ciclo 18/10–18/11/2026) por causa de downloads de arquivos grandes; o Supabase avisou restrição a partir de 23/11/2026. No R2 o egress é grátis.
+
+**Arquivos e serviços afetados:** `cloudflare/media-worker/` (novo), `js/core/media-store.js` (novo), `js/app.js`, `js/modules2.js`, `js/social/social_media.js`, `js/pages/feed.js`, `js/pages/jornal.js`, `js/space/ui/profile.js`, `js/space/workspace.js`, `sw.js`, `?v=` em todas as páginas, `supabase/functions/storage-cleanup/` (novo) e as migrations `20261101_*`. Fora do Git: bucket R2 `msy-portal-media`, Worker `msy-media`, cron `storage-orphan-cleanup`, `pg_net`, limite do bucket `activity-files`.
+
+**Como funciona:** ver `INFRAESTRUTURA.md` (arquitetura, rotas do Worker, regras de dono dos caminhos, limites, limpeza, como publicar o Worker e como adicionar upload novo).
+
+**Validação realizada:** Worker testado ao vivo (upload próprio 200, caminho de outro membro 403, sem login 401, tipo proibido 415, duplicado 409, Range 206, delete, import); adaptador testado no portal com nome com espaço/acento/`&`; 210 de 210 arquivos copiados e conferidos por HEAD; nenhuma URL do Supabase restante nos 4 buckets; Feed, Perfil, Atividades e Jornal sem imagem quebrada; simulação da limpeza do R2 (0 a apagar, todos com menos de 7 dias); `node --check` nos scripts.
+
+**Pendências ou cuidados para deploy:** apagar as cópias antigas no Supabase Storage (~310 MB) depois de conferir que não houve upload novo lá; 34 registros já apontavam para arquivos inexistentes antes da migração; investigar a exclusão de anexo que pode deixar link pendurado; se o domínio do Worker mudar, refazer a troca de URLs e atualizar `media-store.js` e `sw.js`.
 
 ## Ordem de Contribuição Especial — 2026-09-13
 

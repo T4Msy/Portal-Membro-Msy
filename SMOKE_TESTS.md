@@ -52,6 +52,14 @@ Execute este checklist manualmente **antes de promover qualquer deploy** para ga
 - [ ] Página `presencas.html` carrega lista de eventos
 - [ ] Marcar presença em evento → status atualiza sem reload da página
 
+### Arquivos (Cloudflare R2 — ver INFRAESTRUTURA.md)
+- [ ] `https://msy-media.miguelalvesmm08.workers.dev/` responde `{"ok":true,"service":"msy-media"}`
+- [ ] Feed e Perfil: avatares e mídias carregam (DevTools → Network: URLs `msy-media...workers.dev` com status 200, nenhum 503)
+- [ ] Trocar a foto de perfil → nova foto aparece e o arquivo enviado tem poucos KB (WebP)
+- [ ] Responder atividade com anexo pequeno → anexo abre pelo botão Ver
+- [ ] Vídeo maior que 20 MB ou outro arquivo maior que 10 MB em atividade → recusado com mensagem
+- [ ] Depois de mexer no `sw.js`: o host do Worker continua em `NETWORK_ONLY`
+
 ### Erros de Console
 - [ ] Abrir DevTools → Console
 - [ ] Navegar por 5 páginas → **zero erros vermelhos no console**

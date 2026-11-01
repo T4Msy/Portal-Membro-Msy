@@ -110,6 +110,8 @@ Public files (activity attachments/responses, avatars, feed media, Jornal, Space
 
 In the frontend, use `createMediaStorage(db).from(bucket)` from `js/core/media-store.js` (same `upload` / `getPublicUrl` / `remove` shape as `db.storage.from()`); classic scripts load it with dynamic `import()`. Never call `db.storage.from()` for `activity-files`, `social-media`, `jornal-media` or `space-profile-media`. Private buckets (`meeting-files`, `space-app`) still use Supabase Storage with signed URLs.
 
+**Read `INFRAESTRUTURA.md` before touching uploads, media URLs, `sw.js` or storage.** Key gotchas: the Worker host must stay in `sw.js` `NETWORK_ONLY` (otherwise the SW answers 503 for every R2 image); orphan files are cleaned daily on both sides (Supabase: Edge Function `storage-cleanup` + pg_cron; R2: Worker `POST /_cleanup`, triggered by `_scheduleMediaCleanup` in `app.js` when a diretoria user opens the portal); the Worker source in the repo must match what is deployed in the Cloudflare dashboard (Xitter's Cloudflare account). After changing any `.js`, bump its `?v=` in the HTML pages (Vercel caches `.js` up to a day).
+
 ### Edge Functions (Deno/TypeScript)
 
 Located in `supabase/functions/`. Both are JWT-protected and `diretoria`-only:
