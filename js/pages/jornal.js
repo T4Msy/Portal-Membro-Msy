@@ -501,7 +501,7 @@ function renderCard(post, large = false) {
   return `
     <button class="journal-card ${large ? 'large' : ''}" data-open-journal-post="${post.id}" id="post-${post.id}">
       <div class="journal-card-media">
-        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" muted playsinline webkit-playsinline preload="metadata" data-journal-card-video></video>` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
+        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
         ${post.post_type === 'video' || videoUrl ? '<span class="journal-play-badge"><i class="fa-solid fa-play"></i></span>' : ''}
       </div>
       <div class="journal-card-body">
@@ -545,7 +545,6 @@ function renderEmpty(text) {
 }
 
 function bindPage() {
-  bindJournalCardVideoPreviews();
   document.querySelectorAll('[data-journal-section]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeSection = btn.dataset.journalSection;
     state.activeFormat = state.activeSection === 'videos' ? 'video'
@@ -568,24 +567,6 @@ function bindPage() {
   document.getElementById('journalNewPost')?.addEventListener('click', () => openEditor());
 }
 
-function bindJournalCardVideoPreviews(root = document) {
-  root.querySelectorAll('video[data-journal-card-video]').forEach((video) => {
-    if (video.dataset.previewBound === 'true') return;
-    video.dataset.previewBound = 'true';
-    video.playsInline = true;
-    video.addEventListener('loadedmetadata', () => {
-      const duration = Number(video.duration || 0);
-      const targetTime = Number.isFinite(duration) && duration > 1 ? Math.min(0.8, duration - 0.1) : 0;
-      if (targetTime > 0) {
-        try {
-          video.currentTime = targetTime;
-        } catch (err) {
-          console.warn('[MSY][jornal] Preview do card de video indisponivel:', err);
-        }
-      }
-    }, { once: true });
-  });
-}
 
 function updateVisibleSections() {
   document.querySelectorAll('[data-journal-section-panel]').forEach((panel) => {
@@ -639,7 +620,7 @@ function renderPostBody(post) {
     const poster = getPostCoverImage(post);
     return `
       <div class="journal-player">
-        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls playsinline webkit-playsinline x5-playsinline preload="metadata" ${poster ? `poster="${Utils.escapeHtml(poster)}"` : ''}></video>` : renderEmpty('Video indisponivel.')}
+        ${videoUrl ? `<video src="${Utils.escapeHtml(videoUrl)}" controls playsinline webkit-playsinline x5-playsinline ${poster ? `preload="none" poster="${Utils.escapeHtml(poster)}"` : 'preload="metadata"'}></video>` : renderEmpty('Video indisponivel.')}
       </div>
       ${renderVideoDescription(post)}`;
   }

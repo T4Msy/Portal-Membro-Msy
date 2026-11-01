@@ -293,6 +293,29 @@ function findStoryById(storyId) {
   return null;
 }
 
+// Vídeos de lista e miniaturas entram com preload="none" + data-lazy-preview e só passam a
+// preload="metadata" perto da tela: antes cada vídeo do feed já baixava ao montar a página (egress).
+const LAZY_VIDEO_ATTRS = 'preload="none" data-lazy-preview';
+
+function bindLazyVideoPreviews() {
+  const observer = 'IntersectionObserver' in window
+    ? new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.preload = 'metadata';
+      observer.unobserve(entry.target);
+    }), { rootMargin: '300px 0px' })
+    : null;
+  const watch = (root) => root.querySelectorAll?.('video[data-lazy-preview]:not([data-lazy-bound])').forEach((video) => {
+    video.dataset.lazyBound = 'true';
+    if (observer) observer.observe(video);
+    else video.preload = 'metadata';
+  });
+  watch(document);
+  new MutationObserver((mutations) => mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+    if (node.nodeType === 1) watch(node.parentNode || node);
+  }))).observe(document.body, { childList: true, subtree: true });
+}
+
 function renderStoryMediaElement(story, attrs = '') {
   const editState = normalizeMediaEditState(story?.media_meta || {}, story?.media_type || 'image');
   const aspect = mediaAspectCss(editState.aspect || '9:16', editState.originalAspect);
@@ -528,6 +551,7 @@ async function initFeed() {
   await renderTopBar('Feed Social', profile);
 
   document.getElementById('pageContent').innerHTML = layout();
+  bindLazyVideoPreviews();
   bindComposer();
   bindSearch();
   bindModals();
@@ -827,7 +851,7 @@ function renderPost(post) {
   const media = (post.media || []).length ? `
       <div class="post-media" data-media-post="${post.id}">
         <div class="post-media-track">
-        ${post.media.map((m, index) => `<div class="post-media-slide" style="--post-media-aspect:${postMediaAspectCss(m)}" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? 'controls preload="metadata"' : 'loading="lazy" decoding="async"')}</div>`).join('')}
+        ${post.media.map((m, index) => `<div class="post-media-slide" style="--post-media-aspect:${postMediaAspectCss(m)}" role="button" tabindex="0" data-open-media="${post.id}" data-media-index="${index}" aria-label="Abrir midia">${renderPostMediaElement(m, m.media_type === 'video' ? `controls ${LAZY_VIDEO_ATTRS}` : 'loading="lazy" decoding="async"')}</div>`).join('')}
       </div>
       ${post.media.length > 1 ? `
         <button type="button" class="post-media-nav post-media-prev" data-media-nav="${post.id}" data-media-direction="-1" aria-label="Foto anterior"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1346,7 +1370,7 @@ function openPostShareSheet(postId) {
   modal.dataset.selectedMembers = '';
   const firstMedia = post.media?.[0] || null;
   const media = firstMedia?.url
-    ? `<span class="post-share-context-thumb">${firstMedia.media_type === 'video' ? `<video src="${Utils.escapeHtml(firstMedia.url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(firstMedia.url)}" alt="">`}</span>`
+    ? `<span class="post-share-context-thumb">${firstMedia.media_type === 'video' ? `<video src="${Utils.escapeHtml(firstMedia.url)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video>` : `<img src="${Utils.escapeHtml(firstMedia.url)}" alt="">`}</span>`
     : '<span class="post-share-context-thumb"><i class="fa-regular fa-newspaper"></i></span>';
   modal.innerHTML = `
     <div class="post-share-panel">
@@ -3235,11 +3259,11 @@ function renderActivityThumbnail(notification) {
   const post = postId ? state.posts.find((item) => item.id === postId) : null;
   const media = post?.media?.[0];
   if (media) {
-    return `<span class="activity-thumb">${media.media_type === 'video' ? `<video src="${Utils.escapeHtml(media.url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(media.url)}" alt="">`}</span>`;
+    return `<span class="activity-thumb">${media.media_type === 'video' ? `<video src="${Utils.escapeHtml(media.url)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video>` : `<img src="${Utils.escapeHtml(media.url)}" alt="">`}</span>`;
   }
   if (notification.target_type === 'story') {
     const story = findStoryById(notification.target_id);
-    if (story?.media_url) return `<span class="activity-thumb">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" muted playsinline preload="metadata"></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" alt="">`}</span>`;
+    if (story?.media_url) return `<span class="activity-thumb">${story.media_type === 'video' ? `<video src="${Utils.escapeHtml(story.media_url)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video>` : `<img src="${Utils.escapeHtml(story.media_url)}" alt="">`}</span>`;
   }
   return '';
 }
@@ -3940,7 +3964,7 @@ function renderProfileTab(member, posts, mediaItems, canViewPrivateTabs = false)
       <div class="profile-media-grid">
         ${mediaItems.map(({ post, media, index }) => `
           <button type="button" data-open-profile-media="${post.id}" data-media-index="${index}">
-            ${media.media_type === 'video' ? `<video src="${Utils.escapeHtml(media.url)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>` : `<img src="${Utils.escapeHtml(media.url)}" loading="lazy" decoding="async">`}
+            ${media.media_type === 'video' ? `<video src="${Utils.escapeHtml(media.url)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video><i class="fa-solid fa-play"></i>` : `<img src="${Utils.escapeHtml(media.url)}" loading="lazy" decoding="async">`}
           </button>`).join('')}
       </div>` : '<div class="social-empty"><i class="fa-regular fa-image"></i>Nenhuma midia publicada ainda.</div>';
   }
@@ -5392,7 +5416,7 @@ function renderDirectMessageAttachment(message) {
     const mediaType = firstMedia?.media_type || attachment.media_type || 'image';
     const thumb = mediaUrl
       ? (mediaType === 'video'
-        ? `<video src="${Utils.escapeHtml(mediaUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
+        ? `<video src="${Utils.escapeHtml(mediaUrl)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video><i class="fa-solid fa-play"></i>`
         : `<img src="${Utils.escapeHtml(mediaUrl)}" alt="Preview da publicacao" loading="lazy" decoding="async">`)
       : '<i class="fa-regular fa-newspaper"></i>';
     return `
@@ -5421,7 +5445,7 @@ function renderDirectStoryReplyReference(message, { mine = false } = {}) {
   const caption = reply.story?.caption || reply.attachment.caption_excerpt || reply.attachment.caption || '';
   const thumb = previewUrl
     ? (mediaType === 'video'
-      ? `<video src="${Utils.escapeHtml(previewUrl)}" muted playsinline preload="metadata"></video><i class="fa-solid fa-play"></i>`
+      ? `<video src="${Utils.escapeHtml(previewUrl)}" muted playsinline ${LAZY_VIDEO_ATTRS}></video><i class="fa-solid fa-play"></i>`
       : `<img src="${Utils.escapeHtml(previewUrl)}" alt="Story respondido" loading="lazy" decoding="async">`)
     : '<i class="fa-regular fa-image"></i>';
   return `
