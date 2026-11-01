@@ -58,6 +58,9 @@ sem mudar de plano.
   Uso em 01/11/2026: ~310 MB, cobrança US$ 0,00. **Alerta de cobrança** "MSY Portal - qualquer cobranca"
   criado em 01/11/2026: e-mail para o Xitter assim que a fatura passar de **US$ 1** (R2 → Billing Dashboard).
 
+- **R2 bucket** `msy-backups` — privado; backups semanais **criptografados** do banco (pasta `db/`,
+  apagados após 90 dias). Rotina e restauração: [`BACKUP.md`](BACKUP.md).
+
 **Nenhum segredo fica no Cloudflare.** O Worker valida o login pela chave **pública** (JWKS) do
 Supabase e, para saber se alguém é diretoria, chama o Supabase com o próprio token do usuário.
 Segredos do backend (service role, Resend, Mercado Pago, VAPID) continuam só nos Secrets do Supabase.

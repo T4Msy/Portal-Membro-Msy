@@ -79,6 +79,20 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
 
+## Backup semanal do banco (plano B do Supabase) — 2026-11-01
+
+**O que mudou:** rotina do GitHub Actions (`.github/workflows/db-backup.yml`) que todo domingo faz o dump completo do banco (incluindo os logins de `auth.users`), criptografa com AES-256 e guarda no bucket privado `msy-backups` do Cloudflare R2 (regra apaga após 90 dias).
+
+**Por que mudou:** ter como subir o portal em outro projeto se o Supabase restringir (cota), cair por muito tempo ou o projeto se perder; o plano Free não oferece backup para baixar.
+
+**Arquivos e serviços afetados:** `.github/workflows/db-backup.yml`, `BACKUP.md` (guia), bucket R2 `msy-backups` com regra de ciclo de vida.
+
+**Como funciona:** ver `BACKUP.md` (secrets, onde fica, como baixar, abrir e restaurar).
+
+**Validação realizada:** YAML validado; bucket e regra de 90 dias criados e conferidos no painel. O primeiro backup depende dos 4 secrets.
+
+**Pendências ou cuidados para deploy:** o Xitter precisa cadastrar `SUPABASE_DB_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` e `BACKUP_PASSPHRASE` no GitHub e guardar a passphrase num gerenciador de senhas; repositório público desativa cron após 60 dias sem commits.
+
 ## Arquivos no Cloudflare R2 e redução de egress do Supabase — 2026-11-01
 
 **O que mudou:** os arquivos públicos do portal (anexos e respostas de atividades, avatares, feed, direct, Jornal, perfil do MSY Space) passaram do Supabase Storage para o **Cloudflare R2** (conta do Xitter), servidos pelo Worker `msy-media`. O Supabase continua com login, banco, realtime e Edge Functions. No mesmo dia: limpeza diária de arquivos órfãos (Supabase e R2), limite de 20 MB (vídeo) / 10 MB (demais) nos anexos de atividade, avatar comprimido para 384 px WebP, prévias de vídeo que não baixam o arquivo à toa e 5 avatares antigos recomprimidos.

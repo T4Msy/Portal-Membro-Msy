@@ -1,0 +1,89 @@
+# Backup semanal do banco do Portal MSY (Supabase) para o Cloudflare R2.
+# Inclui os logins (auth.users com as senhas já criptografadas pelo Supabase), então dá para
+# restaurar num projeto novo e todo mundo continua entrando com a mesma senha.
+# O arquivo é CRIPTOGRAFADO (AES-256) antes de sair daqui — este repositório é público.
+# Guia completo (secrets, restauração): BACKUP.md
+name: Backup do banco (Supabase -> R2)
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'   # domingo 06:00 UTC (03:00 em Brasília)
+  workflow_dispatch:       # rodar na hora: Actions -> "Backup do banco" -> Run workflow
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      R2_ENDPOINT: https://d193b63f22591a6a947995231eea6ab4.r2.cloudflarestorage.com
+      R2_BUCKET: msy-backups
+    steps:
+      - name: Conferir secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          missing=0
+          for name in SUPABASE_DB_URL BACKUP_PASSPHRASE R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::Secret $name não cadastrado (ver BACKUP.md)"; missing=1; fi
+          done
+          exit $missing
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Gerar dump (papéis, estrutura, dados e logins)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir -p backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/data.sql --use-copy --data-only
+          # Logins e metadados de arquivos, à parte, para restaurar mesmo se o data.sql mudar de formato.
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/auth_storage_data.sql --use-copy --data-only --schema auth,storage
+          {
+            echo "projeto: lldzgkxpoyqauxdcjyaw"
+            echo "gerado_em_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "commit_do_portal: $GITHUB_SHA"
+            supabase --version | sed 's/^/supabase_cli: /'
+          } > backup/LEIA-ME.txt
+          ls -la backup
+          for f in backup/*.sql; do
+            if [ ! -s "$f" ]; then echo "::error::$f veio vazio"; exit 1; fi
+          done
+
+      - name: Compactar e criptografar
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          STAMP=$(date -u +%Y-%m-%d_%H%M)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          tar -czf "msy-db-$STAMP.tar.gz" backup
+          gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase-fd 3 -o "msy-db-$STAMP.tar.gz.gpg" "msy-db-$STAMP.tar.gz" 3<<<"$BACKUP_PASSPHRASE"
+          rm -rf backup "msy-db-$STAMP.tar.gz"
+          ls -la "msy-db-$STAMP.tar.gz.gpg"
+
+      - name: Enviar para o R2 (msy-backups/db/)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # AWS CLI v2 recente manda checksums que o R2 nem sempre aceita.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          aws s3 cp "msy-db-$STAMP.tar.gz.gpg" "s3://$R2_BUCKET/db/msy-db-$STAMP.tar.gz.gpg" --endpoint-url "$R2_ENDPOINT"
+          aws s3 ls "s3://$R2_BUCKET/db/" --endpoint-url "$R2_ENDPOINT" | tail -5
+          rm -f "msy-db-$STAMP.tar.gz.gpg"
