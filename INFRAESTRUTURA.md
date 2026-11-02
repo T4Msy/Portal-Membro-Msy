@@ -223,12 +223,10 @@ download: Logs Explorer, `source = 'edge_logs'`, `log_attributes['request.path']
 
 ## 8. Pendências e problemas conhecidos (01/11/2026)
 
-- **Cópias antigas no Supabase Storage (~310 MB)** nos 4 buckets migrados: não geram tráfego
-  (nada aponta para elas), mas ocupam espaço. Esperar ~1 dia (cache de JS antigo), conferir se
-  chegou upload novo no Supabase (`storage.objects` com `created_at` recente nesses buckets;
-  se houver, copiar com `/_import` e rodar `20261101_media_urls_to_r2.sql` de novo) e então apagar
-  — **com autorização do Xitter**. Atenção: a `storage-cleanup` do Supabase **não** apaga essas
-  cópias, porque o nome do arquivo continua aparecendo nas URLs novas.
+- ~~Cópias antigas no Supabase Storage~~ — **resolvido em 02/11/2026**: conferido que não houve
+  upload novo no Supabase depois da migração e que o banco não tem nenhuma URL antiga; o Xitter
+  esvaziou `activity-files`, `social-media` e `space-profile-media` (Edit bucket → Empty bucket).
+  Os buckets continuam existindo, vazios. No Supabase Storage sobraram só `meeting-files` e `space-app`.
 - **34 registros apontam para arquivos que já não existiam antes da migração** (14 mídias de post,
   11 stories, 7 respostas de atividade, 2 anexos do direct). Ficam quebrados no site.
 - **Bug provável na exclusão de anexo** (Atividades → Anexos, diretoria): apaga o arquivo e depois
