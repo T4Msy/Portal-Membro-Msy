@@ -319,15 +319,16 @@ async function initBot() {
     comunicado: ['titulo', 'categoria', 'conteudo', 'link'],
     // {do} = do/da/de conforme a pessoa; {frase} = sorteada pelo bot.
     aniversario: ['do', 'nome', 'pessoas', 'frase'],
+    aniversario_ordem: ['anos', 'nome', 'pessoas', 'frase'],
   };
   const SAMPLE = {
     titulo: 'Reunião Geral', data: '05/11/2026', hora: '20:00', descricao: 'Pauta do mês',
     link: 'https://www.portalmsy.site', pendentes: '@Duda @Julia', pessoas: '@Duda', todos: '@todos',
     prazo: '05/11/2026 às 18:00', categoria: 'Geral', conteudo: 'Texto do comunicado...',
-    do: 'da', nome: 'Duda', frase: 'Um brinde a você: que esse ano seja o melhor de todos até agora. 🥂',
+    do: 'da', nome: 'Duda', frase: 'Um brinde a você: que esse ano seja o melhor de todos até agora. 🥂', anos: '2 anos',
   };
   const varsOf = key => AUTO_VARS[
-    key === 'aniversario' ? 'aniversario'
+    key === 'aniversario' || key === 'aniversario_ordem' ? key
       : key.startsWith('evento_cobranca') ? 'evento_cobranca'
       : key === 'evento_inicio' ? 'evento_inicio'
         : key.startsWith('evento') ? 'evento'
