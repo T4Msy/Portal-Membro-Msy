@@ -3113,7 +3113,19 @@ body[data-page="dashboard"] .dash-grid > .card:nth-child(3) { display: none; }
   background: var(--black-4);
   border-radius: var(--radius);
   border: 1px solid var(--border-faint);
+  overflow-wrap: anywhere;
 }
+
+/* Texto com markdown mínimo (Utils.formatRichText) */
+.rich-text p { margin: 0 0 10px; }
+.rich-text ul,
+.rich-text ol { margin: 0 0 10px; padding-left: 22px; }
+.rich-text ul { list-style: disc; }
+.rich-text ol { list-style: decimal; }
+.rich-text li { margin-bottom: 4px; }
+.rich-text li::marker { color: var(--gold); }
+.rich-text strong { color: var(--text-1); font-weight: 700; }
+.rich-text > :last-child { margin-bottom: 0; }
 
 /* File upload zone */
 .upload-zone {

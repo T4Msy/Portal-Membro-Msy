@@ -424,6 +424,42 @@
        d.textContent = String(text || '');
        return d.innerHTML;
      },
+     // Markdown mínimo (parágrafos, listas "- "/"1. ", títulos "#", **negrito**, *itálico*/_itálico_).
+     // Escapa o texto inteiro antes; as únicas tags geradas são as fixas abaixo.
+     formatRichText(text) {
+       const inline = (s) => s
+         .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
+         .replace(/__(?=\S)([\s\S]*?\S)__/g, '<strong>$1</strong>')
+         .replace(/(^|[^\w*])\*(?=[^\s*])([^*\n]*?[^\s*])?\*(?![\w*])/g, (m, pre, body) => body ? `${pre}<em>${body}</em>` : m)
+         .replace(/(^|[^\w])_(?=[^\s_])([^_\n]*?[^\s_])?_(?!\w)/g, (m, pre, body) => body ? `${pre}<em>${body}</em>` : m);
+       const lines = Utils.escapeHtml(text).replace(/\r\n?/g, '\n').split('\n');
+       const out = [];
+       let para = [];
+       let list = null;
+       const flushPara = () => { if (para.length) out.push(`<p>${para.map(inline).join('<br>')}</p>`); para = []; };
+       const flushList = () => { if (list) out.push(`<${list.tag}>${list.items.map(i => `<li>${inline(i)}</li>`).join('')}</${list.tag}>`); list = null; };
+       lines.forEach((raw) => {
+         const line = raw.trim();
+         const ul = line.match(/^[-*•]\s+(.*)$/);
+         const ol = line.match(/^\d+[.)]\s+(.*)$/);
+         const h = line.match(/^#{1,6}\s+(.*)$/);
+         if (!line) { flushPara(); flushList(); return; }
+         if (ul || ol) {
+           const tag = ul ? 'ul' : 'ol';
+           flushPara();
+           if (list && list.tag !== tag) flushList();
+           if (!list) list = { tag, items: [] };
+           list.items.push((ul || ol)[1]);
+           return;
+         }
+         flushList();
+         if (h) { flushPara(); out.push(`<p class="rich-text-title"><strong>${inline(h[1])}</strong></p>`); return; }
+         para.push(line);
+       });
+       flushPara();
+       flushList();
+       return out.join('');
+     },
      debounce(fn, wait = 250) {
        let timer = null;
        return function debounced(...args) {
@@ -2336,7 +2372,7 @@
        ${scheduleInfo}
        <div class="divider"></div>
        <div style="font-size:.8rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Descrição</div>
-       <div class="modal-description">${Utils.escapeHtml(act.description)}</div>
+       <div class="modal-description rich-text">${Utils.formatRichText(act.description)}</div>
 
        ${renderActivityAttachmentSection(attachments)}
        ${renderModalAnexos(anexosDaAtividade)}

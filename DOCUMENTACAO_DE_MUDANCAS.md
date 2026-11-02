@@ -79,6 +79,20 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
 
+## Descrição das atividades com formatação (negrito, listas, parágrafos) — 2026-11-02
+
+**O que mudou:** ao abrir uma atividade, a descrição passa a respeitar a formatação que a Diretoria escreve: parágrafos e linhas em branco, quebras de linha, listas com `- ` (ou `* `, `• `) e numeradas (`1. `), títulos com `#`, **negrito** com `**texto**`/`__texto__` e itálico com `*texto*`/`_texto_`. Emojis continuam como estão.
+
+**Por que mudou:** a descrição era mostrada como texto puro sem `white-space`, então as quebras de linha sumiam e os `**` apareciam crus, deixando atividades longas ilegíveis.
+
+**Arquivos e serviços afetados:** `js/app.js` (novo `Utils.formatRichText()` logo após `Utils.escapeHtml()`; modal da atividade usa `<div class="modal-description rich-text">`), `css/style.css` (`.rich-text` e `overflow-wrap` em `.modal-description`), `?v=` de `js/app.js` trocado para `20261102-desc-formatada` em todas as páginas e de `css/style.css` em `atividades.html` e `bot.html`. Sem migration: o texto continua salvo igual no banco (só `trim()`).
+
+**Como funciona:** `Utils.formatRichText(texto)` escapa o texto inteiro com `Utils.escapeHtml()` primeiro e só depois converte o markdown mínimo nas tags fixas `p`, `br`, `ul`/`ol`/`li`, `strong` e `em` — nenhum atributo é gerado, então não há risco de XSS. Itálico com `_` exige limite de palavra (`snake_case` não vira itálico). Pode ser reaproveitado em outras descrições (eventos, reuniões) adicionando a classe `rich-text` ao container.
+
+**Validação realizada:** página local temporária com o texto real da atividade "Pesquisa de tirinhas" comparando antes/depois (títulos em negrito, parágrafos separados, lista com marcadores dourados, sem `**` visível) e teste com `<img onerror>`/`<script>` saindo escapados.
+
+**Pendências ou cuidados para deploy:** abrir uma atividade real após o deploy (Ctrl+F5 se o navegador estiver com o `app.js` antigo).
+
 ## Importar ranking de imagem (OCR do print da tabela) — 2026-11-02
 
 **O que mudou:** o modal "Novo Ranking" (semanal e mensal) ganhou o botão **Importar de imagem**. A Diretoria anexa ou cola (Ctrl+V) o print da tabela de pontuação (Membro | Semana 1..N | TOTAL | MÉDIA | "TOTAL DO GRUPO") e o portal preenche as linhas com o membro e o TOTAL de cada um. Nada é salvo sozinho: a Diretoria confere, ajusta e clica em Salvar como antes.
