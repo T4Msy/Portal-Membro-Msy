@@ -6,6 +6,8 @@
    Helpers _tron*: module-privados (não mais globals implícitos).
    ============================================================ */
 
+import { importarRankingDeImagem, lembrarAliases } from '../core/ranking-import.js?v=20261102-ocr';
+
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
 /* Paginator copiado inline para tornar o módulo auto-contido. */
@@ -1028,6 +1030,12 @@ async function initRanking() {
             <div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" id="rankStart"></div>
             <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-input" id="rankEnd"></div>
           </div>
+          <div class="rank-import">
+            <button class="btn btn-ghost btn-sm" id="rankImportBtn" type="button"><i class="fa-solid fa-image"></i> Importar de imagem</button>
+            <input type="file" id="rankImportFile" accept="image/*" hidden>
+            <span class="rank-import-hint">ou cole o print da tabela (Ctrl+V)</span>
+            <div class="rank-import-status" id="rankImportStatus" hidden></div>
+          </div>
           <div>
             <label class="form-label" style="margin-bottom:6px;display:block">Participantes</label>
             <div id="rankEntries" class="rank-entries"></div>
@@ -1041,7 +1049,10 @@ async function initRanking() {
       </div>`;
 
     requestAnimationFrame(() => modal.classList.add('open'));
-    const close = () => modal.classList.remove('open');
+    const close = () => {
+      modal.classList.remove('open');
+      document.removeEventListener('paste', onPaste);
+    };
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
     document.getElementById('rankModalClose').addEventListener('click', close);
     document.getElementById('rankCancelBtn').addEventListener('click', close);
@@ -1050,7 +1061,8 @@ async function initRanking() {
       .map(m => `<option value="${m.id}">${Utils.escapeHtml(m.name)}${m.role ? ` · ${Utils.escapeHtml(m.role)}` : ''}</option>`)
       .join('');
 
-    const addRow = (m = '', uid = '') => {
+    // lido: linha vinda do print ({ lido, status, conferir }) — mostra o nome lido e o que falta conferir
+    const addRow = (m = '', uid = '', lido = null) => {
       const row = document.createElement('div');
       row.className = 'rank-entry-row';
       row.innerHTML = `<select class="form-input rank-member" style="padding:8px 10px;font-size:.85rem">
@@ -1061,11 +1073,75 @@ async function initRanking() {
         <button class="btn btn-ghost btn-sm rank-remove-row" type="button" aria-label="Remover participante"><i class="fa-solid fa-times" style="color:var(--red-bright)"></i></button>`;
       const select = row.querySelector('.rank-member');
       if (uid) select.value = uid;
+      if (lido) {
+        row.dataset.lido = lido.lido;
+        const avisos = [];
+        if (!select.value) { row.classList.add('rank-entry-row--pendente'); avisos.push('escolha o membro'); }
+        if (lido.conferir) { row.classList.add('rank-entry-row--conferir'); avisos.push('confira o total'); }
+        const info = document.createElement('div');
+        info.className = 'rank-entry-lido';
+        info.innerHTML = `<i class="fa-solid fa-image"></i> Lido no print: <strong>${Utils.escapeHtml(lido.lido)}</strong>${avisos.length ? ` · ${avisos.join(' · ')}` : ''}`;
+        row.appendChild(info);
+        select.addEventListener('change', () => row.classList.toggle('rank-entry-row--pendente', !select.value));
+      }
       row.querySelector('button').addEventListener('click', () => row.remove());
       document.getElementById('rankEntries').appendChild(row);
     };
     for (let i = 0; i < 5; i++) addRow();
     document.getElementById('rankAddRow').addEventListener('click', () => addRow());
+
+    const importStatus = document.getElementById('rankImportStatus');
+    const importBtn = document.getElementById('rankImportBtn');
+    const mostrarStatus = (texto, tipo = '') => {
+      importStatus.hidden = false;
+      importStatus.className = `rank-import-status${tipo ? ` rank-import-status--${tipo}` : ''}`;
+      importStatus.textContent = texto;
+    };
+
+    // Lê o print, troca as linhas do formulário pelas lidas e deixa para a Diretoria conferir e salvar
+    async function importarImagem(arquivo) {
+      if (!arquivo || !arquivo.type.startsWith('image/')) { Utils.showToast('Escolha uma imagem do print da tabela.', 'error'); return; }
+      importBtn.disabled = true;
+      mostrarStatus('Lendo a imagem... (na primeira vez baixa o leitor, pode levar alguns segundos)');
+      try {
+        const linhas = await importarRankingDeImagem(arquivo, membrosRanking || [], p => {
+          mostrarStatus(`Lendo a imagem... ${Math.round(p * 100)}%`);
+        });
+        if (!linhas.length) {
+          mostrarStatus('Não encontrei linhas de membros nessa imagem. Confira se é o print da tabela.', 'erro');
+          return;
+        }
+        document.getElementById('rankEntries').innerHTML = '';
+        linhas.forEach(l => addRow(l.total, l.userId || '', l));
+        const pendentes = linhas.filter(l => !l.userId).length;
+        const conferir = linhas.filter(l => l.conferir).length;
+        const partes = [`${linhas.length} membros lidos`];
+        if (pendentes) partes.push(`${pendentes} para escolher o membro`);
+        if (conferir) partes.push(`${conferir} para conferir o total`);
+        mostrarStatus(`${partes.join(' · ')}. Confira tudo antes de salvar.`, pendentes || conferir ? 'aviso' : 'ok');
+      } catch (err) {
+        console.error('[MSY][ranking] Erro ao importar ranking de imagem:', err);
+        mostrarStatus('Não foi possível ler a imagem. Tente de novo ou preencha manualmente.', 'erro');
+        Utils.showToast('Erro ao ler a imagem.', 'error');
+      } finally {
+        importBtn.disabled = false;
+      }
+    }
+
+    const importFile = document.getElementById('rankImportFile');
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', () => {
+      importarImagem(importFile.files[0]);
+      importFile.value = '';
+    });
+    function onPaste(e) {
+      if (!modal.classList.contains('open')) return;
+      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+      if (!item) return;
+      e.preventDefault();
+      importarImagem(item.getAsFile());
+    }
+    document.addEventListener('paste', onPaste);
 
     document.getElementById('rankSaveBtn').addEventListener('click', async () => {
       const start = document.getElementById('rankStart').value;
@@ -1101,6 +1177,9 @@ async function initRanking() {
       }
 
       Utils.showToast('Ranking salvo!');
+      // Nomes lidos do print + membro confirmado: na próxima importação casam sozinhos
+      lembrarAliases([...document.querySelectorAll('#rankEntries > div[data-lido]')]
+        .map(r => ({ lido: r.dataset.lido, userId: r.querySelector('.rank-member')?.value })));
       close();
 
       const { data: fresh } = await db.from('weekly_rankings')

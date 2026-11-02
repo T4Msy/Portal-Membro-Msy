@@ -79,6 +79,24 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
 
+## Importar ranking de imagem (OCR do print da tabela) — 2026-11-02
+
+**O que mudou:** o modal "Novo Ranking" (semanal e mensal) ganhou o botão **Importar de imagem**. A Diretoria anexa ou cola (Ctrl+V) o print da tabela de pontuação (Membro | Semana 1..N | TOTAL | MÉDIA | "TOTAL DO GRUPO") e o portal preenche as linhas com o membro e o TOTAL de cada um. Nada é salvo sozinho: a Diretoria confere, ajusta e clica em Salvar como antes.
+
+**Por que mudou:** evitar digitar à mão nome e total de cada membro a cada ranking.
+
+**Arquivos e serviços afetados:** `js/core/ranking-import.js` (novo: OCR, leitura das linhas, casamento com `profiles`), `js/pages/ranking.js` (botão, colar, avisos por linha, lembrar apelidos ao salvar), `css/style.css` (`.rank-import*`, `.rank-entry-lido`, `.rank-entry-row--pendente/--conferir`), `ranking.html` (`?v=20261102-ocr`). Sem migration; continua gravando em `weekly_rankings` com o mesmo formato.
+
+**Como funciona:**
+- **Leitura:** OCR no próprio navegador com Tesseract.js 5.1.1 (jsDelivr, carregado só ao clicar). Custo zero, sem chave/segredo e a imagem não sai do aparelho. Uma Edge Function com IA de visão seria mais "esperta", mas exigiria chave paga no backend; para uma tabela de layout fixo o OCR local basta. Primeira leitura baixa ~2 MB (modelo `eng`), depois fica no cache do navegador; leva ~3 s.
+- **Zero cortado:** a fonte dos números tem Ø, que o OCR às vezes lê como 8/9/6. A imagem é lida em 3 escalas e, por linha, vale a leitura em que as semanas somam o TOTAL e TOTAL ÷ semanas ≈ MÉDIA (trocando 8/9/6 por 0 quando é isso que fecha a conta). Se nenhuma leitura fecha, usa o TOTAL mais repetido e marca a linha "confira o total" (borda vermelha). Funciona com qualquer nº de semanas (lido do cabeçalho).
+- **Nomes:** ignora cabeçalho, "TOTAL DO GRUPO" e o emoji depois do nome. Casa com `profiles` sem acento/maiúscula: apelido já confirmado → nome completo → começo do nome → primeiro nome → palavra do nome → iniciais (ex.: "Ph" → PH) → 1 letra errada do OCR ("Jodo" → João). Só aceita quando sobra um único membro; senão a linha fica "escolha o membro".
+- **Apelidos:** ao salvar, cada "nome lido no print → membro escolhido" fica guardado no `localStorage` (`msy_rank_ocr_alias`) desse navegador, então "Pepeu", "Jotinha" etc. casam sozinhos nas próximas importações. É conveniência por aparelho, não é compartilhado.
+
+**Validação realizada:** com o print de exemplo (11 membros) os 11 totais saíram certos (4030, 3149, 2147, 1930, 1757, 1150, 550, 333, 72, 71, 32), inclusive os com zero; nomes casados exceto apelidos que não existem no nome cadastrado. Testado o modal semanal (arquivo) e mensal (colar), o payload enviado ao salvar e o reaproveitamento dos apelidos, em desktop e 375 px, numa página local com dados simulados. `node --check` em `js/core/ranking-import.js`.
+
+**Pendências ou cuidados para deploy:** depois do deploy, testar uma importação real em `ranking.html` logado como Diretoria. O `sw.js` já deixa `cdn.jsdelivr.net` só na rede (sem cache do SW). Prints com layout bem diferente (outra ordem de colunas) não são suportados.
+
 ## Backup semanal do banco (plano B do Supabase) — 2026-11-01
 
 **O que mudou:** rotina do GitHub Actions (`.github/workflows/db-backup.yml`) que todo domingo faz o dump completo do banco (incluindo os logins de `auth.users`), criptografa com AES-256 e guarda no bucket privado `msy-backups` do Cloudflare R2 (regra apaga após 90 dias).

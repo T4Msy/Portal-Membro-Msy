@@ -5460,6 +5460,44 @@ textarea:invalid:not(:placeholder-shown),
 .rank-add-row {
   margin-top: 8px;
 }
+/* Importar ranking de imagem (OCR do print da tabela) */
+.rank-import {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px dashed var(--border-gold);
+  border-radius: var(--radius);
+  background: var(--gold-subtle);
+}
+.rank-import-hint {
+  font-size: .78rem;
+  color: var(--text-3);
+}
+.rank-import-status {
+  flex-basis: 100%;
+  font-size: .8rem;
+  color: var(--text-2);
+}
+.rank-import-status--ok { color: var(--gold); }
+.rank-import-status--aviso { color: var(--gold-bright); }
+.rank-import-status--erro { color: var(--red-bright); }
+.rank-entry-lido {
+  grid-column: 1 / -1;
+  margin-top: -3px;
+  font-size: .74rem;
+  color: var(--text-3);
+}
+.rank-entry-lido i { margin-right: 4px; }
+.rank-entry-row--pendente .rank-member,
+.rank-entry-row--conferir .rank-msgs {
+  border-color: var(--red-bright);
+}
+.rank-entry-row--pendente .rank-entry-lido,
+.rank-entry-row--conferir .rank-entry-lido {
+  color: var(--red-bright);
+}
 .rank-modal-actions {
   display: flex;
   gap: 10px;
