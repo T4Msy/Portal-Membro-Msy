@@ -196,7 +196,8 @@ async function handleCleanup(req, env, user, url) {
     cursor = page.truncated ? page.cursor : undefined
   } while (cursor)
 
-  const baseName = (key) => key.split('/').pop()
+  // "foto.sm.webp" (versão leve do Jornal) não aparece no banco: vale o nome da original "foto.webp".
+  const baseName = (key) => key.split('/').pop().replace(/\.sm(\.[^.]+)$/, '$1')
   const old = objects.filter((o) => o.uploaded.getTime() < Date.now() - CLEANUP_MIN_AGE_MS && SAFE_NAME.test(baseName(o.key)))
   const unreferenced = new Set()
   const names = [...new Set(old.map((o) => baseName(o.key)))]

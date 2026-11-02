@@ -14,7 +14,7 @@ import {
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
-import { createMediaStorage } from '../core/media-store.js?v=20261101-r2';
+import { createMediaStorage, lightVariantPath, lightVariantUrl, prefersLightMedia } from '../core/media-store.js?v=20261102-light';
 
 const BUCKET = 'jornal-media';
 const TYPE_LABELS = {
@@ -503,7 +503,7 @@ function renderCard(post, large = false) {
   return `
     <button class="journal-card ${large ? 'large' : ''}" data-open-journal-post="${post.id}" id="post-${post.id}">
       <div class="journal-card-media">
-        ${media ? `<img src="${Utils.escapeHtml(media)}" loading="lazy" decoding="async" alt="">` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
+        ${media ? `<img ${journalImgSrc(media)} loading="lazy" decoding="async" alt="">` : `<div class="fallback"><i class="fa-solid ${icon}"></i></div>`}
         ${post.post_type === 'video' || videoUrl ? '<span class="journal-play-badge"><i class="fa-solid fa-play"></i></span>' : ''}
       </div>
       <div class="journal-card-body">
@@ -531,7 +531,7 @@ function renderNewspaperCard(post, lead = false) {
         ${status}
       </div>
       <div class="journal-paper-layout">
-        ${cover ? `<div class="journal-paper-photo"><img src="${Utils.escapeHtml(cover)}" loading="lazy" decoding="async" alt=""></div>` : ''}
+        ${cover ? `<div class="journal-paper-photo"><img ${journalImgSrc(cover)} loading="lazy" decoding="async" alt=""></div>` : ''}
         <div class="journal-paper-copy">
           <div class="journal-paper-kicker">${post.post_type === 'special' ? 'Especial' : 'Matéria'}</div>
           <h3>${Utils.escapeHtml(post.title)}</h3>
@@ -710,7 +710,7 @@ function renderComicPost(post) {
       <div class="journal-comic-grid">
         ${images.length ? images.map((item, index) => `
           <button class="journal-comic-panel" data-open-journal-image="${Utils.escapeHtml(item.url)}">
-            <img src="${Utils.escapeHtml(item.url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(item.caption || `Cena ${index + 1}`)}">
+            <img ${journalImgSrc(item.url)} loading="lazy" decoding="async" alt="${Utils.escapeHtml(item.caption || `Cena ${index + 1}`)}">
             <span>${index + 1}</span>
           </button>
         `).join('') : renderEmpty('Nenhuma cena enviada para esta tirinha.')}
@@ -747,14 +747,14 @@ function renderArticlePhoto(url, caption = '', meta = getArticleImageMeta()) {
     : '';
   return `
     <figure class="journal-article-photo photo-${Utils.escapeHtml(meta.position || 'right')}" style="${aspectStyle}">
-      <img class="${cropClass.trim()}" src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${imgStyle}">
+      <img class="${cropClass.trim()}" ${journalImgSrc(url)} loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}" style="${imgStyle}">
       ${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}
     </figure>`;
 }
 
 function renderFigure(url, caption = '', lightbox = false) {
   if (!url) return '';
-  return `<figure>${lightbox ? `<button class="journal-card" data-open-journal-image="${Utils.escapeHtml(url)}"><img src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}"></button>` : `<img src="${Utils.escapeHtml(url)}" loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}">`}${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+  return `<figure>${lightbox ? `<button class="journal-card" data-open-journal-image="${Utils.escapeHtml(url)}"><img ${journalImgSrc(url)} loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}"></button>` : `<img ${journalImgSrc(url)} loading="lazy" decoding="async" alt="${Utils.escapeHtml(caption || '')}">`}${caption ? `<figcaption>${Utils.escapeHtml(caption)}</figcaption>` : ''}</figure>`;
 }
 
 function renderComments(post) {
@@ -1175,7 +1175,7 @@ async function savePost(event) {
       const { error } = await db.from('jornal_posts').update(payload).eq('id', existing.id);
       if (error) throw error;
       if (videoCover?.storage_path && existing.cover_storage_path) {
-        createMediaStorage(db).from(BUCKET).remove([existing.cover_storage_path]).catch((err) => console.warn('[MSY][jornal] Capa antiga nao removida:', err));
+        createMediaStorage(db).from(BUCKET).remove(withLightVariants([existing.cover_storage_path])).catch((err) => console.warn('[MSY][jornal] Capa antiga nao removida:', err));
       }
     } else {
       const { data, error } = await db.from('jornal_posts').insert(payload).select('id').single();
@@ -1191,7 +1191,7 @@ async function savePost(event) {
         if (error) throw error;
       }
       if (oldPaths.length) {
-        await createMediaStorage(db).from(BUCKET).remove([...new Set(oldPaths)]).catch((err) => console.warn('[MSY][jornal] Fotos antigas não removidas:', err));
+        await createMediaStorage(db).from(BUCKET).remove(withLightVariants(oldPaths)).catch((err) => console.warn('[MSY][jornal] Fotos antigas não removidas:', err));
       }
     }
 
@@ -1558,8 +1558,39 @@ async function uploadJornalFile(file, folder, options = {}) {
     contentType: uploadFile.type,
   });
   if (error) throw error;
+  await uploadJornalLightVariant(file, path);
   const { data } = createMediaStorage(db).from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, storage_path: path };
+}
+
+// Versão leve (~800px) ao lado da original, para quem está nos dados móveis (ver journalImgSrc).
+// Se falhar, a original continua valendo: o leitor só recebe a imagem completa.
+async function uploadJornalLightVariant(file, path) {
+  const lightPath = lightVariantPath(path);
+  if (!lightPath || !file.type.startsWith('image/') || file.type === 'image/gif') return;
+  try {
+    const light = await compressImage(file, { maxWidth: 800, maxHeight: 800, quality: 0.8 });
+    const { error } = await createMediaStorage(db).from(BUCKET).upload(lightPath, light, {
+      cacheControl: '31536000',
+      upsert: true,
+      contentType: light.type,
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[MSY][jornal] Versão leve da imagem não enviada:', err);
+  }
+}
+
+function withLightVariants(paths = []) {
+  return [...new Set(paths.filter(Boolean).flatMap((path) => [path, lightVariantPath(path)]).filter(Boolean))];
+}
+
+// src da imagem: versão leve para quem economiza dados, com volta automática para a original
+// (posts antigos não têm a leve). A tela cheia (data-open-journal-image) usa sempre a original.
+function journalImgSrc(url) {
+  const light = prefersLightMedia() ? lightVariantUrl(url) : null;
+  if (!light) return `src="${Utils.escapeHtml(url)}"`;
+  return `src="${Utils.escapeHtml(light)}" data-full-src="${Utils.escapeHtml(url)}" onerror="this.onerror=null;this.src=this.dataset.fullSrc"`;
 }
 
 async function toggleArchive(post) {
@@ -1573,8 +1604,8 @@ async function toggleArchive(post) {
 
 async function deletePost(post) {
   if (!await confirmAction('Excluir esta publicação e remover seus arquivos?')) return;
-  const paths = [post.cover_storage_path, post.video_storage_path, ...(post.media || []).map((item) => item.storage_path)].filter(Boolean);
-  if (paths.length) await createMediaStorage(db).from(BUCKET).remove([...new Set(paths)]).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
+  const paths = withLightVariants([post.cover_storage_path, post.video_storage_path, ...(post.media || []).map((item) => item.storage_path)]);
+  if (paths.length) await createMediaStorage(db).from(BUCKET).remove(paths).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
   const { error } = await db.from('jornal_posts').delete().eq('id', post.id);
   if (error) return Utils.showToast(error.message || 'Erro ao excluir.', 'error');
   closeModal(document.getElementById('journalPostModal'));

@@ -22,6 +22,47 @@ export function mediaPublicUrl(bucket, path) {
   return `${MEDIA_BASE_URL}/${bucket}/${encodePath(path)}`;
 }
 
+// ---------- Versão leve de imagens (Jornal) ----------
+// Ao lado de "foto.webp" fica "foto.sm.webp" (~800px). Quem está nos dados móveis ou com
+// "Economia de dados" recebe a leve; no Wi-Fi (e sem a API de rede, ex. iPhone) vem a original.
+const LIGHT_IMAGE_EXT = /\.(webp|jpe?g|png)$/i;
+
+/** "pasta/foto.webp" -> "pasta/foto.sm.webp" (null para vídeo, GIF ou o que já é leve). */
+export function lightVariantPath(path) {
+  const value = String(path || '');
+  if (!LIGHT_IMAGE_EXT.test(value) || /\.sm\.[^./]+$/i.test(value)) return null;
+  return value.replace(LIGHT_IMAGE_EXT, '.sm.$1');
+}
+
+/** URL da versão leve, só para imagens no R2; null se não se aplica. */
+export function lightVariantUrl(url) {
+  const value = String(url || '').split('?')[0];
+  if (!value.startsWith(`${MEDIA_BASE_URL}/`)) return null;
+  return lightVariantPath(value);
+}
+
+/** true quando vale economizar: Economia de dados ligada, rede celular ou conexão lenta. */
+export function prefersLightMedia() {
+  const connection = globalThis.navigator?.connection;
+  if (!connection) return false;
+  if (connection.saveData) return true;
+  if (connection.type === 'cellular') return true;
+  return ['slow-2g', '2g', '3g'].includes(connection.effectiveType);
+}
+
+/** Para fundo em CSS (sem onerror): devolve a leve se ela existir e carregar, senão a original. */
+export async function pickLightImageUrl(url, timeoutMs = 3000) {
+  const light = prefersLightMedia() ? lightVariantUrl(url) : null;
+  if (!light) return url;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(url), timeoutMs);
+    img.onload = () => { clearTimeout(timer); resolve(light); };
+    img.onerror = () => { clearTimeout(timer); resolve(url); };
+    img.src = light;
+  });
+}
+
 /** Descobre { bucket, path } de uma URL do R2 ou de uma URL pública antiga do Supabase. */
 export function parseMediaUrl(url) {
   const value = String(url || '');

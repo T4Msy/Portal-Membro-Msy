@@ -1459,7 +1459,7 @@
    // Anexos e avatares ficam no Cloudflare R2 (egress grátis); mesmo formato do db.storage.from().
    let _mediaModule = null;
    async function _mediaStore() {
-     _mediaModule = _mediaModule || await import('./core/media-store.js?v=20261101-r2');
+     _mediaModule = _mediaModule || await import('./core/media-store.js?v=20261102-light');
      return _mediaModule;
    }
    async function _activityFiles() {
@@ -8505,7 +8505,8 @@
        if (error) throw error;
        const post = data?.[0];
        if (!post) return fallback();
-       const cover = post.cover_url ? `background-image:linear-gradient(90deg,rgba(7,7,10,.94),rgba(7,7,10,.62),rgba(7,7,10,.94)),url('${Utils.escapeHtml(post.cover_url)}')` : '';
+       const coverUrl = post.cover_url ? await (await _mediaStore()).pickLightImageUrl(post.cover_url) : '';
+       const cover = coverUrl ? `background-image:linear-gradient(90deg,rgba(7,7,10,.94),rgba(7,7,10,.62),rgba(7,7,10,.94)),url('${Utils.escapeHtml(coverUrl)}')` : '';
        container.innerHTML = `
          <a class="jornal-teaser-card" href="jornal.html#post-${post.id}" style="display:block;text-decoration:none;position:relative;overflow:hidden;border:1px solid rgba(201,168,76,.22);border-radius:18px;background:linear-gradient(135deg,rgba(24,7,10,.96),rgba(10,10,14,.96));${cover};background-size:cover;background-position:center;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
            <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(201,168,76,.08),transparent 50%,rgba(127,29,29,.18));pointer-events:none"></div>

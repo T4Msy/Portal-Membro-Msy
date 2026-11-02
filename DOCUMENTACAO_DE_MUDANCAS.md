@@ -97,6 +97,20 @@ Esta política passa a valer para todas as mudanças futuras. A documentação d
 
 **Pendências ou cuidados para deploy:** depois do deploy, testar uma importação real em `ranking.html` logado como Diretoria. O `sw.js` já deixa `cdn.jsdelivr.net` só na rede (sem cache do SW). Prints com layout bem diferente (outra ordem de colunas) não são suportados.
 
+## Jornal: versão leve das imagens para quem está nos dados móveis — 2026-11-02
+
+**O que mudou:** toda imagem enviada ao Jornal passa a ter uma cópia leve (`foto.sm.webp`, 800 px) ao lado da original (até 2200 px). Nos dados móveis, em conexão lenta ou com "Economia de dados", o Jornal e a capa do dashboard mostram a leve; no Wi-Fi, a original. A tela cheia usa sempre a original.
+
+**Por que mudou:** economizar o pacote de dados do celular dos membros sem perder qualidade para quem está no Wi-Fi (o download no R2 já é grátis para a MSY).
+
+**Arquivos e serviços afetados:** `js/core/media-store.js`, `js/pages/jornal.js`, `js/app.js` (capa do Jornal no dashboard), `cloudflare/media-worker/worker.js` (limpeza trata `.sm` como parte da original), `?v=` das páginas.
+
+**Como funciona:** ver `INFRAESTRUTURA.md` §5. Sem mudança no banco: a versão leve é achada pelo nome. Posts antigos não têm a leve e continuam mostrando a original (volta automática).
+
+**Validação realizada:** regras de escolha testadas (celular/3G/Economia de dados → leve; Wi-Fi/sem API → original); no portal real: upload das duas versões (2200×1467 236 KB e 800×533 77 KB), volta automática para a original quando a leve não existe, exclusão das duas; `node --check`.
+
+**Pendências ou cuidados para deploy:** publicar o Worker com a regra nova da limpeza **antes** de 7 dias, senão as versões leves seriam apagadas como órfãs. iPhone e Brave não informam o tipo de conexão e recebem sempre a original.
+
 ## Backup semanal do banco (plano B do Supabase) — 2026-11-01
 
 **O que mudou:** rotina do GitHub Actions (`.github/workflows/db-backup.yml`) que todo domingo faz o dump completo do banco (incluindo os logins de `auth.users`), criptografa com AES-256 e guarda no bucket privado `msy-backups` do Cloudflare R2 (regra apaga após 90 dias).
