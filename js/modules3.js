@@ -613,13 +613,20 @@ async function renderTabAccessWorkspace(body) {
   let rules = [];
   let members = [];
   let roles = [];
+  // Central do Bot: o acesso é bot_settings.allowed_senders (não tab_permissions)
+  // e vale também para a diretoria — por isso usa a lista completa de membros.
+  let allMembers = [];
+  let botSenders = null;
   try {
-    const [{ data, error }, membersRes] = await Promise.all([
+    const [{ data, error }, membersRes, botRes] = await Promise.all([
       db.from('tab_permissions').select('*').order('label'),
       db.from('profiles').select('id,name,role,initials,color,avatar_url,tier,status').eq('status', 'ativo').order('name'),
+      db.from('bot_settings').select('allowed_senders').eq('id', 1).maybeSingle(),
     ]);
     if (error) throw error;
     if (membersRes.error) throw membersRes.error;
+    if (!botRes.error && botRes.data) botSenders = botRes.data.allowed_senders || [];
+    allMembers = membersRes.data || [];
     const map = {};
     (data || []).forEach((row) => { map[row.page_key] = row; });
     rules = MSY_TAB_CATALOG.map(([page_key, label]) => ({
@@ -712,6 +719,40 @@ async function renderTabAccessWorkspace(body) {
             </div>
           </div>
         </div>`).join('')}
+      ${botSenders ? `
+        <div class="tab-access-row" data-tab-row="bot">
+          <button type="button" class="tab-access-trigger" aria-expanded="false">
+            <div class="tab-access-main">
+              <div>
+                <strong>Bot Corvus <span class="tab-access-badge restricted"><i class="fa-solid fa-lock"></i> Restrita</span></strong>
+                <span>bot.html</span>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div class="tab-access-editor">
+            <div class="tab-access-visibility">
+              <div><strong>Central do Bot</strong><span>Quem for marcado vê a aba e pode enviar mensagens pelo bot no WhatsApp. Sem ninguém marcado, ninguém acessa.</span></div>
+            </div>
+            <div class="tab-access-fields">
+              <div class="tab-access-field tab-access-field-wide">
+                <span class="tab-access-field-label">Membros liberados</span>
+                <button type="button" class="tab-picker-trigger" data-picker-trigger="members">
+                  <span data-picker-label="members">${selectedSummary(botSenders.length, 'Selecionar membros')}</span>
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <div class="tab-picker-menu tab-picker-menu-members" data-picker-menu="members">
+                  ${allMembers.map((member) => `
+                    <label class="tab-picker-option">
+                      <input type="checkbox" data-tab-user="${member.id}" ${botSenders.includes(member.id) ? 'checked' : ''}>
+                      <span>${Utils.escapeHtml(member.name)}</span>
+                      <small>${Utils.escapeHtml(member.role || 'Membro')}</small>
+                    </label>`).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>` : ''}
     </div>`;
 
   body.querySelectorAll('[data-tabs-bulk]').forEach((btn) => btn.addEventListener('click', () => {
@@ -755,7 +796,7 @@ async function renderTabAccessWorkspace(body) {
 
   body.querySelector('#saveAllTabs')?.addEventListener('click', async () => {
     const btn = body.querySelector('#saveAllTabs');
-    const rows = [...body.querySelectorAll('[data-tab-row]')].map((row) => ({
+    const rows = [...body.querySelectorAll('[data-tab-row]:not([data-tab-row="bot"])')].map((row) => ({
       page_key: row.dataset.tabRow,
       label: rules.find((rule) => rule.page_key === row.dataset.tabRow)?.label || row.dataset.tabRow,
       visible: row.querySelector('[data-tab-field="visible"]')?.checked !== false,
@@ -773,6 +814,28 @@ async function renderTabAccessWorkspace(body) {
       const needsMigration = String(error.message || '').includes('allowed_user_ids');
       Utils.showToast(needsMigration ? 'Aplique a migration de abas por membro antes de salvar.' : 'Erro ao salvar abas.', 'error');
       return;
+    }
+    const botRow = body.querySelector('[data-tab-row="bot"]');
+    if (botRow) {
+      const ids = [...botRow.querySelectorAll('[data-tab-user]:checked')].map((input) => input.dataset.tabUser);
+      const changed = ids.length !== botSenders.length || ids.some((id) => !botSenders.includes(id));
+      if (changed && !ids.length) {
+        Utils.showToast('Abas salvas. No Bot Corvus, deixe pelo menos uma pessoa com acesso.', 'error');
+        return;
+      }
+      if (changed) {
+        // RLS: só quem já usa o bot pode mudar a lista (select vazio = não salvou).
+        const { data: saved, error: botError } = await db.from('bot_settings')
+          .update({ allowed_senders: ids, updated_at: new Date().toISOString() })
+          .eq('id', 1).select('allowed_senders');
+        if (botError || !saved?.length) {
+          console.error('[MSY][abas] Erro ao salvar acesso ao bot:', botError);
+          Utils.showToast('Abas salvas, mas só quem já usa o Bot Corvus pode liberar o acesso a ele.', 'error');
+          return;
+        }
+        botSenders = ids;
+        MSYSessionCache?.invalidatePrefix?.('bot_sender:');
+      }
     }
     MSYTabAccess?.invalidate?.();
     Utils.showToast('Permissões de abas salvas.');
@@ -792,7 +855,8 @@ function updateTabAccessBadge(row) {
   const memberLabel = row.querySelector('[data-picker-label="members"]');
   if (roleLabel) roleLabel.textContent = roleCount ? `${roleCount} cargo${roleCount === 1 ? '' : 's'}` : 'Selecionar cargos';
   if (memberLabel) memberLabel.textContent = userCount ? `${userCount} membro${userCount === 1 ? '' : 's'}` : 'Selecionar membros';
-  if (!visible) {
+  // Bot Corvus sem ninguém marcado = ninguém acessa (não "visível para todos").
+  if (!visible || (row.dataset.tabRow === 'bot' && !hasUser)) {
     badge.className = 'tab-access-badge hidden';
     badge.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Oculta';
   } else if (hasRole || hasUser) {
