@@ -153,7 +153,7 @@ texto de todas as linhas de todas as tabelas (`query_to_xml`). Duas rotinas, uma
 | | Supabase Storage | Cloudflare R2 |
 |---|---|---|
 | Quem roda | Edge Function `storage-cleanup` | Worker `msy-media`, rota `POST /_cleanup` |
-| Quando | `pg_cron` job `storage-orphan-cleanup`, todo dia **07:00 UTC (04:00 BRT)** via `pg_net` | quando alguém da **diretoria abre o portal** (`_scheduleMediaCleanup` em `app.js`, 8 s após carregar); o Worker só executa **1x a cada 20 h** (marcador `_meta/last-cleanup` no R2) |
+| Quando | **desligado em 02/11/2026** (`20261102_disable_storage_orphan_cleanup.sql`): os buckets migrados estão vazios e a rotina pesava no disco do banco. Antes: `pg_cron` job `storage-orphan-cleanup`, todo dia 07:00 UTC via `pg_net` | quando alguém da **diretoria abre o portal** (`_scheduleMediaCleanup` em `app.js`, 8 s após carregar); o Worker só executa **1x a cada 20 h** (marcador `_meta/last-cleanup` no R2) |
 | Função SQL | `public.storage_orphan_files(interval)` — só `service_role` | `public.media_unreferenced(text[])` — só **diretoria** (`is_diretoria()`), sem acesso anônimo |
 | Auth | "Verify JWT" **desligado**; quem chama sem login só dispara a limpeza e recebe totais | JWT da diretoria |
 | Travas | só > 7 dias · máx. 300 por vez · aborta se > 60% parecer órfão · ignora `space-app` | só > 7 dias (pela data de upload no R2) · máx. 300 · aborta se > 60% · só nomes `[A-Za-z0-9._-]` |
@@ -232,6 +232,14 @@ download: Logs Explorer, `source = 'edge_logs'`, `log_attributes['request.path']
   11 stories, 7 respostas de atividade, 2 anexos do direct). Ficam quebrados no site.
 - **Bug provável na exclusão de anexo** (Atividades → Anexos, diretoria): apaga o arquivo e depois
   tenta limpar o `file_url` da resposta; se a RLS barrar o update, o link fica pendurado. Não investigado.
+- **Banco travou em 02/11/2026** (~05:00–11:45 BRT): Auth, PostgREST e Storage "Unhealthy",
+  conexões com timeout, login do portal carregando sem fim. Causa provável: **Disk IO Budget**
+  esgotado na máquina **Nano** (aviso no painel desde 01/11), somando as consultas pesadas da
+  migração (varreduras de todas as tabelas com `query_to_xml`) e a limpeza diária. Resolvido com
+  **Settings → General → Restart project** (~5 min). Depois disso a limpeza diária do Supabase foi
+  desligada. Cuidados: evitar consultas que varrem o banco inteiro em sequência; se voltar a
+  acontecer com frequência, o plano Pro permite uma máquina maior. Sintoma rápido de checar:
+  `curl https://lldzgkxpoyqauxdcjyaw.supabase.co/auth/v1/health` sem resposta.
 - **Cota do Supabase:** o ciclo 18/10–18/11 já fechou em 16 GB de cached egress; a carência vai
   até 23/11/2026. Com o R2 o próximo ciclo deve ficar perto de zero, mas pode haver restrição por
   alguns dias depois de 23/11. Upgrade para o Pro é a saída garantida se o portal não puder parar.
