@@ -317,14 +317,18 @@ async function initBot() {
     atividade_prazo: ['titulo', 'data', 'hora', 'prazo', 'link'],
     reuniao: ['titulo', 'data', 'hora', 'link'],
     comunicado: ['titulo', 'categoria', 'conteudo', 'link'],
+    // {do} = do/da/de conforme a pessoa; {frase} = sorteada pelo bot.
+    aniversario: ['do', 'nome', 'pessoas', 'frase'],
   };
   const SAMPLE = {
     titulo: 'Reunião Geral', data: '05/11/2026', hora: '20:00', descricao: 'Pauta do mês',
     link: 'https://www.portalmsy.site', pendentes: '@Duda @Julia', pessoas: '@Duda', todos: '@todos',
     prazo: '05/11/2026 às 18:00', categoria: 'Geral', conteudo: 'Texto do comunicado...',
+    do: 'da', nome: 'Duda', frase: 'Um brinde a você: que esse ano seja o melhor de todos até agora. 🥂',
   };
   const varsOf = key => AUTO_VARS[
-    key.startsWith('evento_cobranca') ? 'evento_cobranca'
+    key === 'aniversario' ? 'aniversario'
+      : key.startsWith('evento_cobranca') ? 'evento_cobranca'
       : key === 'evento_inicio' ? 'evento_inicio'
         : key.startsWith('evento') ? 'evento'
           : key === 'atividade_nova' ? 'atividade_nova'
