@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js';
 import { REACTIONS } from '../voice/VoiceSession.js';
 import { getCapabilities, screenShareUnsupportedReason } from '../voice/media/capabilities.js';
 import { SCREEN_PRESETS } from '../voice/media/screen.js';
+import { SCREEN_QUALITY_CHOICES } from '../voice/webrtc/screenQuality.js';
 import { avatarHtml, bindVideo, displayName, esc, formatKbps, icon, liveCamera, safeColor, toast } from './dom.js';
 import { openVoiceSettings } from './settings.js';
 
@@ -363,7 +364,9 @@ export class VoiceRoomView {
         ? `<div class="sp-stage-tabs">${screens.map((s) => `<button data-act="pick-screen" data-id="${esc(s.sessionId)}" class="${s.sessionId === active.sessionId ? 'is-on' : ''}">${esc(s.name)}</button>`).join('')}</div>`
         : `<span class="sp-stage-who"><b>${esc(active.isLocal ? 'Você' : active.name)}</b> está transmitindo${active.label ? ` · ${esc(active.label)}` : ''}</span>`}
       ${active.hasAudio ? `<span title="Com áudio">${icon('fa-volume-high')}</span>` : ''}
+      ${!active.isLocal && snap.screenLevels?.[active.sessionId]?.auto ? `<span class="sp-stage-lite" title="Seu aparelho estava travando: a transmissão chega mais leve só para você e volta ao normal sozinha">${icon('fa-gauge-simple')} Modo leve</span>` : ''}
       <span class="sp-grow"></span>
+      ${!active.isLocal && active.watching ? this.qualityHtml() : ''}
       ${!active.isLocal ? `<button class="sp-stage-btn" data-act="watch" data-id="${esc(active.sessionId)}" data-watching="${active.watching}" title="${active.watching ? 'Parar de receber esta transmissão (economiza internet)' : 'Voltar a assistir'}">${icon(active.watching ? 'fa-eye-slash' : 'fa-eye')} ${active.watching ? 'Parar de assistir' : 'Assistir'}</button>` : ''}
       <button class="sp-stage-btn" data-act="pip" title="Janela flutuante (continua vendo em outras abas)">${icon('fa-clone')}</button>
       <button class="sp-stage-btn" data-act="fullscreen" title="Tela cheia">${icon('fa-expand')}</button>`);
@@ -377,6 +380,22 @@ export class VoiceRoomView {
     msg.textContent = active.watching ? 'Aguardando vídeo da transmissão…' : 'Você não está assistindo esta transmissão.';
     stage.querySelector('[data-preview]').hidden = !active.isLocal;
     this.renderReactions(stage.querySelector('[data-fx]'), snap.reactions.filter((r) => r.sessionId === active.sessionId));
+  }
+
+  /** Escolha manual da qualidade de tela que eu recebo (teto; o automático continua). */
+  qualityHtml() {
+    const cap = Number(this.voice.prefs.get().screenQualityCap) || 0;
+    const current = SCREEN_QUALITY_CHOICES.find((c) => c.level === cap) || SCREEN_QUALITY_CHOICES[0];
+    const open = this.menu === 'quality';
+    return `<span class="sp-quality">
+      <button class="sp-stage-btn ${open ? 'is-open' : ''}" data-act="quality-menu" aria-expanded="${open}" title="Qualidade da transmissão para você">${icon('fa-sliders')} ${esc(current.label)}</button>
+      ${open ? `<div class="sp-pop sp-quality-pop" role="menu">
+        <h3>Qualidade para você</h3>
+        ${SCREEN_QUALITY_CHOICES.map((c) => `<button class="sp-preset ${c.level === cap ? 'is-on' : ''}" role="menuitemradio" aria-checked="${c.level === cap}" data-act="pick-quality" data-level="${c.level}">
+          <span><b>${esc(c.label)}</b><small>${esc(c.hint)}</small></span></button>`).join('')}
+        <p class="sp-hint">Só muda o que você recebe. Se o aparelho travar, o ajuste automático ainda reduz mais e depois volta, sem passar da sua escolha.</p>
+      </div>` : ''}
+    </span>`;
   }
 
   renderControls(snap) {
@@ -453,6 +472,8 @@ export class VoiceRoomView {
       case 'resume-audio': v.resumeAudio(); break;
       case 'settings': this.menu = null; openVoiceSettings({ prefs: v.prefs, voice: v }); break;
       case 'pick-screen': this.selectedScreen = btn.dataset.id; this.render(); break;
+      case 'quality-menu': this.menu = this.menu === 'quality' ? null : 'quality'; this.render(); break;
+      case 'pick-quality': this.menu = null; v.setScreenQualityCap(Number(btn.dataset.level) || 0); this.render(); break;
       case 'watch': v.setWatching(btn.dataset.id, btn.dataset.watching !== 'true'); break;
       case 'fullscreen': this.toggleFullscreen(); break;
       case 'pip': this.togglePip(); break;

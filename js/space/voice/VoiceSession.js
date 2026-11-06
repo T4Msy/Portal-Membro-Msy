@@ -3,16 +3,12 @@ import { AudioOutput } from './media/audioOutput.js';
 import { getCameraTrack, getMicTrack, mediaErrorMessage } from './media/devices.js';
 import { applyPresetToTrack, captureScreen, SCREEN_PRESETS, surfaceLabel } from './media/screen.js';
 import { SpeakingDetector } from './media/speaking.js';
+import { planEncodings } from './webrtc/budget.js';
+import { ScreenQualityController } from './webrtc/screenQuality.js';
 import { getIceServers, hasTurn } from './webrtc/iceServers.js';
 import { MeshTransport } from './webrtc/MeshTransport.js';
 import { SignalingChannel } from './webrtc/SignalingChannel.js';
 import { SLOTS } from './webrtc/types.js';
-const ENCODINGS = {
-    mic: { maxBitrate: 48_000, priority: 'high', networkPriority: 'high' },
-    camera: { maxBitrate: 1_200_000, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
-    screen: { maxBitrate: SCREEN_PRESETS.motion.maxBitrate, maxFramerate: 30, priority: 'medium', networkPriority: 'medium' },
-    screenAudio: { maxBitrate: 128_000, priority: 'medium', networkPriority: 'medium' },
-};
 export const REACTIONS = ['👍', '😂', '🔥', '👏', '😮', '❤️', '💀', '🎉'];
 let reactionSeq = 1;
 /**
@@ -37,6 +33,8 @@ export class VoiceSession {
     watchedMic = new Map();
     userLimit = 15;
     lastReactionAt = 0;
+    encodingKeys = {};
+    screenQuality = new Map(); // quem transmite -> controle da qualidade que EU recebo
     disposed = false;
     constructor(deps) {
         this.deps = deps;
@@ -62,6 +60,7 @@ export class VoiceSession {
             reactions: [],
             screenPreset: deps.prefs().screenPreset ?? 'motion',
             notWatching: [],
+            screenLevels: {},
             audioBlocked: false,
             turnAvailable: false,
             uploadKbps: 0,
@@ -97,14 +96,21 @@ export class VoiceSession {
             return;
         this.patch({ turnAvailable: hasTurn(ice) });
         const meta = this.buildMeta();
+        const initialEncodings = this.planEncodings();
         this.signaling = new SignalingChannel(channelId, meta, {
             onPeers: (peers) => this.onPeers(peers),
             onSignal: (env) => this.transport?.handleSignal(env),
             onMeta: (meta) => this.onRemoteMeta(meta),
             onReaction: (ev) => this.showReaction(ev.from, ev.emoji),
             onWatch: (ev) => {
-                if (ev.to === this.sessionId)
-                    this.transport?.setPeerWatching(ev.from, ev.watching);
+                if (ev.to !== this.sessionId)
+                    return;
+                this.transport?.setPeerWatching(ev.from, ev.watching);
+                this.rebalance();
+            },
+            onScreenQuality: (ev) => {
+                if (ev.to === this.sessionId && this.screenTracks)
+                    this.transport?.setPeerScreenLevel(ev.from, ev.level);
             },
             onStatus: (s) => this.onSignalingStatus(s),
         });
@@ -112,7 +118,8 @@ export class VoiceSession {
             onRemoteTrack: (peerId, slot, track, stream) => this.onRemoteTrack(peerId, slot, track, stream),
             onPeerState: (peerId, state) => this.onPeerState(peerId, state),
             onStats: (peerId, stats) => this.onStats(peerId, stats),
-        }, ENCODINGS);
+        }, initialEncodings);
+        this.rememberEncodings(initialEncodings);
         if (this.micTrack)
             await this.transport.setTrack('mic', this.micTrack);
         try {
@@ -286,7 +293,7 @@ export class VoiceSession {
         this.localStreams.screen.addTrack(cap.video);
         if (cap.audio)
             this.localStreams.screenAudio.addTrack(cap.audio);
-        this.transport?.setEncoding('screen', { ...ENCODINGS.screen, maxBitrate: preset.maxBitrate, maxFramerate: preset.frameRate });
+        this.rebalance();
         await this.transport?.setTrack('screen', cap.video);
         await this.transport?.setTrack('screenAudio', cap.audio);
         this.patchLocal({ screen: new MediaStream([cap.video]), screenLabel: surfaceLabel(cap.surface), screenHasAudio: Boolean(cap.audio) });
@@ -302,13 +309,15 @@ export class VoiceSession {
         s.video.onended = null;
         s.video.stop();
         s.audio?.stop();
+        this.transport?.resetScreenLevels();
         this.patchLocal({ screen: null, screenLabel: null, screenHasAudio: false });
+        this.rebalance();
         this.publishVoiceState();
     }
     async setScreenPreset(id) {
         const preset = SCREEN_PRESETS[id];
         this.patch({ screenPreset: id });
-        this.transport?.setEncoding('screen', { ...ENCODINGS.screen, maxBitrate: preset.maxBitrate, maxFramerate: preset.frameRate });
+        this.rebalance();
         if (this.screenTracks)
             await applyPresetToTrack(this.screenTracks.video, preset);
     }
@@ -440,6 +449,7 @@ export class VoiceSession {
         this.speaking.unwatch(id);
     }
     onPeerState(peerId, state) {
+        this.rebalance();
         const p = this.peers.get(peerId);
         if (!p)
             return;
@@ -456,11 +466,82 @@ export class VoiceSession {
         if (!p)
             return;
         p.stats = stats;
+        this.adaptScreenQuality(p, stats.screenHealth);
         let up = 0;
         for (const x of this.peers.values())
             up += x.stats?.outKbps ?? 0;
         this.patch({ uploadKbps: up });
         this.emitParticipants();
+    }
+    /** Escolha manual da qualidade das telas que recebo (teto; o automático continua). */
+    setScreenQualityCap() {
+        for (const p of this.peers.values())
+            this.adaptScreenQuality(p, null);
+    }
+    /**
+     * Espectador: se a tela de alguém está pesando neste aparelho, pede uma versão
+     * mais leve só para mim (ver webrtc/screenQuality.js). Os outros não são afetados.
+     * O pedido é o mais leve entre a escolha manual (teto) e o automático.
+     */
+    adaptScreenQuality(p, health) {
+        const watching = p.meta.screen && !this.snapshot.notWatching.includes(p.sessionId);
+        if (!watching) {
+            this.screenQuality.delete(p.sessionId); // quem transmite zera o nível ao parar/retomar
+            if (this.snapshot.screenLevels[p.sessionId]) {
+                const { [p.sessionId]: _gone, ...rest } = this.snapshot.screenLevels;
+                this.patch({ screenLevels: rest });
+            }
+            return;
+        }
+        let q = this.screenQuality.get(p.sessionId);
+        if (!q) {
+            q = new ScreenQualityController();
+            q.sent = 0; // quem transmite começa no nível 0 para cada espectador
+            q.sentAt = 0;
+            this.screenQuality.set(p.sessionId, q);
+        }
+        // A escolha manual é o ponto de partida; o automático só reduz a partir dela.
+        q.setFloor(this.deps.prefs().screenQualityCap);
+        const autoChanged = q.sample(health);
+        if (autoChanged !== null)
+            console.info('[MSY][space] Qualidade automática da tela ajustada para o nível', autoChanged, health?.reasons ?? []);
+        const level = q.level;
+        // Muda o nível, ou reforça a cada 30 s enquanto reduzido (mensagem perdida / reconexão).
+        if (level !== q.sent || (level > 0 && Date.now() - q.sentAt > 30_000)) {
+            q.sent = level;
+            q.sentAt = Date.now();
+            this.signaling?.sendScreenQuality({ from: this.sessionId, to: p.sessionId, level });
+        }
+        const prev = this.snapshot.screenLevels[p.sessionId];
+        const auto = q.level > q.floor;
+        if (prev?.level !== level || prev?.auto !== auto)
+            this.patch({ screenLevels: { ...this.snapshot.screenLevels, [p.sessionId]: { level, auto } } });
+    }
+    // ---- Orçamento de envio (ver webrtc/budget.js) -------------------------------------
+    planEncodings() {
+        return planEncodings({
+            peers: this.transport?.peerCount() ?? 0,
+            screenViewers: this.transport?.screenViewers() ?? 0,
+            sharingScreen: Boolean(this.screenTracks),
+            screenPreset: SCREEN_PRESETS[this.snapshot.screenPreset] ?? SCREEN_PRESETS.motion,
+        });
+    }
+    /** Recalcula bitrate/fps/resolução quando a sala muda; só reaplica o que mudou. */
+    rebalance() {
+        if (!this.transport || this.disposed)
+            return;
+        const plan = this.planEncodings();
+        for (const slot of SLOTS) {
+            const key = JSON.stringify(plan[slot]);
+            if (this.encodingKeys[slot] === key)
+                continue;
+            this.encodingKeys[slot] = key;
+            this.transport.setEncoding(slot, plan[slot]);
+        }
+    }
+    rememberEncodings(plan) {
+        for (const slot of SLOTS)
+            this.encodingKeys[slot] = JSON.stringify(plan[slot]);
     }
     onSignalingStatus(s) {
         if (this.disposed || this.snapshot.status === 'joining' || this.snapshot.status === 'error')
