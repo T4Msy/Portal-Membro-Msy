@@ -157,3 +157,15 @@
 @media (max-width: 640px) {
   .bot-autos { grid-template-columns: 1fr; }
 }
+
+/* Pessoas de fora */
+.bot-guests-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.bot-guests-card:hover { border-color: var(--border-gold); }
+.bot-guests-card .stat-icon { flex-shrink: 0; }
+.bot-guests-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.bot-guests-card .bot-section-title { margin: 0; }
+.bot-guest-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 14px; }
+.bot-guests { display: flex; flex-direction: column; gap: 8px; }
+.bot-guest { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.bot-guest-info { min-width: 0; }
+@media (max-width: 600px) { .bot-guest-form { grid-template-columns: 1fr; } }

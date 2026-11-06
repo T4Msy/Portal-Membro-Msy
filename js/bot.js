@@ -1,7 +1,7 @@
 /* ============================================================
    PAGE: BOT CORVUS — central do bot de WhatsApp (quem está em bot_settings.allowed_senders)
    Painel em cartões: saúde do bot, grupos (ativar, boas-vindas, antilink,
-   ranking, grupo padrão), envio de avisos, pessoas, acesso e histórico.
+   ranking, grupo padrão), envio de avisos, pessoas, gente de fora, acesso e histórico.
    Tudo passa por /api/whatsapp (WhatsAppManager, push.js) e pelas
    tabelas bot_settings, member_whatsapp e bot_messages.
    ============================================================ */
@@ -26,7 +26,7 @@ async function initBot() {
 
   const state = {
     api: null, health: null, dmPhones: new Set(), members: [], contacts: new Map(),
-    settings: null, history: [], sentToday: 0, automations: [],
+    settings: null, history: [], sentToday: 0, automations: [], guests: [],
   };
 
   /* ── Helpers ─────────────────────────────────────────── */
@@ -61,7 +61,7 @@ async function initBot() {
 
   async function loadData() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const [api, health, dm, membersRes, contactsRes, settings, todayRes, autoRes] = await Promise.all([
+    const [api, health, dm, membersRes, contactsRes, settings, todayRes, autoRes, guestsRes] = await Promise.all([
       WhatsAppManager.request('GET').catch(err => ({ erro: err.message, conectado: false, grupos: [], comWhatsapp: [] })),
       WhatsAppManager.request('GET', null, { r: 'saude' }).catch(() => null),
       WhatsAppManager.request('GET', null, { r: 'membros' }).catch(() => ({ numeros: [] })),
@@ -70,6 +70,7 @@ async function initBot() {
       WhatsAppManager.settings({ refresh: true }),
       db.from('bot_messages').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
       db.from('bot_automations').select('*').order('sort'),
+      db.from('bot_guests').select('phone,name').order('name'),
     ]);
     if (membersRes.error) throw membersRes.error;
     if (contactsRes.error) throw contactsRes.error;
@@ -82,6 +83,8 @@ async function initBot() {
     state.sentToday = todayRes.count || 0;
     if (autoRes.error) console.warn('[MSY][bot] Erro ao carregar automações:', autoRes.error);
     state.automations = autoRes.data || [];
+    if (guestsRes.error) console.warn('[MSY][bot] Erro ao carregar pessoas de fora:', guestsRes.error);
+    state.guests = guestsRes.error ? null : guestsRes.data || [];
   }
 
   async function reload() {
@@ -122,6 +125,7 @@ async function initBot() {
         <a href="#botAuto"><i class="fa-solid fa-robot"></i> Automações</a>
         <a href="#botAviso"><i class="fa-solid fa-paper-plane"></i> Enviar aviso</a>
         <a href="#botPessoas"><i class="fa-solid fa-address-book"></i> Pessoas</a>
+        <a href="#botFora"><i class="fa-solid fa-user-plus"></i> Pessoas de fora</a>
         <a href="#botAcesso"><i class="fa-solid fa-user-shield"></i> Acesso</a>
         <a href="#botHistorico"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</a>
       </nav>
@@ -149,6 +153,17 @@ async function initBot() {
         <div class="bot-people">${state.members.map(personRow).join('')}</div>
       </section>
 
+      <section class="bot-section" id="botFora">
+        <button type="button" class="card bot-guests-card" id="botGuestsOpen">
+          <span class="stat-icon gold"><i class="fa-solid fa-user-plus"></i></span>
+          <span class="bot-guests-card-text">
+            <span class="bot-section-title">Pessoas de fora</span>
+            <span class="bot-muted"><span id="botGuestsCount">${guestsCount()}</span> · Toque para adicionar ou remover</span>
+          </span>
+          <i class="fa-solid fa-chevron-right bot-muted"></i>
+        </button>
+      </section>
+
       <section class="bot-section card" id="botAcesso">
         <div class="bot-section-title"><i class="fa-solid fa-user-shield"></i> Acesso</div>
         <div class="bot-help">Quem pode usar o bot pelo portal: esta central (aparece no menu como <b>Bot Corvus</b>), o canal WhatsApp ao criar atividade e o botão Notificação. Não precisa ser da diretoria.</div>
@@ -166,6 +181,7 @@ async function initBot() {
     bindAutomations();
     renderWhatsAppComposer(document.getElementById('botComposer'), { onSent: () => loadHistory() });
     bindPeople();
+    document.getElementById('botGuestsOpen').addEventListener('click', openGuests);
     bindAccess();
     loadHistory();
   }
@@ -497,6 +513,107 @@ async function initBot() {
       }
       btn.disabled = false;
     }));
+  }
+
+  /* ── Pessoas de fora (bot_guests) ────────────────────── */
+  function guestsCount() {
+    const n = state.guests?.length || 0;
+    return n ? `${n} ${n === 1 ? 'número liberado' : 'números liberados'}` : 'Nenhum número liberado';
+  }
+
+  function guestRows() {
+    if (!state.guests.length) return '<div class="empty-state">Nenhum número liberado ainda.</div>';
+    return state.guests.map(g => `
+      <div class="bot-guest" data-phone="${esc(g.phone)}">
+        <div class="bot-guest-info">
+          <div class="bot-person-name">${esc(g.name)}</div>
+          <div class="bot-muted">${esc(formatPhone(g.phone))}</div>
+        </div>
+        <button class="btn btn-sm btn-outline" data-remove title="Remover"><i class="fa-solid fa-trash"></i></button>
+      </div>`).join('');
+  }
+
+  function openGuests() {
+    let overlay = document.getElementById('botGuestsModal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'botGuestsModal';
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <div class="modal-title"><i class="fa-solid fa-user-plus"></i> Pessoas de fora</div>
+          <button class="modal-close" id="botGuestsClose"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="bot-help">Quem é do grupo <b>Masayoshi 🍷</b> já usa o Corvus. Aqui você libera quem é de fora: a pessoa usa o bot, mas sem nada da Masayoshi (portal, atividades, avisos). Vale em até 1 minuto.</div>
+          ${state.guests === null ? '<div class="empty-state">A lista ainda não foi instalada no banco.</div>' : `
+            <form class="bot-guest-form" id="botGuestForm">
+              <input class="form-input" id="botGuestName" placeholder="Nome" maxlength="60" autocomplete="off">
+              <input class="form-input" id="botGuestPhone" inputmode="tel" placeholder="(34) 99999-9999" autocomplete="off">
+              <button class="btn btn-primary" type="submit"><i class="fa-solid fa-plus"></i> Adicionar</button>
+            </form>
+            <div class="bot-guests" id="botGuestList">${guestRows()}</div>`}
+        </div>
+      </div>`;
+    overlay.classList.add('open');
+    document.getElementById('botGuestsClose').addEventListener('click', () => overlay.classList.remove('open'));
+    if (state.guests === null) return;
+
+    const list = document.getElementById('botGuestList');
+    const refresh = () => {
+      list.innerHTML = guestRows();
+      document.getElementById('botGuestsCount').textContent = guestsCount();
+    };
+
+    document.getElementById('botGuestForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const nameInput = document.getElementById('botGuestName');
+      const phoneInput = document.getElementById('botGuestPhone');
+      const name = nameInput.value.trim();
+      const phone = normalizeWhatsapp(phoneInput.value);
+      if (!name) { Utils.showToast('Coloque o nome da pessoa.', 'error'); return; }
+      if (!phone) { Utils.showToast('WhatsApp inválido. Use DDD + número.', 'error'); return; }
+      if (state.dmPhones.has(phoneKey(phone))) { Utils.showToast('Esse número já está no grupo da Masayoshi.', 'error'); return; }
+      if (state.guests.some(g => phoneKey(g.phone) === phoneKey(phone))) { Utils.showToast('Esse número já está liberado.', 'error'); return; }
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      try {
+        const { data, error } = await db.from('bot_guests')
+          .insert({ phone, name, added_by: profile.id })
+          .select('phone,name')
+          .single();
+        if (error) throw error;
+        state.guests = [...state.guests, data].sort((a, b) => a.name.localeCompare(b.name));
+        nameInput.value = '';
+        phoneInput.value = '';
+        refresh();
+        Utils.showToast('Número liberado!');
+      } catch (err) {
+        console.error('[MSY][bot]', err);
+        Utils.showToast('Erro ao salvar. Tente novamente.', 'error');
+      }
+      btn.disabled = false;
+    });
+
+    list.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      const phone = btn.closest('.bot-guest').dataset.phone;
+      if (!await MSYConfirm.show('Remover este número? A pessoa não vai mais conseguir usar o Corvus.')) return;
+      try {
+        const { error } = await db.from('bot_guests').delete().eq('phone', phone);
+        if (error) throw error;
+        state.guests = state.guests.filter(g => g.phone !== phone);
+        refresh();
+        Utils.showToast('Número removido.');
+      } catch (err) {
+        console.error('[MSY][bot]', err);
+        Utils.showToast('Erro ao remover. Tente novamente.', 'error');
+      }
+    });
   }
 
   /* ── Acesso ──────────────────────────────────────────── */
