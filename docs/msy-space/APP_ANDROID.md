@@ -59,6 +59,7 @@ fora do Safari a câmera para (o site agora mostra a foto em vez de tela preta).
 ## Versões
 | Versão | Data | Mudança |
 |---|---|---|
+| 0.6 | 07/11/2026 | Chat e lista de canais ao vivo por Broadcast do banco (sem `postgres_changes`, que mantinha o Realtime lendo o log do banco) |
 | 0.5 | 22/10/2026 | Encerrar salas com código: lixeira na lista, segurar a sala ou "Encerrar sala" na folha (quem criou ou a gestão) |
 | 0.4 | 22/10/2026 | Visual novo no jeito do Discord (lista de canais com quem está em cada sala, folha "Entrar na voz", call com grade + anel verde de quem fala + barra de controles, barra "Voz conectada", chat dos canais de texto); a call continua ao trocar de tela; ícones Font Awesome |
 | 0.3 | 20/10/2026 | Sua câmera não aparece mais espelhada (você se vê igual os outros te veem). Download pelo MSY Space |

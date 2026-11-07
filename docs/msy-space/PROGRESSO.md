@@ -288,3 +288,8 @@ Limitações conhecidas:
 - Fora do Space: saíram também as assinaturas `postgres_changes` que nunca funcionaram (as tabelas não estão na
   publicação) mas mantinham a leitura do log ligada: `js/core/realtime.js` (27 páginas), feed de atividades
   (`modules2.js`) e notificações/stories/direct do feed social (`pages/feed.js`).
+
+## 07/11/2026 — App 0.6 publicado
+- APK 0.6 (chat e lista de canais por Broadcast) gerado e publicado no bucket `space-app` (SHA-256 conferido
+  depois do envio: `1d224808…5c25ae5`, 50.025.487 bytes). O botão do Space mostra "Versão 0.6 · 48 MB · 07/11/2026".
+- Envio e exclusão de mensagens ao vivo testados pelo dono no site com duas abas; leitura do WAL no banco caiu para 0.
