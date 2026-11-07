@@ -270,3 +270,21 @@ Limitações conhecidas:
   lado da marca; ao clicar abre a janela `openAppDownload()` (`ui/app-download.js`): versão/tamanho/data (de
   `latest.json`), o que o app faz, como instalar e o botão "Baixar app". Não aparece no iPhone.
 - Testado no site publicado: ícone no cabeçalho, janela com "Versão 0.5 · 48 MB · 22/10/2026", sem o cartão antigo.
+
+## 07/11/2026 — Tempo real do Space por Broadcast do banco (pedido do dono, depois da queda de 06/11)
+- Motivo: o portal caiu em 06/11 (20:48–22:30) por falta de memória na máquina Nano do Supabase. Qualquer assinatura
+  `postgres_changes` faz o Realtime ler o log do banco (WAL) 2x por segundo, o dia todo (185 mil leituras desde 02/11),
+  mesmo sem ninguém no Space.
+- Banco (`supabase/migrations/20261107_space_broadcast_from_db.sql`): gatilhos publicam as mudanças em tópicos privados:
+  - `space_messages` → `space:chat:<canal>`, eventos INSERT/UPDATE/DELETE com `{ record, old_record }`
+    (`realtime.broadcast_changes`);
+  - `space_channels`, `space_categories`, `space_channel_members` → `space:workspace`, evento `changed`
+    (`realtime.send`, 1 aviso por comando).
+  A autorização continua a mesma (`space_realtime_topic_allowed` em `realtime.messages`).
+- Site: `workspace.js` e `ui/chat.js` ouvem `broadcast` em vez de `postgres_changes`. App: `lib/space.ts` e
+  `ChatScreen.tsx` iguais (precisa gerar APK novo).
+- As 4 tabelas seguem na publicação `supabase_realtime` só para o APK antigo; quando todos atualizarem, rodar a
+  "Limpeza futura" no fim da migration.
+- Fora do Space: saíram também as assinaturas `postgres_changes` que nunca funcionaram (as tabelas não estão na
+  publicação) mas mantinham a leitura do log ligada: `js/core/realtime.js` (27 páginas), feed de atividades
+  (`modules2.js`) e notificações/stories/direct do feed social (`pages/feed.js`).

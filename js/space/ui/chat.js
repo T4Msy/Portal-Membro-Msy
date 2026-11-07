@@ -1,5 +1,5 @@
 // Canal de texto do MSY Space. Lógica portada de useMessages/ChatView da Plataforma:
-// envio otimista com nonce, tempo real por postgres_changes ('space:chat:<id>'),
+// envio otimista com nonce, tempo real por broadcast do banco ('space:chat:<id>'),
 // reenvio ao falhar, carregar antigas ao rolar para cima, agrupamento por autor.
 import { supabase } from '../lib/supabase.js';
 import { mergeMessages } from '../chat/mergeMessages.js';
@@ -126,13 +126,12 @@ export class ChatView {
 
   subscribe() {
     let subscribedOnce = false;
-    const filter = `channel_id=eq.${this.channel.id}`;
+    // Um gatilho no banco publica cada mudança de space_messages no tópico do próprio canal.
     this.rt = supabase.channel(`space:chat:${this.channel.id}`, { config: { private: true } })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'space_messages', filter }, (p) => this.apply([p.new]))
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'space_messages', filter }, (p) => this.apply([p.new]))
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'space_messages' }, (p) => {
-        const id = p.old?.id;
-        // DELETE não aceita filtro no Supabase: ignora ids que não são deste canal.
+      .on('broadcast', { event: 'INSERT' }, ({ payload }) => this.apply([payload.record]))
+      .on('broadcast', { event: 'UPDATE' }, ({ payload }) => this.apply([payload.record]))
+      .on('broadcast', { event: 'DELETE' }, ({ payload }) => {
+        const id = payload.old_record?.id;
         if (id && this.items.some((m) => m.id === id)) { this.items = this.items.filter((m) => m.id !== id); this.scheduleRender(); }
       })
       .subscribe((status) => {

@@ -72,13 +72,13 @@ export function ChatScreen({ store, room, onBack }: { store: SpaceStore; room: R
       setHasMore((data ?? []).length >= PAGE)
       setLoading(false)
     })()
-    const filter = `channel_id=eq.${room.id}`
+    // Um gatilho no banco publica cada mudança de space_messages no tópico do próprio canal.
     rt = supabase
       .channel(`space:chat:${room.id}`, { config: { private: true } })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'space_messages', filter }, (p) => apply(merge(itemsRef.current, [p.new as Message])))
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'space_messages', filter }, (p) => apply(merge(itemsRef.current, [p.new as Message])))
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'space_messages' }, (p) => {
-        const id = (p.old as { id?: string })?.id
+      .on('broadcast', { event: 'INSERT' }, ({ payload }) => apply(merge(itemsRef.current, [payload.record as Message])))
+      .on('broadcast', { event: 'UPDATE' }, ({ payload }) => apply(merge(itemsRef.current, [payload.record as Message])))
+      .on('broadcast', { event: 'DELETE' }, ({ payload }) => {
+        const id = (payload.old_record as { id?: string })?.id
         if (id && itemsRef.current.some((m) => m.id === id)) apply(itemsRef.current.filter((m) => m.id !== id))
       })
       .subscribe()

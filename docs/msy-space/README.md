@@ -59,10 +59,12 @@ Tudo com prefixo `space_` para não colidir com tabelas/funções do portal
 - Detalhes na migration e em PROGRESSO.md.
 
 ### Realtime (tópicos privados, autorizados por RLS em `realtime.messages`)
+Sem `postgres_changes`: mudanças no banco chegam por gatilhos que fazem broadcast (`20261107_space_broadcast_from_db.sql`).
 | Tópico | Uso |
 |---|---|
 | `space:online` | presença global: quem está no Space e em qual sala de voz |
-| `space:chat:<canal>` | mensagens novas de um canal de texto |
+| `space:workspace` | aviso `changed` quando canais, categorias ou membros de sala mudam (gatilho no banco) |
+| `space:chat:<canal>` | mensagens novas/editadas/apagadas de um canal de texto (gatilho no banco) |
 | `space:voice:<canal>` | sinalização WebRTC + presença da sala de voz |
 
 ## Decisões herdadas da Plataforma (NÃO desfazer sem ler)

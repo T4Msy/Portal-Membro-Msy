@@ -72,14 +72,13 @@ export class SpaceStore {
     await this.reload()
     void canManageSpace().then((canManage) => this.patch({ canManage }))
     // Estrutura ao vivo (canal criado/apagado no site aparece aqui), como o 'space:workspace' do site.
-    let ch = supabase.channel('space:workspace', { config: { private: true } })
-    for (const table of ['space_channels', 'space_categories', 'space_channel_members']) {
-      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+    // Um gatilho no banco manda o broadcast 'changed' (20261107_space_broadcast_from_db.sql).
+    this.structure = supabase.channel('space:workspace', { config: { private: true } })
+      .on('broadcast', { event: 'changed' }, () => {
         if (this.reloadTimer) clearTimeout(this.reloadTimer)
         this.reloadTimer = setTimeout(() => void this.reload().catch(() => undefined), 300)
       })
-    }
-    this.structure = ch.subscribe()
+      .subscribe()
 
     // Presença global: quem está em cada sala de voz (mesmo formato do site).
     const on = supabase.channel('space:online', { config: { private: true, presence: { key: this.tabId } } })

@@ -234,8 +234,6 @@ async function initFeed() {
   let allFeed       = [];
   let filtroTipo    = 'todos';
   let buscaFeed     = '';
-  let feedRealtimeChannel = null;
-  let feedRealtimeTimer = null;
 
   const TIPO_META = {
     atividade:  { icon:'fa-list-check',    color:'#e8c060', label:'Atividade'  },
@@ -302,23 +300,6 @@ async function initFeed() {
     }
     if (item.localizacao) chips.push(item.localizacao);
     return chips;
-  }
-
-  function subscribeFeedRealtime() {
-    if (feedRealtimeChannel) return;
-    try {
-      feedRealtimeChannel = db
-        .channel('feed-atividade-live')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_atividade' }, () => {
-          clearTimeout(feedRealtimeTimer);
-          feedRealtimeTimer = setTimeout(() => {
-            carregarFeed().catch((err) => console.warn('[MSY][feed] Realtime do feed indisponível:', err));
-          }, 180);
-        })
-        .subscribe();
-    } catch (err) {
-      console.warn('[MSY][feed] Falha ao assinar realtime do feed:', err);
-    }
   }
 
   /* ---- MODAL CRIAR / EDITAR ---- */
@@ -620,8 +601,6 @@ async function initFeed() {
       });
     });
   }
-
-  subscribeFeedRealtime();
 
   /* ---- LAYOUT ---- */
   content.innerHTML = `

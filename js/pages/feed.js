@@ -33,9 +33,6 @@ const state = {
   socialNotifications: [],
   notificationFilter: 'all',
   notificationPanelOpen: false,
-  socialNotificationChannel: null,
-  socialStoriesChannel: null,
-  directMessagesChannel: null,
   directConversations: [],
   directUnreadCount: 0,
   activeDirectConversationId: null,
@@ -46,7 +43,6 @@ const state = {
   directScrollRequestId: 0,
   directContextMessageId: null,
   directEditingMessageId: null,
-  directActivityRefreshTimer: null,
   activeProfileId: null,
   activeProfilePosts: [],
   activeProfileLikedPosts: [],
@@ -515,10 +511,6 @@ function closeSocialModals() {
     state.mediaViewerCleanup();
     state.mediaViewerCleanup = null;
   }
-  if (state.directMessagesChannel) {
-    try { db.removeChannel(state.directMessagesChannel); } catch {}
-    state.directMessagesChannel = null;
-  }
   state.directEditingMessageId = null;
   if (state.postEditPreviews?.length) revokePreviews(state.postEditPreviews.filter((item) => item.isNew));
   state.postEditPreviews = [];
@@ -561,8 +553,6 @@ async function initFeed() {
   bindPullToRefresh();
   bindRouteNavigation();
   await loadInitial();
-  subscribeSocialNotifications();
-  subscribeStoriesRealtime();
   handleDeepLink();
 }
 
@@ -1273,7 +1263,6 @@ async function sharePostToDirect(postId, targetUserId, button = null, { openAfte
     state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
     renderDirectUnreadBadges();
     if (openAfterSend) {
-      await subscribeDirectConversation(conversationId);
       document.getElementById('postShareModal')?.classList.remove('open');
       renderDirectInbox();
     }
@@ -3446,56 +3435,6 @@ function openNotificationTarget(notification) {
   }
 }
 
-function subscribeSocialNotifications() {
-  if (!state.hasSocialTables || state.socialNotificationChannel) return;
-  try {
-    state.socialNotificationChannel = db
-      .channel(`feed-social-notifications-${state.profile.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${state.profile.id}`,
-      }, (payload) => {
-        const item = state.service.normalizeSocialNotification(payload.new);
-        if (state.service.isDirectNotification(item)) refreshDirectUnreadCount();
-        if (!state.service.isSocialActivityNotification(item)) return;
-        state.socialNotifications = [item, ...state.socialNotifications.filter((current) => current.id !== item.id)].slice(0, 48);
-        renderSocialNotifications();
-        if (state.notificationPanelOpen) renderSocialNotificationsDrawer();
-      })
-      .subscribe();
-  } catch (err) {
-    console.warn('[MSY][feed-social] Realtime de atividade indisponivel:', err);
-  }
-}
-
-function subscribeStoriesRealtime() {
-  if (!state.hasSocialTables || state.socialStoriesChannel) return;
-  try {
-    state.socialStoriesChannel = db
-      .channel('feed-social-stories')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'social_stories',
-      }, () => {
-        clearTimeout(state.directActivityRefreshTimer);
-        state.directActivityRefreshTimer = setTimeout(async () => {
-          try {
-            state.stories = await state.service.loadStories();
-            renderStories();
-          } catch (err) {
-            console.warn('[MSY][feed-social] Realtime de stories indisponível:', err);
-          }
-        }, 180);
-      })
-      .subscribe();
-  } catch (err) {
-    console.warn('[MSY][feed-social] Assinatura realtime de stories falhou:', err);
-  }
-}
-
 function renderSuggestions(query = '') {
   const el = document.getElementById('suggestionsList');
   if (!el) return;
@@ -5537,7 +5476,6 @@ async function handleDirectArchiveConversation(conversationId) {
     if (state.activeDirectConversationId === conversationId) {
       state.activeDirectConversationId = null;
       state.directEditingMessageId = null;
-      await subscribeDirectConversation(null);
     }
     state.directConversations = state.directConversations.filter((conversation) => conversation.id !== conversationId);
     state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
@@ -5667,41 +5605,6 @@ function bindDirectMessageActions(modal) {
   }));
 }
 
-async function subscribeDirectConversation(conversationId) {
-  if (!state.hasSocialTables) return;
-  if (state.directMessagesChannel) {
-    try { await db.removeChannel(state.directMessagesChannel); } catch {}
-    state.directMessagesChannel = null;
-  }
-  if (!conversationId) return;
-  try {
-    state.directMessagesChannel = db
-      .channel(`feed-social-direct-${conversationId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'direct_messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      }, async (payload) => {
-        try {
-          const messages = await state.service.loadDirectMessages(conversationId);
-          const conversation = getActiveDirectConversation();
-          if (conversation) {
-            conversation.messages = messages;
-            conversation.lastMessage = messages.at(-1) || conversation.lastMessage;
-            conversation.last_message_at = conversation.lastMessage?.created_at || conversation.last_message_at;
-          }
-          renderDirectInbox();
-        } catch (err) {
-          console.warn('[MSY][feed-social] Realtime do direct indisponível:', err);
-        }
-      })
-      .subscribe();
-  } catch (err) {
-    console.warn('[MSY][feed-social] Falha ao assinar realtime do direct:', err);
-  }
-}
-
 async function openDirectInbox(targetId = null) {
   if (!state.hasSocialTables) {
     Utils.showToast('Aplique as migrations sociais antes de usar o Direct.', 'error');
@@ -5741,7 +5644,6 @@ async function openDirectInbox(targetId = null) {
         state.directUnreadCount = state.service.getDirectUnreadCount(state.directConversations);
         renderDirectUnreadBadges();
       }
-      await subscribeDirectConversation(activeConversation.id);
     }
 
     renderDirectInbox();
@@ -5901,7 +5803,6 @@ function renderDirectInbox() {
       if (!conversation.streak || !conversation.streak.active) {
         conversation.streak = state.service.calculateDirectStreak(conversation.messages, conversation.otherParticipants.map((participant) => participant.user_id));
       }
-      await subscribeDirectConversation(conversation.id);
     }
     renderDirectInbox();
   }));
@@ -5912,7 +5813,6 @@ function renderDirectInbox() {
   modal.querySelector('[data-direct-back]')?.addEventListener('click', async () => {
     state.activeDirectConversationId = null;
     state.directEditingMessageId = null;
-    await subscribeDirectConversation(null);
     closeDirectConversationMenu();
     renderDirectInbox();
   });

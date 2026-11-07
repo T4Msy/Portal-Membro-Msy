@@ -240,6 +240,12 @@ download: Logs Explorer, `source = 'edge_logs'`, `log_attributes['request.path']
   desligada. Cuidados: evitar consultas que varrem o banco inteiro em sequência; se voltar a
   acontecer com frequência, o plano Pro permite uma máquina maior. Sintoma rápido de checar:
   `curl https://lldzgkxpoyqauxdcjyaw.supabase.co/auth/v1/health` sem resposta.
+- **Portal caiu em 06/11/2026** (20:48–22:30 BRT): login com 522/504 e consultas com 503; o banco
+  não reiniciou nem registrou erro. Causa: **falta de memória na Nano** (RAM 98%, ~300 MB de swap,
+  "memory commitment" em nível SEVERE o dia todo) somada ao pico de uso de sexta à noite. Cargas
+  fixas achadas em 07/11: o **bot Corvus** consulta o portal a cada 1 min (~90% das requisições da
+  API) e as assinaturas `postgres_changes` mantinham o Realtime lendo o WAL 2x/s. Em 07/11 o Space
+  passou para Broadcast vindo do banco e as assinaturas mortas saíram (`docs/msy-space/PROGRESSO.md`).
 - **Cota do Supabase:** o ciclo 18/10–18/11 já fechou em 16 GB de cached egress; a carência vai
   até 23/11/2026. Com o R2 o próximo ciclo deve ficar perto de zero, mas pode haver restrição por
   alguns dias depois de 23/11. Upgrade para o Pro é a saída garantida se o portal não puder parar.

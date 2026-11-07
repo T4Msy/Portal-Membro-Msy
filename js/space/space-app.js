@@ -1,11 +1,11 @@
 // Entrada da página MSY Space (space.html). Visão geral: docs/msy-space/README.md
-import { Workspace } from './workspace.js';
+import { Workspace } from './workspace.js?v=20261107-bc';
 import { OnlinePresence } from './online.js';
 import { SpacePrefs } from './prefs.js';
 import { VoiceController } from './voice-controller.js';
 import { CallShell } from './shell.js';
 import { SpaceNav } from './ui/nav.js';
-import { ChatView } from './ui/chat.js';
+import { ChatView } from './ui/chat.js?v=20261107-bc';
 import { VoiceRoomView } from './ui/voice-room.js';
 import { CallDock } from './ui/call-dock.js';
 import { CallPip } from './ui/call-pip.js';

@@ -1,5 +1,6 @@
 // Estrutura do MSY Space: categorias, canais e perfis do portal.
-// Atualiza ao vivo pelo tópico privado 'space:workspace' (postgres_changes filtrado por RLS).
+// Atualiza ao vivo pelo tópico privado 'space:workspace': um gatilho no banco manda o broadcast
+// 'changed' quando canais, categorias ou membros de sala mudam (20261107_space_broadcast_from_db.sql).
 import { supabase } from './lib/supabase.js';
 import { mediaPublicUrl } from '../core/media-store.js?v=20261101-r2';
 
@@ -71,13 +72,11 @@ export class Workspace extends EventTarget {
       clearTimeout(this.reloadTimer);
       this.reloadTimer = setTimeout(() => this.reloadChannels(), 300);
     };
-    let ch = supabase.channel('space:workspace', { config: { private: true } });
-    for (const table of ['space_channels', 'space_categories', 'space_channel_members']) {
-      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, schedule);
-    }
-    this.channel = ch.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') console.warn('[MSY][space] Canal de estrutura indisponível.');
-    });
+    this.channel = supabase.channel('space:workspace', { config: { private: true } })
+      .on('broadcast', { event: 'changed' }, schedule)
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') console.warn('[MSY][space] Canal de estrutura indisponível.');
+      });
   }
 
   close() {
