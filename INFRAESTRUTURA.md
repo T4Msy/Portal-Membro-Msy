@@ -246,6 +246,9 @@ download: Logs Explorer, `source = 'edge_logs'`, `log_attributes['request.path']
   fixas achadas em 07/11: o **bot Corvus** consulta o portal a cada 1 min (~90% das requisições da
   API) e as assinaturas `postgres_changes` mantinham o Realtime lendo o WAL 2x/s. Em 07/11 o Space
   passou para Broadcast vindo do banco e as assinaturas mortas saíram (`docs/msy-space/PROGRESSO.md`).
+  O bot passou a fazer **1 requisição por minuto**: a função `bot_tick_data()`
+  (`supabase/migrations/20261107_bot_tick_data.sql`, só `service_role`) devolve tudo que os avisos
+  precisam. Campo novo num aviso do bot = mudar essa função **e** `corvus-botv/src/automations.js`.
 - **Cota do Supabase:** o ciclo 18/10–18/11 já fechou em 16 GB de cached egress; a carência vai
   até 23/11/2026. Com o R2 o próximo ciclo deve ficar perto de zero, mas pode haver restrição por
   alguns dias depois de 23/11. Upgrade para o Pro é a saída garantida se o portal não puder parar.
