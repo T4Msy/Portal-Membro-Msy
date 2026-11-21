@@ -1373,6 +1373,9 @@ async function initRanking() {
       <button class="rank-main-tab" data-aba="constancia">
         <i class="fa-solid fa-fire-flame-curved"></i><span class="rank-main-label">Constância</span>
       </button>
+      <button class="rank-main-tab" data-aba="mensagens">
+        <i class="fa-solid fa-table-list"></i><span class="rank-main-label">Mensagens</span>
+      </button>
       <button class="rank-main-tab" data-aba="mensal">
         <i class="fa-solid fa-calendar-days"></i><span class="rank-main-label">Mensal</span>
         <span class="rank-tab-count">${mensais.length}</span>
@@ -1380,9 +1383,6 @@ async function initRanking() {
       <button class="rank-main-tab" data-aba="semanal">
         <i class="fa-solid fa-calendar-week"></i><span class="rank-main-label">Semanal</span>
         <span class="rank-tab-count">${semanais.length}</span>
-      </button>
-      <button class="rank-main-tab" data-aba="mensagens">
-        <i class="fa-solid fa-table-list"></i><span class="rank-main-label">Mensagens</span>
       </button>
     </div>
 
