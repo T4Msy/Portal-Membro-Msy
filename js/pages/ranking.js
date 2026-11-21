@@ -7,6 +7,7 @@
    ============================================================ */
 
 import { importarRankingDeImagem, lembrarAliases } from '../core/ranking-import.js?v=20261102-ocr';
+import { createMensagensTab } from './ranking-mensagens.js?v=20261121-mensagens';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -366,6 +367,7 @@ async function initRanking() {
   let tronoBanco = { semanal: [], mensal: [], diario: [] };
   let constanciaResumo = { semanal: [], mensal: [], byUser: {} };
   let membrosRanking = [];
+  const abaMensagens = createMensagensTab({ db, Utils });
 
   if (!document.getElementById('msy-trono-css')) {
     const s = document.createElement('style');
@@ -582,7 +584,7 @@ async function initRanking() {
       .trono-diario-btn:hover { background: rgba(201,168,76,.08); border-color: rgba(201,168,76,.38); color: var(--gold); }
 
       .rank-main-tabs {
-        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+        display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
         border-radius: 12px; overflow: hidden;
         background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
         margin-bottom: 24px; overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -1012,6 +1014,7 @@ async function initRanking() {
     document.querySelectorAll('.rank-main-tab').forEach(b => b.classList.toggle('active', b.dataset.aba === tipo));
     if (tipo === 'trono') renderTrono();
     else if (tipo === 'constancia') renderConstancia();
+    else if (tipo === 'mensagens') abaMensagens.render(document.getElementById('rankContent'));
     else renderListaRanking();
   }
 
@@ -1377,6 +1380,9 @@ async function initRanking() {
       <button class="rank-main-tab" data-aba="semanal">
         <i class="fa-solid fa-calendar-week"></i><span class="rank-main-label">Semanal</span>
         <span class="rank-tab-count">${semanais.length}</span>
+      </button>
+      <button class="rank-main-tab" data-aba="mensagens">
+        <i class="fa-solid fa-table-list"></i><span class="rank-main-label">Mensagens</span>
       </button>
     </div>
 

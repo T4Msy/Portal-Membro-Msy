@@ -1,0 +1,109 @@
+/* ============================================================
+   Ranking → aba "Mensagens" (js/pages/ranking-mensagens.js)
+   Tabela de mensagens por participante no grupo da Masayoshi.
+   ============================================================ */
+
+.rmsg-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.rmsg-title {
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: .95rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--text-1);
+}
+.rmsg-sub { font-size: .72rem; color: var(--text-3); margin-top: 4px; }
+.rmsg-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.rmsg-filtros {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.rmsg-modos {
+  display: inline-flex; border: 1px solid var(--border-faint); border-radius: 10px;
+  overflow: hidden; background: rgba(255,255,255,.02);
+}
+.rmsg-modo {
+  padding: 8px 16px; background: none; border: none; color: var(--text-3);
+  font-size: .76rem; font-weight: 600; cursor: pointer; transition: color .2s, background .2s;
+}
+.rmsg-modo + .rmsg-modo { border-left: 1px solid var(--border-faint); }
+.rmsg-modo:hover { color: var(--text-1); }
+.rmsg-modo.active { color: var(--gold); background: var(--gold-subtle); }
+
+.rmsg-nav { display: flex; align-items: center; gap: 10px; }
+.rmsg-nav-label { font-size: .8rem; color: var(--text-2); min-width: 170px; text-align: center; }
+.rmsg-seta {
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border-faint); background: rgba(255,255,255,.02); color: var(--text-2);
+}
+.rmsg-seta:hover { color: var(--gold); border-color: var(--border-gold); }
+
+.rmsg-datas { display: flex; gap: 10px; flex-wrap: wrap; font-size: .76rem; color: var(--text-3); }
+.rmsg-datas label { display: flex; align-items: center; gap: 6px; }
+.rmsg-datas input {
+  background: var(--black-3); color: var(--text-1); border: 1px solid var(--border-faint);
+  border-radius: 8px; padding: 6px 8px; font: inherit; color-scheme: dark;
+}
+
+.rmsg-card {
+  border: 1px solid var(--border-faint); border-radius: 14px;
+  background: var(--black-2); overflow: hidden;
+}
+.rmsg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rmsg-table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 640px; }
+.rmsg-table th, .rmsg-table td {
+  padding: 12px 10px; text-align: center; border-bottom: 1px solid var(--border-faint);
+  white-space: nowrap; color: var(--text-1);
+}
+.rmsg-table thead th {
+  font-size: .64rem; font-weight: 700; letter-spacing: .08em; color: var(--text-3);
+  background: rgba(255,255,255,.015);
+}
+.rmsg-table thead th span { display: block; }
+.rmsg-table thead th small { display: block; font-weight: 400; letter-spacing: 0; margin-top: 2px; opacity: .7; }
+.rmsg-table .rmsg-membro {
+  text-align: left; position: sticky; left: 0; background: var(--black-2);
+  font-family: 'Cinzel', serif; font-weight: 600; padding-left: 16px;
+}
+.rmsg-table thead .rmsg-membro { font-size: .78rem; color: var(--text-1); background: var(--black-2); }
+.rmsg-membro-in { display: flex; align-items: center; gap: 10px; }
+.rmsg-total { font-weight: 700; }
+.rmsg-media { color: var(--text-3); }
+.rmsg-table tbody tr:hover td { background: rgba(255,255,255,.02); }
+.rmsg-zerado td { color: var(--text-3); }
+
+.rmsg-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: .62rem; font-weight: 700; color: var(--c, var(--gold));
+  background: color-mix(in srgb, var(--c, var(--gold)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c, var(--gold)) 45%, transparent);
+  font-family: 'Exo 2', sans-serif;
+}
+.rmsg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.rmsg-table tfoot td {
+  font-weight: 700; color: var(--red-bright); border-bottom: none;
+  background: var(--red-subtle);
+}
+.rmsg-table tfoot .rmsg-membro {
+  font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-1);
+  background: var(--black-2);
+}
+
+@media (max-width: 640px) {
+  .rmsg-filtros { flex-direction: column; align-items: stretch; }
+  .rmsg-modos { display: flex; }
+  .rmsg-modo { flex: 1; }
+  .rmsg-nav { justify-content: space-between; }
+  .rmsg-nav-label { min-width: 0; }
+  .rmsg-membro-in > span:last-child { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+[data-theme="light"] .rmsg-card,
+[data-theme="light"] .rmsg-table .rmsg-membro,
+[data-theme="light"] .rmsg-table thead .rmsg-membro,
+[data-theme="light"] .rmsg-table tfoot .rmsg-membro { background: #fff; }
+[data-theme="light"] .rmsg-datas input { background: #fff; color-scheme: light; }
+
+.rmsg-pendente { color: var(--text-3); opacity: .6; }

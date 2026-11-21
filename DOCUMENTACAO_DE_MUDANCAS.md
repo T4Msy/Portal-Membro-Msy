@@ -79,6 +79,20 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
 
+## Ranking: aba "Mensagens" com mensagens por participante — 2026-11-21
+
+**O que mudou:** nova aba **Mensagens** no Ranking com a tabela de mensagens por membro no grupo Masayoshi.🍷: foto e nome do portal, colunas por dia ou por semana, Total, Média por dia e linha "Total do grupo", com botões Copiar (texto para o WhatsApp) e Baixar PDF.
+
+**Por que mudou:** o relatório semanal era feito à mão a partir de um app externo; agora o bot Corvus conta sozinho e o portal mostra o histórico.
+
+**Arquivos e serviços afetados:** `js/pages/ranking-mensagens.js` (novo), `css/ranking-mensagens.css` (novo), `js/pages/ranking.js` (aba nova, grade de 5 abas), `ranking.html` (CSS, jsPDF, versões), `supabase/migrations/20261121_group_message_daily.sql` (tabela `group_message_daily`, aplicada em 21/11). No bot (repo corvus-botv): `src/lib/msgdaily.js`, `src/automations.js`, `src/lib/supabase.js` (upsert), `src/commands/rankmsg.js` (guarda 35 dias).
+
+**Como funciona:** o bot já contava as mensagens por pessoa e por dia (horário de Brasília) em `data/timecounters.json`. A partir da 1h, a regra `syncMessageDaily` do tick envia os dias fechados ainda não enviados num único upsert (uma linha por membro do portal no grupo por dia, com 0 para quem não falou; liga @lid → número pelos participantes do grupo e número → perfil por `member_whatsapp`). Se falhar, tenta de novo na hora seguinte. O portal lê o período numa consulta só e soma no navegador. Modos: **Semana** (Dom a Sáb, setas), **Mês** (uma coluna por semana Dom–Sáb) e **Período** (datas livres: até 7 dias, um dia por coluna a partir da data de início; acima disso, uma coluna por semana). Dias que ainda não fecharam aparecem como "–"; a Média divide pelos dias já fechados. Todos os membros logados leem (RLS); só o bot escreve (chave secreta).
+
+**Validação realizada:** teste a seco no servidor (11 membros ligados, 121 linhas); primeiro envio real com 11 dias (10/11 a 20/11); aba conferida no portal local com os dados reais nos três modos; lógica de colunas testada com node.
+
+**Pendências ou cuidados para deploy:** o histórico começa em 10/11/2026 (antes disso a semana aparece zerada). O grupo está fixo em `GROUP_ID` no JS e é o grupo padrão da Central do Bot no envio; se o grupo padrão mudar, ajustar os dois. Copiar e Baixar PDF não foram testados automaticamente.
+
 ## Descrição das atividades com formatação (negrito, listas, parágrafos) — 2026-11-02
 
 **O que mudou:** ao abrir uma atividade, a descrição passa a respeitar a formatação que a Diretoria escreve: parágrafos e linhas em branco, quebras de linha, listas com `- ` (ou `* `, `• `) e numeradas (`1. `), títulos com `#`, **negrito** com `**texto**`/`__texto__` e itálico com `*texto*`/`_texto_`. Emojis continuam como estão.
