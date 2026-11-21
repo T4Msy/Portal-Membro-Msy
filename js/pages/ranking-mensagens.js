@@ -6,8 +6,10 @@
  * Cada período é lido numa consulta só e somado aqui no navegador.
  *
  *   Semana  → colunas Dom a Sáb (semana fixa, setas para trocar)
- *   Mês     → uma coluna por semana (Dom–Sáb) dentro do mês
- *   Período → datas livres, uma coluna por semana
+ *   Mês     → uma coluna por semana (Dom–Sáb) dentro do mês. Semana que o bot
+ *             não cobre inteira usa o ranking semanal importado (weekly_rankings)
+ *             daquela mesma semana, se existir — é o histórico de antes do bot.
+ *   Período → datas livres: até 7 dias, um dia por coluna; acima, uma por semana
  *   Média   → total ÷ dias do período que já fecharam (até ontem)
  */
 
@@ -54,20 +56,37 @@ function colunasDo(modo, inicio, fim) {
   return cols;
 }
 
-/** Monta as linhas da tabela a partir das linhas do banco. */
-function montarTabela(registros, colunas, diasFechados) {
+/**
+ * Monta as linhas da tabela a partir das linhas do banco. `importados` troca
+ * colunas inteiras (índice → entries do ranking semanal) pelo total importado.
+ */
+function montarTabela(registros, colunas, diasFechados, importados = new Map(), perfis = new Map()) {
   const porMembro = new Map();
+  const membro = (id, perfil) => {
+    let m = porMembro.get(id);
+    if (!m) {
+      m = { id, perfil, valores: colunas.map(() => 0), total: 0 };
+      porMembro.set(id, m);
+    }
+    return m;
+  };
   for (const r of registros) {
     if (!r.profile) continue;
-    let m = porMembro.get(r.user_id);
-    if (!m) {
-      m = { id: r.user_id, perfil: r.profile, valores: colunas.map(() => 0), total: 0 };
-      porMembro.set(r.user_id, m);
-    }
     const i = colunas.findIndex(c => r.day >= c.de && r.day <= c.ate);
-    if (i < 0) continue;
+    if (i < 0 || importados.has(i)) continue;
+    const m = membro(r.user_id, r.profile);
     m.valores[i] += r.messages;
     m.total += r.messages;
+  }
+  for (const [i, entries] of importados) {
+    for (const e of entries) {
+      const perfil = perfis.get(e.user_id);
+      const n = Number(e.messages) || 0;
+      if (!perfil) continue;
+      const m = membro(e.user_id, perfil);
+      m.valores[i] += n;
+      m.total += n;
+    }
   }
   const membros = [...porMembro.values()].sort((a, b) =>
     b.total - a.total || a.perfil.name.localeCompare(b.perfil.name, 'pt-BR'));
@@ -168,7 +187,7 @@ export function createMensagensTab({ db, Utils }) {
     }
     // Coluna que começa hoje ou depois ainda não tem números (o bot manda à 1h do dia seguinte).
     const celula = (v, i) => `<td>${colunas[i].de > ontem ? '<span class="rmsg-pendente">–</span>' : v}</td>`;
-    const cabecalho = colunas.map(c => `<th><span>${c.rotulo}</span><small>${c.sub}</small></th>`).join('');
+    const cabecalho = colunas.map(c => `<th${c.importado ? ' class="rmsg-importado" title="Total do ranking semanal importado"' : ''}><span>${c.rotulo}</span><small>${c.sub}</small>${c.importado ? '<small>importado</small>' : ''}</th>`).join('');
     const linhas = tabela.membros.map(m => `
       <tr class="${m.total ? '' : 'rmsg-zerado'}">
         <td class="rmsg-membro"><div class="rmsg-membro-in">${avatar(m.perfil)}<span>${Utils.escapeHtml(m.perfil.name)}</span></div></td>
@@ -205,14 +224,50 @@ export function createMensagensTab({ db, Utils }) {
     const diasFechados = inicio <= fechadoAte ? diasEntre(inicio, fechadoAte) : 0;
 
     try {
-      const { data, error } = await db.from('group_message_daily')
-        .select('day,user_id,messages,profile:user_id(name,initials,color,avatar_url)')
-        .eq('group_id', GROUP_ID)
-        .gte('day', inicio)
-        .lte('day', fim);
-      if (error) throw error;
+      const [diario, semanais] = await Promise.all([
+        db.from('group_message_daily')
+          .select('day,user_id,messages,profile:user_id(name,initials,color,avatar_url)')
+          .eq('group_id', GROUP_ID)
+          .gte('day', inicio)
+          .lte('day', fim),
+        estado.modo === 'mes'
+          ? db.from('weekly_rankings')
+            .select('week_start,week_end,entries')
+            .or('tipo.is.null,tipo.eq.semanal')
+            .gte('week_start', inicio)
+            .lte('week_end', fim)
+          : Promise.resolve({ data: [] })
+      ]);
+      if (diario.error) throw diario.error;
+      if (semanais.error) throw semanais.error;
+      const data = diario.data || [];
+
+      // Semana que o bot não cobre inteira (até ontem) usa o ranking semanal importado.
+      const diasDoBot = new Set(data.map(r => r.day));
+      const importados = new Map();
+      colunas.forEach((c, i) => {
+        const ranking = (semanais.data || []).find(r => r.week_start === c.de && r.week_end === c.ate);
+        if (!ranking || c.de > ontem) return;
+        const ate = c.ate < ontem ? c.ate : ontem;
+        let completa = true;
+        for (let d = c.de; d <= ate; d = addDays(d, 1)) if (!diasDoBot.has(d)) completa = false;
+        if (completa) return;
+        importados.set(i, Array.isArray(ranking.entries) ? ranking.entries : []);
+        c.importado = true;
+      });
+
+      const perfis = new Map(data.filter(r => r.profile).map(r => [r.user_id, r.profile]));
+      const faltando = [...new Set([...importados.values()].flat().map(e => e.user_id))]
+        .filter(id => id && !perfis.has(id));
+      if (faltando.length) {
+        const { data: extras, error: errPerfis } = await db.from('profiles')
+          .select('id,name,initials,color,avatar_url')
+          .in('id', faltando);
+        if (errPerfis) throw errPerfis;
+        for (const p of extras || []) perfis.set(p.id, p);
+      }
       if (meu !== pedido) return;
-      const tabela = montarTabela(data || [], colunas, diasFechados);
+      const tabela = montarTabela(data, colunas, diasFechados, importados, perfis);
       ultimo = { periodo: `${fmtDia(inicio)} a ${fmtDia(fim)}`, colunas, tabela };
       alvo.innerHTML = htmlTabela(colunas, tabela);
     } catch (err) {

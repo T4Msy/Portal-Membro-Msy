@@ -7,7 +7,7 @@
    ============================================================ */
 
 import { importarRankingDeImagem, lembrarAliases } from '../core/ranking-import.js?v=20261102-ocr';
-import { createMensagensTab } from './ranking-mensagens.js?v=20261121-mensagens';
+import { createMensagensTab } from './ranking-mensagens.js?v=20261121-importados';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 

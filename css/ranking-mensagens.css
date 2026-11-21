@@ -107,3 +107,4 @@
 [data-theme="light"] .rmsg-datas input { background: #fff; color-scheme: light; }
 
 .rmsg-pendente { color: var(--text-3); opacity: .6; }
+.rmsg-table thead th.rmsg-importado small:last-child { color: var(--gold); opacity: .8; font-style: italic; }
