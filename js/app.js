@@ -5567,6 +5567,13 @@
            tab.querySelectorAll('[data-justification-status]').forEach(card => {
              card.hidden = filter !== 'todas' && card.dataset.justificationStatus !== filter;
            });
+           let anyVisible = false;
+           tab.querySelectorAll('.events-justification-group').forEach(group => {
+             group.hidden = !group.querySelector('.events-review-card:not([hidden])');
+             if (!group.hidden) anyVisible = true;
+           });
+           const filterEmpty = tab.querySelector('.events-justification-filter-empty');
+           if (filterEmpty) filterEmpty.hidden = anyVisible;
          });
        });
 
@@ -6287,12 +6294,11 @@
       const meta = reviewStatus(isAnnulled ? 'anulada' : r.status);
       const filterStatus = isAnnulled ? 'anuladas' : reviewFilter(r.status);
       addToCount(r.status, isAnnulled);
-      return `
+      return { eventId: r.event_id, ev: r.ev, filterStatus, html: `
       <div class="events-review-card" data-justification-status="${filterStatus}"${filterStatus !== 'pendentes' ? ' hidden' : ''}>
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(r.requester?.name || 'Membro')}</div>
-             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(r.ev?.title || 'Evento')} · ${Utils.formatDate(r.ev?.event_date)}</div>
            </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
             <span class="ev-badge ev-badge-opt">Cancelamento</span>
@@ -6308,20 +6314,19 @@
           ` : ''}
           <button class="btn btn-sm ev-change-delete" data-rid="${r.id}" style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.22);color:#ef4444"><i class="fa-solid fa-trash"></i> Apagar</button>
         </div>
-      </div>`;
-    }).join('');
+      </div>` };
+    });
 
     const justCards = (eventJustifs || []).map(p => {
       const isAnnulled = !!p.justificativa_anulada;
       const meta = reviewStatus(isAnnulled ? 'anulada' : (p.justificativa_status || 'pendente'));
       const filterStatus = isAnnulled ? 'anuladas' : reviewFilter(p.justificativa_status || 'pendente');
       addToCount(p.justificativa_status || 'pendente', isAnnulled);
-      return `
+      return { eventId: p.event_id, ev: p.ev, filterStatus, html: `
       <div class="events-review-card" data-justification-status="${filterStatus}"${filterStatus !== 'pendentes' ? ' hidden' : ''}>
         <div class="events-review-head">
            <div>
              <div class="events-review-title">${Utils.escapeHtml(p.requester?.name || 'Membro')}</div>
-             <div class="events-review-meta"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(p.ev?.title || 'Evento')} · ${Utils.formatDate(p.ev?.event_date)}</div>
            </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
             <span class="ev-badge ev-badge-opt">Ausencia</span>
@@ -6337,12 +6342,34 @@
           ` : ''}
           <button class="btn btn-sm ev-just-delete" data-pid="${p.id}" style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.22);color:#ef4444"><i class="fa-solid fa-trash"></i> Apagar</button>
         </div>
-      </div>`;
-    }).join('');
+      </div>` };
+    });
+
+    // Agrupa os cartões por evento (evento mais recente primeiro)
+    const groups = new Map();
+    [...cancelCards, ...justCards].forEach(card => {
+      const key = card.eventId || 'sem-evento';
+      if (!groups.has(key)) groups.set(key, { ev: card.ev, cards: [] });
+      groups.get(key).cards.push(card);
+    });
+    const reviewCards = [...groups.values()]
+      .sort((a, b) => String(b.ev?.event_date || '').localeCompare(String(a.ev?.event_date || '')))
+      .map(g => {
+        const pending = g.cards.filter(c => c.filterStatus === 'pendentes').length;
+        return `
+        <section class="events-justification-group"${pending ? '' : ' hidden'}>
+          <div class="events-justification-group-head">
+            <div class="events-justification-group-title"><i class="fa-regular fa-calendar"></i> ${Utils.escapeHtml(g.ev?.title || 'Evento')}</div>
+            <div class="events-justification-group-meta">${g.ev?.event_date ? Utils.formatDate(g.ev.event_date) : ''}<span>${g.cards.length} ${g.cards.length === 1 ? 'justificativa' : 'justificativas'}</span>${pending ? `<span class="is-pending">${pending} pendente${pending === 1 ? '' : 's'}</span>` : ''}</div>
+          </div>
+          <div class="events-director-grid">
+            ${g.cards.map(c => c.html).join('')}
+          </div>
+        </section>`;
+      }).join('');
 
     const empty = `<div class="empty-state" style="padding:34px"><div class="empty-state-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="empty-state-text">Nenhuma justificativa registrada.</div></div>`;
     const total = counts.pendentes + counts.aprovadas + counts.recusadas;
-    const reviewCards = `${cancelCards}${justCards}`;
     return `
       ${actionsHtml}
       <div class="ev-section-label"><i class="fa-solid fa-comment-dots"></i> Justificativas</div>
@@ -6353,9 +6380,10 @@
           <button class="events-justification-filter" type="button" data-justification-filter="recusadas">Recusadas <span>${counts.recusadas}</span></button>
           <button class="events-justification-filter" type="button" data-justification-filter="todas">Todas <span>${total}</span></button>
         </div>
-        <div class="events-director-grid">
+        <div class="events-justification-groups">
           ${reviewCards}
-        </div>` : empty}
+        </div>
+        <div class="empty-state events-justification-filter-empty" style="padding:34px"${counts.pendentes ? ' hidden' : ''}><div class="empty-state-text">Nenhuma justificativa neste filtro.</div></div>` : empty}
     `;
   }
 

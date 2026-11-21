@@ -287,8 +287,57 @@ body[data-page="eventos"] .events-justification-filter.active span {
   color: var(--gold);
 }
 
-body[data-page="eventos"] .events-review-card[hidden] {
+body[data-page="eventos"] .events-review-card[hidden],
+body[data-page="eventos"] .events-justification-group[hidden],
+body[data-page="eventos"] .events-justification-filter-empty[hidden] {
   display: none;
+}
+
+body[data-page="eventos"] .events-justification-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+body[data-page="eventos"] .events-justification-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 0 2px 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(201,168,76,.2);
+}
+
+body[data-page="eventos"] .events-justification-group-title {
+  color: var(--gold);
+  font-weight: 800;
+  font-size: .9rem;
+}
+
+body[data-page="eventos"] .events-justification-group-title i {
+  margin-right: 6px;
+  opacity: .8;
+}
+
+body[data-page="eventos"] .events-justification-group-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+
+body[data-page="eventos"] .events-justification-group-meta span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+}
+
+body[data-page="eventos"] .events-justification-group-meta span.is-pending {
+  background: rgba(245,158,11,.12);
+  color: #f59e0b;
 }
 
 body[data-page="eventos"] .events-review-card {
