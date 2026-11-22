@@ -275,16 +275,33 @@
     return row.week_start || row.week_end || '';
   }
 
+  /* Primeira palavra do nome, normalizada ("Naíra 🍷" → "naira", "Pedro (Ph)" → "pedro"). */
+  function _firstNameKey(name) {
+    const first = String(name || '').trim().split(/[\s(]+/)[0];
+    return first ? normalizeName(first) : '';
+  }
+
+  /* Só guarda chaves que apontam para um único perfil (null = ambíguo). */
+  function _addUnique(map, key, profile) {
+    if (!key) return;
+    map.set(key, map.has(key) && map.get(key) !== profile ? null : profile);
+  }
+
   function _makeProfileIndexes(profiles = []) {
     const byId = new Map();
     const byName = new Map();
+    const byFirstName = new Map();
+    const byInitials = new Map();
     for (const p of profiles || []) {
       if (!p?.id) continue;
       byId.set(p.id, p);
       const norm = normalizeName(p.name);
       if (norm && !byName.has(norm)) byName.set(norm, p);
+      _addUnique(byFirstName, _firstNameKey(p.name), p);
+      const ini = normalizeName(p.initials);
+      if (ini && ini.length >= 2) _addUnique(byInitials, ini, p);
     }
-    return { byId, byName };
+    return { byId, byName, byFirstName, byInitials };
   }
 
   function _resolveRankingEntry(entry, indexes) {
@@ -292,7 +309,13 @@
     const rawName = entry?.name || entry?.nome || '';
     const normName = normalizeName(rawName);
     const profileById = rawUserId ? indexes.byId.get(rawUserId) : null;
-    const profileByName = normName ? indexes.byName.get(normName) : null;
+    // Rankings antigos foram salvos sem id, com apelido ("Naira", "Tales 🍷", "Ph"):
+    // nome inteiro → primeiro nome → iniciais, sempre exigindo um único perfil.
+    const profileByName = normName
+      ? (indexes.byName.get(normName)
+        || indexes.byFirstName?.get(_firstNameKey(rawName))
+        || (normName.length >= 2 ? indexes.byInitials?.get(normName) : null))
+      : null;
     const profile = profileById || profileByName || null;
     const userId = rawUserId || profile?.id || null;
     const key = userId ? `id:${userId}` : (normName ? `name:${normName}` : '');
@@ -428,8 +451,9 @@
     return {
       updatedAt: new Date().toISOString(),
       all,
-      semanal: _sortConstanciaList(all.filter(p => (p.semanal?.best || 0) > 0), 'semanal'),
-      mensal: _sortConstanciaList(all.filter(p => (p.mensal?.best || 0) > 0), 'mensal'),
+      // Constância = pelo menos 2 vitórias seguidas; 1 vitória isolada não entra no Hall
+      semanal: _sortConstanciaList(all.filter(p => (p.semanal?.best || 0) >= 2), 'semanal'),
+      mensal: _sortConstanciaList(all.filter(p => (p.mensal?.best || 0) >= 2), 'mensal'),
       byUser: all.reduce((acc, person) => {
         if (person.user_id) acc[person.user_id] = person;
         return acc;
