@@ -96,6 +96,49 @@ function montarTabela(registros, colunas, diasFechados, importados = new Map(), 
   return { membros, totais, total, media };
 }
 
+/**
+ * Total de mensagens de cada membro entre `inicio` e `fim` (YYYY-MM-DD, inclusive),
+ * do maior para o menor. Usado para preencher o "Novo Ranking" sem print.
+ * Devolve { linhas: [{ user_id, messages }], ultimoDia } — ultimoDia é o dia mais
+ * recente que o bot já contou no período (null se não há nada).
+ */
+export async function somarMensagensDoPeriodo(db, inicio, fim) {
+  const { data, error } = await db.from('group_message_daily')
+    .select('day,user_id,messages')
+    .eq('group_id', GROUP_ID)
+    .gte('day', inicio)
+    .lte('day', fim)
+    .limit(5000);
+  if (error) throw error;
+  const porMembro = new Map();
+  let ultimoDia = null;
+  for (const r of data || []) {
+    if (!r.user_id) continue;
+    porMembro.set(r.user_id, (porMembro.get(r.user_id) || 0) + (Number(r.messages) || 0));
+    if (!ultimoDia || r.day > ultimoDia) ultimoDia = r.day;
+  }
+  const linhas = [...porMembro.entries()]
+    .map(([user_id, messages]) => ({ user_id, messages }))
+    .sort((a, b) => b.messages - a.messages);
+  return { linhas, ultimoDia };
+}
+
+/** Última semana Dom–Sáb que já fechou (até ontem). */
+export function ultimaSemanaFechada() {
+  const ontem = addDays(hojeLocal(), -1);
+  const sabado = weekday(ontem) === 6 ? ontem : addDays(startOfWeek(ontem), -1);
+  return { inicio: addDays(sabado, -6), fim: sabado };
+}
+
+/** Último mês que já fechou (até ontem). */
+export function ultimoMesFechado() {
+  const ontem = addDays(hojeLocal(), -1);
+  const [y, m] = ontem.split('-').map(Number);
+  const fimDoMes = toKey(new Date(Date.UTC(y, m, 0)));
+  const ref = fimDoMes === ontem ? ontem : toKey(new Date(Date.UTC(y, m - 1, 0)));
+  return { inicio: `${ref.slice(0, 7)}-01`, fim: ref };
+}
+
 /* ── Componente ── */
 
 export function createMensagensTab({ db, Utils }) {

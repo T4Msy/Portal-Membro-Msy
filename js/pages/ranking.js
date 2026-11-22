@@ -7,7 +7,7 @@
    ============================================================ */
 
 import { importarRankingDeImagem, lembrarAliases } from '../core/ranking-import.js?v=20261102-ocr';
-import { createMensagensTab } from './ranking-mensagens.js?v=20261121-importados';
+import { createMensagensTab, somarMensagensDoPeriodo, ultimaSemanaFechada, ultimoMesFechado } from './ranking-mensagens.js?v=20261122-preencher';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -1034,6 +1034,7 @@ async function initRanking() {
             <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-input" id="rankEnd"></div>
           </div>
           <div class="rank-import">
+            <button class="btn btn-gold btn-sm" id="rankFromMsgsBtn" type="button"><i class="fa-solid fa-comments"></i> Preencher com a aba Mensagens</button>
             <button class="btn btn-ghost btn-sm" id="rankImportBtn" type="button"><i class="fa-solid fa-image"></i> Importar de imagem</button>
             <input type="file" id="rankImportFile" accept="image/*" hidden>
             <span class="rank-import-hint">ou cole o print da tabela (Ctrl+V)</span>
@@ -1130,6 +1131,45 @@ async function initRanking() {
         importBtn.disabled = false;
       }
     }
+
+    // Preenche com as mensagens que o Corvus contou (group_message_daily) nas datas do modal
+    const fromMsgsBtn = document.getElementById('rankFromMsgsBtn');
+    fromMsgsBtn.addEventListener('click', async () => {
+      const startEl = document.getElementById('rankStart');
+      const endEl = document.getElementById('rankEnd');
+      if (!startEl.value || !endEl.value) {
+        const p = tipo === 'semanal' ? ultimaSemanaFechada() : ultimoMesFechado();
+        startEl.value = p.inicio;
+        endEl.value = p.fim;
+      }
+      if (startEl.value > endEl.value) { Utils.showToast('A data de início é depois do fim.', 'error'); return; }
+      fromMsgsBtn.disabled = true;
+      mostrarStatus('Buscando as mensagens do período...');
+      try {
+        const { linhas, ultimoDia } = await somarMensagensDoPeriodo(db, startEl.value, endEl.value);
+        if (!linhas.length) {
+          mostrarStatus('O Corvus não tem mensagens contadas nesse período.', 'erro');
+          return;
+        }
+        document.getElementById('rankEntries').innerHTML = '';
+        const conhecidos = new Set((membrosRanking || []).map(m => m.id));
+        linhas.forEach(l => addRow(l.messages, conhecidos.has(l.user_id) ? l.user_id : ''));
+        const fora = linhas.filter(l => !conhecidos.has(l.user_id)).length;
+        const partes = [`${linhas.length} membros preenchidos com a aba Mensagens`];
+        if (fora) partes.push(`${fora} sem membro na lista (escolha ou remova)`);
+        if (ultimoDia && ultimoDia < endEl.value) {
+          const [y, m, d] = ultimoDia.split('-');
+          partes.push(`só há números até ${d}/${m}/${y}`);
+        }
+        mostrarStatus(`${partes.join(' · ')}. Confira antes de salvar.`, fora || (ultimoDia && ultimoDia < endEl.value) ? 'aviso' : 'ok');
+      } catch (err) {
+        console.error('[MSY][ranking] Erro ao preencher com a aba Mensagens:', err);
+        mostrarStatus('Não foi possível buscar as mensagens. Tente de novo.', 'erro');
+        Utils.showToast('Erro ao buscar as mensagens.', 'error');
+      } finally {
+        fromMsgsBtn.disabled = false;
+      }
+    });
 
     const importFile = document.getElementById('rankImportFile');
     importBtn.addEventListener('click', () => importFile.click());
