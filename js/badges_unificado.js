@@ -735,6 +735,18 @@
 
     CONSTANCIA_META,
 
+    /**
+     * Resolve entradas de weekly_rankings para perfis (id, nome, primeiro nome
+     * ou iniciais, como a Constância). Devolve entry => perfil | null.
+     */
+    makeRankingResolver(profiles = []) {
+      const indexes = _makeProfileIndexes(profiles);
+      return entry => {
+        const p = _resolveRankingEntry(entry, indexes);
+        return p?.user_id ? (indexes.byId.get(p.user_id) || null) : null;
+      };
+    },
+
     async getRankingStreakSummary(noCache = false) {
       return _getRankingConstanciaSummary(noCache);
     },

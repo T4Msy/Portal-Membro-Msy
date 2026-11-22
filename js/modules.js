@@ -1272,6 +1272,42 @@ async function initPremiacoes() {
 
   }
 
+  /**
+   * Data (YYYY-MM-DD) em que termina o período de um prêmio, lida do texto livre
+   * ("15 a 21 de Novembro", "27 a 03 de outubro", "Semana 2 de Março",
+   * "29/03 até 04/04", "Setembro 2026", "2025"...). Sem ano escrito usa o ano do
+   * registro. Nunca passa da data do registro. null quando não dá para ler.
+   */
+  function periodoParaData(periodo, criadoEm) {
+    const MESES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+    const texto = String(periodo || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const criado = String(criadoEm || '').slice(0, 10);
+    const anoCriado = Number(criado.slice(0, 4)) || new Date().getFullYear();
+    const anoExplicito = (texto.match(/\b(20\d{2})\b/g) || []).map(Number).pop();
+    const fimDoMes = (a, m) => new Date(Date.UTC(a, m, 0)).getUTCDate();
+    const iso = (a, m, d) => `${a}-${String(m).padStart(2, '0')}-${String(Math.min(d, fimDoMes(a, m))).padStart(2, '0')}`;
+    const limitar = data => (criado && data > criado ? criado : data);
+    const comAno = (m, d) => {
+      if (anoExplicito) return limitar(iso(anoExplicito, m, d));
+      const data = iso(anoCriado, m, d);
+      // Sem ano escrito e bem depois do registro: é do ano anterior (ex.: "Dezembro" registrado em janeiro)
+      return limitar(criado && data > criado && (Date.parse(data) - Date.parse(criado)) > 40 * 864e5 ? iso(anoCriado - 1, m, d) : data);
+    };
+    const barras = [...texto.matchAll(/\b(\d{1,2})\/(\d{1,2})\b/g)];
+    if (barras.length) { const [, d, m] = barras[barras.length - 1]; return comAno(Number(m), Number(d)); }
+    const meses = [...texto.matchAll(/\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*\.?/g)];
+    if (meses.length) {
+      const ult = meses[meses.length - 1];
+      const antes = texto.slice(0, ult.index);
+      const semana = antes.match(/semana\s+(\d)\s*(?:de\s*)?$/);
+      if (semana) return comAno(MESES[ult[1]], Number(semana[1]) * 7);
+      const dias = (antes.match(/\b\d{1,2}\b/g) || []).map(Number).filter(n => n >= 1 && n <= 31);
+      return comAno(MESES[ult[1]], dias.length ? dias[dias.length - 1] : 31);
+    }
+    if (anoExplicito) return limitar(`${anoExplicito}-12-31`);
+    return null;
+  }
+
   // -------- RENDER: Detalhe de premiação --------
   async function renderDetalhe(id) {
     viewState = { mode: 'detail', id };
@@ -1303,11 +1339,13 @@ async function initPremiacoes() {
       (profs || []).forEach(p => { profilesMap[p.id] = p; });
     }
 
-    // Montar vencedores com dados de perfil
+    // Montar vencedores com dados de perfil, do período mais recente para o mais antigo
+    // (não pela data de registro: semanas registradas atrasadas ou no mesmo dia ficavam fora de ordem)
+    const chave = v => periodoParaData(v.periodo, v.created_at) || String(v.created_at || '').slice(0, 10);
     const venc = vencRaw.map(v => ({
       ...v,
       membro: profilesMap[v.membro_id] || { id: v.membro_id, name: 'Membro', role: '', initials: 'MS', color: '#7f1d1d', avatar_url: null }
-    }));
+    })).sort((a, b) => chave(b).localeCompare(chave(a)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
 
     const prem     = premRes.data;
     const impColor = IMPORTANCIA_COLORS[prem.importancia] || 'var(--gold)';

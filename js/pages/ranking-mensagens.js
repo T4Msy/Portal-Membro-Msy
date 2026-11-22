@@ -13,7 +13,7 @@
  *   Média   → total ÷ dias do período que já fecharam (até ontem)
  */
 
-const GROUP_ID = '553493181512-1629215863@g.us'; // Masayoshi.🍷 (grupo padrão do bot)
+export const GROUP_ID = '553493181512-1629215863@g.us'; // Masayoshi.🍷 (grupo padrão do bot)
 const DIAS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -273,7 +273,7 @@ export function createMensagensTab({ db, Utils }) {
           .eq('group_id', GROUP_ID)
           .gte('day', inicio)
           .lte('day', fim),
-        estado.modo === 'mes'
+        estado.modo === 'mes' || estado.modo === 'semana'
           ? db.from('weekly_rankings')
             .select('week_start,week_end,entries')
             .or('tipo.is.null,tipo.eq.semanal')
@@ -288,6 +288,13 @@ export function createMensagensTab({ db, Utils }) {
       // Semana que o bot não cobre inteira (até ontem) usa o ranking semanal importado.
       const diasDoBot = new Set(data.map(r => r.day));
       const importados = new Map();
+      // Modo Semana: o importado só tem o total da semana, então os 7 dias viram uma coluna só
+      if (estado.modo === 'semana' && inicio <= ontem
+        && (semanais.data || []).some(r => r.week_start === inicio && r.week_end === fim)) {
+        let botCobre = true;
+        for (let d = inicio; d <= (fim < ontem ? fim : ontem); d = addDays(d, 1)) if (!diasDoBot.has(d)) botCobre = false;
+        if (!botCobre) colunas.splice(0, colunas.length, { rotulo: 'SEMANA', sub: `${fmtCurto(inicio)}–${fmtCurto(fim)}`, de: inicio, ate: fim });
+      }
       colunas.forEach((c, i) => {
         const ranking = (semanais.data || []).find(r => r.week_start === c.de && r.week_end === c.ate);
         if (!ranking || c.de > ontem) return;
@@ -398,8 +405,13 @@ export function createMensagensTab({ db, Utils }) {
   }
 
   return {
-    render(el) {
+    /** semana (opcional): domingo YYYY-MM-DD para abrir direto nela (link do Progresso). */
+    render(el, { semana } = {}) {
       container = el;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(semana || '') && weekday(semana) === 0 && semana <= ontem) {
+        estado.modo = 'semana';
+        estado.semana = semana;
+      }
       carregar();
     }
   };

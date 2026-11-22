@@ -587,6 +587,7 @@
        { page: 'tecnologias', icon: 'fa-solid fa-microchip',     label: 'Tecnologias' },
        { page: 'mensalidade', icon: 'fa-solid fa-credit-card',   label: 'Mensalidade' },
        { page: 'icm',         icon: 'fa-solid fa-brain',         label: 'ICM' },
+       { page: 'progresso',   icon: 'fa-solid fa-chart-line',    label: 'Progresso' },
        { page: 'perfil',      icon: 'fa-solid fa-circle-user',   label: 'Meu Perfil' },
      ], profile);
    
@@ -4404,6 +4405,8 @@
          </div>
        </div>
 
+       <div id="memberProfileProgresso" class="mcard-progresso"></div>
+
        <div class="mcard-details">
          <div class="member-profile-detail-row">
            <i class="fa-regular fa-calendar"></i>
@@ -4445,6 +4448,16 @@
          <div class="mpb-grid">${renderBadgesList(badges)}</div>
        </div>
      `;
+
+     // Progresso do membro: mensagens para todos; cargo só para ele mesmo e a Diretoria
+     import('./core/progresso.js?v=20261122-progresso8')
+       .then(({ renderProgresso }) => {
+         const alvo = document.getElementById('memberProfileProgresso');
+         if (alvo && body.dataset.memberId === m.id) {
+           return renderProgresso(alvo, { db, Utils, membro: m, viewer: currentProfile, compacto: true });
+         }
+       })
+       .catch(err => console.error('[MSY][membros] Erro ao carregar progresso:', err));
 
      // Prévia de nível no modal (só Diretoria)
     const previewSel = isDiretoria
@@ -7929,7 +7942,9 @@
            <div class="page-header-sub">Gerencie suas informações e preferências</div>
          </div>
        </div>
-   
+
+       <div id="perfilProgresso"></div>
+
        <div class="profile-page-grid">
          <!-- LEFT: Avatar Card -->
          <div class="profile-avatar-card">
@@ -8214,7 +8229,12 @@
          </div>
        </div>
      `;
-   
+
+     // Progresso (mensagens + desempenho no cargo) — js/core/progresso.js
+     import('./core/progresso.js?v=20261122-progresso8')
+       .then(({ renderProgresso }) => renderProgresso(document.getElementById('perfilProgresso'), { db, Utils, membro: profile, viewer: profile }))
+       .catch(err => console.error('[MSY][perfil] Erro ao carregar progresso:', err));
+
      // Carregar insígnias do perfil — sistema unificado MSYBadges
      if (typeof MSYBadges !== 'undefined') {
        MSYBadges.render(profile.id, 'profileBadgesContainer', { compact: false });

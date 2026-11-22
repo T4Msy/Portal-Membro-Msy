@@ -7,7 +7,7 @@
    ============================================================ */
 
 import { importarRankingDeImagem, lembrarAliases } from '../core/ranking-import.js?v=20261102-ocr';
-import { createMensagensTab, somarMensagensDoPeriodo, ultimaSemanaFechada, ultimoMesFechado } from './ranking-mensagens.js?v=20261122-preencher';
+import { createMensagensTab, somarMensagensDoPeriodo, ultimaSemanaFechada, ultimoMesFechado } from './ranking-mensagens.js?v=20261122-progresso7';
 
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
@@ -364,6 +364,7 @@ async function initRanking() {
   let abaAtiva  = 'trono';
   let pageSem   = 1, pageMen = 1;
   let semanais  = [], mensais = [];
+  let rankingAlvoId = null; // relatório destacado ao abrir por link (?aba=semanal&semana=...)
   let tronoBanco = { semanal: [], mensal: [], diario: [] };
   let constanciaResumo = { semanal: [], mensal: [], byUser: {} };
   let membrosRanking = [];
@@ -930,7 +931,7 @@ async function initRanking() {
     const rest     = entries.slice(3);
     const isRecente = offset === 0 && idx === 0;
     return `
-      <div class="ranking-card card${isRecente ? ' ranking-card-destaque' : ''}">
+      <div class="ranking-card card${isRecente ? ' ranking-card-destaque' : ''}${r.id === rankingAlvoId ? ' ranking-card-alvo' : ''}" data-ranking-id="${r.id}">
         ${isRecente ? '<div class="ranking-card-tag">🔥 Mais Recente</div>' : ''}
         <div class="ranking-card-header">
           <div>
@@ -1009,13 +1010,26 @@ async function initRanking() {
     });
   }
 
-  function ativarAba(tipo) {
+  function ativarAba(tipo, opcoes = {}) {
     abaAtiva = tipo;
+    // Link do Progresso: abre a página do relatório daquela semana e destaca o cartão
+    rankingAlvoId = null;
+    if ((tipo === 'semanal' || tipo === 'mensal') && opcoes.semana) {
+      const lista = tipo === 'semanal' ? semanais : mensais;
+      const idx = lista.findIndex(r => r.week_start === opcoes.semana);
+      if (idx >= 0) {
+        rankingAlvoId = lista[idx].id;
+        if (tipo === 'semanal') pageSem = Math.floor(idx / PER_PAGE) + 1; else pageMen = Math.floor(idx / PER_PAGE) + 1;
+      }
+    }
     document.querySelectorAll('.rank-main-tab').forEach(b => b.classList.toggle('active', b.dataset.aba === tipo));
     if (tipo === 'trono') renderTrono();
     else if (tipo === 'constancia') renderConstancia();
-    else if (tipo === 'mensagens') abaMensagens.render(document.getElementById('rankContent'));
-    else renderListaRanking();
+    else if (tipo === 'mensagens') abaMensagens.render(document.getElementById('rankContent'), opcoes);
+    else {
+      renderListaRanking();
+      if (rankingAlvoId) document.querySelector(`[data-ranking-id="${rankingAlvoId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
   function abrirModal(tipo) {
@@ -1434,7 +1448,11 @@ async function initRanking() {
   document.getElementById('newRankSemBtn')?.addEventListener('click', () => abrirModal('semanal'));
   document.getElementById('newRankMenBtn')?.addEventListener('click', () => abrirModal('mensal'));
 
-  ativarAba('trono');
+  // Links como ranking.html?aba=mensagens&semana=2026-11-08 (vindos do Progresso) abrem direto na aba e na semana
+  const params = new URLSearchParams(location.search);
+  const abaUrl = params.get('aba');
+  const abasValidas = ['trono', 'constancia', 'mensagens', 'semanal', 'mensal'];
+  ativarAba(abasValidas.includes(abaUrl) ? abaUrl : 'trono', { semana: params.get('semana') });
 }
 
 initRanking().catch(err => {

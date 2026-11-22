@@ -5365,6 +5365,8 @@ textarea:invalid:not(:placeholder-shown),
 
 .ranking-card { position: relative; overflow: hidden; margin-bottom: 18px; }
 .ranking-card-destaque { border-color: var(--border-gold) !important; }
+/* Relatório aberto por link do Progresso (ranking.html?aba=semanal&semana=...) */
+.ranking-card-alvo { border-color: var(--gold) !important; box-shadow: 0 0 0 1px var(--gold), 0 0 26px rgba(201,168,76,.22); }
 .ranking-card-tag {
   position: absolute;
   top: 14px; right: 14px;

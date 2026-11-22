@@ -602,7 +602,7 @@ const MSY_TAB_CATALOG = [
   ['ranking', 'Ranking'], ['jornal', 'Jornal da Masayoshi'], ['feed', 'Feed'],
   ['sugestoes', 'Sugestões'], ['biblioteca', 'Biblioteca'], ['premiacoes', 'Premiações'],
   ['ordem', 'Estrutura'], ['tecnologias', 'Tecnologias'], ['mensalidade', 'Mensalidade'],
-  ['icm', 'ICM'], ['perfil', 'Meu Perfil'], ['admin', 'Administração'],
+  ['icm', 'ICM'], ['progresso', 'Progresso'], ['perfil', 'Meu Perfil'], ['admin', 'Administração'],
   ['permissoes', 'Permissões'], ['desempenho', 'Desempenho'],
 ];
 
