@@ -57,6 +57,7 @@ export class SignalingChannel {
                 .on('broadcast', { event: 'signal' }, ({ payload }) => this.h.onSignal(payload))
                 .on('broadcast', { event: 'reaction' }, ({ payload }) => this.h.onReaction(payload))
                 .on('broadcast', { event: 'watch' }, ({ payload }) => this.h.onWatch(payload))
+                .on('broadcast', { event: 'screen-quality' }, ({ payload }) => this.h.onScreenQuality?.(payload))
                 .on('broadcast', { event: 'meta' }, ({ payload }) => this.h.onMeta?.(payload));
             const timeout = window.setTimeout(() => {
                 if (!this.everJoined) {
@@ -179,6 +180,10 @@ export class SignalingChannel {
     }
     sendWatch(ev) {
         void this.channel?.send({ type: 'broadcast', event: 'watch', payload: ev });
+    }
+    /** Espectador pede a quem transmite um nível de qualidade da tela só para ele. */
+    sendScreenQuality(ev) {
+        void this.channel?.send({ type: 'broadcast', event: 'screen-quality', payload: ev });
     }
     leave() {
         if (this.closed)

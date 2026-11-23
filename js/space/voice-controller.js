@@ -185,6 +185,13 @@ export class VoiceController extends EventTarget {
   react(emoji) { this.run((s) => s.react(emoji)); }
   resumeAudio() { this.run((s) => s.resumeAudio()); }
 
+  /** Qualidade máxima das telas que eu recebo (0 = automático). Vale dentro e fora da chamada. */
+  setScreenQualityCap(level) {
+    this.prefs.update({ screenQualityCap: level });
+    this.run((s) => s.setScreenQualityCap(level));
+    this.emit();
+  }
+
   setScreenPreset(id) {
     this.run((s) => s.setScreenPreset(id));
     this.prefs.update({ screenPreset: id });
