@@ -1,0 +1,45 @@
+/* ============================================================
+   MSY PORTAL — AGENTE MSY
+   Apps conectados e histórico do que o agente fez (agente.html).
+   ============================================================ */
+
+.ag-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .ag-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; } }
+
+.ag-card {
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.015)), rgba(12,12,17,.94);
+  min-width: 0;
+}
+.ag-card-title {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  color: var(--gold); font-family: 'Cinzel', serif; font-weight: 700; font-size: .95rem; letter-spacing: .04em;
+}
+.ag-text { color: var(--text-2); font-size: .85rem; line-height: 1.55; margin: 0 0 10px; }
+.ag-text code { font-size: .8rem; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,.06); }
+
+.ag-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.ag-toolbar select {
+  min-width: 0; flex: 1 1 160px; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(0,0,0,.25); color: var(--text-1); font: inherit; font-size: .82rem;
+}
+
+.ag-apps, .ag-list { display: flex; flex-direction: column; gap: 8px; }
+.ag-app, .ag-item {
+  display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05); min-width: 0;
+}
+.ag-icon {
+  flex: 0 0 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(201,168,76,.12); color: var(--gold); font-size: .9rem;
+}
+.ag-icon.whats { background: rgba(37,211,102,.12); color: #25d366; }
+.ag-icon.fail { background: rgba(239,68,68,.12); color: #ef4444; }
+.ag-body { min-width: 0; flex: 1; }
+.ag-line { color: var(--text-1); font-size: .86rem; font-weight: 600; overflow-wrap: anywhere; }
+.ag-sub { color: var(--text-3); font-size: .76rem; margin-top: 2px; overflow-wrap: anywhere; }
+.ag-detail { color: var(--text-2); font-size: .78rem; margin-top: 4px; overflow-wrap: anywhere; white-space: pre-line; }
+.ag-empty, .ag-loading { color: var(--text-3); font-size: .85rem; padding: 18px 4px; text-align: center; }
+.ag-more { margin-top: 10px; width: 100%; }
