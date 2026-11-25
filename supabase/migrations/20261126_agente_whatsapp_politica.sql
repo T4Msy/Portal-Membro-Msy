@@ -114,7 +114,8 @@ WITH CHECK (user_id = auth.uid());
 -- Sem UPDATE/DELETE: o registro não se apaga pelo agente.
 
 -- ── 4. Histórico do bot ─────────────────────────────────────
-ALTER TABLE public.bot_messages ADD COLUMN IF NOT EXISTS via text NOT NULL DEFAULT 'portal'
+-- Sem padrão: a ponte grava 'portal' ou 'agente'; as automações já usam a coluna source.
+ALTER TABLE public.bot_messages ADD COLUMN IF NOT EXISTS via text
   CHECK (via IN ('portal', 'agente', 'automacao'));
 ALTER TABLE public.bot_messages ADD COLUMN IF NOT EXISTS app text;
 
@@ -130,13 +131,14 @@ WITH CHECK (public.is_diretoria() AND NOT public.is_agent_session());
 -- ── 6. Liberação total (decisão do Tales, 25/11) ────────────
 -- Tales, Xitter, Mariana e Hariany: todos os grupos, privado, disparo,
 -- controlar o Corvus. O registro de tudo que sai continua.
--- Procura pelo display_name; só grava quando o nome bate com UMA pessoa.
+-- Procura pelo nome (profiles.name); só grava quando o nome bate com UMA pessoa.
+-- Também entram em "Quem pode usar o bot" (bot_settings.allowed_senders), se ainda não estiverem.
 -- Confira o resultado nas mensagens (NOTICE) e ajuste à mão se faltar alguém.
 DO $$
 DECLARE n text; ids uuid[];
 BEGIN
   FOREACH n IN ARRAY ARRAY['Tales', 'Xitter', 'Mariana', 'Hariany'] LOOP
-    SELECT array_agg(id) INTO ids FROM public.profiles WHERE display_name ILIKE n || '%';
+    SELECT array_agg(id) INTO ids FROM public.profiles WHERE name ILIKE n || '%';
     IF coalesce(array_length(ids, 1), 0) <> 1 THEN
       RAISE NOTICE 'Liberação total: "%" achou % pessoas; preencha à mão.', n, coalesce(array_length(ids, 1), 0);
       CONTINUE;
@@ -144,6 +146,8 @@ BEGIN
     INSERT INTO public.bot_send_policy (user_id, pode_privado, grupos, pode_disparo, controla_corvus)
     VALUES (ids[1], true, NULL, true, true)
     ON CONFLICT (user_id) DO UPDATE SET pode_privado = true, grupos = NULL, pode_disparo = true, controla_corvus = true, updated_at = now();
+    UPDATE public.bot_settings SET allowed_senders = array_append(coalesce(allowed_senders, '{}'), ids[1])
+      WHERE id = 1 AND NOT (ids[1] = ANY (coalesce(allowed_senders, '{}')));
     RAISE NOTICE 'Liberação total: "%" ok.', n;
   END LOOP;
 END $$;
