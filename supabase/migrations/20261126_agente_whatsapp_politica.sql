@@ -1,5 +1,5 @@
 -- ============================================================
--- 20261126_agente_whatsapp_politica.sql   (RASCUNHO, Fase 0 do Agente MSY)
+-- 20261126_agente_whatsapp_politica.sql   (Fase 0 do Agente MSY)
 --
 -- Decisão do Tales (25/11): o agente envia direto pelo Corvus, sem clique de
 -- aprovação. Os freios ficam no servidor do portal, onde o modelo não mexe:
