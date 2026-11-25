@@ -588,6 +588,7 @@
        { page: 'mensalidade', icon: 'fa-solid fa-credit-card',   label: 'Mensalidade' },
        { page: 'icm',         icon: 'fa-solid fa-brain',         label: 'ICM' },
        { page: 'progresso',   icon: 'fa-solid fa-chart-line',    label: 'Progresso' },
+       { page: 'agente',      icon: 'fa-solid fa-robot',         label: 'Agente MSY' },
        { page: 'perfil',      icon: 'fa-solid fa-circle-user',   label: 'Meu Perfil' },
      ], profile);
    
