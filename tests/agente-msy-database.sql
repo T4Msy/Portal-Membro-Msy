@@ -1,6 +1,7 @@
 -- Teste da migration 20261125_agente_msy_e_acesso_anonimo.sql num Postgres local que imita o Supabase.
 -- Rodar: psql -v ON_ERROR_STOP=1 -f tests/agente-msy-database.sql  (num banco vazio, de dentro de tests/)
-CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
+DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 GRANT USAGE ON SCHEMA auth, public TO anon, authenticated;
@@ -18,6 +19,11 @@ ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY events_select_policy ON public.events FOR SELECT USING (is_private = false);
 ALTER TABLE public.event_presencas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY aberta ON public.event_presencas FOR SELECT USING (true);
+-- Como em produção: policy aberta a todos para tudo.
+CREATE POLICY ep_all ON public.event_presencas FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE public.scheduled_meetings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY sched_all ON public.scheduled_meetings FOR ALL USING (true) WITH CHECK (true);
+INSERT INTO public.scheduled_meetings VALUES (1);
 INSERT INTO public.events(title) VALUES ('Call semanal'); INSERT INTO public.event_presencas VALUES (1);
 
 \ir ../supabase/migrations/20260615_gestao_projetos.sql
@@ -66,6 +72,21 @@ SELECT public.test_reject('SELECT 1 FROM public.scheduled_meetings', 'anon sched
 SELECT public.test_reject('SELECT 1 FROM public.meeting_requests', 'anon meeting_requests');
 SELECT public.test_reject('SELECT 1 FROM public.event_cancel_requests', 'anon event_cancel_requests');
 RESET ROLE;
+-- Membro comum logado não apaga mais reunião agendada nem presença (antes: sched_all / ep_all).
+SET ROLE authenticated; SET request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000c';
+DELETE FROM public.scheduled_meetings; DELETE FROM public.event_presencas;
+RESET ROLE;
+SELECT public.test_assert((SELECT count(*) FROM public.scheduled_meetings) = 1, 'membro não apaga reunião agendada');
+SELECT public.test_assert((SELECT count(*) FROM public.event_presencas) = 1, 'membro não apaga presença');
+-- Revisor com cancelar_eventos (sem diretoria) grava presença ao aprovar cancelamento, mas não apaga.
+INSERT INTO public.member_permissions VALUES ('00000000-0000-4000-8000-00000000000c', ARRAY['cancelar_eventos']);
+SET ROLE authenticated; SET request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000c';
+INSERT INTO public.event_presencas VALUES (2);
+UPDATE public.event_presencas SET id = 3 WHERE id = 2;
+DELETE FROM public.event_presencas;
+RESET ROLE;
+SELECT public.test_assert((SELECT count(*) FROM public.event_presencas) = 2, 'revisor grava presença e não apaga');
+DELETE FROM public.member_permissions;
 -- Logado continua lendo evento público.
 SET ROLE authenticated; SET request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000c';
 SELECT public.test_assert((SELECT count(*) FROM public.events) = 1, 'logado lê events');

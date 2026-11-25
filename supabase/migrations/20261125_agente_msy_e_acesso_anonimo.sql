@@ -12,6 +12,8 @@
 --    e as Edge Functions também usam login ou service_role. Nada depende do anon.
 --    Rollback (só se algum fluxo externo sem login quebrar, e corrija o fluxo depois):
 --      GRANT SELECT ON public.<tabela> TO anon;
+--    Em produção também havia policies FOR ALL USING (true) (ecr_all, ep_all, mr_all, meet_all,
+--    sched_all): qualquer um, até sem login, inseria, alterava e apagava. Removidas na seção 1b.
 --
 -- 2. Agente MSY: o responsável por uma tarefa de projeto (que não é gestor) só pode
 --    mudar, por update direto, a nota de execução. A policy de UPDATE de project_tasks
@@ -52,6 +54,52 @@ USING (
     OR public.has_permission('gerenciar_eventos')
   )
 );
+
+-- ── 1b. Policies "FOR ALL USING (true)" ─────────────────────
+-- Em produção (não estavam nas migrations do repositório) havia policies abertas a qualquer
+-- papel, inclusive anon: qualquer pessoa podia inserir, alterar e apagar linhas destas tabelas.
+-- As policies específicas que já existem cobrem o uso do portal (conferido em js/app.js,
+-- js/modules2.js, js/modules3.js e js/reunioes.js). As duas abaixo cobrem quem revisa
+-- justificativas com as permissões da tela de eventos (cancelar_eventos e
+-- revisar_justificativas_eventos), que antes dependiam da policy aberta.
+DROP POLICY IF EXISTS ecr_all   ON public.event_cancel_requests;
+DROP POLICY IF EXISTS ep_all    ON public.event_presencas;
+DROP POLICY IF EXISTS mr_all    ON public.meeting_requests;
+DROP POLICY IF EXISTS meet_all  ON public.meetings;
+DROP POLICY IF EXISTS sched_all ON public.scheduled_meetings;
+
+DROP POLICY IF EXISTS "Revisores gerenciam solicitações de cancelamento" ON public.event_cancel_requests;
+CREATE POLICY "Revisores gerenciam solicitações de cancelamento"
+  ON public.event_cancel_requests FOR ALL
+  TO authenticated
+  USING (
+    public.is_diretoria()
+    OR public.has_permission('cancelar_eventos')
+    OR public.has_permission('gerenciar_eventos')
+    OR public.has_permission('revisar_justificativas_eventos')
+  )
+  WITH CHECK (
+    public.is_diretoria()
+    OR public.has_permission('cancelar_eventos')
+    OR public.has_permission('gerenciar_eventos')
+    OR public.has_permission('revisar_justificativas_eventos')
+  );
+
+-- Aprovar um cancelamento lê e grava a presença do membro como "justificado" (sem apagar nada).
+DROP POLICY IF EXISTS "Revisores de justificativa gravam presenças" ON public.event_presencas;
+DROP POLICY IF EXISTS "Revisores de justificativa leem presenças" ON public.event_presencas;
+DROP POLICY IF EXISTS "Revisores de justificativa criam presenças" ON public.event_presencas;
+DROP POLICY IF EXISTS "Revisores de justificativa atualizam presenças" ON public.event_presencas;
+CREATE POLICY "Revisores de justificativa leem presenças"
+  ON public.event_presencas FOR SELECT TO authenticated
+  USING (public.has_permission('cancelar_eventos') OR public.has_permission('revisar_justificativas_eventos'));
+CREATE POLICY "Revisores de justificativa criam presenças"
+  ON public.event_presencas FOR INSERT TO authenticated
+  WITH CHECK (public.has_permission('cancelar_eventos') OR public.has_permission('revisar_justificativas_eventos'));
+CREATE POLICY "Revisores de justificativa atualizam presenças"
+  ON public.event_presencas FOR UPDATE TO authenticated
+  USING (public.has_permission('cancelar_eventos') OR public.has_permission('revisar_justificativas_eventos'))
+  WITH CHECK (public.has_permission('cancelar_eventos') OR public.has_permission('revisar_justificativas_eventos'));
 
 -- ── 2. Colunas que o responsável (não gestor) pode mudar ────
 -- SECURITY INVOKER de propósito: current_user mostra quem está executando o UPDATE.
