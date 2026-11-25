@@ -12,6 +12,7 @@ membro vê e faz aqui. Não existe chave de agente com privilégio.
 | Regras do ciclo da tarefa (já existiam) | `task_start`, `task_request_review`, `enforce_task_status_rules` em `supabase/migrations/20260616_projetos_v2.sql` e `20260718_*` |
 | Trava de colunas do responsável | `enforce_task_assignee_columns` em `supabase/migrations/20261125_agente_msy_e_acesso_anonimo.sql` |
 | Rótulos "via Agente MSY" no histórico | `HISTORY_META` em `js/pages/projetos.js` (`agente_*`) |
+| Avisos no WhatsApp (resumo de reunião, ata, lembrete) | `api/whatsapp.js` (já existia): o agente chama com o JWT do membro; vale a mesma liberação da Central do Bot e o registro em `bot_messages` |
 
 ## Como a conexão funciona
 
