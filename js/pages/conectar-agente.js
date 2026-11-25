@@ -96,6 +96,10 @@
         if (out.error) throw out.error;
         var token = out.data && out.data.session && out.data.session.refresh_token;
         if (!token) throw new Error('sem sessão');
+        // Marca esta sessão como do agente: a ponte do WhatsApp não aceita aprovação vinda dela.
+        // Se falhar, não conecta (melhor do que um agente com sessão "de pessoa").
+        var reg = await agentDb.rpc('register_agent_session', { p_app: 'plugin ' + req.computer });
+        if (reg.error) throw reg.error;
 
         show('stateDone');
         var hash = new URLSearchParams({ estado: req.state, token: token }).toString();
