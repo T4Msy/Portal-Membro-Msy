@@ -1,0 +1,37 @@
+/* ============================================================
+   MSY PORTAL — CONECTAR-AGENTE.CSS
+   Página de confirmação da conexão do Agente MSY. Usa a base da tela de login.
+   ============================================================ */
+
+.agent-card { max-width: 480px; }
+.agent-state[hidden] { display: none; }
+.agent-text { color: var(--text-2); font-size: .88rem; line-height: 1.6; margin: 0 0 var(--spacing-2); }
+.agent-text strong { color: var(--text-1); }
+.agent-muted { color: var(--text-3); font-size: .8rem; }
+
+.agent-list { list-style: none; margin: 0 0 var(--spacing-2); padding: 0; display: grid; gap: var(--spacing-1); }
+.agent-list li { display: flex; gap: 10px; align-items: flex-start; color: var(--text-2); font-size: .82rem; line-height: 1.5; }
+.agent-list i { color: var(--gold); margin-top: 3px; width: 16px; text-align: center; flex-shrink: 0; }
+
+.agent-warning {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px; margin-bottom: var(--spacing-2);
+  border: 1px solid var(--border-red); border-radius: var(--radius-sm);
+  background: var(--red-subtle); color: var(--text-1); font-size: .82rem; line-height: 1.5;
+}
+.agent-warning i { color: var(--red-bright); margin-top: 3px; }
+
+.agent-code, .agent-card code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85em;
+  background: var(--black-4); border: 1px solid var(--border-faint); border-radius: var(--radius-sm); padding: 2px 6px;
+  color: var(--gold-bright);
+}
+.agent-code { display: block; padding: 10px 14px; margin-bottom: var(--spacing-2); }
+
+.agent-cancel {
+  display: block; text-align: center; margin-top: 14px;
+  font-size: .8rem; color: var(--text-3); transition: color var(--t1) var(--ease);
+}
+.agent-cancel:hover, .agent-cancel:focus-visible { color: var(--gold); }
+
+.login-btn:disabled { opacity: .6; cursor: progress; }

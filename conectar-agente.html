@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <script>!function(){try{var t=localStorage.getItem("msy_theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){document.documentElement.removeAttribute("data-theme")}}();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#07070a">
+  <meta name="description" content="Conectar o Agente MSY ao Portal de Membro">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111116'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-weight='700' font-size='13' fill='%23c9a84c'%3EMSY%3C/text%3E%3C/svg%3E">
+  <title>MSY Portal — Conectar Agente</title>
+  <link rel="stylesheet" href="css/style.css?v=20261122-progresso8">
+  <link rel="stylesheet" href="css/premium.css">
+  <link rel="stylesheet" href="css/login.css">
+  <link rel="stylesheet" href="css/conectar-agente.css?v=20261125-agente1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body data-page="conectar-agente">
+  <div class="login-page">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="login-container">
+      <main class="login-card agent-card">
+        <div class="login-logo">
+          <span class="login-logo-mark">MSY</span>
+          <div class="login-logo-sep"><span>Masayoshi Order</span></div>
+          <span class="login-logo-sub">Agente MSY</span>
+        </div>
+
+        <!-- Carregando -->
+        <section class="agent-state" id="stateLoading" aria-live="polite">
+          <p class="agent-text"><i class="fa-solid fa-circle-notch fa-spin"></i> Verificando o pedido…</p>
+        </section>
+
+        <!-- Link inválido -->
+        <section class="agent-state" id="stateInvalid" hidden>
+          <div class="login-title">Link de conexão inválido</div>
+          <p class="agent-text">Este endereço não veio de um pedido de conexão válido. Para conectar o agente, rode no
+            terminal do seu computador:</p>
+          <code class="agent-code">msy login</code>
+          <p class="agent-text agent-muted">Ou peça ao agente: "conecta no portal".</p>
+        </section>
+
+        <!-- Pronto para confirmar -->
+        <section class="agent-state" id="stateForm" hidden>
+          <div class="login-title">Conectar o agente ao seu portal</div>
+          <p class="agent-text">O agente no computador <strong id="agentComputer">—</strong> está pedindo acesso à sua
+            conta. Com ele, o agente vê e faz no portal só o que você pode: ler suas tarefas, prazos e projetos,
+            iniciar uma tarefa e mandar para revisão, sempre perguntando antes.</p>
+          <ul class="agent-list">
+            <li><i class="fa-solid fa-lock"></i><span>Sua senha fica aqui no portal; o agente nunca a vê.</span></li>
+            <li><i class="fa-solid fa-laptop"></i><span>A sessão vai só para este computador e é separada da sua sessão no navegador.</span></li>
+            <li><i class="fa-solid fa-plug-circle-xmark"></i><span>Para desconectar depois: <code>msy logout</code>.</span></li>
+          </ul>
+          <div class="agent-warning" role="note">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Só confirme se foi você que pediu a conexão agora, neste computador.</span>
+          </div>
+          <div class="login-error" id="agentError" role="alert">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="agentErrorMsg">E-mail ou senha inválidos.</span>
+          </div>
+          <form class="login-form" id="agentForm" autocomplete="on" novalidate>
+            <div class="form-group">
+              <label class="form-label" for="agentEmail"><i class="fa-solid fa-at"></i> E-mail</label>
+              <input class="form-input" type="email" id="agentEmail" placeholder="seu@msy.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="agentPass"><i class="fa-solid fa-lock"></i> Confirme sua senha</label>
+              <input class="form-input" type="password" id="agentPass" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <button class="login-btn" type="submit" id="agentBtn">Conectar agente</button>
+            <a class="agent-cancel" href="dashboard.html">Não fui eu / cancelar</a>
+          </form>
+        </section>
+
+        <!-- Enviando para o computador -->
+        <section class="agent-state" id="stateDone" hidden aria-live="polite">
+          <div class="login-title">Quase lá</div>
+          <p class="agent-text"><i class="fa-solid fa-circle-notch fa-spin"></i> Entregando a conexão ao agente no seu
+            computador…</p>
+          <p class="agent-text agent-muted">Se a página não mudar em alguns segundos, confira se o comando
+            <code>msy login</code> ainda está rodando no terminal e tente de novo.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>window.supabase||document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');</script>
+  <script defer src="js/config.js"></script>
+  <script defer src="js/pages/conectar-agente.js?v=20261125-agente1"></script>
+</body>
+</html>

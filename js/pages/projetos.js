@@ -69,6 +69,10 @@ const HISTORY_META = {
   tarefa_reatribuida: { icon: 'fa-user-pen', label: 'Tarefa reatribuída' },
   tarefa_removida: { icon: 'fa-trash', label: 'Tarefa removida' },
   doc_atualizada: { icon: 'fa-file-pen', label: 'Documentação atualizada' },
+  // Ações registradas pelo Agente MSY (plugin do Claude Code/Codex), sempre em nome do próprio membro.
+  agente_tarefa_iniciada: { icon: 'fa-robot', label: 'Tarefa iniciada via Agente MSY' },
+  agente_nota_execucao: { icon: 'fa-robot', label: 'Nota de execução atualizada via Agente MSY' },
+  agente_revisao_solicitada: { icon: 'fa-robot', label: 'Revisão solicitada via Agente MSY' },
 };
 
 /* ──────────────────────────────────────────────

@@ -119,6 +119,12 @@ Execute este checklist manualmente **antes de promover qualquer deploy** para ga
 ### Segurança
 - [ ] Acessar Supabase Studio → confirmar que tabela `profiles` tem RLS habilitado
 - [ ] Tentar query direta como membro não-admin: não deve retornar dados de outros membros
+- [ ] `bash scripts/auditar-acesso-anonimo.sh` termina com "OK: nenhuma tabela devolve linhas sem login"
+
+### Agente MSY (`conectar-agente.html`)
+- [ ] Abrir `conectar-agente.html` sem parâmetros → mostra "Link de conexão inválido"
+- [ ] `node bin/msy.mjs login` (repositório msy-agente) abre a página, confirma a senha e o terminal diz "Conectado como …"
+- [ ] Responsável (não gestor) consegue salvar a nota de execução e marcar checklist, mas não muda prazo/título pela API
 
 ---
 

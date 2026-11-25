@@ -89,6 +89,7 @@ Sistema de gestão interna para membros da Masayoshi Order.
 | `onboarding.html` | Integração | Onboarding de novos membros |
 | `tecnologias.html` | Tecnologias | Catálogo de tecnologias |
 | `icm.html` | ICM³ | Sistema de avaliação psicométrica |
+| `conectar-agente.html` | Conectar Agente | Confirma a conexão do Agente MSY (Claude Code/Codex) à conta do membro — ver `AGENTE_MSY.md` |
 
 ---
 
