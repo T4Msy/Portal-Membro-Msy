@@ -205,7 +205,7 @@
 
    const MSYTabAccess = {
      ALWAYS_ALLOWED: new Set(['login', 'offline', 'onboarding', 'busca']),
-     ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho', 'halloween-painel']),
+     ADMIN_ONLY: new Set(['admin', 'permissoes', 'desempenho']),
      _rules: null,
 
      async rules() {
@@ -514,9 +514,6 @@
    /* ============================================================
       SIDEBAR
       ============================================================ */
-   /* Aba temporária do Halloween Masayoshi 2026: some sozinha depois de 01/11 (horário de Brasília). */
-   const HALLOWEEN_UNTIL = Date.parse('2026-11-02T00:00:00-03:00');
-
    async function renderSidebar(activePage) {
      const profileRaw = await Auth.requireAuth();
      if (!profileRaw) return;
@@ -608,19 +605,6 @@
              ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ''}
            </a>
          `).join('')}
-         ${Date.now() < HALLOWEEN_UNTIL ? `
-           <div class="sidebar-section-label" style="margin-top:8px">Evento</div>
-           <a href="halloween.html" class="nav-item nav-item-halloween">
-             <i class="fa-solid fa-ghost"></i>
-             <span>Halloween MSY</span>
-           </a>
-           ${isDiretoria ? `
-             <a href="halloween-painel.html" class="nav-item nav-item-halloween ${activePage === 'halloween-painel' ? 'active' : ''}">
-               <i class="fa-solid fa-eye"></i>
-               <span>Halloween · Quem viu</span>
-             </a>
-           ` : ''}
-         ` : ''}
          ${canAccessSpace ? `
            <div class="sidebar-section-label" style="margin-top:8px">MSY Space</div>
            <a href="space.html" class="nav-item nav-item-space ${activePage === 'space' ? 'active' : ''}">
