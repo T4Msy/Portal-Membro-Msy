@@ -40,6 +40,7 @@ O registro deve informar, no mínimo:
 | Checklist de release ou teste manual | `SMOKE_TESTS.md` |
 | Arquitetura, configuração ou operação geral | `README.md` |
 | Arquivos, uploads, Storage, Cloudflare R2, Worker `msy-media`, limpeza de órfãos | `INFRAESTRUTURA.md` |
+| Jornal da Masayoshi (edições, quadros, leitor, importação de PDF) | `JORNAL.md` |
 | Funcionalidade nova sem documento próprio | Novo arquivo `.md` na raiz, com nome descritivo |
 | Banco de dados | Comentários na migration e referência no documento do domínio |
 
@@ -78,6 +79,42 @@ Se a alteração criar uma nova tabela, migration, integração, regra de permis
 ## Aplicação atual
 
 Esta política passa a valer para todas as mudanças futuras. A documentação da insígnia **Aniversário da Masayoshi — 5 anos** está em `INSIGNIAS.md` e é o exemplo de registro de uma funcionalidade nova com arte, critério, migration, local de exibição e validação.
+
+## Jornal: Edições em quadros, leitor de páginas do PDF e página reformulada — 2026-11-26
+
+**O que mudou:**
+- O Jornal virou só **Edições** e **Turma do Corvinho**. Saíram as abas antigas (Destaques, Vídeos, Jornal escrito, Tirinhas, Especiais, Arquivo), os filtros, a coluna lateral, o botão "Nova publicação" e o tipo de gibi solo.
+- Cada edição é dividida em **quadros**, com as cores do guia editorial.
+- A **importação de PDF** (opcional) gera cada página em alta resolução e reconhece o quadro pelo cabeçalho.
+- O **leitor** tem os modos "Edição completa" e "Por quadro", barra de quadros e zoom (pinça, duplo toque, arrastar, deslizar).
+- Edições sem foto ganham uma **capa gerada**.
+- **Editar e Excluir** ficam visíveis para a redação.
+- O visual segue o padrão do portal (`page-header`, Cinzel, cards e abas douradas).
+
+**Por que mudou:** o guia editorial define o Jornal como edições quinzenais, aos sábados, divididas em quadros, com o portal como lugar principal de leitura. As abas antigas estavam vazias e a página não parecia parte do portal.
+
+**Arquivos e serviços afetados:**
+- código: `jornal.html`, `js/pages/jornal.js`, `js/pages/jornal-edicoes.js` (novo), `js/pages/jornal-edicoes-import.js` (novo), `css/jornal.css`;
+- banco: migration `supabase/migrations/20261126_jornal_edicoes.sql` (já aplicada);
+- arquivos: R2 bucket `jornal-media`, pasta `<uid>/edicoes/`;
+- bibliotecas externas: pdf.js e tesseract.js pelo jsDelivr.
+
+**Como funciona:** veja `JORNAL.md`. A edição fica em `jornal_posts.content_blocks`. Só a diretoria e quem tem `gerenciar_jornal` criam, editam e excluem.
+
+**Validação realizada:**
+- PDF da edição 01 (28 páginas) importado no modo Páginas em cerca de 20 s e salvo em 6 quadros.
+- Leitor testado nos dois modos.
+- Zoom testado com pinça, duplo toque, roda do mouse e deslizar.
+- Exclusão testada com a edição de teste Nº 02.
+- Sem estouro horizontal em 375 px.
+- `node --check` nos módulos.
+
+**Pendências ou cuidados para deploy:**
+- Também entraram os **episódios em vídeo da Turma do Corvinho** (botão "+ Novo episódio", até 50 MB) e a coluna de miniaturas no leitor; veja `JORNAL.md`.
+- As tabelas `jornal_likes` e `jornal_views` não existem; hoje as curtidas e visualizações ficam só no navegador.
+- O OCR não foi testado.
+- A edição 01 continua como rascunho até o deploy.
+- Próximas etapas: pauta da redação, agendamento com notificação e marcação de membros (@).
 
 ## Ranking: aba "Mensagens" com mensagens por participante — 2026-11-21
 

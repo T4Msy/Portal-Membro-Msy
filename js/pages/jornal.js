@@ -15,6 +15,23 @@ import {
 const { db, Utils, renderSidebar, renderTopBar } = window.MSY;
 
 import { createMediaStorage, lightVariantPath, lightVariantUrl, prefersLightMedia } from '../core/media-store.js?v=20261102-light';
+import {
+  bindEditionSections,
+  closeEditionReader,
+  getEditionCounts,
+  getEditionFiles,
+  isEdition,
+  isEpisode,
+  getEpisodeKicker,
+  openEpisodeEditor,
+  isReaderOpen,
+  openEditionEditor,
+  openEditionReader,
+  renderCorvinhoSection,
+  renderEditionModalBody,
+  renderEditionsSection,
+  setupEditions,
+} from './jornal-edicoes.js?v=20261127-sumario';
 
 const BUCKET = 'jornal-media';
 const TYPE_LABELS = {
@@ -23,14 +40,11 @@ const TYPE_LABELS = {
   gallery: ['fa-images', 'Galeria'],
   tirinha: ['fa-pen-nib', 'Tirinha'],
   special: ['fa-star', 'Especial'],
+  edition: ['fa-book-open', 'Edição'],
 };
 const SECTION_LABELS = {
-  principal: 'Destaques',
-  videos: 'Videos',
-  escrito: 'Jornal escrito',
-  tirinha: 'Tirinhas',
-  especiais: 'Especiais',
-  arquivo: 'Arquivo',
+  edicoes: 'Edições',
+  corvinho: 'Turma do Corvinho',
 };
 
 const FORMAT_LABELS = {
@@ -58,7 +72,7 @@ const state = {
   profile: null,
   canManage: false,
   posts: [],
-  activeSection: 'principal',
+  activeSection: 'edicoes',
   activeFormat: 'all',
   editingPostId: null,
   jornalLikesAvailable: true,
@@ -298,6 +312,24 @@ async function initJornal() {
   state.profile = profile;
   state.canManage = profile.tier === 'diretoria' || await MSYPerms.check(profile.id, profile.tier, 'gerenciar_jornal');
   await renderTopBar('Jornal da Masayoshi', profile);
+  setupEditions({
+    state,
+    db,
+    Utils,
+    openPost,
+    openImage: openLightbox,
+    confirm: confirmAction,
+    recordJournalView,
+    toggleJournalLike,
+    reload: async () => { await loadPosts(); renderPage(); },
+    renderEmpty,
+    openModal,
+    closeModal,
+    createUploadId,
+    deletePost,
+    uploadFile: uploadJornalFile,
+    createVideoCover: createJornalVideoCover,
+  });
   Utils.showLoading(document.getElementById('pageContent'));
   await loadPosts();
   renderPage();
@@ -371,27 +403,24 @@ async function loadPosts() {
 
 function renderPage() {
   const content = document.getElementById('pageContent');
-  const featured = getFeaturedPost();
   content.innerHTML = `
     <div class="journal-shell">
-      ${renderHero(featured)}
-      ${state.canManage ? renderAdminBar() : ''}
-      ${renderTabs()}
-      ${renderFormatFilters()}
-      <div class="journal-grid">
-        <main class="journal-main">
-          ${renderSection('principal', 'Destaques da edição', 'A linha editorial principal da Ordem.', getSectionPosts('principal'))}
-          ${renderSection('videos', 'Jornal em video', 'Edições semanais, mensais e registros audiovisuais.', getVideoPosts())}
-          ${renderSection('escrito', 'Jornal escrito', 'Matérias editoriais, reportagens internas e textos longos da Masayoshi.', getWrittenPosts())}
-          ${renderSection('tirinha', 'Tirinhas e quadros visuais', 'Publicações ilustradas, humor interno e pequenas narrativas.', getSectionPosts('tirinha'))}
-          ${renderSection('especiais', 'Publicações especiais', 'Matérias marcantes, editoriais e conteúdos de maior peso.', getSectionPosts('especiais'))}
-          ${renderSection('arquivo', 'Arquivo editorial', 'Histórico completo das publicações preservadas.', getArchivePosts())}
-        </main>
-        <aside class="journal-side">
-          ${renderSidePanel('Ultimos videos', getVideoPosts().slice(0, 4))}
-          ${renderSidePanel('Leituras recentes', state.posts.filter((p) => p.post_type === 'article' || p.post_type === 'special').slice(0, 4))}
-        </aside>
+      <div class="page-header">
+        <div>
+          <div class="page-header-title">Jornal da Masayoshi</div>
+          <div class="page-header-sub">Uma edição a cada duas semanas, aos sábados. Leia completa ou quadro por quadro.</div>
+        </div>
+        ${state.canManage ? `
+          <div class="journal-new-actions">
+            <button class="btn btn-ghost btn-sm" id="journalNewEpisode"><i class="fa-solid fa-film"></i> Novo episódio</button>
+            <button class="btn btn-gold btn-sm" id="journalNewEdition"><i class="fa-solid fa-plus"></i> Nova edição</button>
+          </div>` : ''}
       </div>
+      ${renderTabs()}
+      <main class="journal-main">
+        ${renderEditionsSection()}
+        ${renderCorvinhoSection()}
+      </main>
     </div>
   `;
   ensureModalRoots();
@@ -419,13 +448,13 @@ function renderHero(post) {
   return `
     <section class="journal-hero">
       <div class="journal-hero-content">
-        <div class="journal-kicker">Edição especial</div>
+        <div class="journal-kicker">Jornal oficial da Ordem</div>
         <h1 class="journal-title">Jornal da Masayoshi</h1>
-        <p class="journal-subtitle">${post ? Utils.escapeHtml(post.subtitle || post.summary || 'Comunicação oficial, memoria editorial e midia propria da Ordem.') : 'A central editorial da Ordem: videos, materias, tirinhas, especiais e arquivo historico em uma experiencia propria.'}</p>
-        <div class="journal-hero-meta">
-          <span class="journal-chip"><i class="fa-solid fa-newspaper"></i> Centro de midia MSY</span>
-          ${post ? `<span class="journal-chip"><i class="fa-solid fa-star"></i> Destaque: ${Utils.escapeHtml(post.title)}</span>` : ''}
-        </div>
+        <p class="journal-subtitle">Uma edição a cada duas semanas, aos sábados, dividida em quadros: Plantão, Você Sabia?, Turma do Corvinho e mais.</p>
+        ${post ? `
+          <div class="journal-hero-meta">
+            <span class="journal-chip"><i class="fa-solid fa-book-open"></i> Última edição: ${Utils.escapeHtml(post.title)}</span>
+          </div>` : ''}
       </div>
     </section>`;
 }
@@ -435,17 +464,25 @@ function renderAdminBar() {
     <section class="journal-admin-bar">
       <div>
         <strong>Redação da Masayoshi</strong>
-        <div class="journal-section-sub">Crie rascunhos, publique edições e organize o acervo editorial.</div>
+        <div class="journal-section-sub">Monte as edições, deixe como rascunho e publique quando estiver pronta.</div>
       </div>
-      <button class="btn btn-primary" id="journalNewPost"><i class="fa-solid fa-plus"></i> Nova publicação</button>
+      <div class="journal-admin-actions">
+        <button class="btn btn-primary" id="journalNewEdition"><i class="fa-solid fa-book-open"></i> Nova edição</button>
+      </div>
     </section>`;
 }
 
 function renderTabs() {
+  const counts = getEditionCounts();
+  const icons = { edicoes: 'fa-book-open', corvinho: 'fa-feather-pointed' };
   return `
     <nav class="journal-tabs" aria-label="Seções do Jornal">
       ${Object.entries(SECTION_LABELS).map(([key, label]) => `
-        <button class="journal-tab ${state.activeSection === key ? 'active' : ''}" data-journal-section="${key}">${label}</button>
+        <button class="journal-tab ${state.activeSection === key ? 'active' : ''}" data-journal-section="${key}">
+          <i class="fa-solid ${icons[key] || 'fa-newspaper'}"></i>
+          <span>${label}</span>
+          ${counts[key] ? `<span class="journal-tab-count">${counts[key]}</span>` : ''}
+        </button>
       `).join('')}
     </nav>`;
 }
@@ -549,35 +586,18 @@ function renderEmpty(text) {
 function bindPage() {
   document.querySelectorAll('[data-journal-section]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeSection = btn.dataset.journalSection;
-    state.activeFormat = state.activeSection === 'videos' ? 'video'
-      : state.activeSection === 'escrito' ? 'written'
-        : 'all';
     document.querySelectorAll('.journal-tab').forEach((tab) => tab.classList.toggle('active', tab === btn));
-    document.querySelectorAll('.journal-format-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.journalFormat === state.activeFormat));
     updateVisibleSections();
   }));
-  document.querySelectorAll('[data-journal-format]').forEach((btn) => btn.addEventListener('click', () => {
-    state.activeFormat = btn.dataset.journalFormat;
-    if (state.activeFormat === 'video') state.activeSection = 'videos';
-    if (state.activeFormat === 'written') state.activeSection = 'escrito';
-    if (state.activeFormat === 'all' && !['principal', 'tirinha', 'especiais', 'arquivo'].includes(state.activeSection)) state.activeSection = 'principal';
-    document.querySelectorAll('.journal-format-tab').forEach((tab) => tab.classList.toggle('active', tab === btn));
-    document.querySelectorAll('.journal-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.journalSection === state.activeSection));
-    updateVisibleSections();
-  }));
-  document.querySelectorAll('[data-open-journal-post]').forEach((btn) => btn.addEventListener('click', () => openPost(btn.dataset.openJournalPost)));
-  document.getElementById('journalNewPost')?.addEventListener('click', () => openEditor());
+  document.getElementById('journalNewEdition')?.addEventListener('click', () => openEditionEditor());
+  document.getElementById('journalNewEpisode')?.addEventListener('click', () => openEpisodeEditor());
+  bindEditionSections(document.getElementById('pageContent') || document);
 }
 
 
 function updateVisibleSections() {
   document.querySelectorAll('[data-journal-section-panel]').forEach((panel) => {
-    const section = panel.dataset.journalSectionPanel;
-    const sectionMatches = section === state.activeSection;
-    const formatMatches = state.activeFormat === 'all'
-      || (state.activeFormat === 'video' && section === 'videos')
-      || (state.activeFormat === 'written' && ['escrito', 'especiais'].includes(section));
-    panel.hidden = !(sectionMatches && formatMatches);
+    panel.hidden = panel.dataset.journalSectionPanel !== state.activeSection;
   });
 }
 
@@ -586,11 +606,17 @@ function openHashPost() {
   if (id && state.posts.some((post) => post.id === id)) openPost(id);
 }
 
-function openPost(postId) {
+function openPost(postId, { keepReader = false } = {}) {
   const post = state.posts.find((item) => item.id === postId);
   const modal = document.getElementById('journalPostModal');
   if (!post || !modal) return;
-  const [icon, label] = TYPE_LABELS[post.post_type] || TYPE_LABELS.article;
+  // Edição abre direto no leitor; o modal só aparece para comentários (vindo do leitor).
+  if (isEdition(post) && !keepReader && !isReaderOpen()) {
+    openEditionReader(post.id);
+    return;
+  }
+  const [icon, typeLabel] = TYPE_LABELS[post.post_type] || TYPE_LABELS.article;
+  const label = isEpisode(post) ? getEpisodeKicker(post) : typeLabel;
   modal.innerHTML = `
     <div class="journal-modal-panel">
       <div class="journal-modal-head">
@@ -617,6 +643,7 @@ function openPost(postId) {
 }
 
 function renderPostBody(post) {
+  if (isEdition(post)) return renderEditionModalBody(post);
   const videoUrl = getPostVideoUrl(post);
   if (post.post_type === 'video' || videoUrl) {
     const poster = getPostCoverImage(post);
@@ -798,6 +825,7 @@ function bindPostModal(modal, post) {
   });
   modal.querySelector('[data-archive-journal-post]')?.addEventListener('click', () => toggleArchive(post));
   modal.querySelector('[data-delete-journal-post]')?.addEventListener('click', () => deletePost(post));
+  bindEditionSections(modal);
 }
 
 async function toggleJournalLike(postId, root = document) {
@@ -890,6 +918,14 @@ async function reloadAndReopen(postId) {
 }
 
 function openEditor(post = null) {
+  if (isEdition(post)) {
+    openEditionEditor(post);
+    return;
+  }
+  if (!post || isEpisode(post)) {
+    openEpisodeEditor(post);
+    return;
+  }
   state.editingPostId = post?.id || null;
   state.articlePhotoItem = null;
   clearJornalSceneFiles();
@@ -1598,19 +1634,36 @@ async function toggleArchive(post) {
   const { error } = await db.from('jornal_posts').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', post.id);
   if (error) return Utils.showToast(error.message || 'Erro ao arquivar.', 'error');
   closeModal(document.getElementById('journalPostModal'));
+  if (isEdition(post)) closeEditionReader();
   await loadPosts();
   renderPage();
 }
 
 async function deletePost(post) {
-  if (!await confirmAction('Excluir esta publicação e remover seus arquivos?')) return;
-  const paths = withLightVariants([post.cover_storage_path, post.video_storage_path, ...(post.media || []).map((item) => item.storage_path)]);
-  if (paths.length) await createMediaStorage(db).from(BUCKET).remove(paths).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
-  const { error } = await db.from('jornal_posts').delete().eq('id', post.id);
-  if (error) return Utils.showToast(error.message || 'Erro ao excluir.', 'error');
+  const question = isEdition(post)
+    ? `Excluir "${post.title}"? Todas as páginas e comentários desta edição serão apagados e não dá para desfazer.`
+    : isEpisode(post)
+      ? `Excluir o episódio "${post.title}"? O vídeo e os comentários serão apagados e não dá para desfazer.`
+      : 'Excluir esta publicação e remover seus arquivos?';
+  if (!await confirmAction(question)) return false;
+  try {
+    const paths = withLightVariants([post.cover_storage_path, post.video_storage_path, ...(post.media || []).map((item) => item.storage_path)]);
+    if (isEdition(post)) paths.push(...getEditionFiles(post).filter((path) => !paths.includes(path)));
+    const { error } = await db.from('jornal_posts').delete().eq('id', post.id);
+    if (error) throw error;
+    // Arquivos só saem depois que o registro foi apagado (se falhar, a limpeza diária do R2 pega).
+    if (paths.length) await createMediaStorage(db).from(BUCKET).remove(paths).catch((err) => console.warn('[MSY][jornal] Arquivos não removidos:', err));
+  } catch (err) {
+    console.error('[MSY][jornal] Erro ao excluir:', err);
+    Utils.showToast(err?.message || 'Erro ao excluir.', 'error');
+    return false;
+  }
   closeModal(document.getElementById('journalPostModal'));
+  if (isEdition(post)) closeEditionReader();
+  Utils.showToast(isEdition(post) ? 'Edição excluída.' : isEpisode(post) ? 'Episódio excluído.' : 'Publicação excluída.', 'success');
   await loadPosts();
   renderPage();
+  return true;
 }
 
 function openLightbox(url) {
@@ -1624,9 +1677,8 @@ function openLightbox(url) {
 }
 
 function getFeaturedPost() {
-  return state.posts.find((post) => post.status === 'published' && post.is_featured)
-    || state.posts.find((post) => post.status === 'published')
-    || state.posts[0];
+  const editions = state.posts.filter((post) => isEdition(post) && post.status === 'published');
+  return editions.find((post) => post.is_featured) || editions[0] || null;
 }
 
 function getSectionPosts(section) {
@@ -1784,7 +1836,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal?.classList.remove('open');
   modal?.querySelectorAll('video').forEach((video) => video.pause());
-  if (!document.querySelector('.journal-modal.open')) {
+  if (!document.querySelector('.journal-modal.open, .edition-reader.open')) {
     document.body.classList.remove('social-modal-locked');
   }
 }
