@@ -1,10 +1,11 @@
 -- Correcoes de seguranca e integridade da Supervisao.
 -- Execute depois de 20260808_supervisao_briefing.sql.
+-- Aplicada em producao em 25/11/2026 com a assinatura de 9 argumentos (p_status), igual a do banco, para nao criar sobrecarga.
 
 CREATE OR REPLACE FUNCTION public.upsert_supervision_case(
   p_source_type text, p_source_id uuid, p_source_key text, p_priority text,
   p_title text, p_description text DEFAULT NULL, p_member_id uuid DEFAULT NULL,
-  p_due_at timestamptz DEFAULT NULL
+  p_due_at timestamptz DEFAULT NULL, p_status text DEFAULT 'open'
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_id uuid; v_is_new boolean := false;
 BEGIN
@@ -16,9 +17,10 @@ BEGIN
   END IF;
   IF p_priority NOT IN ('critical', 'attention', 'info') THEN RAISE EXCEPTION 'Prioridade invalida.'; END IF;
   IF p_title IS NULL OR btrim(p_title) = '' THEN RAISE EXCEPTION 'Titulo do caso e obrigatorio.'; END IF;
+  IF coalesce(p_status, 'open') NOT IN ('open', 'in_progress') THEN RAISE EXCEPTION 'Status inicial invalido.'; END IF;
 
-  INSERT INTO public.supervision_cases(source_type, source_id, source_key, priority, title, description, member_id, due_at)
-  VALUES (p_source_type, p_source_id, p_source_key, p_priority, p_title, p_description, p_member_id, p_due_at)
+  INSERT INTO public.supervision_cases(source_type, source_id, source_key, priority, status, title, description, member_id, due_at)
+  VALUES (p_source_type, p_source_id, p_source_key, p_priority, coalesce(p_status, 'open'), p_title, p_description, p_member_id, p_due_at)
   ON CONFLICT (source_type, source_key) DO UPDATE SET
     priority = EXCLUDED.priority, title = EXCLUDED.title, description = EXCLUDED.description,
     member_id = EXCLUDED.member_id, due_at = EXCLUDED.due_at, updated_at = now()
@@ -149,12 +151,17 @@ CREATE POLICY "Supervisao: coordenacao cria observacoes" ON public.supervision_o
 CREATE POLICY "Supervisao: coordenacao arquiva observacoes" ON public.supervision_observations FOR UPDATE TO authenticated
   USING (public.is_supervision_operator()) WITH CHECK (public.is_supervision_operator());
 
-REVOKE ALL ON FUNCTION public.upsert_supervision_case(text, uuid, text, text, text, text, uuid, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.upsert_supervision_case(text, uuid, text, text, text, text, uuid, timestamptz, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.record_supervision_daily_checkin() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.resolve_supervision_source_item(text, uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.record_health_snapshot(date, smallint, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sync_supervision_case_from_source() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.upsert_supervision_case(text, uuid, text, text, text, text, uuid, timestamptz) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.upsert_supervision_case(text, uuid, text, text, text, text, uuid, timestamptz, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.record_supervision_daily_checkin() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resolve_supervision_source_item(text, uuid, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.record_health_snapshot(date, smallint, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.upsert_supervision_case(text, uuid, text, text, text, text, uuid, timestamptz, text) FROM anon;
+REVOKE ALL ON FUNCTION public.record_supervision_daily_checkin() FROM anon;
+REVOKE ALL ON FUNCTION public.resolve_supervision_source_item(text, uuid, text, text) FROM anon;
+REVOKE ALL ON FUNCTION public.record_health_snapshot(date, smallint, jsonb) FROM anon;
+REVOKE ALL ON FUNCTION public.sync_supervision_case_from_source() FROM anon, authenticated;
