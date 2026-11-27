@@ -62,6 +62,8 @@ const MSYPerms = {
     { key: 'gerenciar_mensalidade', label: 'Gerenciar Mensalidade',  group: 'Mensalidade', icon: 'fa-credit-card' },
     // ── Reuniões
     { key: 'gerenciar_reunioes',    label: 'Gerenciar Reuniões',     group: 'Reuniões',   icon: 'fa-handshake' },
+    // ── Marketing e Comercial
+    { key: 'agente_marketing_comercial', label: 'Marketing e Comercial (conteúdo, leads e propostas)', group: 'Marketing', icon: 'fa-chart-line' },
     // ── Reconhecimento
     { key: 'gerenciar_premiacoes',  label: 'Gerenciar Premiações',   group: 'Reconhecimento', icon: 'fa-trophy' },
     // ── Projetos
@@ -268,6 +270,7 @@ async function openPermissionsManager() {
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
+    'Marketing':   { icon:'fa-chart-line',    color:'#FF0028', keys:['agente_marketing_comercial'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
@@ -526,6 +529,7 @@ function getPermissionsGroups() {
     'Sugestões':   { icon:'fa-lightbulb',     color:'#facc15', keys:['gerenciar_sugestoes'] },
     'Mensalidade': { icon:'fa-credit-card',   color:'#22c55e', keys:['gerenciar_mensalidade'] },
     'Reuniões':    { icon:'fa-handshake',     color:'#818cf8', keys:['gerenciar_reunioes'] },
+    'Marketing':   { icon:'fa-chart-line',    color:'#FF0028', keys:['agente_marketing_comercial'] },
     'Reconhecimento': { icon:'fa-trophy',     color:'#fbbf24', keys:['gerenciar_premiacoes'] },
     'Projetos':    { icon:'fa-diagram-project',color:'#8b5cf6', keys:['criar_projetos','gerenciar_projetos'] },
     'Supervisao':  { icon:'fa-eye',            color:'#ef4444', keys:['acessar_supervisao'] },
